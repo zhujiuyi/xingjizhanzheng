@@ -149,6 +149,10 @@ func _run() -> void:
 func _finish() -> void:
 	if watchdog != null and watchdog.timeout.is_connected(_watchdog): watchdog.timeout.disconnect(_watchdog)
 	watchdog = null
-	if is_instance_valid(host): host.free()
+	# QuitWithoutSave already requested SceneTree shutdown. Use the standard
+	# node queue instead of adding synchronous destruction in the UI stack.
+	# The external guard still rejects any audio/resource teardown warning.
+	if is_instance_valid(host): host.queue_free()
+	host = null
 	print("CLIENT_EDGES_RESULT ", "PASS" if failures.is_empty() else "FAIL", " checks=", checks, " failures=", failures.size())
 	quit(0 if failures.is_empty() else 1)

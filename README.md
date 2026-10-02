@@ -1,6 +1,8 @@
 # 星际战舰
 
-一款以星际探索、采矿、战斗与不同类型战舰操作为核心的 3D 游戏。技术栈为 Godot 4 + typed GDScript + Forward+ + Blender + SQLite。本次交付范围为完整单人版：逐阶段实现双星系四舰闭环、十星系与高级玩法，保留联机接口。环境、设计、数据库结构、接口与技术验证已建立，正式游戏开发进行中。
+一款以星际探索、采矿、战斗与不同类型战舰操作为核心的 3D 游戏。技术栈为 Godot 4 + typed GDScript + Forward+ + Blender + SQLite。当前 v0.4 已实现文档确认的完整单人范围：十星系、九类舰船、三十种模块、任务、工业市场、研究基地与数据库存读档，保留联机接口。
+
+macOS 客户端已在 Apple Silicon Mac 实际启动并验证存读档；Windows x64 包已成功导出，原生 Windows 运行尚未验证。交付路径、构建身份与验证边界见 [交付记录](doc/26-开发阶段与交付记录.md)，启动方式和操作见 [客户端说明](doc/28-客户端使用与交付说明.md)。构建包不入 Git；可用 `jiaoben/build_client.py --platform all --publish` 重建。
 
 源码仓库：[xingjizhanzheng](https://github.com/zhujiuyi/xingjizhanzheng)（私人仓库）。开发阶段通过对应检查后提交推送，状态与证据见 [开发阶段与交付记录](doc/26-开发阶段与交付记录.md)。
 
