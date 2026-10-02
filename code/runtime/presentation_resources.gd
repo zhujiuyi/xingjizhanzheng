@@ -1,0 +1,21 @@
+class_name XJPresentationResources
+extends RefCounted
+## Presentation packs can advance without changing frozen world/asset identity.
+const MANIFESTS: Array[String] = ["res://assets/interface_v2/manifest.json", "res://assets/hangar_v2/manifest.json"]
+
+static func validate() -> String:
+	for manifest_path: String in MANIFESTS:
+		if not FileAccess.file_exists(manifest_path): return "表现资源清单缺失：" + manifest_path
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(manifest_path))
+		if not parsed is Dictionary or not parsed.get("resources") is Array or parsed.resources.is_empty():
+			return "表现资源清单无效：" + manifest_path
+		for entry: Variant in parsed.resources:
+			if not entry is Dictionary: return "表现资源条目无效：" + manifest_path
+			var path: String = str(entry.get("resource_path", entry.get("path", "")))
+			if not path.begins_with("res://") or path.contains("..") or not FileAccess.file_exists(path):
+				return "表现资源缺失：" + path
+			if FileAccess.get_sha256(path) != str(entry.get("sha256", "")):
+				return "表现资源摘要不匹配：" + path
+			if path.get_extension() in ["png", "svg", "glb", "gdshader"] and not ResourceLoader.exists(path):
+				return "表现资源导入缺失：" + path
+	return ""

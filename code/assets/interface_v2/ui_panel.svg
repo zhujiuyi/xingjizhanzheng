@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="128" viewBox="0 0 256 128">
+<defs><linearGradient id="metal" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#222b33"/><stop offset=".18" stop-color="#151d24"/><stop offset="1" stop-color="#0c1117"/></linearGradient></defs>
+<path d="M12 1H243L255 13V115L243 127H13L1 115V13Z" fill="url(#metal)" stroke="#3d4b55" stroke-width="1"/>
+<path d="M15 4H240M4 16V54M252 75V112M16 124H240" fill="none" stroke="#7c919e" stroke-opacity=".17" stroke-width="1"/>
+<path d="M13 1H68" stroke="#7fbdcc" stroke-width="2"/><path d="M204 126H242L252 116" fill="none" stroke="#cda567" stroke-opacity=".55"/>
+</svg>

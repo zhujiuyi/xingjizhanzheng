@@ -69,14 +69,14 @@ func _run() -> void:
 	check(not technical, "ship and loan names have no raw IDs or policies")
 	ui.mission_filter = "local"; ui.show_page("missions")
 	var first_card: VBoxContainer
-	for node: Node in ui.body.get_children():
+	for node: Node in descendants(ui.body):
 		if str(node.name).begins_with("MissionCard"):
 			first_card = node
 			break
 	check(first_card != null and first_card.get_child(0).text == "出航准备", "new player first card is available T0 tutorial")
 	ui.mission_filter = "all"; ui.show_page("missions")
 	var cards: int = 0
-	for node: Node in ui.body.get_children():
+	for node: Node in descendants(ui.body):
 		if str(node.name).begins_with("MissionCard"): cards += 1
 	check(cards <= 6 and cards > 0, "all missions are paginated into at most six cards")
 	check(button_text(ui, "下一页") != null and not button_text(ui, "下一页").disabled, "full forty mission list has pagination")
@@ -90,6 +90,8 @@ func _run() -> void:
 	var inventory_rows: Array = host.state.rows("container_state")
 	for container: D.ContainerStateDto in inventory_rows:
 		if container.kind == T.ContainerKind.SLOT: check(not ui._local_container(container.container_id), "installed slot excluded from warehouse")
+	# Use the actual undock transition before checking the flight-only HUD.
+	host._business_action("undock", "", 1, "")
 	ui.show_page("")
 	ui.tick(1.0)
 	check(ui.health.text.contains("护盾") and ui.top.text.contains("雨燕"), "HUD refresh displays actual typed ship metrics")
@@ -128,7 +130,8 @@ func _run() -> void:
 				await process_frame
 				var close: Button = ui.panel.find_child("PanelClose", true, false)
 				var viewport: Rect2 = Rect2(Vector2.ZERO, ui.root.size)
-				check(close != null and viewport.encloses(close.get_global_rect()) and ui.page_scroll.size.y >= 40, "page header/scroll reachable %s %s x%.0f" % [key, str(size), scale])
+				var header: Control = ui.station_layer.find_child("UndockButton", true, false) if key == "station" else close
+				check(header != null and viewport.encloses(header.get_global_rect()) and ui.page_scroll.size.y >= 40, "page header/scroll reachable %s %s x%.0f" % [key, str(size), scale])
 			check(Rect2(Vector2.ZERO, ui.root.size).encloses(ui.operation_cancel.get_global_rect()), "waiting cancel reachable %s x%.0f" % [str(size), scale])
 	ui.set_operation_status("idle", "")
 	ui.show_page("")

@@ -1,0 +1,208 @@
+{
+  "asset_version": "interface-v2",
+  "created_at": "2026-10-03",
+  "tool": "image_gen.imagegen (built-in Codex imagegen)",
+  "model": "not disclosed by built-in tool",
+  "references_used": [],
+  "generation_note": "Original generated output; no third-party reference image or preexisting game design was supplied. No additional paid API/CLI was used.",
+  "license_note": "Generated output under the user's OpenAI service terms; no third-party artwork license or CC0 claim is asserted.",
+  "terms_url": "https://openai.com/policies/terms-of-use/",
+  "assets": [
+    {
+      "id": "metal_albedo",
+      "filename": "metal_albedo.png",
+      "source_path": "/Users/a0000/.codex/generated_images/01a0fcfd-b742-7c90-8971-8f80a23ee790/exec-78f32826-f281-4dc4-baa5-58cf4e03491d.png",
+      "role": "low-contrast industrial metal albedo",
+      "prompt": "Use case: precise-object-edit\nAsset type: seamless tileable albedo texture for industrial sci-fi station surfaces.\nEdit target: the supplied square charcoal cold-gray industrial metal texture.\nChange only the material pattern to repair its tiling limitation: remove all panel perimeter lines, plate seams, large rivets and recognizable rectangular landmarks. Preserve the existing charcoal carbon-gray/cold-blue color, aged metal grain, fine brushing, subtle wear and small oxidized pits.\nThe final image must be a continuous uniform metal field suitable for seamless repeating UVs in both directions. Opposite left/right and top/bottom boundaries must continue the same understated microtexture with no stripe, edge line, framing, seam, lighting jump or directional gradient. Extremely low contrast at broad scales. Fine crisp detail at working scale, not blurry; no broad patches or hero focal features.\nKeep square opaque PNG and flat orthographic diffuse albedo appearance. No baked lights, highlights, shadows, perspective, text, labels, icons, logos or watermarks. Do not add objects or scene context.",
+      "technical": {
+        "expected_layout": "square",
+        "filtering": "linear",
+        "mipmaps_recommended": true,
+        "repeat_requested": true,
+        "color_space": "sRGB",
+        "collision_role": "none",
+        "mipmaps_generate": true
+      },
+      "source_history": [
+        {
+          "generated_path": "/Users/a0000/.codex/generated_images/01a0fcfd-b742-7c90-8971-8f80a23ee790/exec-7588936a-0ced-43d4-a468-cd8d0e834016.png",
+          "sha256": "49ad85713dcef49f4743de4407997e3969ad950f4dfd85a033b5c783bf2dd768",
+          "prompt": "Use case: stylized-concept\nAsset type: seamless tileable albedo texture for a mature industrial science-fiction game's station interior and interface metal panels.\nPrimary request: one square 1024x1024 seamless worn metal albedo texture, low-contrast charcoal carbon gray with subtle cold blue undertones. Small brushed steel grain, fine scuffs, oxidized pits, subtle overlapping rectangular plate seams and sparse recessed rivets. Dense, restrained believable industrial material detail.\nComposition/framing: perfectly flat orthographic top-down surface, no perspective. Texture fills every pixel edge-to-edge. All four edges must tile seamlessly with no obvious outer frame. Even scale and detail distribution, no hero focal point.\nLighting/mood: flat neutral diffuse reference only; albedo without baked directional illumination, highlights, cast shadows or gradients.\nConstraints: original design; no readable text, labels, lettering, emblems, UI icons, logos or watermark; no yellow hazard stripes; no large glowing elements. Opaque PNG, square image. Material pattern must remain subtle enough behind game UI.",
+          "selection": "Rejected for visible panel discontinuity in 3x3 repeat; original preserved."
+        }
+      ],
+      "edit_history": [
+        "Built-in imagegen edited the first generated metal source to remove large panel seams; no third-party image input."
+      ],
+      "status": "approved_for_current_presentation",
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "approved_by": "engine_research (source/native-scale) and project_docs (UI context)",
+        "context_evidence": "jiaoben/logs/ui-visual-v2.log: 75 assertions and 42 captures; original source bytes are unchanged by QA.",
+        "tiling_reviewed": true,
+        "tiling_visual_result": "The selected built-in edit removes the large panel seams. A 3762x3762 native 3x3 repeat was inspected. Repetition and nonidentical edge pixels remain; approved for low-amplitude/triplanar modulation, not certified mathematically seamless.",
+        "tiling_edge_rgb_mae_horizontal": 0.062277056554066,
+        "tiling_edge_rgb_mae_vertical": 0.0591675290428914,
+        "source_qa_evidence": "jiaoben/tmp/interface-v2-repeat-3x3.png; jiaoben/tmp/interface-v2-native-scale.png",
+        "mipmaps_imported_verified": true,
+        "mipmap_evidence": "code/assets/interface_v2/metal_albedo.png.import and native Texture2D.get_image().has_mipmaps()==true verified by station agent."
+      }
+    },
+    {
+      "id": "npc_portraits",
+      "filename": "npc_portraits.png",
+      "source_path": "/Users/a0000/.codex/generated_images/01a0fcfd-b742-7c90-8971-8f80a23ee790/exec-0152747b-3dbf-47be-a562-f6b3741389d6.png",
+      "role": "four profession portraits in one 2x2 atlas",
+      "prompt": "Use case: stylized-concept\nAsset type: original NPC portrait atlas for a mature industrial spaceflight game.\nPrimary request: one perfectly square opaque PNG atlas composed of an exact 2 by 2 grid of FOUR individual portraits. Four equally sized square regions fill the image edge-to-edge. No borders, no gutters, no padding, no panel frames. Grid division exactly at 50% width and 50% height.\nCharacter order is mandatory:\nTOP LEFT: adult woman station traffic controller, composed authoritative expression, practical gray-blue station uniform.\nTOP RIGHT: middle-aged man quartermaster and supply officer, square-cut short hairstyle, rugged face, muted amber utility jacket.\nBOTTOM LEFT: woman industrial engineer, short hair, practical worn workwear.\nBOTTOM RIGHT: older man research officer, graying hair, thoughtful expression, cool-colored technical uniform.\nComposition: in EACH square cell a complete head and half-body portrait from head to mid-torso, face centered near upper third, natural upright professional pose, clear distinct face silhouette. No one is cut by grid lines; each character has their own dim softly blurred station interior backdrop. Lighting is consistent across all four.\nStyle/medium: polished high-quality realistic video-game character illustration, restrained cinematic 3D-render finish, natural facial structure and fabric/material detail. Industrial science-fiction density and tangible worn material without copying any existing game's character design.\nPalette: cool carbon gray and subdued blue with quartermaster's restrained amber accent. Soft side lighting, subtle cool rim light, grounded mature tone.\nConstraints: exactly four people, one per quadrant. No readable text, names, symbols, logos, emblems, watermark, UI, weapons or fantasy ornament. No outside margin. Every quadrant is a clean square portrait region suitable for AtlasTexture.",
+      "technical": {
+        "expected_layout": "square_2x2",
+        "filtering": "linear",
+        "mipmaps_recommended": false,
+        "repeat_requested": false,
+        "color_space": "sRGB",
+        "collision_role": "none",
+        "quadrant_ids": [
+          "station_traffic",
+          "quartermaster",
+          "industrial_engineer",
+          "research_officer"
+        ]
+      },
+      "status": "approved_for_current_presentation",
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "approved_by": "engine_research (source/native-scale) and project_docs (UI context)",
+        "context_evidence": "jiaoben/logs/ui-visual-v2.log: 75 assertions and 42 captures; original source bytes are unchanged by QA."
+      }
+    },
+    {
+      "id": "title_background",
+      "filename": "title_background.png",
+      "source_path": "/Users/a0000/.codex/generated_images/01a0fcfd-b742-7c90-8971-8f80a23ee790/exec-49a1d5bc-5459-4865-bc09-f73e51daeb85.png",
+      "role": "title background with dark left copy-safe space",
+      "prompt": "Use case: stylized-concept\nAsset type: original 16:9 title-screen background for a mature industrial spaceflight video game.\nPrimary request: a restrained cinematic science-fiction key visual, exactly wide 16:9 landscape composition, preferably 2048x1152. A colossal industrial orbital station docking entrance fills the RIGHT HALF of the frame, with cavernous steel docking architecture, structural ribs, layered gantries, subtle working lights, and a few docked spacecraft at believable scales. Beyond the station, a subdued distant blue nebula and fine starfield suggest an immense universe.\nComposition/framing: the LEFT 45 PERCENT is mostly dark quiet space with very low contrast and no important subjects, reserved for game title and menu text that will be added separately. Station architecture, docking aperture and ships are confined primarily to the right half; allow atmospheric depth toward center. Wide cinematic establishing view. Strong scale and clear original silhouettes.\nStyle/medium: high-quality polished realistic 3D game key art, tangible worn steel and ceramic surfaces, densely engineered industrial materials, mature and controlled. Original designs, no specific existing game's ship or station designs.\nLighting/mood: cool gray-blue ambient light, restrained cyan navigation illumination, small warm industrial highlights deep in the docks. Calm confident exploration mood, not battle. No excessive bloom.\nConstraints: no text, title, captions, logos, watermarks, UI, people, readable signage or identifiable trademarks. Opaque PNG. Preserve useful dark negative space on left. Full canvas image, no frame or border.",
+      "technical": {
+        "expected_layout": "approximately_16_9",
+        "filtering": "linear",
+        "mipmaps_recommended": true,
+        "repeat_requested": false,
+        "color_space": "sRGB",
+        "collision_role": "none"
+      },
+      "status": "approved_for_current_presentation",
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "approved_by": "engine_research (source/native-scale) and project_docs (UI context)",
+        "context_evidence": "jiaoben/logs/ui-visual-v2.log: 75 assertions and 42 captures; original source bytes are unchanged by QA."
+      }
+    },
+    {
+      "status": "approved_for_current_presentation",
+      "source_kind": "project-authored",
+      "tool": "Codex repository-native vector/shader authoring",
+      "generation_note": "Original repository-native code; no third-party image or external art input.",
+      "license_note": "Project-authored source; no external artwork license or CC0 assertion.",
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "approved_by": "engine_research (source/native-scale) and project_docs (UI context)",
+        "context_evidence": "jiaoben/logs/ui-visual-v2.log: 75 assertions and 42 captures; original source bytes are unchanged by QA.",
+        "original_viewed_with_view_image": false
+      },
+      "id": "ui_panel",
+      "filename": "ui_panel.svg",
+      "source_path": "/Users/a0000/workspace/xingjizhanjian/code/assets/interface_v2/ui_panel.svg",
+      "role": "scalable cut-corner industrial panel",
+      "prompt": "Original SVG drawing of a 256x128 cut-corner metal module panel; functional text stays engine-native.",
+      "technical": {
+        "expected_layout": "vector_panel",
+        "filtering": "linear",
+        "collision_role": "none",
+        "color_space": "sRGB",
+        "scaling": "9-slice StyleBoxTexture"
+      }
+    },
+    {
+      "status": "approved_for_current_presentation",
+      "source_kind": "project-authored",
+      "tool": "Codex repository-native vector/shader authoring",
+      "generation_note": "Original repository-native code; no third-party image or external art input.",
+      "license_note": "Project-authored source; no external artwork license or CC0 assertion.",
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "approved_by": "engine_research (source/native-scale) and project_docs (UI context)",
+        "context_evidence": "jiaoben/logs/ui-visual-v2.log: 75 assertions and 42 captures; original source bytes are unchanged by QA.",
+        "original_viewed_with_view_image": false
+      },
+      "id": "ui_button",
+      "filename": "ui_button.svg",
+      "source_path": "/Users/a0000/workspace/xingjizhanjian/code/assets/interface_v2/ui_button.svg",
+      "role": "scalable cut-corner industrial button",
+      "prompt": "Original SVG drawing of a 128x40 cut-corner control; functional text stays engine-native.",
+      "technical": {
+        "expected_layout": "vector_button",
+        "filtering": "linear",
+        "collision_role": "none",
+        "color_space": "sRGB",
+        "scaling": "9-slice StyleBoxTexture"
+      }
+    },
+    {
+      "status": "approved_for_current_presentation",
+      "source_kind": "project-authored",
+      "tool": "Codex repository-native vector/shader authoring",
+      "generation_note": "Original repository-native code; no third-party image or external art input.",
+      "license_note": "Project-authored source; no external artwork license or CC0 assertion.",
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "approved_by": "engine_research (source/native-scale) and project_docs (UI context)",
+        "context_evidence": "jiaoben/logs/ui-visual-v2.log: 75 assertions and 42 captures; original source bytes are unchanged by QA.",
+        "original_viewed_with_view_image": false
+      },
+      "id": "ui_material_shader",
+      "filename": "ui_material.gdshader",
+      "resource_path": "res://runtime/ui/ui_material.gdshader",
+      "source_path": "/Users/a0000/workspace/xingjizhanjian/code/runtime/ui/ui_material.gdshader",
+      "role": "low-contrast static industrial UI material",
+      "prompt": "Original canvas_item shader: static low-amplitude metal albedo modulation, procedural fine grain and brushing; no simulation state.",
+      "technical": {
+        "expected_layout": "shader",
+        "shader_type": "canvas_item",
+        "collision_role": "none",
+        "dependency": "res://assets/interface_v2/metal_albedo.png",
+        "default_visual_strength": 0.12
+      }
+    },
+    {
+      "id": "app_icon",
+      "filename": "app_icon.svg",
+      "role": "original standalone client application insignia",
+      "source_path": "/Users/a0000/workspace/xingjizhanjian/code/assets/interface_v2/app_icon.svg",
+      "resource_path": "res://assets/interface_v2/app_icon.svg",
+      "source_kind": "authored_vector",
+      "tool": "original project SVG source authored in repository",
+      "model": "not applicable: authored vector",
+      "prompt": "Original top-down vessel silhouette within restrained industrial orbit insignia; carbon steel, ice blue and muted amber; no text or third-party insignia.",
+      "status": "source_authored_export_review_pending",
+      "technical": {
+        "expected_layout": "square",
+        "color_space": "sRGB",
+        "collision_role": "none",
+        "filtering": "linear",
+        "repeat_requested": false
+      },
+      "generation_note": "Original project vector source; no external reference image or paid service.",
+      "license_note": "Original project artwork; no third-party artwork license applies.",
+      "verification": {
+        "vector_layout_checks_passed": true,
+        "source_copy_sha256_matches": true,
+        "approved_by": "project author; actual export check pending"
+      }
+    }
+  ]
+}

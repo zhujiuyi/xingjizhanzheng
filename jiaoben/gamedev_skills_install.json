@@ -1,0 +1,43 @@
+{
+  "repository": "https://github.com/gamedev-skills/awesome-gamedev-agent-skills",
+  "revision": "d4b0e35550c55ae70bdfcab4ef5a0e94610438a9",
+  "license": "Apache-2.0",
+  "method": "skill-installer --method git; verified pinned source, no TLS bypass",
+  "skills": [
+    {
+      "name": "game-ui-ux",
+      "skill_sha256": "8a094c84a377503aa8f4c40df676d1c6b6fc07d36ff95554ce06467f1614397e",
+      "location": "/Users/a0000/.codex/skills/game-ui-ux/SKILL.md"
+    },
+    {
+      "name": "godot-ui-control",
+      "skill_sha256": "9ac89920e74bbf8d939b4d565e350d53b07c9afbe0970345c97d4122f590cfd5",
+      "location": "/Users/a0000/.codex/skills/godot-ui-control/SKILL.md"
+    },
+    {
+      "name": "create-game-assets",
+      "skill_sha256": "c178cde20316f7d326f2a853a76522b375b325346b5b8797ef52aa98740aff18",
+      "location": "/Users/a0000/.codex/skills/create-game-assets/SKILL.md"
+    },
+    {
+      "name": "game-feel",
+      "skill_sha256": "68fc818ad939151be2db9e358e4295a71830c19d61f3aff849f1599307f39f9d",
+      "location": "/Users/a0000/.codex/skills/game-feel/SKILL.md"
+    },
+    {
+      "name": "godot-3d-essentials",
+      "skill_sha256": "e2358689bf656964f3a388baf1c224dc3be2b8de460db8ac8bb1e5bf0b0a4fe8",
+      "location": "/Users/a0000/.codex/skills/godot-3d-essentials/SKILL.md"
+    },
+    {
+      "name": "camera-systems",
+      "skill_sha256": "cec5e9ef16aaf8d42a7b86e3b17678d57920ab7692bbbfe710a34ac0d09b32c7",
+      "location": "/Users/a0000/.codex/skills/camera-systems/SKILL.md"
+    },
+    {
+      "name": "godot-shaders",
+      "skill_sha256": "15bf46f7b0af586f026c1bb58beaeba2579009b70398f43859b7ab286a45e63e",
+      "location": "/Users/a0000/.codex/skills/godot-shaders/SKILL.md"
+    }
+  ]
+}

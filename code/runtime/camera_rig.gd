@@ -28,6 +28,9 @@ func cycle_mode() -> void:
 	zoom = 1.0
 	snapped = false
 
+func reset_observation() -> void:
+	orbit = Vector2.ZERO
+
 func observe(motion: Vector2, sensitivity: float) -> void:
 	orbit.x -= motion.x * sensitivity
 	var limit := _presentation("camera_orbit_pitch_limit_rad")
@@ -59,7 +62,10 @@ func step(delta: float) -> void:
 	camera.near = float(profile.near_m)
 	camera.far = float(profile.far_m)
 	var up := Vector3.UP
-	var target_point := ship.global_position - ship.global_basis.z * float(profile.look_ahead_m)
+	# Frame the player at the actual viewport center. Legacy forward look-ahead
+	# moved the vessel away from the center; independent rotation damping then
+	# added a second, moving offset while steering.
+	var target_point := ship.global_position
 	var desired: Vector3
 	if ship.visual != null:
 		ship.visual.visible = mode != Types.CameraMode.FRONT or ship.record.status == Types.ShipStatus.DOCKED
@@ -75,16 +81,25 @@ func step(delta: float) -> void:
 	elif mode == Types.CameraMode.FRONT:
 		var front := ship.get_node_or_null("FrontCamera") as Node3D
 		desired = front.global_position if front != null else ship.global_position
-		target_point = desired - ship.global_basis.z
-		up = ship.global_basis.y
 		if ship.visual != null:
 			ship.visual.visible = false
+		# A cockpit view must inherit the ship pose without positional lag.
+		# Free look affects only this camera and returns on right-button release.
+		camera.global_position = desired
+		camera.global_basis = (ship.global_basis * Basis(Vector3.UP, orbit.x) * Basis(Vector3.RIGHT, orbit.y)).orthonormalized()
+		snapped = true
+		return
 	else:
 		if ship.visual != null:
 			ship.visual.visible = true
 		var distance := clampf(float(profile.distance_m) * zoom, float(profile.zoom_min_m), float(profile.zoom_max_m))
 		var offset := Vector3(0.0, float(profile.height_m), distance)
 		if mode == Types.CameraMode.FOLLOW:
+			# Limit the final camera elevation, including the authored dolly height.
+			# Clamping only orbit pitch crosses the up pole at minimum zoom.
+			var base_elevation := atan2(offset.y, offset.z)
+			var pitch_limit := _presentation("camera_orbit_pitch_limit_rad")
+			orbit.y = clampf(orbit.y, base_elevation - pitch_limit, base_elevation + pitch_limit)
 			offset = Basis(Vector3.UP, orbit.x) * Basis(Vector3.RIGHT, orbit.y) * offset
 			desired = ship.global_position + ship.global_basis * offset
 			up = ship.global_basis.y
@@ -97,6 +112,15 @@ func step(delta: float) -> void:
 	var mix := 1.0 - exp(-delta / float(profile.position_smooth_s))
 	camera.global_position = desired if not snapped else camera.global_position.lerp(desired, mix)
 	if camera.global_position.distance_squared_to(target_point) > 0.0001:
-		var aim: Basis = Transform3D(Basis.IDENTITY, camera.global_position).looking_at(target_point, up).basis
-		camera.global_basis = aim if not snapped else camera.global_basis.slerp(aim, 1.0 - exp(-delta / float(profile.rotation_smooth_s))).orthonormalized()
+		var direction := camera.global_position.direction_to(target_point)
+		if direction.cross(up).length_squared() < 0.000001:
+			# A moving dolly can transiently pass directly above its target. Project
+			# the preceding up axis first to retain orientation through that point.
+			up = camera.global_basis.y.slide(direction)
+			if up.length_squared() < 0.000001:
+				up = (Vector3.RIGHT if absf(direction.x) < 0.9 else Vector3.FORWARD).slide(direction)
+		var aim: Basis = Transform3D(Basis.IDENTITY, camera.global_position).looking_at(target_point, up.normalized()).basis
+		# Smooth the dolly position, then aim at the current vessel, so center
+		# framing is exact even while the ship moves and the camera catches up.
+		camera.global_basis = aim.orthonormalized()
 	snapped = true

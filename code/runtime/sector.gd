@@ -102,6 +102,7 @@ func rebuild_player() -> bool:
 		flight.visual = factory.ship(row.ship_def_id)
 		flight.visual.name = "ShipArt"
 		flight.add_child(flight.visual)
+	XJSurfaceStyle.apply_ship(flight.visual)
 	return true
 
 func _clear_owners(node: Node) -> void:
@@ -123,6 +124,7 @@ func sync_entities() -> void:
 			var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", row.spawn_id)
 			var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)
 			var body: CharacterBody3D = Factory.enemy_scene(str(definition.archetype_id))
+			XJSurfaceStyle.apply_ship(body)
 			body.motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
 			body.collision_layer = 2
 			body.collision_mask = 3

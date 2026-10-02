@@ -5,6 +5,9 @@ const Store = preload("res://runtime/data/store.gd")
 
 static func run(test_path: String, upgrade: bool = false) -> bool:
 	var evidence: Dictionary = {"checks": 0, "failures": 0}
+	var visual_error := XJPresentationResources.validate()
+	print("PRESENTATION_RELEASE_RESULT ", "PASS" if visual_error.is_empty() else "FAIL " + visual_error)
+	if not visual_error.is_empty(): return false
 	test_path = test_path.replace("\\", "/")
 	if not test_path.is_absolute_path() or test_path.contains("..") or not test_path.contains("/jiaoben/tmp/"):
 		_check(evidence, false, "diagnostic requires absolute jiaoben/tmp test database")

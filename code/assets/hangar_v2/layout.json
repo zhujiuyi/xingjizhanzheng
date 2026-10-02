@@ -1,0 +1,46 @@
+{
+  "asset_version": "hangar-v2",
+  "units": "exhibition_metres",
+  "exhibition_only": true,
+  "world_offset_y": 15000,
+  "camera_position": [
+    36,
+    26,
+    36
+  ],
+  "camera_target": [
+    0,
+    5,
+    -2
+  ],
+  "camera_fov_deg": 49,
+  "showcase_position": [
+    0,
+    7,
+    -5
+  ],
+  "showcase_length_m": 26,
+  "showcase_yaw_deg": 170,
+  "crew_positions": {
+    "operations": [
+      -18,
+      0,
+      14.7
+    ],
+    "industry": [
+      -6,
+      0,
+      18.7
+    ],
+    "research": [
+      8,
+      0,
+      17.7
+    ],
+    "supplies": [
+      21,
+      0,
+      12.7
+    ]
+  }
+}

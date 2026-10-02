@@ -11,7 +11,7 @@ class RawAssetExport extends EditorExportPlugin:
 	func _export_begin(_features: PackedStringArray, _is_debug: bool, _path: String, _flags: int) -> void:
 		var count: int = 0
 		var included: Dictionary = {}
-		for manifest_path in ["res://assets/manifest.json", "res://assets/placeholders/manifest.json"]:
+		for manifest_path in ["res://assets/manifest.json", "res://assets/placeholders/manifest.json", "res://assets/interface_v2/manifest.json", "res://assets/hangar_v2/manifest.json"]:
 			if not FileAccess.file_exists(manifest_path): continue
 			var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(manifest_path))
 			if not parsed is Dictionary or not parsed.has("resources"):
@@ -19,7 +19,7 @@ class RawAssetExport extends EditorExportPlugin:
 				continue
 			add_file(manifest_path, FileAccess.get_file_as_bytes(manifest_path), false)
 			for entry in parsed.resources:
-				var source_path: String = entry.resource_path
+				var source_path: String = entry.get("resource_path", entry.get("path", ""))
 				if included.has(source_path): continue
 				if not source_path.begins_with("res://") or source_path.contains("..") or not FileAccess.file_exists(source_path) or FileAccess.get_sha256(source_path) != entry.sha256:
 					push_error("XJ export: missing/hash-mismatched original source " + source_path)

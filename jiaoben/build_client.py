@@ -35,16 +35,33 @@ def main() -> None:
     args = parser.parse_args()
     source_revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip())
-    build_id = '0.4.0-' + source_revision[:8] + '-' + time.strftime('%Y%m%d-%H%M%S')
+    version = re.search(r'^config/version="([^"]+)"$', (CODE / 'project.godot').read_text(), re.M)
+    if version is None: raise RuntimeError('Client version is absent')
+    build_id = version[1] + '-' + source_revision[:8] + '-' + time.strftime('%Y%m%d-%H%M%S')
     staging = ROOT / 'jiaoben/tmp/delivery' / build_id
     staging.mkdir(parents=True)
     logs = ROOT / 'jiaoben/logs'
     logs.mkdir(exist_ok=True)
     manifest = json.loads((CODE / 'assets/manifest.json').read_text())
-    for resource in manifest['resources']:
-        path = CODE / resource['resource_path'].removeprefix('res://')
-        if sha(path) != resource['sha256']:
-            raise RuntimeError(f'Formal asset hash differs: {path}')
+    raw_paths: dict[str, str] = {}
+    presentation_packs = []
+    for manifest_path in (CODE / 'assets/manifest.json', CODE / 'assets/placeholders/manifest.json',
+                          CODE / 'assets/interface_v2/manifest.json', CODE / 'assets/hangar_v2/manifest.json'):
+        pack = json.loads(manifest_path.read_text())
+        for resource in pack['resources']:
+            resource_path = resource.get('resource_path', resource.get('path', ''))
+            if not resource_path.startswith('res://') or '..' in Path(resource_path[6:]).parts:
+                raise RuntimeError(f'Invalid runtime resource: {resource_path}')
+            path = CODE / resource_path[6:]
+            if sha(path) != resource['sha256']:
+                raise RuntimeError(f'Formal asset hash differs: {path}')
+            if resource_path in raw_paths and raw_paths[resource_path] != resource['sha256']:
+                raise RuntimeError(f'Conflicting pack identity: {resource_path}')
+            raw_paths[resource_path] = resource['sha256']
+        if manifest_path.parent.name in ('interface_v2', 'hangar_v2'):
+            presentation_packs.append({'asset_version': pack['asset_version'],
+                                       'manifest_path': str(manifest_path.relative_to(CODE)),
+                                       'manifest_sha256': sha(manifest_path), 'resource_count': len(pack['resources'])})
     with sqlite3.connect(f'file:{CODE / "data/catalog.db"}?mode=ro', uri=True) as catalog:
         catalog.row_factory = sqlite3.Row
         if catalog.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
@@ -52,7 +69,8 @@ def main() -> None:
         content = dict(catalog.execute('SELECT * FROM catalog_meta').fetchone())
     evidence = {'build_id': build_id, 'source_revision': source_revision, 'source_dirty': dirty,
                 'content': content, 'asset_version': manifest['asset_version'],
-                'asset_manifest_sha256': manifest['manifest_sha256'], 'verification': {}, 'archives': {}}
+                'asset_manifest_sha256': manifest['manifest_sha256'], 'presentation_packs': presentation_packs,
+                'raw_resource_count': len(raw_paths), 'verification': {}, 'archives': {}}
     for platform in (['mac', 'windows'] if args.platform == 'all' else [args.platform]):
         folder = staging / platform
         folder.mkdir()
@@ -60,7 +78,7 @@ def main() -> None:
         text = run(['sh', 'jiaoben/run_godot.sh', '--headless', '--editor', '--path', 'code',
                     '--export-release', 'macOS' if platform == 'mac' else 'Windows', str(output)],
                    logs / f'{build_id}-{platform}-export.log')
-        if 'XJ_RAW_ASSET_EXPORT sources=79' not in text:
+        if not re.search(rf'^XJ_RAW_ASSET_EXPORT sources={len(raw_paths)}$', text, re.M):
             raise RuntimeError('Expected formal raw asset export evidence is absent')
         licenses = folder / '第三方许可'
         licenses.mkdir()
@@ -81,6 +99,8 @@ def main() -> None:
                        logs / f'{build_id}-mac-database.log', env)
             if not re.search(r'STORE_RELEASE_RESULT PASS checks=6 failures=0', text):
                 raise RuntimeError('Exported app database diagnostic did not pass')
+            if 'PRESENTATION_RELEASE_RESULT PASS' not in text:
+                raise RuntimeError('Exported presentation package diagnostic did not pass')
             evidence['verification']['mac'] = 'actual exported app: resource hashes/new/save/reopen/resume PASS; ad-hoc signature PASS'
             archive = staging / '星际战舰-macOS.zip'
             run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(folder), str(archive)],

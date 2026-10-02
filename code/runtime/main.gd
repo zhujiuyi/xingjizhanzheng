@@ -28,6 +28,10 @@ var last_error: String = ""
 var save_wait_elapsed: float = 0.0
 var previous_page: String = "title"
 var weapon_errors: Dictionary = {}
+var flight_look := XJFlightLook.new()
+var pointer_mode: bool = false
+var hangar: XJStationHangar
+var presentation_stage: String = ""
 
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
@@ -42,8 +46,14 @@ func _ready() -> void:
 			get_tree().quit(2)
 			return
 		progress_database_path = validation_path
+	last_error = XJPresentationResources.validate()
+	if not last_error.is_empty():
+		push_error(last_error)
+		get_tree().quit(2)
+		return
 	_install_input()
 	get_tree().auto_accept_quit = false
+	get_window().focus_exited.connect(_release_observation)
 	ui = XJUI.new()
 	add_child(ui)
 	ui.requested.connect(_command)
@@ -59,6 +69,20 @@ func _ready() -> void:
 	Engine.physics_ticks_per_second = int(store.catalog.rule("simulation_hz"))
 	preferences = store.preferences()
 	_apply_preferences()
+	# Prepare every presentation dependency before publishing a new/load world.
+	# It is a hidden exhibition; gameplay state and catalog balance are untouched.
+	hangar = XJStationHangar.new()
+	hangar.name = "StationExhibition"
+	hangar.configure("shuttle_swift", store.catalog)
+	add_child(hangar)
+	hangar.hide()
+	hangar.process_mode = Node.PROCESS_MODE_DISABLED
+	if hangar.get_camera() == null:
+		last_error = "空间站表现资源初始化失败"
+		ui.notify(last_error, true)
+		push_error(last_error)
+		return
+	camera.camera.make_current()
 	ui.show_title(store.list_slots())
 	services_ready = true
 
@@ -67,6 +91,7 @@ func _notification(what: int) -> void:
 		_command("quit", "", 1, "")
 
 func _exit_tree() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if gameplay != null and gameplay.has_method("dispose"):
 		gameplay.call("dispose")
 	if staged_gameplay != null and staged_gameplay.has_method("dispose"):
@@ -78,6 +103,8 @@ func _process(delta: float) -> void:
 	if ui != null:
 		if not previous_page.is_empty() and ui.page.is_empty(): _center_steering()
 		previous_page = ui.page
+	_sync_mouse_mode()
+	_sync_presentation_stage()
 	if not deferred_save.is_empty():
 		save_wait_elapsed += delta
 		if save_wait_elapsed >= float(store.catalog.rule("save_wait_prompt_s")):
@@ -92,7 +119,8 @@ func _process(delta: float) -> void:
 	if ui != null:
 		ui.tick(delta)
 	if camera != null:
-		camera.step(delta)
+		if state == null or state.ship().status != Types.ShipStatus.DOCKED:
+			camera.step(delta)
 
 func _physics_process(delta: float) -> void:
 	if state == null or world == null or busy or _paused():
@@ -104,7 +132,7 @@ func _physics_process(delta: float) -> void:
 		world.rebuild_player()
 		camera.bind(world.flight, store.catalog, state.player().camera_mode)
 	world.flight.metrics = gameplay.call("metrics", ship)
-	_read_flight_input()
+	_read_flight_input(delta)
 	gameplay.call("activate_repairs")
 	if fire_held and Input.is_action_pressed("fire") and not ui.input_blocked() and ship.status == Types.ShipStatus.FLYING:
 		_fire_weapons()
@@ -143,15 +171,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	if state == null or busy:
 		return
 	if event.is_action_pressed("menu"):
-		ui.show_page("pause" if ui.page.is_empty() else "")
+		var next_page := "pause" if ui.page.is_empty() or ui.page == "station" else _home_page()
+		if ui.page == "settings": next_page = "pause"
+		ui.show_page(next_page)
 		_release_observation()
 		world.flight.clear_intent()
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("map"):
-		ui.show_page("" if ui.page == "map" else "map")
+		ui.show_page(_home_page() if ui.page == "map" else "map")
 	elif event.is_action_pressed("missions"):
-		ui.show_page("" if ui.page == "missions" else "missions")
+		ui.show_page(_home_page() if ui.page == "missions" else "missions")
 	elif event.is_action_pressed("quick_save"):
 		_request_save("quick", 0)
 	elif event.is_action_pressed("quick_load"):
@@ -159,6 +189,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			if slot.world_id == state.world_id and slot.slot_kind == "quick":
 				_command("load", slot.slot_id, slot.generation, slot.current_snapshot_id)
 				break
+	if event.is_action_pressed("pointer") and not event.is_echo() and ui.page.is_empty():
+		pointer_mode = not pointer_mode
+		flight_look.clear()
+		fire_held = false
+		_sync_mouse_mode()
+		get_viewport().set_input_as_handled()
+		return
 	if ui.input_blocked():
 		return
 	if event.is_action_pressed("camera"):
@@ -169,16 +206,19 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("interact"):
 		_interact()
 	elif event.is_action_pressed("fire"):
-		fire_held = true
+		fire_held = not pointer_mode and not observing
 	elif event.is_action_released("fire"):
 		fire_held = false
 	elif event.is_action_pressed("observe"):
 		observing = true
+		flight_look.clear()
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	elif event.is_action_released("observe"):
 		_release_observation()
 	elif event is InputEventMouseMotion and observing:
-		camera.observe(event.relative, float(preferences.get("mouse_sensitivity", 0.0)))
+		camera.observe(event.screen_relative, float(preferences.get("mouse_sensitivity", 0.0)))
+	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not pointer_mode:
+		flight_look.add_motion(event.screen_relative, float(preferences.get("mouse_sensitivity", 0.0)))
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			camera.scroll_zoom(-1)
@@ -193,10 +233,11 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_released("observe") and observing:
 		_release_observation()
 
-func _read_flight_input() -> void:
+func _read_flight_input(delta: float = 0.0) -> void:
 	world.flight.clear_intent()
 	if ui.input_blocked() or state.ship().status != Types.ShipStatus.FLYING or travel.active():
 		fire_held = false
+		flight_look.clear()
 		return
 	var intent := world.flight.intent
 	intent.thrust_x = Input.get_axis("left", "right")
@@ -205,12 +246,11 @@ func _read_flight_input() -> void:
 	intent.roll_request = Input.get_axis("roll_left", "roll_right")
 	intent.brake_requested = Input.is_action_pressed("brake")
 	intent.engine_cycle_requested = Input.is_action_pressed("boost")
-	if not observing:
-		var cursor := get_viewport().get_mouse_position()
-		var size := get_viewport().get_visible_rect().size
-		var displacement := (cursor - size * 0.5) / (size * 0.5)
-		intent.yaw_request = -clampf(displacement.x, -1.0, 1.0)
-		intent.pitch_request = -clampf(displacement.y, -1.0, 1.0)
+	if not observing and not pointer_mode and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		var tick_delta := delta if delta > 0.0 else 1.0 / float(Engine.physics_ticks_per_second)
+		var turn_request := flight_look.consume(float(world.flight.metrics.turn_radps), tick_delta)
+		intent.yaw_request = turn_request.x
+		intent.pitch_request = turn_request.y
 	if intent.engine_cycle_requested:
 		for equipment: Dtos.EquipmentStateDto in state.rows("equipment_state"):
 			var slot := state.find("container_state", "container_id", equipment.slot_container_id) as Dtos.ContainerStateDto
@@ -314,6 +354,7 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			var created := store.new_world(target.strip_edges() if not target.strip_edges().is_empty() else "断航远征", int(Time.get_unix_time_from_system()), _prepare_loaded)
 			if created != null:
 				_activate(created)
+				ui.notify("远征已建立，选择航路与委托开始教学。")
 			else:
 				_discard_staged()
 				ui.notify("新建世界失败，已有档案保留。", true)
@@ -356,6 +397,9 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		"quit_without_save":
 			deferred_save = {}
 			get_tree().quit()
+		"hangar_focus":
+			if hangar != null and state != null and state.ship().status == Types.ShipStatus.DOCKED:
+				hangar.focus_service(target)
 		"quit", "return_title":
 			if state == null:
 				if action == "quit": get_tree().quit()
@@ -462,11 +506,14 @@ func _activate(candidate: XJRuntimeState) -> void:
 	camera.bind(world.flight, store.catalog, state.player().camera_mode)
 	ui.slots = store.list_slots()
 	ui.bind(state, store.catalog, gameplay, world, camera)
+	presentation_stage = ""
 	deferred_save = {}
 	brake_hold.clear()
 	pending_damage.clear()
 	autosave_elapsed = 0.0
 	_release_observation()
+	_center_steering()
+	_sync_presentation_stage()
 
 func _discard_staged() -> void:
 	if is_instance_valid(staged_world):
@@ -596,18 +643,59 @@ func _apply_preferences() -> void:
 func _release_observation() -> void:
 	observing = false
 	fire_held = false
+	flight_look.clear()
+	if camera != null: camera.reset_observation()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	_center_steering()
+	if world != null: world.flight.clear_intent()
+
+func _home_page() -> String:
+	return "station" if state != null and state.ship().status == Types.ShipStatus.DOCKED else ""
+
+func _sync_mouse_mode() -> void:
+	var flight_active := state != null and world != null and ui != null and ui.page.is_empty() and state.ship().status == Types.ShipStatus.FLYING and not busy and get_window().has_focus()
+	var desired := Input.MOUSE_MODE_CAPTURED if flight_active and (observing or not pointer_mode) else Input.MOUSE_MODE_VISIBLE
+	if Input.mouse_mode != desired:
+		flight_look.clear()
+		Input.mouse_mode = desired
+
+func _sync_presentation_stage() -> void:
+	if state == null or world == null:
+		if hangar != null:
+			hangar.hide()
+			hangar.process_mode = Node.PROCESS_MODE_DISABLED
+		presentation_stage = ""
+		return
+	var docked := state.ship().status == Types.ShipStatus.DOCKED
+	if docked:
+		if hangar.ship_def_id != state.ship().ship_def_id:
+			hangar.change_ship(state.ship().ship_def_id)
+		if presentation_stage != "hangar": hangar.focus_service("")
+		world.hide()
+		hangar.show()
+		hangar.process_mode = Node.PROCESS_MODE_DISABLED if _paused() or busy else Node.PROCESS_MODE_INHERIT
+		hangar.get_camera().make_current()
+		presentation_stage = "hangar"
+	else:
+		if hangar != null:
+			hangar.hide()
+			hangar.process_mode = Node.PROCESS_MODE_DISABLED
+		if presentation_stage == "hangar": camera.snapped = false
+		world.show()
+		camera.camera.make_current()
+		presentation_stage = "flight"
 
 func _center_steering() -> void:
 	if state != null and ui != null and ui.page.is_empty() and state.ship().status == Types.ShipStatus.FLYING:
 		fire_held = false
 		weapon_errors.clear()
 		world.flight.clear_intent()
-		Input.warp_mouse(get_viewport().get_visible_rect().get_center())
+		flight_look.clear()
+		pointer_mode = false
+		if camera != null: camera.reset_observation()
+		_sync_mouse_mode()
 
 func _install_input() -> void:
-	var keys := {"forward": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "up": KEY_SPACE, "down": KEY_C, "roll_left": KEY_Q, "roll_right": KEY_E, "brake": KEY_X, "boost": KEY_SHIFT, "interact": KEY_F, "target": KEY_TAB, "camera": KEY_V, "map": KEY_M, "missions": KEY_J, "menu": KEY_ESCAPE, "quick_save": KEY_F5, "quick_load": KEY_F9}
+	var keys := {"forward": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "up": KEY_SPACE, "down": KEY_C, "roll_left": KEY_Q, "roll_right": KEY_E, "brake": KEY_X, "boost": KEY_SHIFT, "interact": KEY_F, "target": KEY_TAB, "camera": KEY_V, "map": KEY_M, "missions": KEY_J, "menu": KEY_ESCAPE, "quick_save": KEY_F5, "quick_load": KEY_F9, "pointer": KEY_ALT}
 	for action in keys:
 		if not InputMap.has_action(action): InputMap.add_action(action)
 		var event := InputEventKey.new()

@@ -3,6 +3,7 @@ extends CanvasLayer
 signal requested(action: String, target: String, quantity: int, extra: String)
 const Types = preload("res://contracts/contract_types.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
+const UISkin = preload("res://runtime/ui_theme.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
 var gameplay: RefCounted
@@ -53,6 +54,33 @@ var friendly_names: Dictionary = {}
 const PAGE_TITLES: Dictionary = {"station": "空间站服务", "ships": "舰队与借船", "warehouse": "仓库与货舱", "fitting": "舰船配装", "market": "站点市场", "industry": "工业与回收", "missions": "任务与合同", "research": "科技与设施", "map": "星域航路", "pause": "暂停与存读档"}
 const ACTION_NAMES: Dictionary = {"undock": "已出港", "dock": "已停靠", "switch_ship": "已切换驾驶舰", "buy_item": "购买完成", "sell_item": "出售完成", "buy_ship": "船体购买完成", "sell_ship": "船体出售完成", "move_stack": "货物转移完成", "move_item": "设备转移完成", "fit_module": "配装完成", "unfit_module": "设备已卸下", "repair": "维修完成", "manufacture": "生产完成", "recycle": "拆解完成", "accept_mission": "任务已接取", "abandon_mission": "任务已放弃", "deliver_mission": "任务已交付", "claim_loan": "任务舰已交接", "handoff_loan": "借船已归还", "request_rescue": "救援完成", "start_scan": "扫描已开始", "stop_scan": "扫描已停止", "start_mining": "采矿已开始", "stop_mining": "采矿已停止", "set_module_enabled": "设备开关已更新", "request_engine_cycle": "增推已启用", "research": "研究完成", "build_base": "设施已建成", "recover_resource": "组件已回收", "pickup_wreck": "残骸已回收"}
 var preferences: Dictionary = {}
+var title_background: TextureRect
+var title_shade: ColorRect
+var instrument: PanelContainer
+var dial: Control
+var condition_bars: Array[Dictionary] = []
+var energy_label: Label
+var energy_bar: ProgressBar
+var heat_label: Label
+var heat_bar: ProgressBar
+var cargo_label: Label
+var instrument_title: Label
+var navigation: PanelContainer
+var station_layer: Control
+var station_services: PanelContainer
+var station_details: PanelContainer
+var station_departure: PanelContainer
+var station_ship_name: Label
+var station_ship_status: Label
+var station_status: Label
+var station_portraits: Array[TextureRect] = []
+var sidebar: VBoxContainer
+var card_grid: GridContainer
+var title_show_slots: bool = false
+var return_page: String = ""
+var ui_motion: Tween
+var telemetry_signature: String = ""
+var last_page_focus: Dictionary = {}
 var operation_kind: String = ""
 var operation_message: String = ""
 var operation_waiting: bool = false
@@ -73,117 +101,94 @@ func _ready() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
-	theme = Theme.new()
-	var font: SystemFont = SystemFont.new()
-	font.font_names = PackedStringArray(["PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC"])
-	font.allow_system_fallback = true
-	theme.default_font = font
-	theme.default_font_size = 16
-	theme.set_color("font_color", "Label", Color("d5e4ef"))
-	theme.set_color("font_color", "Button", Color("c5e8ee"))
-	theme.set_color("font_hover_color", "Button", Color.WHITE)
-	theme.set_stylebox("normal", "Button", _box(Color("102831"), Color("28606a")))
-	theme.set_stylebox("hover", "Button", _box(Color("21414d"), Color("57dce9")))
-	theme.set_stylebox("pressed", "Button", _box(Color("265761"), Color("71f0ff")))
-	theme.set_stylebox("disabled", "Button", _box(Color("111b22"), Color("273740")))
-	theme.set_stylebox("panel", "PanelContainer", _box(Color(0.025, 0.055, 0.083, 0.98), Color("30616d")))
+	theme = UISkin.create()
 	root.theme = theme
-	hud_left = VBoxContainer.new()
-	hud_left.position = Vector2(20, 16)
-	hud_left.add_theme_constant_override("separation", 9)
-	hud_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(hud_left)
-	top = _text_to(hud_left, "星际战舰", 21)
-	health = _text_to(hud_left, "", 14)
-	objective = _text_to(hud_left, "", 15)
-	objective.max_lines_visible = 7
-	work_box = VBoxContainer.new()
-	work_box.add_theme_constant_override("separation", 5)
-	hud_left.add_child(work_box)
-	work_label = _text_to(work_box, "", 14)
-	work_progress = ProgressBar.new()
-	work_progress.show_percentage = true
-	work_progress.custom_minimum_size.y = 18
-	work_box.add_child(work_progress)
-	work_stop = _button(work_box, "停止当前作业", func():
-		requested.emit("stop_scan" if work_mode == "scan" else "stop_mining", "", 1, ""))
-	work_box.hide()
-	controls = _label(root, "W/S 推进  A/D 横移  Space/C 升降  Q/E 滚转\n鼠标转向 / 左键射击 / 右键观察  X 制动  Shift 增推\nF 交互  V 视角  Tab 目标  M 星图  J 任务  Esc 暂停", 13)
-	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	controls.offset_left = 20
-	controls.offset_top = -84
-	controls.offset_bottom = -20
-	toast = _label(root, "", 15)
-	toast.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	toast.offset_top = -119
-	toast.offset_left = 20
-	toast.offset_right = -20
-	toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	toast.max_lines_visible = 2
-	toast.modulate = Color("ffc77d")
+	title_background = TextureRect.new()
+	title_background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	title_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	title_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	title_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title_background.texture = UISkin.texture("res://assets/interface_v2/title_background.png")
+	root.add_child(title_background)
+	title_shade = ColorRect.new()
+	title_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	title_shade.color = Color(0.008, 0.015, 0.024, 0.43)
+	title_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(title_shade)
 	marker_layer = Control.new()
 	marker_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	marker_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	marker_layer.draw.connect(_draw_markers)
 	root.add_child(marker_layer)
-	target_panel = PanelContainer.new()
-	target_panel.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
-	target_panel.anchor_left = 1.0
-	target_panel.offset_left = -282
-	target_panel.offset_right = -18
-	target_panel.offset_top = 100
-	target_panel.offset_bottom = -122
-	target_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	root.add_child(target_panel)
-	var target_body: VBoxContainer = VBoxContainer.new()
-	target_panel.add_child(target_body)
-	_text_to(target_body, "附近目标 · Tab 切换", 16)
-	npc_detail = VBoxContainer.new()
-	target_body.add_child(npc_detail)
-	npc_title = _text_to(npc_detail, "", 15)
-	for layer_name: String in ["护盾", "装甲", "结构"]:
-		var label: Label = _text_to(npc_detail, layer_name, 12)
-		var bar: ProgressBar = ProgressBar.new()
-		bar.show_percentage = false
-		bar.custom_minimum_size.y = 9
-		var style: StyleBoxFlat = _box(Color("57bde9") if layer_name == "护盾" else Color("d0a366") if layer_name == "装甲" else Color("d27e7e"), Color.TRANSPARENT)
-		style.content_margin_top = 0
-		style.content_margin_bottom = 0
-		bar.add_theme_stylebox_override("fill", style)
-		npc_detail.add_child(bar)
-		npc_bars.append({"label": label, "bar": bar, "name": layer_name})
-	npc_detail.hide()
-	var target_scroll: ScrollContainer = ScrollContainer.new()
-	target_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	target_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	target_body.add_child(target_scroll)
-	target_list = VBoxContainer.new()
-	target_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	target_scroll.add_child(target_list)
-	operation_bar = PanelContainer.new()
+	var objective_frame: PanelContainer = _frame(root, "FlightObjective")
+	objective_frame.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	objective_frame.offset_left = 22
+	objective_frame.offset_top = 22
+	objective_frame.offset_right = 342
+	objective_frame.offset_bottom = 130
+	hud_left = VBoxContainer.new()
+	hud_left.add_theme_constant_override("separation", 9)
+	hud_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	objective_frame.add_child(hud_left)
+	top = _text_to(hud_left, "航行", 17)
+	top.add_theme_color_override("font_color", UISkin.ICE)
+	objective = _text_to(hud_left, "", 14)
+	objective.max_lines_visible = 4
+	work_box = VBoxContainer.new()
+	work_box.add_theme_constant_override("separation", 5)
+	hud_left.add_child(work_box)
+	work_label = _text_to(work_box, "", 13)
+	work_progress = _bar(work_box, UISkin.AMBER, 6)
+	work_progress.show_percentage = true
+	work_stop = _button(work_box, "停止作业", func(): requested.emit("stop_scan" if work_mode == "scan" else "stop_mining", "", 1, ""))
+	work_box.hide()
+	_build_instrument()
+	_build_navigation()
+	controls = _label(root, "Alt 操作界面 · 右键观察", 11)
+	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	controls.offset_left = 22
+	controls.offset_top = -37
+	controls.offset_right = 302
+	controls.add_theme_color_override("font_color", UISkin.MUTED)
+	toast = _label(root, "", 14)
+	toast.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	toast.offset_left = 370
+	toast.offset_right = -320
+	toast.offset_top = 22
+	toast.offset_bottom = 68
+	toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	toast.max_lines_visible = 2
+	_build_target_module()
+	operation_bar = _frame(root, "OperationStatus")
 	operation_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	operation_bar.offset_left = 18
-	operation_bar.offset_right = -18
-	operation_bar.offset_top = 8
+	operation_bar.offset_left = 22
+	operation_bar.offset_right = -22
+	operation_bar.offset_top = 12
 	operation_bar.offset_bottom = 70
 	var operation_row: HBoxContainer = HBoxContainer.new()
+	operation_row.add_theme_constant_override("separation", 16)
 	operation_bar.add_child(operation_row)
-	operation_label = _text_to(operation_row, "", 15)
-	operation_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	operation_label = _text_to(operation_row, "", 14)
 	operation_label.custom_minimum_size.x = 0
 	operation_label.max_lines_visible = 3
-	operation_cancel = _button(operation_row, "取消等待保存", func(): requested.emit("cancel_save", "", 1, ""))
+	operation_cancel = _button(operation_row, "取消等待", func(): requested.emit("cancel_save", "", 1, ""))
+	operation_cancel.custom_minimum_size.x = 122
 	operation_cancel.size_flags_horizontal = Control.SIZE_SHRINK_END
-	operation_cancel.custom_minimum_size.x = 150
-	root.add_child(operation_bar)
 	operation_bar.hide()
 	panel = PanelContainer.new()
+	panel.name = "ScreenPanel"
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	panel.offset_left = 18
-	panel.offset_top = 80
-	panel.offset_right = -18
-	panel.offset_bottom = -52
+	panel.offset_left = 30
+	panel.offset_top = 34
+	panel.offset_right = -30
+	panel.offset_bottom = -34
 	root.add_child(panel)
+	station_layer = Control.new()
+	station_layer.name = "StationOverlay"
+	station_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	station_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(station_layer)
+	station_layer.hide()
 	root.resized.connect(_responsive)
 	operation_bar.resized.connect(_responsive)
 	show_title([])
@@ -196,6 +201,7 @@ func bind(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted, world: X
 	sector = world
 	camera = rig
 	definition_cache.clear()
+	telemetry_signature = ""
 	_build_names()
 	menu_open = false
 	target_id = ""
@@ -207,43 +213,60 @@ func show_title(save_slots: Array[Dictionary]) -> void:
 	slots = save_slots
 	menu_open = true
 	page = "title"
-	_build_panel("星际战舰", "断航星域 · 单人远征")
-	_text("驾驶专职战舰探索失联星系，重建航路、采集资源并完成战斗任务。", 20)
-	_text("进度保留在本机。可建立新的远征，或继续已保存的航行。")
+	_build_panel("星际战舰", "断航星域  /  单人远征")
+	_text("从失联边疆，重建你的航路。", 17)
+	if not slots.is_empty():
+		var resume: Button = _button(body, "继续最近航行", func(): requested.emit("continue", "", 1, ""))
+		_primary(resume)
 	new_name = LineEdit.new()
+	new_name.name = "ExpeditionName"
 	new_name.placeholder_text = "远征名称"
 	new_name.text = "断航远征"
 	new_name.max_length = 48
+	new_name.custom_minimum_size.y = 38
 	body.add_child(new_name)
-	_button(body, "建立新远征", func(): requested.emit("new_world", new_name.text.strip_edges(), 1, ""))
+	var start: Button = _button(body, "建立新远征", func(): requested.emit("new_world", new_name.text.strip_edges(), 1, ""))
+	_primary(start) if slots.is_empty() else _secondary(start)
 	if not slots.is_empty():
-		_button(body, "继续最近航行", func(): requested.emit("continue", "", 1, ""))
-		_show_slots()
-	_button(body, "设置", func(): show_page("settings"))
-	_button(body, "退出游戏", func(): requested.emit("quit", "", 1, ""))
+		_button(body, "航行档案" + (" · 收起" if title_show_slots else ""), func(): title_show_slots = not title_show_slots; show_title(slots))
+		if title_show_slots: _show_slots()
+	var utilities: HBoxContainer = HBoxContainer.new()
+	utilities.add_theme_constant_override("separation", 12)
+	body.add_child(utilities)
+	_secondary(_button(utilities, "设置", func(): show_page("settings")))
+	_secondary(_button(utilities, "退出游戏", func(): requested.emit("quit", "", 1, "")))
+	var footer: Label = _text_to(body, "本机保存 · 原创星域 · 离线航行", 12)
+	footer.add_theme_color_override("font_color", UISkin.MUTED)
+	_focus_page.call_deferred()
 
 func show_page(next_page: String) -> void:
+	if page == "settings" and next_page != "settings": return_page = ""
+	elif next_page == "settings" and page != "settings": return_page = page
 	page = next_page
-	panel.visible = not next_page.is_empty()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = not next_page.is_empty() and next_page != "station"
+	station_layer.visible = next_page == "station"
 	_update_hud_visibility()
 	if next_page.is_empty():
+		root.get_viewport().gui_release_focus()
 		return
-	if next_page == "title":
-		show_title(slots)
-		return
+	if next_page == "title": show_title(slots); return
 	if next_page == "settings":
-		_build_panel("设置", "偏好立即保留在本机；返回后继续航行。")
+		_build_panel("设置", "偏好立即保留在本机")
 		_settings()
+		_focus_page.call_deferred()
 		return
-	if state == null:
-		show_title(slots)
+	if state == null: show_title(slots); return
+	if next_page == "station":
+		_station()
+		_responsive()
 		return
-	_build_panel(str(PAGE_TITLES.get(next_page, "航行服务")), "%s · 当前舰 %s · %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
-	if next_page in ["station","ships","warehouse","fitting","market","industry","research"] and not state.player().has_docked_station_id:
+	_build_panel(str(PAGE_TITLES.get(next_page, "航行服务")), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
+	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "research"] and not state.player().has_docked_station_id:
 		_text("此服务需要停靠空间站。使用星图找到站点，进入停靠范围并减速后按 F。")
+		_focus_page.call_deferred()
 		return
 	match next_page:
-		"station": _station()
 		"ships": _ships()
 		"warehouse": _warehouse()
 		"fitting": _fitting()
@@ -253,10 +276,14 @@ func show_page(next_page: String) -> void:
 		"research": _research()
 		"map": _map()
 		"pause": _pause()
+	_animate_panel()
+	_focus_page.call_deferred()
 
 func notify(message: String, is_error: bool = false) -> void:
 	toast.text = _friendly(message)
-	toast.modulate = Color("ff8578") if is_error else Color("ffc77d")
+	toast.tooltip_text = toast.text
+	toast.modulate = Color("ff8578") if is_error else UISkin.AMBER
+	_responsive()
 	message_age = 0.0
 
 func tick(delta: float) -> void:
@@ -281,19 +308,21 @@ func tick(delta: float) -> void:
 		top.text = "%s\n%s · %s" % [_ship_name(ship.ship_def_id), _sector_name(ship.sector_id), _risk_name(str(definition.get("risk_zone_id", "")))]
 		health.text = "护盾 %.0f%% · 装甲 %.0f%% · 结构 %.0f%%\n电容 %.0f%% · 热量 %.0f%% %s\n速度 %.0f m/s · 货 %.0f/%.0f L" % [ship.shield / maxf(metrics.shield_max, 1.0) * 100, ship.armor / maxf(metrics.armor_max, 1.0) * 100, ship.hull / maxf(metrics.hull_max, 1.0) * 100, ship.energy / maxf(metrics.energy_max, 1.0) * 100, ship.heat / maxf(metrics.heat_max, 1.0) * 100, "过热" if ship.overheated else "", Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length(), metrics.cargo_used_l + metrics.mineral_used_l, metrics.cargo_capacity_l + metrics.mineral_capacity_l]
 	objective.text = _objective_text()
+	_update_instrument(ship, metrics)
+	if page == "station": _update_station_info()
 	_update_work()
 	_update_live_missions()
 	_refresh_targets()
 	_update_npc_target()
 
 func input_blocked() -> bool:
-	return menu_open or panel.visible or (root.get_viewport().gui_get_focus_owner() is LineEdit) or _pointer_over(target_panel) or _pointer_over(work_box) or _pointer_over(operation_bar)
+	return menu_open or panel.visible or station_layer.visible or (root.get_viewport().gui_get_focus_owner() is LineEdit) or _pointer_over(target_panel) or _pointer_over(work_box) or _pointer_over(operation_bar) or _pointer_over(navigation) or _pointer_over(instrument)
 
 func refresh_page() -> void:
 	if not page.is_empty() and page != "settings" and page != "title":
 		var previous_scroll: int = page_scroll.scroll_vertical if is_instance_valid(page_scroll) else 0
 		show_page(page)
-		page_scroll.set_deferred("scroll_vertical", previous_scroll)
+		if is_instance_valid(page_scroll): page_scroll.set_deferred("scroll_vertical", previous_scroll)
 
 func select_next() -> void:
 	if sector == null:
@@ -311,39 +340,64 @@ func _build_panel(title: String, description: String) -> void:
 	quotes.clear()
 	live_missions.clear()
 	quantity_input = null
+	card_grid = null
 	panel.visible = true
-	var margin: MarginContainer = MarginContainer.new()
-	for edge: String in ["left", "top", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_" + edge, 12)
-	panel.add_child(margin)
+	panel.modulate = Color.WHITE
+	panel.add_theme_stylebox_override("panel", UISkin.plate() if page != "title" else StyleBoxEmpty.new())
+	var shell: HBoxContainer = HBoxContainer.new()
+	shell.add_theme_constant_override("separation", 24)
+	panel.add_child(shell)
+	sidebar = VBoxContainer.new()
+	sidebar.name = "ServiceSidebar"
+	sidebar.custom_minimum_size.x = 178
+	sidebar.add_theme_constant_override("separation", 8)
+	shell.add_child(sidebar)
+	if state != null and page not in ["title", "settings"]:
+		_module_heading(sidebar, "舰载终端", "服务 / 航路")
+		var available: Array[String] = ["missions", "map", "pause"]
+		if state.player().has_docked_station_id: available = ["station", "ships", "warehouse", "fitting", "market", "industry", "missions", "research", "map", "pause"]
+		for key: String in available:
+			var item: Button = _button(sidebar, str(PAGE_TITLES[key]), show_page.bind(key))
+			item.custom_minimum_size.x = 178
+			item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			if key == page: _primary(item)
+		var divider: HSeparator = HSeparator.new()
+		sidebar.add_child(divider)
+		var location: Label = _text_to(sidebar, _station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), 12)
+		location.add_theme_color_override("font_color", UISkin.MUTED)
+	else: sidebar.hide()
 	var layout: VBoxContainer = VBoxContainer.new()
-	layout.add_theme_constant_override("separation", 8)
-	margin.add_child(layout)
+	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layout.add_theme_constant_override("separation", 14)
+	shell.add_child(layout)
 	var header: HBoxContainer = HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
 	layout.add_child(header)
-	var heading: Label = _text_to(header, title, 24)
-	heading.custom_minimum_size.x = 80
+	var heading: Label = _text_to(header, title, 48 if page == "title" else 25)
+	heading.custom_minimum_size.x = 90
 	heading.max_lines_visible = 2
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if state != null and page not in ["title", "settings"]:
 		var selector: OptionButton = OptionButton.new()
 		selector.name = "PageSelector"
-		selector.custom_minimum_size = Vector2(150, 36)
-		var available: Array[String] = ["missions", "map", "pause"]
-		if state.player().has_docked_station_id:
-			available = ["station", "ships", "warehouse", "fitting", "market", "industry", "missions", "research", "map", "pause"]
-		for key: String in available:
-			selector.add_item(str(PAGE_TITLES[key]))
-		selector.select(maxi(0, available.find(page)))
-		selector.item_selected.connect(func(index: int): show_page(available[index]))
+		selector.custom_minimum_size = Vector2(132, 36)
+		for key: String in PAGE_TITLES: selector.add_item(str(PAGE_TITLES[key])); selector.set_item_metadata(selector.item_count - 1, key)
+		for index: int in range(selector.item_count):
+			if selector.get_item_metadata(index) == page: selector.select(index)
+		selector.item_selected.connect(func(index: int): show_page(str(selector.get_item_metadata(index))))
+		selector.visible = root.size.x < 950
 		header.add_child(selector)
 	if page != "title":
-		var close: Button = _button(header, "返回" if page == "settings" else "关闭", func(): show_page("pause" if page == "settings" and state != null else "title" if page == "settings" else ""))
+		var close: Button = _button(header, "返回" if page == "settings" else "返回机库" if state != null and state.player().has_docked_station_id else "返回航行", _back)
 		close.name = "PanelClose"
+		close.custom_minimum_size.x = 96
 		close.size_flags_horizontal = Control.SIZE_SHRINK_END
-		close.custom_minimum_size.x = 80
-	var subheading: Label = _text_to(layout, description, 14)
+		_secondary(close)
+	var subheading: Label = _text_to(layout, description, 13)
+	subheading.add_theme_color_override("font_color", UISkin.MUTED)
 	subheading.max_lines_visible = 2
+	var line: HSeparator = HSeparator.new()
+	layout.add_child(line)
 	page_scroll = ScrollContainer.new()
 	page_scroll.name = "PageScroll"
 	page_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -351,21 +405,88 @@ func _build_panel(title: String, description: String) -> void:
 	layout.add_child(page_scroll)
 	body = VBoxContainer.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", 10)
+	body.add_theme_constant_override("separation", 14)
 	page_scroll.add_child(body)
 	_update_hud_visibility()
 	_responsive()
 
 func _station() -> void:
-	_text("整理配装和货物后出航；完成任务后返回指定站点交付。")
-	_command(body, "出港", "undock").name = "UndockButton"
+	for child: Node in station_layer.get_children():
+		station_layer.remove_child(child)
+		child.queue_free()
+	panel.hide()
+	quotes.clear()
+	live_missions.clear()
+	card_grid = null
+	station_services = _frame(station_layer, "StationServices")
+	station_services.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+	station_services.offset_left = 22
+	station_services.offset_right = 282
+	station_services.offset_top = 96
+	station_services.offset_bottom = -120
+	var services: VBoxContainer = VBoxContainer.new()
+	services.add_theme_constant_override("separation", 12)
+	station_services.add_child(services)
+	_module_heading(services, "驻站联络", "选择服务人员")
+	var service_scroll: ScrollContainer = ScrollContainer.new()
+	page_scroll = service_scroll
+	service_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	service_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	services.add_child(service_scroll)
+	body = VBoxContainer.new()
+	body.add_theme_constant_override("separation", 10)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	service_scroll.add_child(body)
+	station_portraits.clear()
+	_npc_service(body, 0, "航路与委托", "站务官 · 任务 / 航路", "missions")
+	_npc_service(body, 1, "舰队与补给", "补给官 · 市场 / 舰队", "market")
+	_npc_service(body, 2, "工业与整备", "工程师 · 制造 / 仓储", "industry")
+	_npc_service(body, 3, "科技与研究", "研究官 · 科技 / 设施", "research")
+	var shortcuts: HFlowContainer = HFlowContainer.new()
+	body.add_child(shortcuts)
+	_secondary(_button(shortcuts, "舰队", show_page.bind("ships")))
+	_secondary(_button(shortcuts, "配装", show_page.bind("fitting")))
+	_secondary(_button(shortcuts, "仓储", show_page.bind("warehouse")))
+	station_details = _frame(station_layer, "StationShipDetails")
+	station_details.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
+	station_details.offset_left = -282
+	station_details.offset_right = -22
+	station_details.offset_top = 96
+	station_details.offset_bottom = -170
+	var details: VBoxContainer = VBoxContainer.new()
+	details.add_theme_constant_override("separation", 12)
+	station_details.add_child(details)
+	_module_heading(details, "舰泊档案", "当前驾驶舰")
+	station_ship_name = _text_to(details, _ship_name(state.ship().ship_def_id), 22)
+	station_ship_name.add_theme_color_override("font_color", UISkin.ICE)
+	station_ship_status = _text_to(details, "", 14)
+	var funds: Label = _text_to(details, "%d 信用点" % state.player().credit, 19)
+	funds.add_theme_color_override("font_color", UISkin.AMBER)
 	var needs: Dictionary = gameplay.get("economy").call("repair_requirements")
 	var price: int = int(gameplay.get("economy").call("quote_repair"))
-	_text("维修与电容补给：%d 信用点，结构部件 × %d" % [price, int(needs.get("structural_units", 0))])
-	var repair: Button = _command(body, "维修并补给 · %d 信用点" % price, "repair", state.ship().ship_instance_id)
+	var repair: Button = _command(details, "维修补给 · %d 信用点" % price, "repair", state.ship().ship_instance_id)
+	repair.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	repair.disabled = state.player().credit < price
-	_button(body, "查看当前站点任务", show_page.bind("missions"))
-	_button(body, "舰队与任务借船", show_page.bind("ships"))
+	_text_to(details, "需结构部件 × %d" % int(needs.get("structural_units", 0)), 12).add_theme_color_override("font_color", UISkin.MUTED)
+	_secondary(_button(details, "调整配装", show_page.bind("fitting")))
+	station_departure = _frame(station_layer, "StationDeparture")
+	station_departure.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	station_departure.offset_left = 22
+	station_departure.offset_right = -22
+	station_departure.offset_top = -96
+	station_departure.offset_bottom = -22
+	var departure: HBoxContainer = HBoxContainer.new()
+	departure.add_theme_constant_override("separation", 18)
+	station_departure.add_child(departure)
+	station_status = _text_to(departure, _station_name(state.player().docked_station_id) + "\n停靠完成 · 整备后即可出航", 15)
+	station_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var undock: Button = _command(departure, "确认出港  ›", "undock")
+	undock.name = "UndockButton"
+	undock.custom_minimum_size = Vector2(210, 44)
+	_primary(undock)
+	_secondary(_button(departure, "系统", show_page.bind("pause")))
+	_update_station_info()
+	_focus_page.call_deferred()
 
 func _ships() -> void:
 	for row: Dtos.ShipStateDto in state.rows("ship_state"):
@@ -588,7 +709,7 @@ func _missions() -> void:
 				progress_rows.append({"label": label, "state": progress, "definition": objective_def})
 			live_missions.append({"label": status, "mission": current, "progress": progress_rows})
 			var target: String = _current_mission_target(current)
-			if not target.is_empty() and sector != null and sector.targets.has(target): _button(card, "定位当前目标并继续航行", func(): target_id = target; show_page(""))
+			if not target.is_empty() and sector != null and sector.targets.has(target): _button(card, "定位当前目标并继续航行", func(): target_id = target; _back())
 			var deliver: Button = _command(card, "交付任务与实物", "deliver_mission", current.mission_instance_id)
 			deliver.disabled = current.status != "ready" or state.player().docked_station_id != definition.turnin_station_id
 			if current.status == "ready": _text_to(card, "返回 %s；将所需实物带入当前舰或该站仓库。" % _station_name(str(definition.turnin_station_id)), 14)
@@ -643,17 +764,17 @@ func _map() -> void:
 			for station: Dictionary in _defs("station_defs"):
 				if station.sector_id == sector_def.sector_id:
 					_text_to(card, "站点 · " + _station_name(str(station.station_id)), 14)
-					if station.sector_id == state.current_sector(): _button(card, "定位 " + _station_name(str(station.station_id)), func(): target_id = str(station.station_id); show_page(""))
+					if station.sector_id == state.current_sector(): _button(card, "定位 " + _station_name(str(station.station_id)), func(): target_id = str(station.station_id); _back())
 			for resource: Dictionary in _defs("resource_node_defs"):
 				if resource.sector_id == sector_def.sector_id: _text_to(card, "产出 · " + _item_name(str(resource.item_id)), 14)
 			for endpoint: Dictionary in _defs("gate_endpoint_defs"):
 				if endpoint.origin_sector_id != sector_def.sector_id: continue
 				_text_to(card, "航路 → " + _sector_name(str(endpoint.target_sector_id)), 14)
-				if endpoint.origin_sector_id == state.current_sector(): _button(card, "定位通往 " + _sector_name(str(endpoint.target_sector_id)) + " 的虫洞门", func(): target_id = str(endpoint.endpoint_id); show_page(""))
+				if endpoint.origin_sector_id == state.current_sector(): _button(card, "定位通往 " + _sector_name(str(endpoint.target_sector_id)) + " 的虫洞门", func(): target_id = str(endpoint.endpoint_id); _back())
 
 func _pause() -> void:
 	_text("世界时间已暂停。保存成功后才会更新存档；等待中的保存可取消。", 14)
-	_button(body, "继续航行", func(): show_page(""))
+	_button(body, "继续航行", _back)
 	var rescue: Button = _command(body, "舰船损失后返回保障站", "request_rescue")
 	rescue.name = "RescueButton"
 	rescue.disabled = state.ship().status != Types.ShipStatus.DESTROYED
@@ -673,7 +794,7 @@ func _settings() -> void:
 		_text("偏好尚未加载，请稍后重新打开设置。")
 		return
 	for field: String in ["master_volume", "mouse_sensitivity", "vfx_intensity"]:
-		var title: String = {"master_volume": "主音量", "mouse_sensitivity": "观察镜头鼠标灵敏度", "vfx_intensity": "特效强度"}[field]
+		var title: String = {"master_volume": "主音量", "mouse_sensitivity": "鼠标灵敏度", "vfx_intensity": "特效强度"}[field]
 		var current: float = float(preferences.get(field, 0.0))
 		var value_label: Label = _text_to(body, _setting_text(title, current, field))
 		var slider: HSlider = HSlider.new()
@@ -722,6 +843,7 @@ func _refresh_targets() -> void:
 		else:
 			button = _button(target_list, "", func(): target_id = id)
 			button.focus_mode = Control.FOCUS_NONE
+			button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			target_buttons[id] = button
 		button.text = "%s%s\n%.0f m" % ["▸ " if id == target_id else "", _target_title(target), distance]
 		target_list.move_child(button, visible_ids.size() - 1)
@@ -733,13 +855,15 @@ func _refresh_targets() -> void:
 			target_buttons.erase(id)
 
 func _draw_markers() -> void:
-	if camera == null or camera.camera == null or sector == null or panel.visible:
+	if camera == null or camera.camera == null or sector == null or panel.visible or station_layer.visible or state == null or state.ship().status != Types.ShipStatus.FLYING:
 		return
 	var center := root.size * 0.5
-	marker_layer.draw_line(center + Vector2(-10, 0), center + Vector2(-3, 0), Color("89cdd7"))
-	marker_layer.draw_line(center + Vector2(3, 0), center + Vector2(10, 0), Color("89cdd7"))
-	marker_layer.draw_line(center + Vector2(0, -10), center + Vector2(0, -3), Color("89cdd7"))
-	marker_layer.draw_line(center + Vector2(0, 3), center + Vector2(0, 10), Color("89cdd7"))
+	for segment: Vector4 in [Vector4(-11, 0, -4, 0), Vector4(4, 0, 11, 0), Vector4(0, -11, 0, -4), Vector4(0, 4, 0, 11)]:
+		var start: Vector2 = center + Vector2(segment.x, segment.y)
+		var finish: Vector2 = center + Vector2(segment.z, segment.w)
+		marker_layer.draw_line(start, finish, Color(0.005, 0.01, 0.015, 0.9), 3.5, true)
+		marker_layer.draw_line(start, finish, UISkin.ICE, 1.5, true)
+	marker_layer.draw_circle(center, 1.5, UISkin.ICE)
 	for target: Dictionary in sector.targets.values():
 		var node: Node3D = target.node
 		if not is_instance_valid(node) or camera.camera.is_position_behind(node.global_position):
@@ -825,20 +949,23 @@ func _button(parent: Node, title: String, callback: Callable) -> Button:
 	var button: Button = Button.new()
 	button.text = title
 	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	button.custom_minimum_size.y = 36
-	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.custom_minimum_size = Vector2(118, 38)
+	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	button.pressed.connect(callback)
+	button.mouse_entered.connect(func(): _button_feedback(button, true))
+	button.mouse_exited.connect(func(): _button_feedback(button, false))
 	parent.add_child(button)
 	return button
 
-func _text(text: String, size: int = 16) -> void:
+func _text(text: String, size: int = 15) -> void:
+	card_grid = null
 	_text_to(body, text, size)
 
 func _text_to(parent: Node, text: String, size: int = 16) -> Label:
 	var label := _label(parent, text, size)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.custom_minimum_size.x = 180
+	label.custom_minimum_size.x = 0
 	return label
 
 func _label(parent: Node, text: String, size: int) -> Label:
@@ -850,12 +977,21 @@ func _label(parent: Node, text: String, size: int) -> Label:
 	return label
 
 func _card(title: String) -> VBoxContainer:
-	var separator := HSeparator.new()
-	body.add_child(separator)
-	var card := VBoxContainer.new()
-	card.add_theme_constant_override("separation", 7)
-	body.add_child(card)
-	_text_to(card, title, 20)
+	if card_grid == null:
+		card_grid = GridContainer.new()
+		card_grid.name = "ModuleCards"
+		card_grid.columns = 2 if root.size.x >= 1200 else 1
+		card_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card_grid.add_theme_constant_override("h_separation", 14)
+		card_grid.add_theme_constant_override("v_separation", 14)
+		body.add_child(card_grid)
+	var frame: PanelContainer = _frame(card_grid, "ModuleCard")
+	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var card: VBoxContainer = VBoxContainer.new()
+	card.add_theme_constant_override("separation", 10)
+	frame.add_child(card)
+	var heading: Label = _text_to(card, title, 18)
+	heading.add_theme_color_override("font_color", UISkin.ICE)
 	return card
 
 func _box(fill: Color, border: Color) -> StyleBoxFlat:
@@ -954,41 +1090,91 @@ func _pointer_over(control: Control) -> bool:
 	return is_instance_valid(control) and control.is_visible_in_tree() and control.get_global_rect().has_point(control.get_global_mouse_position())
 
 func _update_hud_visibility() -> void:
-	var show_hud: bool = state != null and not panel.visible and not menu_open
-	if is_instance_valid(hud_left): hud_left.visible = show_hud
+	var show_hud: bool = state != null and state.ship() != null and state.ship().status == Types.ShipStatus.FLYING and not panel.visible and not station_layer.visible and not menu_open
+	if is_instance_valid(hud_left): hud_left.get_parent().visible = show_hud
+	if is_instance_valid(instrument): instrument.visible = show_hud
+	if is_instance_valid(navigation): navigation.visible = show_hud
 	if is_instance_valid(target_panel): target_panel.visible = show_hud
-	if is_instance_valid(controls): controls.visible = show_hud and root.size.x >= 900
+	if is_instance_valid(controls): controls.visible = show_hud and root.size.x >= 1100
+	if is_instance_valid(title_background): title_background.visible = page == "title"
+	if is_instance_valid(title_shade): title_shade.visible = page == "title"
+	if is_instance_valid(station_layer): station_layer.visible = page == "station" and state != null
+	_responsive_title()
 
 func _responsive() -> void:
 	if not is_instance_valid(root): return
-	var compact: bool = root.size.x < 900
+	var compact: bool = root.size.x < 950
+	var safe: float = 14.0 if compact else 22.0
 	if is_instance_valid(hud_left):
-		hud_left.custom_minimum_size.x = clampf(root.size.x * 0.35, 210, 420)
-		hud_left.add_theme_constant_override("separation", 5 if compact else 9)
-		hud_left.size.x = hud_left.custom_minimum_size.x
-	if is_instance_valid(top): top.add_theme_font_size_override("font_size", 16 if compact else 21)
-	if is_instance_valid(health): health.add_theme_font_size_override("font_size", 12 if compact else 14)
-	if is_instance_valid(objective):
-		objective.max_lines_visible = 3 if compact else 7
-		objective.add_theme_font_size_override("font_size", 12 if compact else 15)
+		var frame: PanelContainer = hud_left.get_parent()
+		frame.offset_left = safe
+		frame.offset_top = safe
+		frame.offset_right = safe + (220 if compact else 316)
+		top.add_theme_font_size_override("font_size", 14 if compact else 17)
+		objective.add_theme_font_size_override("font_size", 12 if compact else 14)
+		objective.max_lines_visible = 3 if compact else 4
+	if is_instance_valid(instrument):
+		var width: float = minf(650, root.size.x - safe * 2)
+		instrument.offset_left = -width * 0.5
+		instrument.offset_right = width * 0.5
+		instrument.offset_top = -164 if compact else -244
+		instrument.offset_bottom = -68
+		var inset: StyleBox = UISkin.plate()
+		inset.content_margin_top = 6 if compact else 12
+		inset.content_margin_bottom = 6 if compact else 12
+		instrument.add_theme_stylebox_override("panel", inset)
+		instrument_title.add_theme_font_size_override("font_size", 11 if compact else 14)
+		dial.custom_minimum_size = Vector2(90, 56) if compact else Vector2(154, 125)
+		for entry: Dictionary in condition_bars:
+			entry.label.add_theme_font_size_override("font_size", 10 if compact else 13)
+			entry.bar.visible = not compact
+		energy_bar.visible = not compact
+		heat_bar.visible = not compact
+		energy_label.add_theme_font_size_override("font_size", 10 if compact else 13)
+		heat_label.add_theme_font_size_override("font_size", 10 if compact else 13)
+		cargo_label.add_theme_font_size_override("font_size", 10 if compact else 12)
+	if is_instance_valid(target_panel):
+		target_panel.offset_left = -(196 if compact else 270)
+		target_panel.offset_right = -safe
+		target_panel.offset_top = safe
+		target_panel.offset_bottom = 184 if compact else 390
 	if is_instance_valid(npc_title): npc_title.add_theme_font_size_override("font_size", 12 if compact else 15)
 	if is_instance_valid(npc_detail): npc_detail.add_theme_constant_override("separation", 2 if compact else 4)
 	for entry: Dictionary in npc_bars:
 		entry.label.add_theme_font_size_override("font_size", 10 if compact else 12)
-		entry.bar.custom_minimum_size.y = 6 if compact else 9
-	if is_instance_valid(work_label): work_label.add_theme_font_size_override("font_size", 12 if compact else 14)
-	if is_instance_valid(work_progress): work_progress.add_theme_font_size_override("font_size", 12 if compact else 16)
-	if is_instance_valid(target_panel):
-		target_panel.offset_left = -220 if compact else -282
-		target_panel.offset_top = 100
-		target_panel.offset_bottom = -58 if compact else -122
+		entry.bar.custom_minimum_size.y = 5 if compact else 7
 	if is_instance_valid(panel):
-		panel.offset_top = maxf(82, operation_bar.position.y + operation_bar.size.y + 8) if is_instance_valid(operation_bar) and operation_bar.visible else 18
-		panel.offset_bottom = -56
+		panel.offset_left = safe
+		panel.offset_right = -safe
+		panel.offset_top = maxf(safe, operation_bar.position.y + operation_bar.size.y + 8) if is_instance_valid(operation_bar) and operation_bar.visible else safe
+		panel.offset_bottom = -52
+		if page == "title": _responsive_title()
+	if is_instance_valid(sidebar): sidebar.visible = state != null and page not in ["title", "settings"] and not compact
+	if is_instance_valid(panel):
+		var selector: OptionButton = panel.find_child("PageSelector", true, false)
+		if selector != null: selector.visible = compact
+	if is_instance_valid(panel):
+		for grid: Node in panel.find_children("ModuleCards*", "GridContainer", true, false):
+			grid.columns = 2 if root.size.x >= 1200 else 1
+	if is_instance_valid(station_services):
+		station_services.offset_left = safe
+		station_services.offset_right = safe + (200 if compact else 260)
+		station_services.offset_top = 44 if compact else 96
+		station_services.offset_bottom = -94 if compact else -120
+	if is_instance_valid(station_details):
+		station_details.visible = not compact
+	if is_instance_valid(station_departure):
+		station_departure.offset_left = safe
+		station_departure.offset_right = -safe
+		station_departure.offset_top = -82 if compact else -96
+		station_departure.offset_bottom = -safe
 	if is_instance_valid(toast):
-		toast.offset_top = -49 if panel.visible or compact else -119
-		toast.offset_bottom = -6 if panel.visible or compact else -91
-	_update_hud_visibility()
+		toast.offset_left = safe if panel.visible or station_layer.visible else 244 if compact else 370
+		toast.offset_right = -safe if panel.visible or station_layer.visible else -206 if compact else -320
+		toast.offset_top = -41 if panel.visible else 52 if station_layer.visible else 22
+		toast.anchor_top = 1.0 if panel.visible else 0.0
+		toast.anchor_bottom = toast.anchor_top
+		toast.offset_bottom = -10 if panel.visible else toast.offset_top + 40
 
 func _setting_text(title: String, value: float, field: String) -> String:
 	return "%s %.4f" % [title, value] if field == "mouse_sensitivity" else "%s %d%%" % [title, roundi(value * 100)]
@@ -999,7 +1185,8 @@ func _update_work() -> void:
 	var scan: String = str(worker.get("scan_target"))
 	var mining: String = str(worker.get("mining_target"))
 	work_mode = "scan" if not scan.is_empty() else "mining" if not mining.is_empty() else ""
-	work_box.visible = not work_mode.is_empty() and not panel.visible
+	work_box.visible = not work_mode.is_empty() and not panel.visible and not station_layer.visible
+	objective.visible = root.size.x >= 950 or work_mode.is_empty()
 	if work_mode == "scan":
 		var definition: Dictionary = _one("signal_defs", "signal_id", scan)
 		var threshold: float = float(definition.get("threshold_progress", 1.0))
@@ -1029,6 +1216,8 @@ func _update_live_missions() -> void:
 func _update_npc_target() -> void:
 	var npc: Dtos.NpcStateDto = state.find("npc_state", "npc_instance_id", target_id)
 	npc_detail.visible = npc != null and npc.alive
+	var scroll: ScrollContainer = target_panel.find_child("TargetScroll", true, false)
+	if scroll != null: scroll.visible = not npc_detail.visible or root.size.x >= 950
 	if not npc_detail.visible: return
 	var spawn: Dictionary = _one("npc_spawn_defs", "spawn_id", npc.spawn_id)
 	var definition: Dictionary = _one("npc_full_defs", "npc_id", str(spawn.get("npc_id", "")))
@@ -1143,3 +1332,256 @@ func _mission_rank(definition: Dictionary) -> int:
 	if mission != null and mission.status in ["active", "ready"]: return 0
 	if not bool(definition.get("repeatable", false)) and _mission_completed(str(definition.mission_id)): return 3
 	return 1 if _mission_reason(definition, mission).is_empty() else 2
+
+func _frame(parent: Node, name_hint: String) -> PanelContainer:
+	var frame: PanelContainer = PanelContainer.new()
+	frame.name = name_hint
+	frame.mouse_filter = Control.MOUSE_FILTER_STOP
+	parent.add_child(frame)
+	UISkin.decorate(frame, 0.52)
+	return frame
+
+func _bar(parent: Node, color: Color, height: float = 7.0) -> ProgressBar:
+	var bar: ProgressBar = ProgressBar.new()
+	bar.show_percentage = false
+	bar.custom_minimum_size.y = height
+	bar.add_theme_stylebox_override("fill", UISkin.flat(color, color, 0))
+	parent.add_child(bar)
+	return bar
+
+func _module_heading(parent: Node, title: String, subtitle: String = "") -> void:
+	var line: Label = _text_to(parent, "▰  " + title, 14)
+	line.add_theme_color_override("font_color", UISkin.ICE)
+	if not subtitle.is_empty():
+		var caption: Label = _text_to(parent, subtitle, 11)
+		caption.add_theme_color_override("font_color", UISkin.MUTED)
+
+func _build_instrument() -> void:
+	instrument = _frame(root, "ShipInstrument")
+	instrument.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	instrument.offset_left = -325
+	instrument.offset_right = 325
+	instrument.offset_top = -190
+	instrument.offset_bottom = -48
+	var layout: VBoxContainer = VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 4)
+	instrument.add_child(layout)
+	instrument_title = _text_to(layout, "舰况 / 巡航", 14)
+	instrument_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	instrument_title.add_theme_color_override("font_color", UISkin.MUTED)
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 18)
+	layout.add_child(row)
+	var defense: VBoxContainer = VBoxContainer.new()
+	defense.custom_minimum_size.x = 145
+	defense.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	defense.add_theme_constant_override("separation", 6)
+	row.add_child(defense)
+	for index: int in range(3):
+		var name_value: String = ["护盾", "装甲", "结构"][index]
+		var label: Label = _text_to(defense, name_value, 13)
+		label.custom_minimum_size.x = 0
+		var bar: ProgressBar = _bar(defense, [UISkin.ICE, UISkin.AMBER, Color("a6b2be")][index], 5)
+		condition_bars.append({"label": label, "bar": bar, "name": name_value})
+	dial = UISkin.Dial.new()
+	dial.name = "SpeedDial"
+	dial.custom_minimum_size = Vector2(154, 125)
+	row.add_child(dial)
+	var resources: VBoxContainer = VBoxContainer.new()
+	resources.custom_minimum_size.x = 145
+	resources.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	resources.add_theme_constant_override("separation", 6)
+	row.add_child(resources)
+	energy_label = _text_to(resources, "电容", 13)
+	energy_label.custom_minimum_size.x = 0
+	energy_bar = _bar(resources, UISkin.ICE, 5)
+	heat_label = _text_to(resources, "热量", 13)
+	heat_label.custom_minimum_size.x = 0
+	heat_bar = _bar(resources, UISkin.AMBER, 5)
+	cargo_label = _text_to(resources, "载荷", 12)
+	cargo_label.custom_minimum_size.x = 0
+	cargo_label.add_theme_color_override("font_color", UISkin.MUTED)
+	health = _label(root, "", 12)
+	health.hide() # 保留测试/辅助读取接口，正式仪表只使用条形与弧形读数。
+
+func _build_navigation() -> void:
+	navigation = _frame(root, "FlightNavigation")
+	navigation.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	navigation.offset_left = -220
+	navigation.offset_right = 220
+	navigation.offset_top = -58
+	navigation.offset_bottom = -8
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	navigation.add_child(row)
+	for key: String in ["missions", "map", "pause"]:
+		var title: String = {"missions": "任务  J", "map": "星图  M", "pause": "系统  Esc"}[key]
+		var button: Button = _button(row, title, show_page.bind(key))
+		button.focus_mode = Control.FOCUS_NONE
+		button.custom_minimum_size = Vector2(104, 25)
+		button.add_theme_font_size_override("font_size", 12)
+		_secondary(button)
+		button.add_theme_stylebox_override("normal", UISkin.flat(Color(0.08, 0.105, 0.125, 0.65), Color("384650"), 4))
+		button.add_theme_stylebox_override("hover", UISkin.flat(Color("253b45"), UISkin.ICE, 4))
+		button.add_theme_stylebox_override("pressed", UISkin.flat(Color("192b34"), UISkin.ICE, 4))
+
+func _build_target_module() -> void:
+	target_panel = _frame(root, "TargetModule")
+	target_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	target_panel.offset_left = -270
+	target_panel.offset_right = -22
+	target_panel.offset_top = 22
+	target_panel.offset_bottom = 390
+	var layout: VBoxContainer = VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 10)
+	target_panel.add_child(layout)
+	_module_heading(layout, "目标识别", "Tab 切换 / 点击选中")
+	npc_detail = VBoxContainer.new()
+	npc_detail.add_theme_constant_override("separation", 4)
+	layout.add_child(npc_detail)
+	npc_title = _text_to(npc_detail, "", 15)
+	for layer_name: String in ["护盾", "装甲", "结构"]:
+		var label: Label = _text_to(npc_detail, layer_name, 12)
+		var bar: ProgressBar = _bar(npc_detail, UISkin.ICE if layer_name == "护盾" else UISkin.AMBER if layer_name == "装甲" else Color("a6b2be"), 7)
+		npc_bars.append({"label": label, "bar": bar, "name": layer_name})
+	npc_detail.hide()
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.name = "TargetScroll"
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	layout.add_child(scroll)
+	target_list = VBoxContainer.new()
+	target_list.add_theme_constant_override("separation", 6)
+	target_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(target_list)
+
+func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
+	var values: Array[float] = [ship.shield, ship.armor, ship.hull]
+	var maximums: Array[float] = [float(metrics.shield_max), float(metrics.armor_max), float(metrics.hull_max)]
+	var signature: String = JSON.stringify([ship.ship_def_id, ship.shield, ship.armor, ship.hull, ship.energy, ship.heat, ship.overheated, Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length(), metrics.shield_max, metrics.armor_max, metrics.hull_max, metrics.energy_max, metrics.heat_max, metrics.cargo_used_l, metrics.cargo_capacity_l, metrics.mineral_used_l, metrics.mineral_capacity_l])
+	if signature == telemetry_signature: return
+	telemetry_signature = signature
+	instrument_title.text = _ship_name(ship.ship_def_id) + "  /  " + ("过热警报" if ship.overheated else "巡航状态")
+	instrument_title.modulate = UISkin.AMBER if ship.overheated else Color.WHITE
+	for index: int in range(3):
+		condition_bars[index].label.text = "%s  %.0f / %.0f" % [condition_bars[index].name, values[index], maximums[index]]
+		condition_bars[index].bar.max_value = maxf(maximums[index], 1.0)
+		condition_bars[index].bar.value = values[index]
+	dial.speed = Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length()
+	dial.ratios = Vector3(values[0] / maxf(maximums[0], 1.0), values[1] / maxf(maximums[1], 1.0), values[2] / maxf(maximums[2], 1.0))
+	dial.queue_redraw()
+	energy_label.text = "电容  %.0f / %.0f" % [ship.energy, float(metrics.energy_max)]
+	energy_bar.max_value = maxf(float(metrics.energy_max), 1.0)
+	energy_bar.value = ship.energy
+	heat_label.text = "热量  %.0f%%" % (ship.heat / maxf(float(metrics.heat_max), 1.0) * 100)
+	heat_bar.max_value = maxf(float(metrics.heat_max), 1.0)
+	heat_bar.value = ship.heat
+	cargo_label.text = "货 %.0f/%.0f L · 矿 %.0f/%.0f L" % [float(metrics.cargo_used_l), float(metrics.cargo_capacity_l), float(metrics.mineral_used_l), float(metrics.mineral_capacity_l)]
+
+func _update_station_info() -> void:
+	if state == null or not is_instance_valid(station_ship_status): return
+	var metrics: Dictionary = gameplay.call("metrics", state.ship())
+	station_ship_name.text = _ship_name(state.ship().ship_def_id)
+	station_ship_status.text = "护盾  %.0f / %.0f\n装甲  %.0f / %.0f\n结构  %.0f / %.0f\n\n电容  %.0f / %.0f\n热量  %.0f%%\n\n货舱  %.0f / %.0f L\n矿舱  %.0f / %.0f L" % [state.ship().shield, float(metrics.shield_max), state.ship().armor, float(metrics.armor_max), state.ship().hull, float(metrics.hull_max), state.ship().energy, float(metrics.energy_max), state.ship().heat / maxf(float(metrics.heat_max), 1.0) * 100, float(metrics.cargo_used_l), float(metrics.cargo_capacity_l), float(metrics.mineral_used_l), float(metrics.mineral_capacity_l)]
+
+func _npc_service(parent: Node, portrait: int, title: String, subtitle: String, destination: String) -> void:
+	var button: Button = _button(parent, "", show_page.bind(destination))
+	button.name = "NpcService" + str(portrait)
+	button.custom_minimum_size = Vector2(0, 87)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var row: HBoxContainer = HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	row.offset_left = 10
+	row.offset_right = -10
+	row.offset_top = 10
+	row.offset_bottom = -10
+	row.add_theme_constant_override("separation", 12)
+	button.add_child(row)
+	var image: TextureRect = TextureRect.new()
+	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	image.custom_minimum_size = Vector2(62, 62)
+	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var atlas: Texture2D = UISkin.texture("res://assets/interface_v2/npc_portraits.png")
+	if atlas != null:
+		var region: AtlasTexture = AtlasTexture.new()
+		region.atlas = atlas
+		region.region = Rect2(Vector2((portrait % 2) * atlas.get_width() * 0.5, floori(portrait / 2.0) * atlas.get_height() * 0.5), Vector2(atlas.get_size()) * 0.5)
+		image.texture = region
+	row.add_child(image)
+	station_portraits.append(image)
+	var caption: VBoxContainer = VBoxContainer.new()
+	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(caption)
+	_text_to(caption, title, 15).custom_minimum_size.x = 0
+	var detail: Label = _text_to(caption, subtitle, 11)
+	detail.custom_minimum_size.x = 0
+	detail.add_theme_color_override("font_color", UISkin.MUTED)
+
+func _primary(button: Button) -> void:
+	button.add_theme_stylebox_override("normal", UISkin.button_style(Color("e2b46d")))
+	button.add_theme_color_override("font_color", Color("ffdf9d"))
+
+func _secondary(button: Button) -> void:
+	button.add_theme_stylebox_override("normal", UISkin.flat(Color(0.08, 0.105, 0.125, 0.65), Color("384650"), 8))
+	button.add_theme_color_override("font_color", UISkin.MUTED)
+
+func _back() -> void:
+	var destination: String = return_page if page == "settings" and not return_page.is_empty() else "title" if state == null else "station" if state.player().has_docked_station_id else ""
+	show_page(destination)
+
+func _responsive_title() -> void:
+	if page != "title" or not is_instance_valid(panel): return
+	var width: float = root.size.x
+	var compact: bool = width < 950
+	panel.anchor_left = 0.0
+	panel.anchor_right = 0.0
+	panel.anchor_top = 0.0
+	panel.anchor_bottom = 1.0
+	panel.offset_left = 28 if compact else 80
+	panel.offset_right = minf(width - 28, 430 if compact else 520)
+	panel.offset_top = 28 if compact else 120
+	panel.offset_bottom = -50 if compact else -100
+
+func _button_feedback(button: Button, hovering: bool) -> void:
+	if not is_instance_valid(button) or button.disabled: return
+	var old: Tween = button.get_meta("hover_tween", null)
+	if old != null and old.is_valid(): old.kill()
+	var animation: Tween = button.create_tween()
+	animation.tween_property(button, "modulate", Color(1.09, 1.09, 1.09, 1.0) if hovering else Color.WHITE, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	button.set_meta("hover_tween", animation)
+
+func _animate_panel() -> void:
+	if ui_motion != null and ui_motion.is_valid(): ui_motion.kill()
+	panel.modulate.a = 0.0
+	ui_motion = create_tween()
+	ui_motion.tween_property(panel, "modulate:a", 1.0, 0.14).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+func _focus_controls(node: Node) -> Array[Control]:
+	var result: Array[Control] = []
+	for child: Node in node.get_children():
+		if child is Control and child.is_visible_in_tree() and child.focus_mode != Control.FOCUS_NONE and not (child is BaseButton and child.disabled): result.append(child)
+		result.append_array(_focus_controls(child))
+	return result
+
+func _focus_page() -> void:
+	if not is_instance_valid(body) or page.is_empty():
+		root.get_viewport().gui_release_focus()
+		return
+	var entries: Array[Control] = _focus_controls(station_layer if page == "station" else panel)
+	if is_instance_valid(operation_bar) and operation_bar.visible:
+		entries.append_array(_focus_controls(operation_bar))
+	for index: int in range(entries.size()):
+		entries[index].focus_next = entries[(index + 1) % entries.size()].get_path()
+		entries[index].focus_previous = entries[(index - 1 + entries.size()) % entries.size()].get_path()
+		entries[index].focus_neighbor_bottom = entries[index].focus_next
+		entries[index].focus_neighbor_top = entries[index].focus_previous
+	var default: Array[Control] = _focus_controls(body)
+	for entry: Control in default:
+		if entry is Button and not entry.disabled:
+			entry.grab_focus()
+			return
+	if not default.is_empty(): default[0].grab_focus()
+	elif not entries.is_empty(): entries[0].grab_focus()

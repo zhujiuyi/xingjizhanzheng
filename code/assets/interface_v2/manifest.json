@@ -1,0 +1,407 @@
+{
+  "format_version": 1,
+  "asset_version": "interface-v2",
+  "scope": "Current presentation pack independent of frozen gameplay; does not replace art-full-v1 or world content identity.",
+  "art_direction": {
+    "shape": "engineered rectangular panels and restrained character silhouettes",
+    "palette": "carbon gray, cold blue, small muted amber accents",
+    "material": "worn steel, practical fabric, natural skin",
+    "lighting": "soft cold ambient with controlled highlights",
+    "text_policy": "All functional text remains engine-native; no raster labels."
+  },
+  "resources": [
+    {
+      "id": "metal_albedo",
+      "role": "low-contrast industrial metal albedo",
+      "path": "res://assets/interface_v2/metal_albedo.png",
+      "sha256": "5b518105a6a34cbda60bd91c4183af937af8755291b679688f18fe8a05854d51",
+      "size_bytes": 3231352,
+      "status": "approved_for_current_presentation",
+      "technical": {
+        "expected_layout": "square",
+        "filtering": "linear",
+        "mipmaps_recommended": true,
+        "repeat_requested": true,
+        "color_space": "sRGB",
+        "collision_role": "none",
+        "mipmaps_generate": true,
+        "width": 1254,
+        "height": 1254,
+        "bit_depth": 8,
+        "png_color_type": 2,
+        "alpha_channel": false
+      },
+      "source": {
+        "kind": "generated",
+        "url_or_tool": "image_gen.imagegen (built-in Codex imagegen)",
+        "model": "not disclosed by built-in tool",
+        "created_at": "2026-10-03",
+        "original_generated_path": "/Users/a0000/.codex/generated_images/01a0fcfd-b742-7c90-8971-8f80a23ee790/exec-78f32826-f281-4dc4-baa5-58cf4e03491d.png",
+        "original_sha256": "5b518105a6a34cbda60bd91c4183af937af8755291b679688f18fe8a05854d51",
+        "prompt": "Use case: precise-object-edit\nAsset type: seamless tileable albedo texture for industrial sci-fi station surfaces.\nEdit target: the supplied square charcoal cold-gray industrial metal texture.\nChange only the material pattern to repair its tiling limitation: remove all panel perimeter lines, plate seams, large rivets and recognizable rectangular landmarks. Preserve the existing charcoal carbon-gray/cold-blue color, aged metal grain, fine brushing, subtle wear and small oxidized pits.\nThe final image must be a continuous uniform metal field suitable for seamless repeating UVs in both directions. Opposite left/right and top/bottom boundaries must continue the same understated microtexture with no stripe, edge line, framing, seam, lighting jump or directional gradient. Extremely low contrast at broad scales. Fine crisp detail at working scale, not blurry; no broad patches or hero focal features.\nKeep square opaque PNG and flat orthographic diffuse albedo appearance. No baked lights, highlights, shadows, perspective, text, labels, icons, logos or watermarks. Do not add objects or scene context.",
+        "references": [],
+        "source_history": [
+          {
+            "generated_path": "/Users/a0000/.codex/generated_images/01a0fcfd-b742-7c90-8971-8f80a23ee790/exec-7588936a-0ced-43d4-a468-cd8d0e834016.png",
+            "sha256": "49ad85713dcef49f4743de4407997e3969ad950f4dfd85a033b5c783bf2dd768",
+            "prompt": "Use case: stylized-concept\nAsset type: seamless tileable albedo texture for a mature industrial science-fiction game's station interior and interface metal panels.\nPrimary request: one square 1024x1024 seamless worn metal albedo texture, low-contrast charcoal carbon gray with subtle cold blue undertones. Small brushed steel grain, fine scuffs, oxidized pits, subtle overlapping rectangular plate seams and sparse recessed rivets. Dense, restrained believable industrial material detail.\nComposition/framing: perfectly flat orthographic top-down surface, no perspective. Texture fills every pixel edge-to-edge. All four edges must tile seamlessly with no obvious outer frame. Even scale and detail distribution, no hero focal point.\nLighting/mood: flat neutral diffuse reference only; albedo without baked directional illumination, highlights, cast shadows or gradients.\nConstraints: original design; no readable text, labels, lettering, emblems, UI icons, logos or watermark; no yellow hazard stripes; no large glowing elements. Opaque PNG, square image. Material pattern must remain subtle enough behind game UI.",
+            "selection": "Rejected for visible panel discontinuity in 3x3 repeat; original preserved."
+          }
+        ],
+        "license_or_generation_note": "Original generated output; no third-party reference image or preexisting game design was supplied. No additional paid API/CLI was used.",
+        "license_note": "Generated output under the user's OpenAI service terms; no third-party artwork license or CC0 claim is asserted.",
+        "terms_url": "https://openai.com/policies/terms-of-use/",
+        "edits": [
+          "Built-in imagegen edited the first generated metal source to remove large panel seams; no third-party image input.",
+          "Byte-identical copy of selected tool output; no pixel edits by the install script."
+        ]
+      },
+      "verification": {
+        "original_viewed_with_view_image": true,
+        "source_copy_sha256_matches": true,
+        "png_layout_checks_passed": true,
+        "vector_layout_checks_passed": false,
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "tiling_reviewed": true,
+        "approved_by": "engine_research (source/native-scale) and project_docs (UI context)",
+        "context_evidence": "jiaoben/logs/ui-visual-v2.log: 75 assertions and 42 captures; original source bytes are unchanged by QA.",
+        "tiling_visual_result": "The selected built-in edit removes the large panel seams. A 3762x3762 native 3x3 repeat was inspected. Repetition and nonidentical edge pixels remain; approved for low-amplitude/triplanar modulation, not certified mathematically seamless.",
+        "tiling_edge_rgb_mae_horizontal": 0.062277056554066,
+        "tiling_edge_rgb_mae_vertical": 0.0591675290428914,
+        "source_qa_evidence": "jiaoben/tmp/interface-v2-repeat-3x3.png; jiaoben/tmp/interface-v2-native-scale.png",
+        "mipmaps_imported_verified": true,
+        "mipmap_evidence": "code/assets/interface_v2/metal_albedo.png.import and native Texture2D.get_image().has_mipmaps()==true verified by station agent."
+      }
+    },
+    {
+      "id": "npc_portraits",
+      "role": "four profession portraits in one 2x2 atlas",
+      "path": "res://assets/interface_v2/npc_portraits.png",
+      "sha256": "12fbf4513760870324039e2f5681cc0a5ebd17bb60b940dc1ca289bff27c798d",
+      "size_bytes": 2295301,
+      "status": "approved_for_current_presentation",
+      "technical": {
+        "expected_layout": "square_2x2",
+        "filtering": "linear",
+        "mipmaps_recommended": false,
+        "repeat_requested": false,
+        "color_space": "sRGB",
+        "collision_role": "none",
+        "quadrant_ids": [
+          "station_traffic",
+          "quartermaster",
+          "industrial_engineer",
+          "research_officer"
+        ],
+        "width": 1254,
+        "height": 1254,
+        "bit_depth": 8,
+        "png_color_type": 2,
+        "alpha_channel": false,
+        "atlas_regions": [
+          {
+            "id": "station_traffic",
+            "rect": [
+              0,
+              0,
+              627,
+              627
+            ]
+          },
+          {
+            "id": "quartermaster",
+            "rect": [
+              627,
+              0,
+              627,
+              627
+            ]
+          },
+          {
+            "id": "industrial_engineer",
+            "rect": [
+              0,
+              627,
+              627,
+              627
+            ]
+          },
+          {
+            "id": "research_officer",
+            "rect": [
+              627,
+              627,
+              627,
+              627
+            ]
+          }
+        ],
+        "atlas_edit": "None: original image remains one file; UI uses AtlasTexture regions."
+      },
+      "source": {
+        "kind": "generated",
+        "url_or_tool": "image_gen.imagegen (built-in Codex imagegen)",
+        "model": "not disclosed by built-in tool",
+        "created_at": "2026-10-03",
+        "original_generated_path": "/Users/a0000/.codex/generated_images/01a0fcfd-b742-7c90-8971-8f80a23ee790/exec-0152747b-3dbf-47be-a562-f6b3741389d6.png",
+        "original_sha256": "12fbf4513760870324039e2f5681cc0a5ebd17bb60b940dc1ca289bff27c798d",
+        "prompt": "Use case: stylized-concept\nAsset type: original NPC portrait atlas for a mature industrial spaceflight game.\nPrimary request: one perfectly square opaque PNG atlas composed of an exact 2 by 2 grid of FOUR individual portraits. Four equally sized square regions fill the image edge-to-edge. No borders, no gutters, no padding, no panel frames. Grid division exactly at 50% width and 50% height.\nCharacter order is mandatory:\nTOP LEFT: adult woman station traffic controller, composed authoritative expression, practical gray-blue station uniform.\nTOP RIGHT: middle-aged man quartermaster and supply officer, square-cut short hairstyle, rugged face, muted amber utility jacket.\nBOTTOM LEFT: woman industrial engineer, short hair, practical worn workwear.\nBOTTOM RIGHT: older man research officer, graying hair, thoughtful expression, cool-colored technical uniform.\nComposition: in EACH square cell a complete head and half-body portrait from head to mid-torso, face centered near upper third, natural upright professional pose, clear distinct face silhouette. No one is cut by grid lines; each character has their own dim softly blurred station interior backdrop. Lighting is consistent across all four.\nStyle/medium: polished high-quality realistic video-game character illustration, restrained cinematic 3D-render finish, natural facial structure and fabric/material detail. Industrial science-fiction density and tangible worn material without copying any existing game's character design.\nPalette: cool carbon gray and subdued blue with quartermaster's restrained amber accent. Soft side lighting, subtle cool rim light, grounded mature tone.\nConstraints: exactly four people, one per quadrant. No readable text, names, symbols, logos, emblems, watermark, UI, weapons or fantasy ornament. No outside margin. Every quadrant is a clean square portrait region suitable for AtlasTexture.",
+        "references": [],
+        "source_history": [],
+        "license_or_generation_note": "Original generated output; no third-party reference image or preexisting game design was supplied. No additional paid API/CLI was used.",
+        "license_note": "Generated output under the user's OpenAI service terms; no third-party artwork license or CC0 claim is asserted.",
+        "terms_url": "https://openai.com/policies/terms-of-use/",
+        "edits": [
+          "Byte-identical copy of selected tool output; no pixel edits by the install script."
+        ]
+      },
+      "verification": {
+        "original_viewed_with_view_image": true,
+        "source_copy_sha256_matches": true,
+        "png_layout_checks_passed": true,
+        "vector_layout_checks_passed": false,
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "tiling_reviewed": false,
+        "approved_by": "engine_research (source/native-scale) and project_docs (UI context)",
+        "context_evidence": "jiaoben/logs/ui-visual-v2.log: 75 assertions and 42 captures; original source bytes are unchanged by QA."
+      }
+    },
+    {
+      "id": "title_background",
+      "role": "title background with dark left copy-safe space",
+      "path": "res://assets/interface_v2/title_background.png",
+      "sha256": "dea1b86a5b24afdaa30f8815bf78b54d91c03b5db9cfb04062fd19e38bb9030f",
+      "size_bytes": 2193534,
+      "status": "approved_for_current_presentation",
+      "technical": {
+        "expected_layout": "approximately_16_9",
+        "filtering": "linear",
+        "mipmaps_recommended": true,
+        "repeat_requested": false,
+        "color_space": "sRGB",
+        "collision_role": "none",
+        "width": 1672,
+        "height": 941,
+        "bit_depth": 8,
+        "png_color_type": 2,
+        "alpha_channel": false,
+        "aspect_note": "Original generated dimensions preserved; use UI cover scaling, no crop/resample file."
+      },
+      "source": {
+        "kind": "generated",
+        "url_or_tool": "image_gen.imagegen (built-in Codex imagegen)",
+        "model": "not disclosed by built-in tool",
+        "created_at": "2026-10-03",
+        "original_generated_path": "/Users/a0000/.codex/generated_images/01a0fcfd-b742-7c90-8971-8f80a23ee790/exec-49a1d5bc-5459-4865-bc09-f73e51daeb85.png",
+        "original_sha256": "dea1b86a5b24afdaa30f8815bf78b54d91c03b5db9cfb04062fd19e38bb9030f",
+        "prompt": "Use case: stylized-concept\nAsset type: original 16:9 title-screen background for a mature industrial spaceflight video game.\nPrimary request: a restrained cinematic science-fiction key visual, exactly wide 16:9 landscape composition, preferably 2048x1152. A colossal industrial orbital station docking entrance fills the RIGHT HALF of the frame, with cavernous steel docking architecture, structural ribs, layered gantries, subtle working lights, and a few docked spacecraft at believable scales. Beyond the station, a subdued distant blue nebula and fine starfield suggest an immense universe.\nComposition/framing: the LEFT 45 PERCENT is mostly dark quiet space with very low contrast and no important subjects, reserved for game title and menu text that will be added separately. Station architecture, docking aperture and ships are confined primarily to the right half; allow atmospheric depth toward center. Wide cinematic establishing view. Strong scale and clear original silhouettes.\nStyle/medium: high-quality polished realistic 3D game key art, tangible worn steel and ceramic surfaces, densely engineered industrial materials, mature and controlled. Original designs, no specific existing game's ship or station designs.\nLighting/mood: cool gray-blue ambient light, restrained cyan navigation illumination, small warm industrial highlights deep in the docks. Calm confident exploration mood, not battle. No excessive bloom.\nConstraints: no text, title, captions, logos, watermarks, UI, people, readable signage or identifiable trademarks. Opaque PNG. Preserve useful dark negative space on left. Full canvas image, no frame or border.",
+        "references": [],
+        "source_history": [],
+        "license_or_generation_note": "Original generated output; no third-party reference image or preexisting game design was supplied. No additional paid API/CLI was used.",
+        "license_note": "Generated output under the user's OpenAI service terms; no third-party artwork license or CC0 claim is asserted.",
+        "terms_url": "https://openai.com/policies/terms-of-use/",
+        "edits": [
+          "Byte-identical copy of selected tool output; no pixel edits by the install script."
+        ]
+      },
+      "verification": {
+        "original_viewed_with_view_image": true,
+        "source_copy_sha256_matches": true,
+        "png_layout_checks_passed": true,
+        "vector_layout_checks_passed": false,
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "tiling_reviewed": false,
+        "approved_by": "engine_research (source/native-scale) and project_docs (UI context)",
+        "context_evidence": "jiaoben/logs/ui-visual-v2.log: 75 assertions and 42 captures; original source bytes are unchanged by QA."
+      }
+    },
+    {
+      "id": "ui_panel",
+      "role": "scalable cut-corner industrial panel",
+      "path": "res://assets/interface_v2/ui_panel.svg",
+      "sha256": "73ba29b622a2859ec0b803d370ad6b98ac3e16c6831ab56f4c0c5b5015e48630",
+      "size_bytes": 652,
+      "status": "approved_for_current_presentation",
+      "technical": {
+        "expected_layout": "vector_panel",
+        "filtering": "linear",
+        "collision_role": "none",
+        "color_space": "sRGB",
+        "scaling": "9-slice StyleBoxTexture",
+        "width": 256,
+        "height": 128,
+        "format": "SVG",
+        "supports_transparency": true
+      },
+      "source": {
+        "kind": "project-authored",
+        "url_or_tool": "Codex repository-native vector/shader authoring",
+        "model": "not disclosed by built-in tool",
+        "created_at": "2026-10-03",
+        "original_generated_path": "/Users/a0000/workspace/xingjizhanjian/code/assets/interface_v2/ui_panel.svg",
+        "original_sha256": "73ba29b622a2859ec0b803d370ad6b98ac3e16c6831ab56f4c0c5b5015e48630",
+        "prompt": "Original SVG drawing of a 256x128 cut-corner metal module panel; functional text stays engine-native.",
+        "references": [],
+        "source_history": [],
+        "license_or_generation_note": "Original repository-native code; no third-party image or external art input.",
+        "license_note": "Project-authored source; no external artwork license or CC0 assertion.",
+        "terms_url": "",
+        "edits": [
+          "Byte-identical copy of selected tool output; no pixel edits by the install script."
+        ]
+      },
+      "verification": {
+        "original_viewed_with_view_image": false,
+        "source_copy_sha256_matches": true,
+        "png_layout_checks_passed": false,
+        "vector_layout_checks_passed": true,
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "tiling_reviewed": false,
+        "approved_by": "engine_research (source/native-scale) and project_docs (UI context)",
+        "context_evidence": "jiaoben/logs/ui-visual-v2.log: 75 assertions and 42 captures; original source bytes are unchanged by QA."
+      }
+    },
+    {
+      "id": "ui_button",
+      "role": "scalable cut-corner industrial button",
+      "path": "res://assets/interface_v2/ui_button.svg",
+      "sha256": "09c531eb78322e127ce435b1435092c4e3086ae6312fc30eb83b59ca23fe134d",
+      "size_bytes": 413,
+      "status": "approved_for_current_presentation",
+      "technical": {
+        "expected_layout": "vector_button",
+        "filtering": "linear",
+        "collision_role": "none",
+        "color_space": "sRGB",
+        "scaling": "9-slice StyleBoxTexture",
+        "width": 128,
+        "height": 40,
+        "format": "SVG",
+        "supports_transparency": true
+      },
+      "source": {
+        "kind": "project-authored",
+        "url_or_tool": "Codex repository-native vector/shader authoring",
+        "model": "not disclosed by built-in tool",
+        "created_at": "2026-10-03",
+        "original_generated_path": "/Users/a0000/workspace/xingjizhanjian/code/assets/interface_v2/ui_button.svg",
+        "original_sha256": "09c531eb78322e127ce435b1435092c4e3086ae6312fc30eb83b59ca23fe134d",
+        "prompt": "Original SVG drawing of a 128x40 cut-corner control; functional text stays engine-native.",
+        "references": [],
+        "source_history": [],
+        "license_or_generation_note": "Original repository-native code; no third-party image or external art input.",
+        "license_note": "Project-authored source; no external artwork license or CC0 assertion.",
+        "terms_url": "",
+        "edits": [
+          "Byte-identical copy of selected tool output; no pixel edits by the install script."
+        ]
+      },
+      "verification": {
+        "original_viewed_with_view_image": false,
+        "source_copy_sha256_matches": true,
+        "png_layout_checks_passed": false,
+        "vector_layout_checks_passed": true,
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "tiling_reviewed": false,
+        "approved_by": "engine_research (source/native-scale) and project_docs (UI context)",
+        "context_evidence": "jiaoben/logs/ui-visual-v2.log: 75 assertions and 42 captures; original source bytes are unchanged by QA."
+      }
+    },
+    {
+      "id": "ui_material_shader",
+      "role": "low-contrast static industrial UI material",
+      "path": "res://runtime/ui/ui_material.gdshader",
+      "sha256": "7bd8fbc8e1cea3900d137a39041f777c69cdc6d5a9992c16267ae0109854ab88",
+      "size_bytes": 664,
+      "status": "approved_for_current_presentation",
+      "technical": {
+        "expected_layout": "shader",
+        "shader_type": "canvas_item",
+        "collision_role": "none",
+        "dependency": "res://assets/interface_v2/metal_albedo.png",
+        "default_visual_strength": 0.12,
+        "format": "Godot canvas_item shader"
+      },
+      "source": {
+        "kind": "project-authored",
+        "url_or_tool": "Codex repository-native vector/shader authoring",
+        "model": "not disclosed by built-in tool",
+        "created_at": "2026-10-03",
+        "original_generated_path": "/Users/a0000/workspace/xingjizhanjian/code/runtime/ui/ui_material.gdshader",
+        "original_sha256": "7bd8fbc8e1cea3900d137a39041f777c69cdc6d5a9992c16267ae0109854ab88",
+        "prompt": "Original canvas_item shader: static low-amplitude metal albedo modulation, procedural fine grain and brushing; no simulation state.",
+        "references": [],
+        "source_history": [],
+        "license_or_generation_note": "Original repository-native code; no third-party image or external art input.",
+        "license_note": "Project-authored source; no external artwork license or CC0 assertion.",
+        "terms_url": "",
+        "edits": [
+          "Byte-identical copy of selected tool output; no pixel edits by the install script."
+        ]
+      },
+      "verification": {
+        "original_viewed_with_view_image": false,
+        "source_copy_sha256_matches": true,
+        "png_layout_checks_passed": false,
+        "vector_layout_checks_passed": false,
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "tiling_reviewed": false,
+        "approved_by": "engine_research (source/native-scale) and project_docs (UI context)",
+        "context_evidence": "jiaoben/logs/ui-visual-v2.log: 75 assertions and 42 captures; original source bytes are unchanged by QA."
+      }
+    },
+    {
+      "id": "app_icon",
+      "role": "original standalone client application insignia",
+      "path": "res://assets/interface_v2/app_icon.svg",
+      "sha256": "7c36374f54e4f23b1efce1fd0686e52305308f11c68f8769010fb8ee5e67f0a9",
+      "size_bytes": 1307,
+      "status": "source_authored_export_review_pending",
+      "technical": {
+        "expected_layout": "square",
+        "color_space": "sRGB",
+        "collision_role": "none",
+        "filtering": "linear",
+        "repeat_requested": false,
+        "width": 512,
+        "height": 512,
+        "format": "SVG",
+        "supports_transparency": true
+      },
+      "source": {
+        "kind": "authored_vector",
+        "url_or_tool": "original project SVG source authored in repository",
+        "model": "not applicable: authored vector",
+        "created_at": "2026-10-03",
+        "original_generated_path": "/Users/a0000/workspace/xingjizhanjian/code/assets/interface_v2/app_icon.svg",
+        "original_sha256": "7c36374f54e4f23b1efce1fd0686e52305308f11c68f8769010fb8ee5e67f0a9",
+        "prompt": "Original top-down vessel silhouette within restrained industrial orbit insignia; carbon steel, ice blue and muted amber; no text or third-party insignia.",
+        "references": [],
+        "source_history": [],
+        "license_or_generation_note": "Original project vector source; no external reference image or paid service.",
+        "license_note": "Original project artwork; no third-party artwork license applies.",
+        "terms_url": "",
+        "edits": [
+          "Byte-identical copy of selected tool output; no pixel edits by the install script."
+        ]
+      },
+      "verification": {
+        "original_viewed_with_view_image": false,
+        "source_copy_sha256_matches": true,
+        "png_layout_checks_passed": false,
+        "vector_layout_checks_passed": true,
+        "native_scale_reviewed": false,
+        "in_engine_reviewed": false,
+        "tiling_reviewed": false,
+        "approved_by": "project author; actual export check pending"
+      }
+    }
+  ],
+  "manifest_sha256": "457668ba688acac472a85e3c235f58c52aee45099b723d1801129eec8c9d5b00"
+}

@@ -1,0 +1,182 @@
+{
+  "format_version": 1,
+  "asset_version": "hangar-v2",
+  "scope": "Independent presentation stage and runtime metal shaders; no world-state, balance, ship geometry or old art identity changes.",
+  "authoring": {
+    "tool": "Blender 4.5.14 LTS",
+    "source_script": "jiaoben/art/build_hangar_v2.py",
+    "origin": "Original authored geometry; no third-party meshes.",
+    "rights": "Project-authored models and shaders. External metal texture provenance belongs to assets/interface_v2/manifest.json."
+  },
+  "runtime_script": "res://runtime/station_hangar.gd",
+  "surface_script": "res://runtime/surface_style.gd",
+  "art_direction": {
+    "shape": "beveled industrial panels, angled machinery, stylized human anatomy",
+    "palette": "steel blue/carbon grey with cyan navigation and amber safety details; profession uniforms navy/orange/white/olive",
+    "materials": "rough brushed metal, matte cloth and skin, dark functional terminal displays",
+    "lighting": "cold key and restrained warm fill, one shadow-casting light",
+    "camera": "diagonal 45-degree exhibition, private Environment and visual layer 20",
+    "motion": "low-amplitude head/arm motion, hovering service drone and exhibit, no simulated physics"
+  },
+  "technical": {
+    "deck_bounds_m": [
+      76,
+      27,
+      64
+    ],
+    "crew_height_m_approx": 2,
+    "showcase_length_m": 26,
+    "showcase_only": true,
+    "collision": "none",
+    "mesh_normal_source": "Blender bevel/weighted normals; smooth faces on anatomy",
+    "uv_policy": "Blender primitive UVs; metal uses object/triplanar mapping on original UV-less hulls",
+    "rig": "rigid pivot hierarchy HeadPivot/LeftArmPivot/RightArmPivot, not skinned",
+    "texture_dependency": "res://assets/interface_v2/metal_albedo.png",
+    "shadow_lights": 1,
+    "layer": 20,
+    "lod_policy": "Single small isolated exhibition stage, merged material surfaces; hidden stage processing disabled by host; no extra character LOD yet."
+  },
+  "resources": [
+    {
+      "resource_path": "res://assets/hangar_v2/crew_industry.glb",
+      "sha256": "60765ea3237b5e36b9359113929af081bc58367fc3606019fda7267159360f4c",
+      "size_bytes": 398396,
+      "triangles": 10260,
+      "mesh_surfaces": 17,
+      "nodes": 20,
+      "materials": 9,
+      "animation": "rigid_pivots"
+    },
+    {
+      "resource_path": "res://assets/hangar_v2/crew_operations.glb",
+      "sha256": "e1f0db729f518d1471cac3b7d531120b1f5a4ef3ab6b44799332960104e56b0c",
+      "size_bytes": 401760,
+      "triangles": 10216,
+      "mesh_surfaces": 16,
+      "nodes": 19,
+      "materials": 9,
+      "animation": "rigid_pivots"
+    },
+    {
+      "resource_path": "res://assets/hangar_v2/crew_research.glb",
+      "sha256": "aaa0e1320e16c0cd9f612aa9e9f78021d50663f9bcd60de3fa7c12689e5a87c1",
+      "size_bytes": 420064,
+      "triangles": 10320,
+      "mesh_surfaces": 17,
+      "nodes": 20,
+      "materials": 10,
+      "animation": "rigid_pivots"
+    },
+    {
+      "resource_path": "res://assets/hangar_v2/crew_supplies.glb",
+      "sha256": "66adb912b8bfecfe869ef12291b0c97eb58d610e1f7ce9e21cb9b3034d7029f3",
+      "size_bytes": 406880,
+      "triangles": 9992,
+      "mesh_surfaces": 14,
+      "nodes": 17,
+      "materials": 8,
+      "animation": "rigid_pivots"
+    },
+    {
+      "resource_path": "res://assets/hangar_v2/hangar_environment.glb",
+      "sha256": "816e85ec4f8efedde68573bd4a7f88d9a3ec8ccca4788ef734b3a9873bd3b834",
+      "size_bytes": 2268064,
+      "triangles": 36596,
+      "mesh_surfaces": 7,
+      "nodes": 7,
+      "materials": 7,
+      "animation": "runtime_transform"
+    },
+    {
+      "resource_path": "res://assets/hangar_v2/layout.json",
+      "sha256": "244658df0401052f78b70fe83538743896a2c5fd141cd9c76d4307f65c917f63",
+      "size_bytes": 596
+    },
+    {
+      "resource_path": "res://assets/hangar_v2/metal.gdshader",
+      "sha256": "554cbd12cec1cf5f57028a5a0cfe1b029790999a9700d3497a62412c91a7e8c4",
+      "size_bytes": 835
+    },
+    {
+      "resource_path": "res://assets/hangar_v2/service_drone.glb",
+      "sha256": "b5ecf32c55e0c1008415a229fb231b610cbbbfb31f0013ac62779746b9438ffa",
+      "size_bytes": 56940,
+      "triangles": 1312,
+      "mesh_surfaces": 4,
+      "nodes": 4,
+      "materials": 4,
+      "animation": "runtime_transform"
+    },
+    {
+      "resource_path": "res://assets/hangar_v2/ship_metal.gdshader",
+      "sha256": "5050a597af01126e66200ae98803ada9238183779e2e6b09a838bb69e94846a0",
+      "size_bytes": 1544
+    },
+    {
+      "resource_path": "res://assets/hangar_v2/terminal.gdshader",
+      "sha256": "b655f704905828321a53d76d4a58e82a785f5354500cd732389bf7cc6faf7d38",
+      "size_bytes": 522
+    },
+    {
+      "resource_path": "res://assets/hangar_v2/window_space.gdshader",
+      "sha256": "21ae9b89c2fe80346eabd45f6c666fdbbdfd491b35694ac5105dfaaf744cadc8",
+      "size_bytes": 941
+    }
+  ],
+  "source_assets": [
+    {
+      "path": "code/assets/hangar_v2/source/crew_industry.blend",
+      "sha256": "83cd9159226b681b67a8527a2005061881818e08ed4582b9c1b7a1643a2e06f4",
+      "size_bytes": 1385729
+    },
+    {
+      "path": "code/assets/hangar_v2/source/crew_operations.blend",
+      "sha256": "4c39985bf27da358f68be66729839004c61c8cbfe217c04837fe2390e7b7be8f",
+      "size_bytes": 1345504
+    },
+    {
+      "path": "code/assets/hangar_v2/source/crew_research.blend",
+      "sha256": "fbff959f76bd5a981fe5840dfe1bfd860357fc79145a7ba997f583259f234581",
+      "size_bytes": 1450163
+    },
+    {
+      "path": "code/assets/hangar_v2/source/crew_supplies.blend",
+      "sha256": "9fea5dd4f8f44f53347c966ebb40ccb0e5a57d36ac21a01716b06ecfc74e42f0",
+      "size_bytes": 1447590
+    },
+    {
+      "path": "code/assets/hangar_v2/source/hangar_environment.blend",
+      "sha256": "6240beac25140bc333346a32d4dada79fdb52381f89341cb1f4bec111f490b8d",
+      "size_bytes": 3200347
+    },
+    {
+      "path": "code/assets/hangar_v2/source/service_drone.blend",
+      "sha256": "b7431c95c4e22dff05bf8a91a7829ce3e84a7d866cfbb256edb288db8331fa5d",
+      "size_bytes": 905962
+    }
+  ],
+  "qa": {
+    "native_renderer": "Godot 4.7.2 Metal Forward+ / Apple M1 Pro",
+    "resolution_px": [
+      1440,
+      900
+    ],
+    "test_script": "jiaoben/art/test_hangar_v2.gd",
+    "runtime_assertions": 161,
+    "failed_assertions": 0,
+    "preview_script": "jiaoben/art/preview_hangar_v2.gd",
+    "ship_preview_script": "jiaoben/art/preview_surface_v2.gd",
+    "status": "native isolated-stage visual checks passed; host UI and exported-client checks owned by integration",
+    "performance_monitor": "TIME_PROCESS: stage samples vary with focus/system scheduling; not a GPU timing or 60fps certification",
+    "draw_calls_final_observed": {
+      "battle_overview": 205,
+      "miner_overview": 205,
+      "operations": 72,
+      "industry": 137,
+      "research": 131,
+      "supplies_repeat": 128
+    },
+    "preserved_frozen_world_art_resources": 79,
+    "preserved_catalog_file_sha256": "38f9d73575a17a578884e335d1b19ee4833e490cbbd2047b2953c69dd367e25b"
+  }
+}
