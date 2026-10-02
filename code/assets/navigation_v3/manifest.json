@@ -1,0 +1,30 @@
+{
+  "asset_version": "navigation-v3",
+  "scope": "presentation only; scenic planets are nonphysical navigation bearings; local contact visibility remains core SQLite rules",
+  "resources": [
+    {
+      "path": "res://data/navigation_v3.db",
+      "sha256": "c6e89f92aadf32bc6ec7133b4ecc08b07f591748652793bf117b2c80ffed8ffc",
+      "role": "readonly_navigation_definitions",
+      "source": "project authored; no third party art"
+    },
+    {
+      "path": "res://assets/navigation_v3/planet.gdshader",
+      "sha256": "d6bb1615684b034d8108ca69c404374c354a4cecb403e10a51c1feb361cf1c1f",
+      "role": "original_planet_surface_shader",
+      "source": "project authored; no third party art"
+    },
+    {
+      "path": "res://assets/navigation_v3/planet_surface.png",
+      "sha256": "302cdb614d5e70336232bd784a1d8bd266b17e748d88bc6bfd7b908a75df4683",
+      "role": "original_generated_planet_albedo",
+      "source": "Original project image, built-in image_gen, no image references; sources.json"
+    },
+    {
+      "path": "res://assets/navigation_v3/space_panorama.png",
+      "sha256": "cf8946c2c4229ddc1ee59034437dca4c6a753a31625d1c59c5fb8b5b3d55157f",
+      "role": "original_generated_space_panorama",
+      "source": "Original project image, built-in image_gen, no image references; sources.json"
+    }
+  ]
+}

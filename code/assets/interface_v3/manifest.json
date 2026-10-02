@@ -1,0 +1,176 @@
+{
+  "format_version": 1,
+  "asset_version": "interface-v3",
+  "scope": "Presentation-only font and interface skin. Does not modify interface-v2, hangar-v2 geometry, original art or frozen world content identity.",
+  "art_direction": {
+    "shape": "thin engineered cut-corner frames, vector functional marks and focus brackets",
+    "palette": "deep blue-black glass, readable cool white, ice-blue active state and restrained amber accents",
+    "texture": "low-amplitude static micro-grid; functional text always engine-native"
+  },
+  "font_contract": {
+    "primary_font": "res://assets/interface_v3/NotoSansCJKsc-Regular.otf",
+    "shared_by": [
+      "XJUITheme",
+      "XJStationHangar Label3D"
+    ],
+    "system_fallback": false,
+    "font_file_modified": false,
+    "git_blob_sha1": "dc15562470b4f842321894787a0d066879ccff8b"
+  },
+  "resources": [
+    {
+      "id": "font_sc_regular",
+      "role": "shared simplified Chinese UI and Label3D font",
+      "path": "res://assets/interface_v3/NotoSansCJKsc-Regular.otf",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+      "size_bytes": 16437364,
+      "source": {
+        "kind": "upstream_font",
+        "creator": "Adobe / Noto CJK contributors",
+        "license": "SIL Open Font License 1.1",
+        "edits": "Original font and license byte-identical; copyright extracted from name table.",
+        "repository": "https://github.com/notofonts/noto-cjk",
+        "commit": "f8d157532fbfaeda587e826d4cd5b21a49186f7c",
+        "font_version": "2.004",
+        "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
+        "license_path": "res://assets/interface_v3/LICENSE-OFL.txt"
+      }
+    },
+    {
+      "id": "font_license",
+      "role": "SIL Open Font License 1.1",
+      "path": "res://assets/interface_v3/LICENSE-OFL.txt",
+      "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+      "size_bytes": 4301,
+      "source": {
+        "kind": "upstream_font",
+        "creator": "Adobe / Noto CJK contributors",
+        "license": "SIL Open Font License 1.1",
+        "edits": "Original font and license byte-identical; copyright extracted from name table.",
+        "repository": "https://github.com/notofonts/noto-cjk",
+        "commit": "f8d157532fbfaeda587e826d4cd5b21a49186f7c",
+        "font_version": "2.004",
+        "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/LICENSE",
+        "license_path": "res://assets/interface_v3/LICENSE-OFL.txt"
+      }
+    },
+    {
+      "id": "font_copyright",
+      "role": "embedded original font copyright and version",
+      "path": "res://assets/interface_v3/FONT_COPYRIGHT.txt",
+      "sha256": "44beeeaf021a6b0a6d55c57c018fa28ecdb386867d73188544516615696567a5",
+      "size_bytes": 199,
+      "source": {
+        "kind": "upstream_font",
+        "creator": "Adobe / Noto CJK contributors",
+        "license": "SIL Open Font License 1.1",
+        "edits": "Original font and license byte-identical; copyright extracted from name table.",
+        "repository": "https://github.com/notofonts/noto-cjk",
+        "commit": "f8d157532fbfaeda587e826d4cd5b21a49186f7c",
+        "font_version": "2.004",
+        "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
+        "license_path": "res://assets/interface_v3/LICENSE-OFL.txt"
+      }
+    },
+    {
+      "id": "panel_glass_frame",
+      "role": "scalable glass panel frame",
+      "path": "res://assets/interface_v3/ui_panel.svg",
+      "sha256": "70db3455b407fe2357da885cdc3706108d84112f2e2773fa522aacbedbde1e2f",
+      "size_bytes": 637,
+      "source": {
+        "kind": "original_project_source",
+        "creator": "Codex, authored for 星际战舰",
+        "license": "Original project source; governed by project distribution terms.",
+        "edits": "Original SVG or Godot shader; no game artwork extracted."
+      }
+    },
+    {
+      "id": "button_frame",
+      "role": "scalable engineered button frame",
+      "path": "res://assets/interface_v3/ui_button.svg",
+      "sha256": "de83700db098531d408e5e3dfe2e0da5119583e2184f538c05154a2302bc4c42",
+      "size_bytes": 474,
+      "source": {
+        "kind": "original_project_source",
+        "creator": "Codex, authored for 星际战舰",
+        "license": "Original project source; governed by project distribution terms.",
+        "edits": "Original SVG or Godot shader; no game artwork extracted."
+      }
+    },
+    {
+      "id": "focus_brackets",
+      "role": "keyboard focus brackets",
+      "path": "res://assets/interface_v3/ui_focus.svg",
+      "sha256": "b37cdeef3e71102aba8f2030a7c87e305fcaa99242efc1f54e04190c756cb3a8",
+      "size_bytes": 295,
+      "source": {
+        "kind": "original_project_source",
+        "creator": "Codex, authored for 星际战舰",
+        "license": "Original project source; governed by project distribution terms.",
+        "edits": "Original SVG or Godot shader; no game artwork extracted."
+      }
+    },
+    {
+      "id": "selector_chevron",
+      "role": "vector selector indicator",
+      "path": "res://assets/interface_v3/ui_chevron.svg",
+      "sha256": "512a8ce1af3efdf7923a6664ff26efad375a2e265075978c460171d76de8f288",
+      "size_bytes": 227,
+      "source": {
+        "kind": "original_project_source",
+        "creator": "Codex, authored for 星际战舰",
+        "license": "Original project source; governed by project distribution terms.",
+        "edits": "Original SVG or Godot shader; no game artwork extracted."
+      }
+    },
+    {
+      "id": "slider_handle",
+      "role": "vector settings slider handle",
+      "path": "res://assets/interface_v3/ui_slider_handle.svg",
+      "sha256": "457a3c5fef9162c357222651bd727591321bdab6fbdc6cdbabda337205978355",
+      "size_bytes": 228,
+      "source": {
+        "kind": "original_project_source",
+        "creator": "Codex, authored for 星际战舰",
+        "license": "Original project source; governed by project distribution terms.",
+        "edits": "Original SVG or Godot shader; no game artwork extracted."
+      }
+    },
+    {
+      "id": "glass_surface",
+      "role": "subtle glass grid surface",
+      "path": "res://assets/interface_v3/ui_glass.gdshader",
+      "sha256": "b17b394dce0cee9ee955d0a9740c220e3253d5be6d3b1555f218570a8801dce1",
+      "size_bytes": 797,
+      "source": {
+        "kind": "original_project_source",
+        "creator": "Codex, authored for 星际战舰",
+        "license": "Original project source; governed by project distribution terms.",
+        "edits": "Original SVG or Godot shader; no game artwork extracted."
+      }
+    }
+  ],
+  "verification": {
+    "upstream_git_blob_and_size_verified": true,
+    "source_and_catalog_glyph_scan": {
+      "source_files": 99,
+      "catalog_tables": 84,
+      "required_codepoints": 817,
+      "missing": 0,
+      "encoding_defects": 0,
+      "evidence": "jiaoben/logs/font-v3-glyph-report.json"
+    },
+    "in_engine_reviewed": true,
+    "headless_checks": 29,
+    "native_checks": 34,
+    "native_captures": 5,
+    "native_backend": "Godot 4.7.2 Metal Forward+ on Apple M1 Pro",
+    "evidence": [
+      "jiaoben/logs/font-v3-headless.log",
+      "jiaoben/logs/font-v3-native.log"
+    ],
+    "visual_review": "SC Chinese, common symbols, keyboard focus brackets and selector/slider vector marks viewed at 1440x900 and 1280x720, 100/200 percent. Profession Label3D viewed in the real hangar. Full integrated HUD and Windows execution remain integration checks."
+  },
+  "manifest_sha256": "42f53658d8394fc595c7d4b6968e27a51ac31bd08438d6dceb447c08f0dc72ab"
+}

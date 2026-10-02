@@ -133,12 +133,18 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if state == null or world == null or busy or _paused():
 		return
-	gameplay.call("begin_step", delta)
-	world.sync_entities()
+	if not world.sync_entities():
+		ui.show_page("pause")
+		ui.notify(world.last_error, true)
+		return
 	var ship := state.ship()
 	if ship.ship_instance_id != world.flight.record.ship_instance_id:
-		world.rebuild_player()
+		if not world.rebuild_player():
+			ui.show_page("pause")
+			ui.notify(world.last_error, true)
+			return
 		camera.bind(world.flight, store.catalog, state.player().camera_mode)
+	gameplay.call("begin_step", delta)
 	world.flight.metrics = gameplay.call("metrics", ship)
 	_read_flight_input(delta)
 	gameplay.call("activate_repairs")
@@ -204,6 +210,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_sync_mouse_mode()
 		get_viewport().set_input_as_handled()
 		return
+	if event.is_action_pressed("interact"):
+		if not ui.keyboard_blocked(): _command("interact", "", 1, "")
+		return
 	if ui.input_blocked():
 		return
 	if event.is_action_pressed("camera"):
@@ -211,8 +220,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		state.player().camera_mode = camera.mode
 	elif event.is_action_pressed("target"):
 		ui.select_next()
-	elif event.is_action_pressed("interact"):
-		_interact()
 	elif event.is_action_pressed("fire"):
 		fire_held = not pointer_mode and not observing
 	elif event.is_action_released("fire"):
@@ -321,36 +328,42 @@ func _flush_damage() -> void:
 			ui.notify("命中敌舰 · %.0f" % (raw.x + raw.y + raw.z))
 	pending_damage.clear()
 
-func _interact() -> void:
+func interaction_context(target_id: String = "") -> Dictionary:
+	var context = preload("res://runtime/interaction_context.gd")
+	if target_id.is_empty(): return context.choose(world, state, store.catalog, gameplay, ui.target_id)
+	return context.inspect(world, state, store.catalog, gameplay, target_id)
+
+func _interact(target_id: String = "") -> void:
+	if state == null or world == null or travel == null:
+		ui.notify("当前没有可交互的舰船。", true)
+		return
 	if travel.active():
-		travel.cancel()
+		if not target_id.is_empty():
+			ui.notify("虫洞传送正在进行，F 可取消充能。", true)
+		elif not travel.cancel():
+			ui.notify("跃迁进度正在提交，暂时不能取消。", true)
 		return
-	if not world.targets.has(ui.target_id):
-		ui.select_next()
-		ui.notify("已选择附近目标；F 执行交互，Tab 切换。")
+	# F may choose a nearby eligible object; a mouse command never changes its target.
+	var candidate: Dictionary = interaction_context(target_id)
+	if not candidate.ready:
+		ui.notify(str(candidate.reason), true)
 		return
-	var target: Dictionary = world.targets[ui.target_id]
-	match target.kind:
-		"station": _command("dock", target.id, 1, "")
-		"gate":
-			gameplay.call("stop_interactions")
-			if not _save_block_reason().is_empty():
-				ui.notify("脱离交战并等待设备周期结束后，才能通过虫洞。", true)
-				return
-			travel.begin(target.id)
-		"signal": _command("start_scan", target.id, 1, "")
-		"resource":
-			var definition: Dictionary = store.catalog.one("resource_node_defs", "node_id", target.id)
-			var item: Dictionary = store.catalog.one("item_defs", "item_id", definition.item_id)
-			_command("start_mining" if item.get("item_type", "") == "ore" else "recover_resource", target.id, 1, "")
-		"wreck": _command("pickup_wreck", target.id, 1, "")
-		_: ui.notify("此目标是航路标，靠近即可完成定位。")
+	ui.target_id = str(candidate.target_id)
+	if candidate.action == "travel":
+		gameplay.call("stop_interactions")
+		if not _save_block_reason().is_empty():
+			ui.notify("脱离交战并等待设备周期结束后，才能通过虫洞。", true)
+			return
+		travel.begin(str(candidate.target_id))
+	else:
+		_command(str(candidate.action), str(candidate.target_id), 1, "")
 
 func _command(action: String, target: String, quantity: int, extra: String) -> void:
 	if busy:
 		ui.notify("存档操作正在完成，请稍候。")
 		return
 	match action:
+		"interact", "interact_target": _interact(target)
 		"new_world":
 			if not services_ready:
 				ui.notify("存档服务未就绪，无法新建远征。", true)
@@ -447,6 +460,10 @@ func _business_action(action: String, target: String, quantity: int, extra: Stri
 		if state.ship().ship_instance_id != previous_ship and world.flight.record.ship_instance_id != state.ship().ship_instance_id:
 			if world.rebuild_player():
 				camera.bind(world.flight, store.catalog, state.player().camera_mode)
+			else:
+				ui.show_page("pause")
+				ui.notify(world.last_error, true)
+				return
 		if action in ["dock", "undock", "switch_ship", "request_rescue"]:
 			if world.flight.record.ship_instance_id == state.ship().ship_instance_id:
 				world.flight.bind(state.ship(), store.catalog)
@@ -533,7 +550,7 @@ func _discard_staged() -> void:
 	staged_gameplay = null
 
 func _travel_changed(next_phase: int, message: String) -> void:
-	ui.set_operation_status("travel" if travel.active() else "idle", message if travel.active() else "")
+	ui.set_operation_status("travel" if travel.active() else "idle", message if travel.active() else "", next_phase == Types.TravelPhase.PREPARING)
 	if next_phase == Types.TravelPhase.PREPARING and presentation != null:
 		presentation.jump(true)
 	ui.notify(message, next_phase == Types.TravelPhase.FAILED)

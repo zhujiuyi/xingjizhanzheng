@@ -1,0 +1,4 @@
+© 2014-2021 Adobe (http://www.adobe.com/).
+
+Unmodified Noto Sans CJK SC Regular, Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603
+Distributed under SIL Open Font License 1.1; see LICENSE-OFL.txt.

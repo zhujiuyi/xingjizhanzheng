@@ -3,7 +3,9 @@ extends Node3D
 ## Scene is a projection of typed state; no node is persisted.
 const Types = preload("res://contracts/contract_types.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
-const Factory = preload("res://runtime/visuals/visual_factory.gd")
+const Factory = preload("res://runtime/visuals/industrial_visual_factory.gd")
+const StationVisual = preload("res://runtime/visuals/station_visual_adapter.gd")
+const Celestials = preload("res://runtime/celestial_backdrop.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
 var gameplay: RefCounted
@@ -30,6 +32,10 @@ func build(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted) -> bool
 	for station in catalog.rows("station_defs"):
 		if station.sector_id == state.current_sector():
 			var body: StaticBody3D = Factory.static_body("station", station.station_id)
+			if not StationVisual.apply(body):
+				if body != null: body.free()
+				last_error = "空间站表现资源不可用：" + str(station.station_id)
+				return false
 			body.collision_layer = 65
 			body.collision_mask = 2
 			add_child(body)
@@ -75,34 +81,34 @@ func build(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted) -> bool
 	projectiles.setup(catalog)
 	if not rebuild_player():
 		return false
-	sync_entities()
-	return true
+	return sync_entities()
 
 func rebuild_player() -> bool:
-	if is_instance_valid(flight):
-		flight.queue_free()
 	var row := state.ship()
 	var source: CharacterBody3D
-	source = Factory.scene(row.ship_def_id)
+	source = factory.scene(row.ship_def_id)
 	if source == null:
 		last_error = "舰船资源不可用：" + row.ship_def_id
 		return false
-	flight = XJFlight.new()
+	var replacement := XJFlight.new()
 	for child in source.get_children():
 		source.remove_child(child)
 		_clear_owners(child)
-		flight.add_child(child)
+		replacement.add_child(child)
+	replacement.visual = replacement.get_node_or_null("VisualRoot") as Node3D
+	if replacement.visual == null:
+		source.free()
+		replacement.free()
+		last_error = "舰船视觉结构不可用：" + row.ship_def_id
+		return false
+	replacement.visual.set_meta("visual_asset_version", source.get_meta("visual_asset_version", ""))
 	source.free()
-	add_child(flight)
-	flight.bind(row, catalog)
-	flight.visual = flight.get_node_or_null("VisualRoot") as Node3D
-	if factory != null:
-		if flight.visual != null:
-			flight.visual.queue_free()
-		flight.visual = factory.ship(row.ship_def_id)
-		flight.visual.name = "ShipArt"
-		flight.add_child(flight.visual)
-	XJSurfaceStyle.apply_ship(flight.visual)
+	replacement.bind(row, catalog)
+	XJSurfaceStyle.apply_ship(replacement.visual)
+	add_child(replacement)
+	if is_instance_valid(flight):
+		flight.queue_free()
+	flight = replacement
 	return true
 
 func _clear_owners(node: Node) -> void:
@@ -110,7 +116,7 @@ func _clear_owners(node: Node) -> void:
 	for child in node.get_children():
 		_clear_owners(child)
 
-func sync_entities() -> void:
+func sync_entities() -> bool:
 	for row: Dtos.NpcStateDto in state.rows("npc_state"):
 		if row.sector_id != state.current_sector():
 			continue
@@ -123,7 +129,10 @@ func sync_entities() -> void:
 		if not npcs.has(row.npc_instance_id):
 			var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", row.spawn_id)
 			var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)
-			var body: CharacterBody3D = Factory.enemy_scene(str(definition.archetype_id))
+			var body: CharacterBody3D = factory.enemy_scene(str(definition.archetype_id))
+			if body == null:
+				last_error = "敌舰表现资源不可用：" + str(definition.archetype_id)
+				return false
 			XJSurfaceStyle.apply_ship(body)
 			body.motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
 			body.collision_layer = 2
@@ -142,6 +151,7 @@ func sync_entities() -> void:
 		add_child(wreck)
 		wreck.position = Vector3(container.pos_x, container.pos_y, container.pos_z)
 		_target(container.container_id, "可回收残骸", "wreck", wreck, "")
+	return true
 
 func simulate_npcs(delta: float) -> void:
 	if not is_instance_valid(flight):
@@ -286,14 +296,23 @@ func _beacon() -> MeshInstance3D:
 	return node
 
 func _make_environment() -> void:
-	add_child(Factory.space_background({"visual_seed": float(state.current_sector().hash() % 1000)}))
+	var space: Node3D = Factory.space_background({"visual_seed": float(state.current_sector().hash() % 1000), "nebula_color": Color(0.025, 0.048, 0.06), "nebula_accent": Color(0.061, 0.046, 0.032)})
+	var world_environment: WorldEnvironment = space.get_child(0)
+	world_environment.environment.ambient_light_color = Color(0.38, 0.4, 0.43)
+	var panorama := PanoramaSkyMaterial.new()
+	panorama.panorama = preload("res://assets/navigation_v3/space_panorama.png")
+	panorama.energy_multiplier = 0.65
+	world_environment.environment.sky.sky_material = panorama
+	world_environment.environment.sky_rotation = Vector3(0, float(absi(state.current_sector().hash()) % 1000) / 1000.0 * TAU, 0)
+	add_child(space)
+	Celestials.build(self, state.current_sector())
 	var sun := DirectionalLight3D.new()
-	sun.light_color = Color(0.72, 0.82, 1.0)
+	sun.light_color = Color(1.0, 0.96, 0.89)
 	sun.light_energy = 2.0
 	sun.rotation_degrees = Vector3(-35, -30, 0)
 	add_child(sun)
 	var warm := DirectionalLight3D.new()
-	warm.light_color = Color(1.0, 0.5, 0.23)
+	warm.light_color = Color(0.57, 0.65, 0.71)
 	warm.light_energy = 0.65
 	warm.rotation_degrees = Vector3(30, 140, 0)
 	add_child(warm)

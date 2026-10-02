@@ -1,0 +1,25 @@
+{
+  "asset_version": "navigation-v3",
+  "space_panorama": {
+    "path": "res://assets/navigation_v3/space_panorama.png",
+    "kind": "original_generated_project_image",
+    "generator": "built-in image_gen",
+    "generated_on": "2026-10-03",
+    "generation_id": "exec-05e731a8-5688-4f72-ba30-4fa480ba844f",
+    "source_path": "/Users/a0000/.codex/generated_images/01a0fcfc-70e5-7d00-8338-d35112c96915/exec-05e731a8-5688-4f72-ba30-4fa480ba844f.png",
+    "edits": "Byte-identical copy into project; no bitmap post-processing.",
+    "input_images": [],
+    "prompt": "Original panoramic realistic distant space sky, wide 2:1 equirectangular to wrap a game camera. Mostly blue-black and charcoal dark empty space, fine varied stars, restrained wispy volumetric dust filaments off-center, muted steel-blue/cyan gas and warm grey-brown dust; astrophotography detail. About 75 percent dark negative space; no bright flare or central white glow. Readable pale HUD and metal ship silhouette. No smooth cartoon blobs or rainbow gradients. No planet, ship, station, sun disk, horizon, labels, HUD, grid, watermark or rounded border. Original nebula with no reference images. Coherent poles and longitude wrap as closely as possible."
+  },
+  "planet_surface": {
+    "path": "res://assets/navigation_v3/planet_surface.png",
+    "kind": "original_generated_project_image",
+    "generator": "built-in image_gen",
+    "generated_on": "2026-10-03",
+    "generation_id": "exec-5a6cb8a0-1862-4475-b7ec-b04a9105bab9",
+    "source_path": "/Users/a0000/.codex/generated_images/01a0fcfc-70e5-7d00-8338-d35112c96915/exec-5a6cb8a0-1862-4475-b7ec-b04a9105bab9.png",
+    "edits": "Byte-identical copy into project; no bitmap post-processing.",
+    "input_images": [],
+    "prompt": "Original realistic planetary albedo texture, 2048x1024 wide 2:1 equirectangular latitude-longitude projection to wrap a SphereMesh. Complete unlit flat map, not sphere render. Fictional temperate planet with rugged brown-grey volcanic mountains, ochre desert basins, subtle dark green lowland vegetation, desaturated steel-blue oceans and detailed shallow coast, polar ice, sparse intricate wispy clouds. Natural orbital-photography detail, uniform diffuse albedo, no directional light, sun highlights, atmosphere glow or starfield. Edge wrap and geographic poles coherent. Muted geological colors; no labels, watermark, borders, grid or real Earth continents; no copied game assets."
+  }
+}

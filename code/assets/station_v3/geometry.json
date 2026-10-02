@@ -1,0 +1,32 @@
+{
+  "asset_version": "station-v3",
+  "axis": "Y_up_positive_Z_dock",
+  "visual_only": true,
+  "old_wrapper": "res://assets/objects/station_anchor.tscn",
+  "collision_policy": "immutable box remains 440x230x440; no collision authored by new GLB",
+  "bounds_min_m": [
+    -205.5,
+    -86.5,
+    -207.0
+  ],
+  "bounds_max_m": [
+    201.5,
+    111.5,
+    214.0
+  ],
+  "bounds_m": [
+    407.0,
+    198.0,
+    421.0
+  ],
+  "triangles": 72884,
+  "vertices": 37480,
+  "material_surfaces": 8,
+  "finite_coordinates": true,
+  "degenerate_triangles": 0,
+  "runtime_pivot_m": [
+    0,
+    0,
+    0
+  ]
+}

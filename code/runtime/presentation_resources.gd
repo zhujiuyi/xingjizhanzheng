@@ -1,7 +1,7 @@
 class_name XJPresentationResources
 extends RefCounted
 ## Presentation packs can advance without changing frozen world/asset identity.
-const MANIFESTS: Array[String] = ["res://assets/interface_v2/manifest.json", "res://assets/hangar_v2/manifest.json"]
+const MANIFESTS: Array[String] = ["res://assets/interface_v2/manifest.json", "res://assets/hangar_v2/manifest.json", "res://assets/interface_v3/manifest.json", "res://assets/navigation_v3/manifest.json", "res://assets/ship_v3/manifest.json", "res://assets/station_v3/manifest.json"]
 
 static func validate() -> String:
 	for manifest_path: String in MANIFESTS:
@@ -16,6 +16,6 @@ static func validate() -> String:
 				return "表现资源缺失：" + path
 			if FileAccess.get_sha256(path) != str(entry.get("sha256", "")):
 				return "表现资源摘要不匹配：" + path
-			if path.get_extension() in ["png", "svg", "glb", "gdshader"] and not ResourceLoader.exists(path):
+			if path.get_extension() in ["png", "svg", "glb", "gdshader", "otf"] and not ResourceLoader.exists(path):
 				return "表现资源导入缺失：" + path
 	return ""

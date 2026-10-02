@@ -1,0 +1,205 @@
+{
+  "format_version": 1,
+  "asset_version": "ship-v3-industrial",
+  "scope": "Nine existing player classes plus existing Silent NPC visual; presentation only, immutable art-full-v1 wrappers remain physics and anchors authority.",
+  "authoring": {
+    "tool": "Blender 4.5.14 LTS",
+    "source_script": "jiaoben/art/build_ships_v3.py",
+    "origin": "Project-authored original geometry and shader. No third-party model, extracted mesh or copied texture.",
+    "design_references": [
+      {
+        "url": "https://www.eveonline.com/news/view/iconic-ships-reimagined-the-minmatar-rupture",
+        "use": "Official written discussion of negative spaces, exposed framing, spaced armor and human-scale windows; images were unavailable to this agent, not claimed as visually verified."
+      }
+    ],
+    "texture_provenance": "External texture dependency is independently registered in assets/interface_v2/manifest.json; not bundled a second time."
+  },
+  "runtime_adapter": "res://runtime/visuals/industrial_visual_factory.gd",
+  "surface_script": "res://runtime/surface_style.gd",
+  "geometry_contract": "res://assets/models/geometry.json",
+  "material_policy": {
+    "metal_roughness_range": [
+      0.65,
+      0.9
+    ],
+    "large_surface_emission": false,
+    "lighting_independent": "Final spatial PBR shader, physical authored roughness; no screen-space painted shine",
+    "mapping": "Object-space triplanar microtexture; derivative bump only, no vertex displacement"
+  },
+  "external_dependencies": [
+    {
+      "resource_path": "res://assets/interface_v2/metal_albedo.png",
+      "sha256": "5b518105a6a34cbda60bd91c4183af937af8755291b679688f18fe8a05854d51"
+    }
+  ],
+  "resources": [
+    {
+      "resource_path": "res://assets/ship_v3/battleship_bastion.glb",
+      "sha256": "9083a717cfaea0cfb1c0e9630302544835c67d9ff32a649e5a2b9f7b6b857440",
+      "size_bytes": 9796200,
+      "triangles": 152096,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "battleship_bastion"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/cruiser_horizon.glb",
+      "sha256": "0cfe63ce700382aaf65967dd62110844cdedc32dac04b8ae99f5e5930507c29d",
+      "size_bytes": 4894444,
+      "triangles": 78060,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "cruiser_horizon"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/destroyer_raptor.glb",
+      "sha256": "dc7559bd2afaa8c491c3f45764cd5eafb0e73de9e7495978f6689fd2ba3a6628",
+      "size_bytes": 4073276,
+      "triangles": 67300,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "destroyer_raptor"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/enemy_silent.glb",
+      "sha256": "d9d5fe3d7a3dc8319cda9b480fc6aef7e7b0ea9f7b449f9fd0d16f6fbd42d3f1",
+      "size_bytes": 2275944,
+      "triangles": 37928,
+      "mesh_surfaces": 6,
+      "materials": 6,
+      "ship_def_id": "enemy_silent"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/frigate_kestrel.glb",
+      "sha256": "3fcd8dc99386dddc76365604925a925dc7500ad05fa09e5ad56d38634381f111",
+      "size_bytes": 3103936,
+      "triangles": 52072,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "frigate_kestrel"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/frigate_lantern.glb",
+      "sha256": "750638ec135e7d10248ea8c67d3b5ab10dac85575029ff0414b1106e2c546533",
+      "size_bytes": 2540256,
+      "triangles": 43896,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "frigate_lantern"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/industrial_metal.gdshader",
+      "sha256": "8fcc26a6d8d1acd534bc7160b75c1b0dd5fa6b2d0274e797574a238db7d8ad6d",
+      "size_bytes": 1380
+    },
+    {
+      "resource_path": "res://assets/ship_v3/miner_anvil.glb",
+      "sha256": "15078f6a5d7c8ed0e4877ccf91b906fbdae291710539a3958f93839c5d36d264",
+      "size_bytes": 2693592,
+      "triangles": 52048,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "miner_anvil"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/shuttle_swift.glb",
+      "sha256": "6fadacfdaa52898c9d9a8fa2728b33fdf1e06c8c4fe0743ebb707f8aae7d1bb7",
+      "size_bytes": 1397980,
+      "triangles": 26102,
+      "mesh_surfaces": 10,
+      "materials": 10,
+      "ship_def_id": "shuttle_swift"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/support_weaver.glb",
+      "sha256": "b1ca3e8318c74e86d9a8cecab4b4f97ef41d80d9659a2421d05c28224df18850",
+      "size_bytes": 3807808,
+      "triangles": 64484,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "support_weaver"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/transport_caravan.glb",
+      "sha256": "9e132d34cd7bf34bd3f75925d0339511f18dbc7b7ee95f9dd26796a8efb872fd",
+      "size_bytes": 6175212,
+      "triangles": 99636,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "transport_caravan"
+    }
+  ],
+  "source_assets": [
+    {
+      "path": "code/assets/ship_v3/source/battleship_bastion.blend",
+      "sha256": "5cac699ef33f0fdad80c02948d5605b849c025f04e5254dd7e13403b1aa9fdfc",
+      "size_bytes": 8898362
+    },
+    {
+      "path": "code/assets/ship_v3/source/cruiser_horizon.blend",
+      "sha256": "3605107ca5fb040d688bb2ad7184ddd471dd6791f675415aa1ca233907fe43bf",
+      "size_bytes": 4849276
+    },
+    {
+      "path": "code/assets/ship_v3/source/destroyer_raptor.blend",
+      "sha256": "8c49de9ccd5c034c34e69eed9c5a12848e9eb25756d6d31ab7512b88e0482580",
+      "size_bytes": 4273368
+    },
+    {
+      "path": "code/assets/ship_v3/source/enemy_silent.blend",
+      "sha256": "e82465b2f2cf266ee3736ded222311d7a57c96d363bcc20cf61b017bfa625a61",
+      "size_bytes": 2614504
+    },
+    {
+      "path": "code/assets/ship_v3/source/frigate_kestrel.blend",
+      "sha256": "8e872dd5a05ef391acaa07de9be0fb0a21d7aa3c3a9a7e59b3bc4bddd0f0cfd8",
+      "size_bytes": 3469803
+    },
+    {
+      "path": "code/assets/ship_v3/source/frigate_lantern.blend",
+      "sha256": "56e9855a419fb6788227cb508e3081a24fbf6641c8cf8018e743c9a625896fda",
+      "size_bytes": 3002950
+    },
+    {
+      "path": "code/assets/ship_v3/source/miner_anvil.blend",
+      "sha256": "74bed08d6f38a90d25cd9f390b3e21dc7843109beafcf83aa167cccb303c6d4d",
+      "size_bytes": 3645841
+    },
+    {
+      "path": "code/assets/ship_v3/source/shuttle_swift.blend",
+      "sha256": "5746168ac4b37fd74fc4aaa04251f700e7d2484d9f6e6384b06e01c07e659d53",
+      "size_bytes": 2101276
+    },
+    {
+      "path": "code/assets/ship_v3/source/support_weaver.blend",
+      "sha256": "23b551ed623c8210113403da8d0ba60afcdb24cb2b7ad86f052e328dcf238ac1",
+      "size_bytes": 4120880
+    },
+    {
+      "path": "code/assets/ship_v3/source/transport_caravan.blend",
+      "sha256": "404c5251d9caf1921c7ccc13201613717d188207f44ff44ad4eb8244156099d8",
+      "size_bytes": 6012743
+    }
+  ],
+  "qa": {
+    "status": "Final geometry/material contracts and isolated native previews passed; exported-client and integrated UI review owned by root.",
+    "test_script": "jiaoben/art/test_ship_v3.gd",
+    "preview_script": "jiaoben/art/preview_ship_v3.gd",
+    "runtime_assertions": 410,
+    "failed_assertions": 0,
+    "checked_backends": [
+      "headless",
+      "Metal Forward+ / CoreAudio"
+    ],
+    "resolution_px": [
+      1600,
+      1000
+    ],
+    "native_ship_captures": 12,
+    "native_hangar_captures": 3,
+    "performance_boundary": "TIME_PROCESS samples are CPU/frame-loop observations, affected by window focus and scheduling; not GPU timings or a 60fps certificate. Material surfaces are merged; Godot importer auto-LOD is enabled but no hand-authored LOD is provided.",
+    "preserved_frozen_world_art_resources": 79,
+    "preserved_hangar_resources": 11,
+    "preserved_catalog_file_sha256": "38f9d73575a17a578884e335d1b19ee4833e490cbbd2047b2953c69dd367e25b"
+  }
+}

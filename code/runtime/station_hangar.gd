@@ -1,7 +1,7 @@
 class_name XJStationHangar
 extends Node3D
 ## Isolated visual stage only: never consumes a WorldSnapshot, physics or save state.
-const Factory=preload("res://runtime/visuals/visual_factory.gd")
+const Factory=preload("res://runtime/visuals/industrial_visual_factory.gd")
 const SurfaceStyle=preload("res://runtime/surface_style.gd")
 const ROOT="res://assets/hangar_v2/"
 const HANGAR_LAYER:int=1<<19
@@ -112,7 +112,7 @@ func _build_crew()->void:
 		add_child(crew);_crew[role]=crew
 		_apply_terminals(crew)
 		var title:Label3D=Label3D.new();title.name="ProfessionLabel";title.text=SERVICE_TITLES[role];title.position=Vector3(0,2.4,0)
-		var font:SystemFont=SystemFont.new();font.font_names=PackedStringArray(["PingFang SC","Microsoft YaHei","Noto Sans CJK SC"])
+		var font:FontFile=XJUITheme.font()
 		title.font=font;title.font_size=30;title.pixel_size=.006;title.outline_size=5;title.modulate=Color(.56,.8,.86);title.billboard=BaseMaterial3D.BILLBOARD_ENABLED
 		crew.add_child(title)
 

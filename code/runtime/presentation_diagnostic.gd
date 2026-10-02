@@ -6,8 +6,14 @@ const Types = preload("res://contracts/contract_types.gd")
 static func run(host: Node, output_dir: String) -> bool:
 	var evidence := {"checks": 0, "failures": 0}
 	await host._command("new_world", "发布包表现检查", 1, "")
-	_check(evidence, host.state != null, "actual packed client creates isolated world")
+	var industrial_world: bool = host.state != null and host.world != null and is_instance_valid(host.world.flight) and str(host.world.flight.visual.get_meta("visual_asset_version", "")) == "ship-v3-industrial"
+	if industrial_world:
+		var packed_station: Node3D = host.world.targets.get("station_anchor_port", {}).get("node")
+		industrial_world = is_instance_valid(packed_station) and str(packed_station.get_node("VisualRoot").get_meta("station_visual_version", "")) == "station-v3"
+	_check(evidence, industrial_world, "actual packed client creates isolated world with industrial ship and station")
 	if host.state == null: return _finish(evidence)
+	_check(evidence, host.ui.root.theme.default_font == XJUITheme.font(), "packed UI uses bundled Chinese font")
+	_check(evidence, not XJUITheme.font().allow_system_fallback and XJUITheme.font().has_char("舰".unicode_at(0)), "packed font covers Chinese without system fallback")
 	host.ui.show_title(host.store.list_slots())
 	await host.get_tree().process_frame
 	var continue_button: Button = null
@@ -31,6 +37,12 @@ static func run(host: Node, output_dir: String) -> bool:
 		host.ui.show_page(page)
 		await host.get_tree().process_frame
 		_check(evidence, host.ui.page == page and host.ui.body.get_child_count() > 0, "packed service page " + page)
+		if page == "pause":
+			var manual_count: int = 0
+			for control: Node in host.ui.body.find_children("*", "Button", true, false):
+				if str(control.text).begins_with("保存至手动槽 "): manual_count += 1
+			_check(evidence, manual_count == 5, "packed archive exposes five manual save cards")
+			await _capture(host, output_dir, "archive")
 		for button: Node in host.ui.body.find_children("*", "Button", true, false):
 			if not button.disabled:
 				button.mouse_entered.emit()
@@ -78,7 +90,33 @@ static func run(host: Node, output_dir: String) -> bool:
 	host._business_action("undock", "", 1, "")
 	while host.busy: await host.get_tree().process_frame
 	_check(evidence, host.state.ship().status == Types.ShipStatus.FLYING, "packed authoritative departure")
+	var nav: XJNavigationHUD = host.ui.navigation_hud
+	host.ui.tick(1.0)
+	_check(evidence, nav.visible and nav.scales.size() == 3, "packed local radar reads three SQLite ranges")
+	_check(evidence, nav.sensor_limit == float(host.store.catalog.rule("target_marker_detection_range_m")), "packed radar respects frozen sensor limit")
+	_check(evidence, nav.contacts.filter(func(row: Dictionary): return row.kind == "planet" and row.bearing).size() == 1, "packed sector includes known celestial bearing")
 	await _capture(host, output_dir, "flight")
+	var station_id: String = "station_anchor_port"
+	var station: Node3D = host.world.targets[station_id].node
+	var prior_mode: int = host.process_mode
+	host.process_mode = Node.PROCESS_MODE_DISABLED
+	host.world.flight.global_position = station.global_position + host.world.flight.global_basis.z * (float(host.store.catalog.rule("dock_radius_m")) * 0.8)
+	host.world.flight.velocity = Vector3.ZERO
+	host.world.flight.write_back()
+	host.ui.target_id = station_id
+	host.camera.snapped = false
+	host.camera.step(1.0)
+	host.ui.tick(1.0)
+	var geometry: Dictionary = nav.target_geometry()
+	_check(evidence, not geometry.is_empty() and geometry.end.distance_to(host.camera.camera.unproject_position(station.global_position)) < 0.01, "packed selected line reaches actual station projection")
+	_check(evidence, host.ui.interaction_button.visible and not host.ui.interaction_button.disabled and host.ui.interaction_button.text.contains("[F]"), "packed station approach presents usable F control")
+	await _capture(host, output_dir, "approach")
+	host.world.flight.velocity = Vector3.RIGHT * (float(host.store.catalog.rule("dock_max_speed_mps")) + 1)
+	host.ui.tick(1.0)
+	_check(evidence, host.ui.interaction_button.disabled and host.ui.interaction_label.text.contains("制动"), "packed over-speed approach gives braking reason")
+	host.world.flight.velocity = Vector3.ZERO
+	host.world.flight.write_back()
+	host.process_mode = prior_mode as Node.ProcessMode
 	host.ui.show_page("pause")
 	_check(evidence, host.store.save(host.state, "manual", 0), "packed presentation world saves to isolated SQLite")
 	# Leave a freed reference immediately before quit to exercise cleanup too.

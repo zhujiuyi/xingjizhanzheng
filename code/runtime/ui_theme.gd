@@ -1,25 +1,25 @@
 class_name XJUITheme
 extends RefCounted
 ## Presentation only: dimensions/colors below never drive gameplay.
-const ICE: Color = Color("97cbd6")
+const ICE: Color = Color("9ddcea")
 const AMBER: Color = Color("dcad67")
-const TEXT: Color = Color("dae1e7")
-const MUTED: Color = Color("8997a4")
-const COAL: Color = Color("11171e")
-const MATERIAL: Shader = preload("res://runtime/ui/ui_material.gdshader")
+const TEXT: Color = Color("dfebf0")
+const MUTED: Color = Color("93a9b5")
+const COAL: Color = Color("07121a")
+const MATERIAL: Shader = preload("res://assets/interface_v3/ui_glass.gdshader")
+static var FONT: FontFile = preload("res://assets/interface_v3/NotoSansCJKsc-Regular.otf")
 
-static func font() -> SystemFont:
-	var result: SystemFont = SystemFont.new()
-	result.font_names = PackedStringArray(["PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC"])
-	result.allow_system_fallback = true
-	return result
+static func font() -> FontFile:
+	# A single bundled font resource is shared by Control and Label3D on both desktops.
+	FONT.allow_system_fallback = false
+	return FONT
 
 static func plate() -> StyleBox:
-	var texture: Texture2D = load("res://assets/interface_v2/ui_panel.svg")
+	var texture: Texture2D = load("res://assets/interface_v3/ui_panel.svg")
 	if texture != null:
 		var result: StyleBoxTexture = StyleBoxTexture.new()
 		result.texture = texture
-		for side: Side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]: result.set_texture_margin(side, 14)
+		for side: Side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]: result.set_texture_margin(side, 16)
 		result.content_margin_left = 14
 		result.content_margin_right = 14
 		result.content_margin_top = 12
@@ -37,13 +37,20 @@ static func flat(fill: Color, border: Color, inset: int = 10) -> StyleBoxFlat:
 
 static func button_style(tint: Color) -> StyleBox:
 	var result: StyleBoxTexture = StyleBoxTexture.new()
-	result.texture = load("res://assets/interface_v2/ui_button.svg")
+	result.texture = load("res://assets/interface_v3/ui_button.svg")
 	result.modulate_color = tint
 	for side: Side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]: result.set_texture_margin(side, 10)
 	result.content_margin_left = 16
 	result.content_margin_right = 16
 	result.content_margin_top = 9
 	result.content_margin_bottom = 9
+	return result
+
+static func focus_style() -> StyleBox:
+	var result: StyleBoxTexture = StyleBoxTexture.new()
+	result.texture = load("res://assets/interface_v3/ui_focus.svg")
+	for side: Side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]: result.set_texture_margin(side, 10)
+	result.set_content_margin_all(0)
 	return result
 
 static func create() -> Theme:
@@ -53,22 +60,34 @@ static func create() -> Theme:
 	result.set_color("font_color", "Label", TEXT)
 	result.set_color("font_color", "Button", TEXT)
 	result.set_color("font_hover_color", "Button", Color.WHITE)
-	result.set_color("font_disabled_color", "Button", Color("657380"))
+	result.set_color("font_disabled_color", "Button", Color("687e89"))
 	result.set_stylebox("normal", "Button", button_style(Color.WHITE))
 	result.set_stylebox("hover", "Button", button_style(Color("a6d7e7")))
 	result.set_stylebox("pressed", "Button", button_style(Color("7ab0c4")))
 	result.set_stylebox("disabled", "Button", button_style(Color("686e76")))
-	result.set_stylebox("focus", "Button", flat(Color.TRANSPARENT, ICE, 0))
+	result.set_stylebox("focus", "Button", focus_style())
 	result.set_stylebox("panel", "PanelContainer", plate())
 	for type: String in ["OptionButton", "LineEdit", "SpinBox"]:
-		result.set_stylebox("normal", type, flat(Color("10171e"), Color("485864")))
+		result.set_stylebox("normal", type, flat(Color("0b1822"), Color("4b6c7b")))
+		result.set_stylebox("focus", type, focus_style())
 		result.set_color("font_color", type, TEXT)
+	result.set_icon("arrow", "OptionButton", texture("res://assets/interface_v3/ui_chevron.svg"))
+	result.set_color("caret_color", "LineEdit", ICE)
+	result.set_color("selection_color", "LineEdit", Color("28516a"))
 	result.set_stylebox("panel", "PopupMenu", plate())
 	result.set_color("font_color", "PopupMenu", TEXT)
 	result.set_stylebox("hover", "PopupMenu", flat(Color("253640"), ICE))
 	result.set_stylebox("background", "ProgressBar", flat(Color("080d12"), Color("303d47"), 0))
 	result.set_stylebox("fill", "ProgressBar", flat(ICE, ICE, 0))
 	result.set_color("font_color", "ProgressBar", TEXT)
+	result.set_stylebox("slider", "HSlider", flat(Color("0a151c"), Color("345665"), 0))
+	result.set_stylebox("grabber_area", "HSlider", flat(Color("285666"), Color("527d8d"), 0))
+	result.set_stylebox("grabber_area_highlight", "HSlider", flat(Color("347687"), ICE, 0))
+	result.set_stylebox("focus", "HSlider", focus_style())
+	var handle: Texture2D = texture("res://assets/interface_v3/ui_slider_handle.svg")
+	result.set_icon("grabber", "HSlider", handle)
+	result.set_icon("grabber_highlight", "HSlider", handle)
+	result.set_icon("grabber_disabled", "HSlider", handle)
 	return result
 
 static func texture(path: String) -> Texture2D:
@@ -76,16 +95,14 @@ static func texture(path: String) -> Texture2D:
 
 static func decorate(panel: Control, alpha: float = 0.9) -> void:
 	var detail: ColorRect = ColorRect.new()
-	detail.name = "MetalSurface"
+	detail.name = "GlassSurface"
 	detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	detail.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var material: ShaderMaterial = ShaderMaterial.new()
 	material.shader = MATERIAL
-	material.set_shader_parameter("tint", Color(0.09, 0.12, 0.145, alpha))
-	var metal: Texture2D = texture("res://assets/interface_v2/metal_albedo.png")
-	material.set_shader_parameter("has_metal", metal != null)
-	if metal != null: material.set_shader_parameter("metal_texture", metal)
+	material.set_shader_parameter("tint", Color(0.025, 0.052, 0.073, alpha * 0.35))
 	detail.material = material
+	detail.resized.connect(func(): material.set_shader_parameter("panel_size", detail.size))
 	panel.add_child(detail)
 	panel.move_child(detail, 0)
 

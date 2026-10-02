@@ -1,0 +1,95 @@
+{
+  "format_version": 1,
+  "asset_version": "station-v3",
+  "scope": "Original station render mesh and materials only; no collision, world state, interactions or frozen v0.4 assets are changed.",
+  "authoring": {
+    "tool": "Blender 4.5.14 LTS",
+    "source_script": "jiaoben/art/build_station_v3.py",
+    "origin": "Original project-authored industrial ring geometry and rough-metal spatial shader.",
+    "rights": "Project-authored source; no third-party models or screenshot-derived textures.",
+    "texture_dependency": "res://assets/interface_v2/metal_albedo.png; original asset provenance remains in its existing manifest."
+  },
+  "runtime_script": "res://runtime/visuals/station_visual_adapter.gd",
+  "art_direction": {
+    "silhouette": "Segmented armored habitation ring, open load-bearing spokes, central reactor/service core, asymmetric refinery, logistics and terraced habitation pods.",
+    "scale_cues": "Inset pipe channels, armor joints, inspection panels, radiator slats, sparse tiny windows, docking gantry arms and portal ribs.",
+    "material": "Dark recesses; high-roughness coated steel and exposed structure; restrained cyan windows and amber docking lamps.",
+    "dock": "Recessed visual berth faces positive Godot Z; docking remains existing proximity/menu action, no fly-in collider change."
+  },
+  "technical": {
+    "asset_version": "station-v3",
+    "axis": "Y_up_positive_Z_dock",
+    "visual_only": true,
+    "old_wrapper": "res://assets/objects/station_anchor.tscn",
+    "collision_policy": "immutable box remains 440x230x440; no collision authored by new GLB",
+    "bounds_min_m": [
+      -205.5,
+      -86.5,
+      -207.0
+    ],
+    "bounds_max_m": [
+      201.5,
+      111.5,
+      214.0
+    ],
+    "bounds_m": [
+      407.0,
+      198.0,
+      421.0
+    ],
+    "triangles": 72884,
+    "vertices": 37480,
+    "material_surfaces": 8,
+    "finite_coordinates": true,
+    "degenerate_triangles": 0,
+    "runtime_pivot_m": [
+      0,
+      0,
+      0
+    ]
+  },
+  "resources": [
+    {
+      "resource_path": "res://assets/station_v3/station_industrial.glb",
+      "sha256": "04e4692d97e39de9f822407fbee9752c6077fcb82cf6f452d12d69831d38862b",
+      "size_bytes": 5021244
+    },
+    {
+      "resource_path": "res://assets/station_v3/industrial_station.gdshader",
+      "sha256": "864284643449969307e26cd4c95ffd5554098cc2beb220c1859e66827e2b72c9",
+      "size_bytes": 1517
+    },
+    {
+      "resource_path": "res://assets/station_v3/geometry.json",
+      "sha256": "eba4152fd3cf6a3aff08765094f3a36e8d87d4f39394e92f1b87e929fb24584b",
+      "size_bytes": 592
+    }
+  ],
+  "source_assets": [
+    {
+      "path": "code/assets/station_v3/source/station_industrial.blend",
+      "sha256": "17a19bde0a40f567fb623da767e859f413482a00444e674a92ff42fac8a5159f",
+      "size_bytes": 5085362
+    }
+  ],
+  "qa": {
+    "source_finite_vertices": true,
+    "source_degenerate_triangles": 0,
+    "glb_exported_vertices": 142984,
+    "glb_binary_finite_positions_and_unit_normals": true,
+    "source_bounds_within_immutable_collision_box": true,
+    "runtime_test": "jiaoben/art/test_station_v3.gd",
+    "native_preview": "jiaoben/art/preview_station_v3.gd",
+    "status": "Imported structure, frozen-resource preservation and native two-angle rendering verified; final host/client integration owned by root.",
+    "headless_checks": 114,
+    "native_checks": 114,
+    "failed_assertions": 0,
+    "engine_diagnostics": 0,
+    "native_renderer": "Godot 4.7.2 Metal Forward+ / Apple M1 Pro / CoreAudio",
+    "native_resolution_px": [
+      1440,
+      900
+    ],
+    "native_lighting": "Matches sector_anchor: key2.0, ambient0.7, fill0.65, filmic, project panorama0.65; no extra shadow/AO lights."
+  }
+}
