@@ -30,4 +30,4 @@ UI 生命周期补充检查为 `tests/ui_lifecycle_v2.gd`。最终 headless 与�
 
 与实际游戏并行运行测试时，必须显式传入 `--log-file` 的独立绝对路径，例如 `--log-file /Users/a0000/workspace/xingjizhanjian/jiaoben/logs/ui-lifecycle-v2-engine-native.log`，不与 AppSupport 的实际 `godot.log` 共用。headless 和原生运行分别保留进程输出与引擎日志；原生音频检查传入 `--audio-driver CoreAudio`。
 
-实际发布诊断使用内置 `--xj-verify-presentation` 入口，不加载外部脚本。`build_client.py` 为每次检查创建独立 fresh `jiaoben/tmp/release-presentation/<UUID>/progress.db`，通过 `XJ_TEST_DATABASE` 传入；主程序拒绝已有数据库及 tmp 外路径。构建脚本要求实际 Mac 包的 Metal/CoreAudio 19 项检查通过，保存首页、机库、NPC、飞行四张截图并使用独立 `--log-file`。目前正在最终导出与发布包复验，尚未交付新版；最终发布 PASS、包路径和摘要以 [交付记录](../doc/26-开发阶段与交付记录.md) 为准。
+实际发布诊断使用内置 `--xj-verify-presentation` 入口，不加载外部脚本。`build_client.py` 为每次检查创建独立 fresh `jiaoben/tmp/release-presentation/<UUID>/progress.db`，通过 `XJ_TEST_DATABASE` 传入；主程序拒绝已有数据库及 tmp 外路径。构建脚本要求实际 Mac 包的 Metal/CoreAudio 24 项检查通过，保存首页、机库、NPC、飞行四张截图并使用独立 `--log-file`。目前正在最终导出与发布包复验，尚未交付新版；最终发布 PASS、包路径和摘要以 [交付记录](../doc/26-开发阶段与交付记录.md) 为准。

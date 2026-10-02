@@ -22,6 +22,11 @@ static func run(host: Node, output_dir: String) -> bool:
 		continue_button.mouse_exited.emit()
 		_check(evidence, continue_button.has_meta("hover_tween"), "first hover creates feedback without missing metadata")
 	await _capture(host, output_dir, "title")
+	# Resume through the production endpoint. A direct page switch from title
+	# leaves menu_open true and would freeze the hangar camera in this fixture.
+	await host._command("continue", "", 1, "")
+	_check(evidence, host.state != null and not host.ui.menu_open, "actual continue restores active world from title")
+	if host.state == null: return _finish(evidence)
 	for page: String in ["station", "missions", "market", "industry", "research", "map", "pause", "settings", "station"]:
 		host.ui.show_page(page)
 		await host.get_tree().process_frame
@@ -32,10 +37,19 @@ static func run(host: Node, output_dir: String) -> bool:
 				button.mouse_exited.emit()
 				break
 	await _capture(host, output_dir, "station")
-	host.hangar.focus_service("operations")
-	for frame: int in range(90): await host.get_tree().process_frame
+	var crew: Node3D = host.hangar.get_service_anchor("operations")
+	_check(evidence, is_instance_valid(crew) and crew.is_visible_in_tree(), "packed 3D NPC service model is visible")
+	var portrait: Button = host.ui.station_services.find_child("NpcPortrait0", true, false)
+	_check(evidence, portrait != null, "packed NPC portrait exposes a view control")
+	if portrait != null: portrait.pressed.emit()
+	var focus_deadline := Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < focus_deadline and host.hangar.get_camera().position.distance_to(host.hangar._camera_destination) > 1.0:
+		await host.get_tree().process_frame
+	_check(evidence, host.hangar._focused == "operations" and host.hangar.get_camera().position.distance_to(host.hangar._camera_destination) <= 1.0, "NPC view action reaches the actual close camera")
 	await _capture(host, output_dir, "npc")
-	host.hangar.focus_service("")
+	var overview: Button = host.ui.station_services.find_child("HangarOverview", true, false)
+	if overview != null: overview.pressed.emit()
+	_check(evidence, overview != null and host.hangar._focused.is_empty(), "overview action restores ship framing")
 	host.ui.show_page("station")
 	var presentation: XJPresentation = host.presentation
 	var dead_voice := AudioStreamPlayer.new()

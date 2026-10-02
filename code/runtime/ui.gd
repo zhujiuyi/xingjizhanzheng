@@ -447,6 +447,9 @@ func _station() -> void:
 	_secondary(_button(shortcuts, "舰队", show_page.bind("ships")))
 	_secondary(_button(shortcuts, "配装", show_page.bind("fitting")))
 	_secondary(_button(shortcuts, "仓储", show_page.bind("warehouse")))
+	var overview: Button = _command(shortcuts, "观察舰船", "hangar_focus")
+	overview.name = "HangarOverview"
+	_secondary(overview)
 	station_details = _frame(station_layer, "StationShipDetails")
 	station_details.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
 	station_details.offset_left = -282
@@ -1169,6 +1172,8 @@ func _responsive() -> void:
 		station_services.offset_right = safe + (200 if compact else 260)
 		station_services.offset_top = 44 if compact else 96
 		station_services.offset_bottom = -94 if compact else -120
+		for heading: Label in station_services.find_children("NpcServiceTitle", "Label", true, false):
+			heading.add_theme_font_size_override("font_size", 13 if compact else 15)
 	if is_instance_valid(station_details):
 		station_details.visible = not compact
 	if is_instance_valid(station_departure):
@@ -1493,37 +1498,64 @@ func _update_station_info() -> void:
 	station_ship_status.text = "护盾  %.0f / %.0f\n装甲  %.0f / %.0f\n结构  %.0f / %.0f\n\n电容  %.0f / %.0f\n热量  %.0f%%\n\n货舱  %.0f / %.0f L\n矿舱  %.0f / %.0f L" % [state.ship().shield, float(metrics.shield_max), state.ship().armor, float(metrics.armor_max), state.ship().hull, float(metrics.hull_max), state.ship().energy, float(metrics.energy_max), state.ship().heat / maxf(float(metrics.heat_max), 1.0) * 100, float(metrics.cargo_used_l), float(metrics.cargo_capacity_l), float(metrics.mineral_used_l), float(metrics.mineral_capacity_l)]
 
 func _npc_service(parent: Node, portrait: int, title: String, subtitle: String, destination: String) -> void:
-	var button: Button = _button(parent, "", show_page.bind(destination))
-	button.name = "NpcService" + str(portrait)
-	button.custom_minimum_size = Vector2(0, 87)
-	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Two sibling buttons keep viewing a person separate from opening their service.
 	var row: HBoxContainer = HBoxContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	row.offset_left = 10
-	row.offset_right = -10
-	row.offset_top = 10
-	row.offset_bottom = -10
-	row.add_theme_constant_override("separation", 12)
-	button.add_child(row)
+	row.name = "NpcCard" + str(portrait)
+	row.custom_minimum_size.y = 87
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 4)
+	parent.add_child(row)
+	var roles: Array[String] = ["operations", "supplies", "industry", "research"]
+	var view: Button = _command(row, "", "hangar_focus", roles[portrait])
+	view.name = "NpcPortrait" + str(portrait)
+	view.tooltip_text = "查看人员 · " + subtitle
+	view.custom_minimum_size = Vector2(70, 87)
 	var image: TextureRect = TextureRect.new()
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	image.custom_minimum_size = Vector2(62, 62)
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	view.add_child(image)
+	image.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	image.offset_left = 4
+	image.offset_right = -4
+	image.offset_top = 8
+	image.offset_bottom = 70
 	var atlas: Texture2D = UISkin.texture("res://assets/interface_v2/npc_portraits.png")
 	if atlas != null:
 		var region: AtlasTexture = AtlasTexture.new()
 		region.atlas = atlas
 		region.region = Rect2(Vector2((portrait % 2) * atlas.get_width() * 0.5, floori(portrait / 2.0) * atlas.get_height() * 0.5), Vector2(atlas.get_size()) * 0.5)
 		image.texture = region
-	row.add_child(image)
 	station_portraits.append(image)
+	var badge: PanelContainer = PanelContainer.new()
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.add_theme_stylebox_override("panel", UISkin.flat(Color(0.04, 0.07, 0.09, 0.92), UISkin.ICE, 0))
+	view.add_child(badge)
+	badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	badge.offset_left = 4
+	badge.offset_right = -4
+	badge.offset_top = 52
+	badge.offset_bottom = 72
+	var badge_text: Label = _label(badge, "查看", 11)
+	badge_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge_text.add_theme_color_override("font_color", UISkin.ICE)
+	var button: Button = _button(row, "", show_page.bind(destination))
+	button.name = "NpcService" + str(portrait)
+	button.custom_minimum_size = Vector2(0, 87)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.tooltip_text = title + " · 打开服务"
 	var caption: VBoxContainer = VBoxContainer.new()
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(caption)
-	_text_to(caption, title, 15).custom_minimum_size.x = 0
+	button.add_child(caption)
+	caption.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	caption.offset_left = 8
+	caption.offset_right = -8
+	caption.offset_top = 10
+	caption.offset_bottom = -10
+	var heading: Label = _text_to(caption, title, 13 if root.size.x < 950 else 15)
+	heading.name = "NpcServiceTitle"
+	heading.custom_minimum_size.x = 0
 	var detail: Label = _text_to(caption, subtitle, 11)
 	detail.custom_minimum_size.x = 0
 	detail.add_theme_color_override("font_color", UISkin.MUTED)
