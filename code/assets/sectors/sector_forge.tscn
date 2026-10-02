@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[node name="SectorVisualRoot" type="Node3D"]
+metadata/asset_id = "scene_sector_forge"
+metadata/sector_id = "sector_forge"
+metadata/asset_version = "art-full-v1"

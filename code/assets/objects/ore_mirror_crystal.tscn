@@ -1,0 +1,23 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/models/environment/ore_mirror_crystal.glb" id="1_model"]
+
+[sub_resource type="BoxShape3D" id="Collision"]
+size = Vector3(49.40195465, 38.99034119, 49.44776917)
+
+[node name="ObjectBody" type="StaticBody3D"]
+collision_layer = 1
+collision_mask = 2
+metadata/asset_id = "asset_object_ore_mirror_crystal"
+metadata/asset_version = "art-full-v1"
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="Model" parent="VisualRoot" instance=ExtResource("1_model")]
+
+[node name="InteractionAnchor" type="Marker3D" parent="."]
+position = Vector3(-0.75780296, 0.24532509, -0.99054146)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+position = Vector3(-0.75780296, 0.24532509, -0.99054146)
+shape = SubResource("Collision")

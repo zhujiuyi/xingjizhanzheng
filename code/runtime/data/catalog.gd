@@ -9,7 +9,8 @@ var table_names: Array[String] = []
 var column_info: Dictionary = {}
 var view_sql: Dictionary = {}
 var content_hash: String = ""
-const ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_3.sql"
+const ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_4_r2.sql"
+var adapter_path: String = ADAPTER_PATH
 
 func open(path: String = "res://data/catalog.db") -> bool:
 	close()
@@ -24,7 +25,11 @@ func open(path: String = "res://data/catalog.db") -> bool:
 	if not _db.open_db():
 		last_error = "Cannot open catalog: " + path
 		return false
-	return refresh()
+	if not refresh(): return false
+	if int(rows("catalog_meta")[0].schema_version) <= 2: adapter_path = "res://database/progress/catalog_adapter_v0_3.sql"
+	elif table_names.has("signal_unlock_rewards"): adapter_path = ADAPTER_PATH
+	else: adapter_path = "res://database/progress/catalog_adapter_v0_4.sql"
+	return true
 
 func refresh() -> bool:
 	_cache.clear()
@@ -100,7 +105,7 @@ func verify_reviewed() -> bool:
 	reference.path = ":memory:"
 	reference.foreign_keys = true
 	reference.verbosity_level = 0
-	if not reference.open_db() or not reference.query(FileAccess.get_file_as_string(ADAPTER_PATH)):
+	if not reference.open_db() or not reference.query(FileAccess.get_file_as_string(adapter_path)):
 		last_error = "Cannot load reviewed catalog adapter"
 		return false
 	reference.query("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name COLLATE BINARY")
@@ -206,13 +211,14 @@ static func schema_signature(columns: Array, table: String) -> String:
 			parts.append("%s:%s:%d" % [column.name, column.type, column.pk])
 	return "|".join(parts)
 
-func open_frozen(progress: Object, content_id: String) -> bool:
+func open_frozen(progress: Object, content_id: String, reviewed_adapter: String = ADAPTER_PATH) -> bool:
 	close()
+	adapter_path = reviewed_adapter
 	_db = ClassDB.instantiate("SQLite")
 	_db.path = ":memory:"
 	_db.foreign_keys = true
 	_db.verbosity_level = 0
-	if not _db.open_db() or not _db.query(FileAccess.get_file_as_string(ADAPTER_PATH)):
+	if not _db.open_db() or not _db.query(FileAccess.get_file_as_string(adapter_path)):
 		last_error = "Frozen adapter open failed"
 		return false
 	_db.query("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name COLLATE BINARY")

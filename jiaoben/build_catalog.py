@@ -92,11 +92,34 @@ CONTENT_TABLES = (
     "starting_inventory_policy_defs",
     "camera_profile_defs",
     "presentation_defs",
+    "ship_role_defs",
+    "module_tech_defs",
+    "research_defs",
+    "research_inputs",
+    "research_prerequisites",
+    "hull_recipe_defs",
+    "hull_recipe_inputs",
+    "base_module_defs",
+    "base_module_inputs",
+    "mission_reputation_rewards",
+    "signal_unlock_rewards",
 )
 
 
 # Reviewed column/type/primary-key registry. Schema drift requires explicit registration.
 CONTENT_COLUMNS = {
+    'signal_unlock_rewards': 'signal_id:TEXT:1|unlock_id:TEXT:2',
+    'ship_role_defs': 'ship_id:TEXT:1|class_id:TEXT:0|faction_id:TEXT:0|required_unlock_id:TEXT:0',
+    'module_tech_defs': 'module_id:TEXT:1|faction_id:TEXT:0|tech_level:INTEGER:0|required_unlock_id:TEXT:0',
+    'research_defs': 'research_id:TEXT:1|display_name:TEXT:0|station_faction_id:TEXT:0|required_reputation:INTEGER:0|required_credit:INTEGER:0|reward_unlock_id:TEXT:0|verification_mission_id:TEXT:0',
+    'research_inputs': 'research_id:TEXT:1|item_id:TEXT:2|quantity:INTEGER:0',
+    'research_prerequisites': 'research_id:TEXT:1|unlock_id:TEXT:2',
+    'hull_recipe_defs': 'hull_recipe_id:TEXT:1|display_name:TEXT:0|ship_id:TEXT:0|required_unlock_id:TEXT:0|service_fee_credit:INTEGER:0',
+    'hull_recipe_inputs': 'hull_recipe_id:TEXT:1|item_id:TEXT:2|quantity:INTEGER:0',
+    'base_module_defs': 'base_module_id:TEXT:1|display_name:TEXT:0|required_unlock_id:TEXT:0|service_fee_credit:INTEGER:0|service_kind:TEXT:0|effect_multiplier:REAL:0',
+    'base_module_inputs': 'base_module_id:TEXT:1|item_id:TEXT:2|quantity:INTEGER:0',
+    'mission_reputation_rewards': 'mission_id:TEXT:1|faction_id:TEXT:2|reputation_delta:INTEGER:0',
+
     'faction_defs': 'faction_id:TEXT:1|display_name:TEXT:0',
     'unlock_defs': 'unlock_id:TEXT:1|display_name:TEXT:0|initially_unlocked:INTEGER:0',
     'sector_runtime_defs': 'sector_id:TEXT:1|scene_asset_id:TEXT:0|enabled:INTEGER:0|stage_code:TEXT:0|bounds_radius_m:REAL:0',

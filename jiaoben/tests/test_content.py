@@ -214,16 +214,17 @@ class ContentTests(unittest.TestCase):
         builder.validate_database(db)
         self.assertEqual(set(builder.CONTENT_COLUMNS), set(builder.CONTENT_TABLES))
         metadata = self.c.rows("catalog_meta")[0]
-        self.assertEqual(metadata["content_version"], "v0.3-devready")
-        self.assertEqual(metadata["ruleset_version"], "devready_v0_3")
+        self.assertEqual(metadata["content_version"], "v0.4-singleplayer")
+        self.assertEqual(metadata["ruleset_version"], "singleplayer_v0_4")
         self.assertEqual(metadata["schema_version"], self.c.db.execute("PRAGMA user_version").fetchone()[0])
         self.assertEqual(metadata["content_hash"], builder.logical_content_hash(db))
         self.assertEqual(len(builder.content_views(db)), 4)
 
-    def test_only_two_runtime_sectors_and_closed_location_refs(self):
+    def test_ten_runtime_sectors_and_closed_location_refs(self):
         runtime = self.c.index("sector_runtime_defs", "sector_id")
-        self.assertEqual(set(runtime), {"sector_anchor", "sector_echo"})
-        self.assertTrue(all(row["enabled"] and row["stage_code"] == "B" for row in runtime.values()))
+        self.assertEqual(len(runtime), 10)
+        self.assertTrue({"sector_anchor", "sector_echo"} <= set(runtime))
+        self.assertTrue(all(row["enabled"] and row["stage_code"] in {"B", "C", "D"} for row in runtime.values()))
         self.assertEqual(set(self.c.index("resource_node_defs", "node_id")), set(self.c.index("resource_node_locations", "node_id")))
         builder.validate_content_graph(self.copy())
 
@@ -349,7 +350,8 @@ class ContentTests(unittest.TestCase):
         modules = set(self.c.index("module_defs", "module_id"))
         market = {row["item_id"] for row in self.c.rows("station_stock_defs") if row["station_id"] == "station_anchor_port" and row["allow_buy"]}
         outputs = {row["output_item_id"] for row in self.c.rows("recipe_defs")}
-        self.assertTrue(modules <= market & outputs)
+        self.assertTrue({m for m in modules if m.endswith("_i")} <= market & outputs)
+        self.assertTrue(modules <= outputs)
         self.assertEqual(set(self.c.index("recipe_defs", "recipe_id")), {row["recipe_id"] for row in self.c.rows("recipe_access_defs")})
 
     def test_permanent_lantern_and_industrial_ship_income_routes(self):

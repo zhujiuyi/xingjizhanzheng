@@ -1,0 +1,877 @@
+{
+  "battleship_bastion": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      19.5,
+      0.0
+    ],
+    "collision_box_m": [
+      110.0,
+      65.0,
+      220.0
+    ],
+    "faction_style": "deepforge",
+    "front_camera_m": [
+      0.0,
+      19.5,
+      -123.2
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -29.7,
+        -15.6,
+        33.0
+      ],
+      "structure_1": [
+        -9.9,
+        -15.6,
+        33.0
+      ],
+      "structure_2": [
+        9.9,
+        -15.6,
+        33.0
+      ],
+      "structure_3": [
+        29.7,
+        -15.6,
+        33.0
+      ],
+      "utility_0": [
+        -33.0,
+        19.5,
+        19.8
+      ],
+      "utility_1": [
+        -19.8,
+        19.5,
+        19.8
+      ],
+      "utility_2": [
+        -6.6,
+        19.5,
+        19.8
+      ],
+      "utility_3": [
+        6.6,
+        19.5,
+        19.8
+      ],
+      "utility_4": [
+        19.8,
+        19.5,
+        19.8
+      ],
+      "utility_5": [
+        33.0,
+        19.5,
+        19.8
+      ],
+      "weapon_0": [
+        -33.0,
+        14.3,
+        -85.8
+      ],
+      "weapon_1": [
+        -19.8,
+        14.3,
+        -85.8
+      ],
+      "weapon_2": [
+        -6.6,
+        14.3,
+        -85.8
+      ],
+      "weapon_3": [
+        6.6,
+        14.3,
+        -85.8
+      ],
+      "weapon_4": [
+        19.8,
+        14.3,
+        -85.8
+      ],
+      "weapon_5": [
+        33.0,
+        14.3,
+        -85.8
+      ],
+      "work_0": [
+        0.0,
+        -9.75,
+        -61.6
+      ]
+    },
+    "height_m": 65.0,
+    "length_m": 220.0,
+    "width_m": 110.0,
+    "wrapper_path": "res://assets/ships/battleship_bastion.tscn"
+  },
+  "cruiser_horizon": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      10.2,
+      0.0
+    ],
+    "collision_box_m": [
+      60.0,
+      34.0,
+      115.0
+    ],
+    "faction_style": "council",
+    "front_camera_m": [
+      0.0,
+      10.2,
+      -64.4
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -14.4,
+        -8.16,
+        17.25
+      ],
+      "structure_1": [
+        0.0,
+        -8.16,
+        17.25
+      ],
+      "structure_2": [
+        14.4,
+        -8.16,
+        17.25
+      ],
+      "utility_0": [
+        -17.28,
+        10.2,
+        10.35
+      ],
+      "utility_1": [
+        -8.64,
+        10.2,
+        10.35
+      ],
+      "utility_2": [
+        0.0,
+        10.2,
+        10.35
+      ],
+      "utility_3": [
+        8.64,
+        10.2,
+        10.35
+      ],
+      "utility_4": [
+        17.28,
+        10.2,
+        10.35
+      ],
+      "weapon_0": [
+        -14.4,
+        7.48,
+        -44.85
+      ],
+      "weapon_1": [
+        0.0,
+        7.48,
+        -44.85
+      ],
+      "weapon_2": [
+        14.4,
+        7.48,
+        -44.85
+      ],
+      "work_0": [
+        -10.8,
+        -5.1,
+        -32.2
+      ],
+      "work_1": [
+        10.8,
+        -5.1,
+        -32.2
+      ]
+    },
+    "height_m": 34.0,
+    "length_m": 115.0,
+    "width_m": 60.0,
+    "wrapper_path": "res://assets/ships/cruiser_horizon.tscn"
+  },
+  "destroyer_raptor": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      5.4,
+      0.0
+    ],
+    "collision_box_m": [
+      30.0,
+      18.0,
+      70.0
+    ],
+    "faction_style": "deepforge",
+    "front_camera_m": [
+      0.0,
+      5.4,
+      -39.2
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -5.4,
+        -4.32,
+        10.5
+      ],
+      "structure_1": [
+        5.4,
+        -4.32,
+        10.5
+      ],
+      "utility_0": [
+        -8.1,
+        5.4,
+        6.3
+      ],
+      "utility_1": [
+        -2.7,
+        5.4,
+        6.3
+      ],
+      "utility_2": [
+        2.7,
+        5.4,
+        6.3
+      ],
+      "utility_3": [
+        8.1,
+        5.4,
+        6.3
+      ],
+      "weapon_0": [
+        -7.2,
+        3.96,
+        -27.3
+      ],
+      "weapon_1": [
+        0.0,
+        3.96,
+        -27.3
+      ],
+      "weapon_2": [
+        7.2,
+        3.96,
+        -27.3
+      ]
+    },
+    "height_m": 18.0,
+    "length_m": 70.0,
+    "width_m": 30.0,
+    "wrapper_path": "res://assets/ships/destroyer_raptor.tscn"
+  },
+  "enemy_silent": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      6.0,
+      0.0
+    ],
+    "collision_box_m": [
+      28.0,
+      20.0,
+      30.0
+    ],
+    "faction_style": "silent",
+    "front_camera_m": [
+      0.0,
+      6.0,
+      -16.8
+    ],
+    "hardpoints": {
+      "structure_0": [
+        0.0,
+        -4.8,
+        4.5
+      ],
+      "utility_0": [
+        0.0,
+        6.0,
+        2.7
+      ],
+      "weapon_0": [
+        -5.04,
+        4.4,
+        -11.7
+      ],
+      "weapon_1": [
+        5.04,
+        4.4,
+        -11.7
+      ]
+    },
+    "height_m": 20.0,
+    "length_m": 30.0,
+    "width_m": 28.0,
+    "wrapper_path": "res://assets/ships/enemy_silent.tscn"
+  },
+  "frigate_kestrel": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      3.0,
+      0.0
+    ],
+    "collision_box_m": [
+      18.0,
+      9.0,
+      30.0
+    ],
+    "faction_style": "roaming",
+    "front_camera_m": [
+      0.0,
+      3.0,
+      -16.0
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -4.0,
+        -2.0,
+        4.0
+      ],
+      "structure_1": [
+        4.0,
+        -2.0,
+        4.0
+      ],
+      "utility_0": [
+        -5.0,
+        2.0,
+        2.0
+      ],
+      "utility_1": [
+        0.0,
+        3.0,
+        3.0
+      ],
+      "utility_2": [
+        5.0,
+        2.0,
+        2.0
+      ],
+      "weapon_0": [
+        -6.0,
+        1.0,
+        -12.0
+      ],
+      "weapon_1": [
+        6.0,
+        1.0,
+        -12.0
+      ]
+    },
+    "height_m": 9.0,
+    "length_m": 30.0,
+    "width_m": 18.0,
+    "wrapper_path": "res://assets/ships/frigate_kestrel.tscn"
+  },
+  "frigate_lantern": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      3.0,
+      0.0
+    ],
+    "collision_box_m": [
+      14.0,
+      8.0,
+      28.0
+    ],
+    "faction_style": "council",
+    "front_camera_m": [
+      0.0,
+      3.0,
+      -15.0
+    ],
+    "hardpoints": {
+      "structure_0": [
+        0.0,
+        -2.0,
+        4.0
+      ],
+      "utility_0": [
+        -4.0,
+        2.0,
+        1.0
+      ],
+      "utility_1": [
+        0.0,
+        3.0,
+        2.0
+      ],
+      "utility_2": [
+        4.0,
+        2.0,
+        1.0
+      ],
+      "weapon_0": [
+        0.0,
+        1.0,
+        -13.0
+      ],
+      "work_0": [
+        0.0,
+        -2.0,
+        -8.0
+      ]
+    },
+    "height_m": 8.0,
+    "length_m": 28.0,
+    "width_m": 14.0,
+    "wrapper_path": "res://assets/ships/frigate_lantern.tscn"
+  },
+  "gate_anchor": {
+    "asset_version": "art-full-v1",
+    "bounds_center_m": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "bounds_m": [
+      205.0,
+      205.0,
+      30.0
+    ],
+    "collision_kind": "compound_ring_12",
+    "wrapper_path": "res://assets/objects/gate_anchor.tscn"
+  },
+  "miner_anvil": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      7.0,
+      0.0
+    ],
+    "collision_box_m": [
+      36.0,
+      20.0,
+      56.0
+    ],
+    "faction_style": "deepforge",
+    "front_camera_m": [
+      0.0,
+      7.0,
+      -29.0
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -9.0,
+        -5.0,
+        9.0
+      ],
+      "structure_1": [
+        9.0,
+        -5.0,
+        9.0
+      ],
+      "utility_0": [
+        -10.0,
+        7.0,
+        6.0
+      ],
+      "utility_1": [
+        0.0,
+        8.0,
+        6.0
+      ],
+      "utility_2": [
+        10.0,
+        7.0,
+        6.0
+      ],
+      "weapon_0": [
+        0.0,
+        5.0,
+        -25.0
+      ],
+      "work_0": [
+        -13.0,
+        -3.0,
+        -17.0
+      ],
+      "work_1": [
+        13.0,
+        -3.0,
+        -17.0
+      ]
+    },
+    "height_m": 20.0,
+    "length_m": 56.0,
+    "width_m": 36.0,
+    "wrapper_path": "res://assets/ships/miner_anvil.tscn"
+  },
+  "ore_corrosion_titanium": {
+    "asset_version": "art-full-v1",
+    "bounds_center_m": [
+      0.528583526611328,
+      -0.196128845214844,
+      -1.02057266235352
+    ],
+    "bounds_m": [
+      47.0846138000488,
+      34.9316711425781,
+      46.685188293457
+    ],
+    "collision_kind": "box",
+    "wrapper_path": "res://assets/objects/ore_corrosion_titanium.tscn"
+  },
+  "ore_crystal": {
+    "asset_version": "art-full-v1",
+    "bounds_center_m": [
+      0.33033561706543,
+      -1.02087783813477,
+      -1.08386421203613
+    ],
+    "bounds_m": [
+      49.1087646484375,
+      37.045841217041,
+      48.4340896606445
+    ],
+    "collision_kind": "box",
+    "wrapper_path": "res://assets/objects/ore_crystal.tscn"
+  },
+  "ore_echo_silica": {
+    "asset_version": "art-full-v1",
+    "bounds_center_m": [
+      -0.108480453491211,
+      -1.58212852478027,
+      1.24260330200195
+    ],
+    "bounds_m": [
+      47.4897155761719,
+      34.9166488647461,
+      48.7288665771484
+    ],
+    "collision_kind": "box",
+    "wrapper_path": "res://assets/objects/ore_echo_silica.tscn"
+  },
+  "ore_iron": {
+    "asset_version": "art-full-v1",
+    "bounds_center_m": [
+      0.0740756988525391,
+      -0.602190017700195,
+      0.591035842895508
+    ],
+    "bounds_m": [
+      48.8800354003906,
+      34.9828872680664,
+      48.1828880310059
+    ],
+    "collision_kind": "box",
+    "wrapper_path": "res://assets/objects/ore_iron.tscn"
+  },
+  "ore_mirror_crystal": {
+    "asset_version": "art-full-v1",
+    "bounds_center_m": [
+      -0.757802963256836,
+      0.245325088500977,
+      -0.990541458129883
+    ],
+    "bounds_m": [
+      49.4019546508789,
+      38.9903411865234,
+      49.4477691650391
+    ],
+    "collision_kind": "box",
+    "wrapper_path": "res://assets/objects/ore_mirror_crystal.tscn"
+  },
+  "ore_phase_stone": {
+    "asset_version": "art-full-v1",
+    "bounds_center_m": [
+      0.369607925415039,
+      0.554653167724609,
+      0.794279098510742
+    ],
+    "bounds_m": [
+      47.6670455932617,
+      38.1769256591797,
+      46.3146514892578
+    ],
+    "collision_kind": "box",
+    "wrapper_path": "res://assets/objects/ore_phase_stone.tscn"
+  },
+  "ore_pressure_steel": {
+    "asset_version": "art-full-v1",
+    "bounds_center_m": [
+      -0.147182464599609,
+      0.563871383666992,
+      -0.24601936340332
+    ],
+    "bounds_m": [
+      46.2946319580078,
+      34.8186874389648,
+      48.2161483764648
+    ],
+    "collision_kind": "box",
+    "wrapper_path": "res://assets/objects/ore_pressure_steel.tscn"
+  },
+  "ore_solar_core": {
+    "asset_version": "art-full-v1",
+    "bounds_center_m": [
+      0.0184783935546875,
+      0.383275985717773,
+      -0.273399353027344
+    ],
+    "bounds_m": [
+      48.5406608581543,
+      37.0294227600098,
+      47.6496276855469
+    ],
+    "collision_kind": "box",
+    "wrapper_path": "res://assets/objects/ore_solar_core.tscn"
+  },
+  "shuttle_swift": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      2.0,
+      0.0
+    ],
+    "collision_box_m": [
+      10.0,
+      6.0,
+      18.0
+    ],
+    "faction_style": "council",
+    "front_camera_m": [
+      0.0,
+      2.0,
+      -10.0
+    ],
+    "hardpoints": {
+      "structure_0": [
+        0.0,
+        -1.0,
+        2.0
+      ],
+      "utility_0": [
+        -3.0,
+        1.0,
+        1.0
+      ],
+      "utility_1": [
+        3.0,
+        1.0,
+        1.0
+      ],
+      "weapon_0": [
+        0.0,
+        1.0,
+        -8.0
+      ]
+    },
+    "height_m": 6.0,
+    "length_m": 18.0,
+    "width_m": 10.0,
+    "wrapper_path": "res://assets/ships/shuttle_swift.tscn"
+  },
+  "station_anchor": {
+    "asset_version": "art-full-v1",
+    "bounds_center_m": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "bounds_m": [
+      440.0,
+      230.0,
+      440.0
+    ],
+    "collision_kind": "box",
+    "wrapper_path": "res://assets/objects/station_anchor.tscn"
+  },
+  "support_weaver": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      8.4,
+      0.0
+    ],
+    "collision_box_m": [
+      65.0,
+      28.0,
+      90.0
+    ],
+    "faction_style": "council",
+    "front_camera_m": [
+      0.0,
+      8.4,
+      -50.4
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -15.6,
+        -6.72,
+        13.5
+      ],
+      "structure_1": [
+        0.0,
+        -6.72,
+        13.5
+      ],
+      "structure_2": [
+        15.6,
+        -6.72,
+        13.5
+      ],
+      "utility_0": [
+        -18.72,
+        8.4,
+        8.1
+      ],
+      "utility_1": [
+        -9.36,
+        8.4,
+        8.1
+      ],
+      "utility_2": [
+        0.0,
+        8.4,
+        8.1
+      ],
+      "utility_3": [
+        9.36,
+        8.4,
+        8.1
+      ],
+      "utility_4": [
+        18.72,
+        8.4,
+        8.1
+      ],
+      "weapon_0": [
+        -11.7,
+        6.16,
+        -35.1
+      ],
+      "weapon_1": [
+        11.7,
+        6.16,
+        -35.1
+      ],
+      "work_0": [
+        -15.6,
+        -4.2,
+        -25.2
+      ],
+      "work_1": [
+        0.0,
+        -4.2,
+        -25.2
+      ],
+      "work_2": [
+        15.6,
+        -4.2,
+        -25.2
+      ]
+    },
+    "height_m": 28.0,
+    "length_m": 90.0,
+    "width_m": 65.0,
+    "wrapper_path": "res://assets/ships/support_weaver.tscn"
+  },
+  "transport_caravan": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      14.4,
+      0.0
+    ],
+    "collision_box_m": [
+      75.0,
+      48.0,
+      145.0
+    ],
+    "faction_style": "roaming",
+    "front_camera_m": [
+      0.0,
+      14.4,
+      -81.2
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -18.0,
+        -11.52,
+        21.75
+      ],
+      "structure_1": [
+        0.0,
+        -11.52,
+        21.75
+      ],
+      "structure_2": [
+        18.0,
+        -11.52,
+        21.75
+      ],
+      "utility_0": [
+        -20.25,
+        14.4,
+        13.05
+      ],
+      "utility_1": [
+        -6.75,
+        14.4,
+        13.05
+      ],
+      "utility_2": [
+        6.75,
+        14.4,
+        13.05
+      ],
+      "utility_3": [
+        20.25,
+        14.4,
+        13.05
+      ],
+      "weapon_0": [
+        0.0,
+        10.56,
+        -56.55
+      ],
+      "work_0": [
+        0.0,
+        -7.2,
+        -40.6
+      ]
+    },
+    "height_m": 48.0,
+    "length_m": 145.0,
+    "width_m": 75.0,
+    "wrapper_path": "res://assets/ships/transport_caravan.tscn"
+  },
+  "wreck": {
+    "asset_version": "art-full-v1",
+    "bounds_center_m": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "bounds_m": [
+      16.0,
+      7.0,
+      23.0
+    ],
+    "collision_kind": "box",
+    "wrapper_path": "res://assets/objects/wreck.tscn"
+  }
+}

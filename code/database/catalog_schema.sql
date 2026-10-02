@@ -532,7 +532,7 @@ CREATE TABLE mission_instance_states (
 CREATE TABLE mission_defs (
     mission_id TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
-    mission_kind TEXT NOT NULL CHECK (mission_kind IN ('tutorial', 'contract')),
+    mission_kind TEXT NOT NULL CHECK (mission_kind IN ('tutorial', 'contract', 'story')),
     tutorial_step_id TEXT UNIQUE REFERENCES tutorial_step_defs(step_id),
     accept_station_id TEXT NOT NULL REFERENCES station_defs(station_id),
     turnin_station_id TEXT NOT NULL REFERENCES station_defs(station_id),
@@ -544,7 +544,7 @@ CREATE TABLE mission_defs (
     max_active_instances INTEGER NOT NULL CHECK (max_active_instances = 1),
     deadline_s REAL CHECK (deadline_s IS NULL OR deadline_s > 0),
     reset_objectives_on_retry INTEGER NOT NULL CHECK (reset_objectives_on_retry = 1),
-    CHECK ((mission_kind = 'tutorial' AND tutorial_step_id IS NOT NULL AND repeatable = 0) OR (mission_kind = 'contract' AND tutorial_step_id IS NULL AND repeatable = 1)),
+    CHECK ((mission_kind = 'tutorial' AND tutorial_step_id IS NOT NULL AND repeatable = 0) OR (mission_kind = 'contract' AND tutorial_step_id IS NULL AND repeatable = 1) OR (mission_kind = 'story' AND tutorial_step_id IS NULL AND repeatable = 0) OR (mission_kind = 'story' AND tutorial_step_id IS NULL AND repeatable = 0)),
     CHECK ((repeatable = 0 AND repeat_cooldown_s = 0 AND repeat_window_s = 0 AND max_completions_per_window = 1) OR (repeatable = 1 AND repeat_window_s > 0 AND repeat_cooldown_s > 0))
 ) STRICT;
 CREATE TABLE mission_prerequisites (
@@ -661,3 +661,52 @@ CREATE TABLE presentation_defs (
 CREATE VIEW mission_summary_defs AS
 SELECT m.*, r.currency_id, r.reward_credit
 FROM mission_defs AS m JOIN mission_reward_defs AS r USING (mission_id);
+
+
+-- Complete offline singleplayer definitions. Additive reviewed schema v3.
+CREATE TABLE ship_role_defs (
+ ship_id TEXT PRIMARY KEY REFERENCES ship_defs(ship_id), class_id TEXT NOT NULL,
+ faction_id TEXT NOT NULL REFERENCES faction_defs(faction_id), required_unlock_id TEXT NOT NULL REFERENCES unlock_defs(unlock_id)
+) STRICT;
+CREATE TABLE module_tech_defs (
+ module_id TEXT PRIMARY KEY REFERENCES module_defs(module_id), faction_id TEXT NOT NULL REFERENCES faction_defs(faction_id),
+ tech_level INTEGER NOT NULL CHECK(tech_level BETWEEN 1 AND 3), required_unlock_id TEXT NOT NULL REFERENCES unlock_defs(unlock_id)
+) STRICT;
+CREATE TABLE research_defs (
+ research_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, station_faction_id TEXT NOT NULL REFERENCES faction_defs(faction_id),
+ required_reputation INTEGER NOT NULL CHECK(required_reputation>=0), required_credit INTEGER NOT NULL CHECK(required_credit>=0),
+ reward_unlock_id TEXT NOT NULL UNIQUE REFERENCES unlock_defs(unlock_id), verification_mission_id TEXT REFERENCES mission_defs(mission_id)
+) STRICT;
+CREATE TABLE research_inputs (
+ research_id TEXT NOT NULL REFERENCES research_defs(research_id), item_id TEXT NOT NULL REFERENCES item_defs(item_id),
+ quantity INTEGER NOT NULL CHECK(quantity>0), PRIMARY KEY(research_id,item_id)
+) STRICT;
+CREATE TABLE research_prerequisites (
+ research_id TEXT NOT NULL REFERENCES research_defs(research_id), unlock_id TEXT NOT NULL REFERENCES unlock_defs(unlock_id), PRIMARY KEY(research_id,unlock_id)
+) STRICT;
+CREATE TABLE hull_recipe_defs (
+ hull_recipe_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, ship_id TEXT NOT NULL UNIQUE REFERENCES ship_defs(ship_id),
+ required_unlock_id TEXT NOT NULL REFERENCES unlock_defs(unlock_id), service_fee_credit INTEGER NOT NULL CHECK(service_fee_credit>=0)
+) STRICT;
+CREATE TABLE hull_recipe_inputs (
+ hull_recipe_id TEXT NOT NULL REFERENCES hull_recipe_defs(hull_recipe_id), item_id TEXT NOT NULL REFERENCES item_defs(item_id),
+ quantity INTEGER NOT NULL CHECK(quantity>0), PRIMARY KEY(hull_recipe_id,item_id)
+) STRICT;
+CREATE TABLE base_module_defs (
+ base_module_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, required_unlock_id TEXT NOT NULL REFERENCES unlock_defs(unlock_id),
+ service_fee_credit INTEGER NOT NULL CHECK(service_fee_credit>=0), service_kind TEXT NOT NULL CHECK(service_kind IN ('repair','industry','navigation','warehouse')),
+ effect_multiplier REAL NOT NULL CHECK(effect_multiplier>=1 AND effect_multiplier<=2)
+) STRICT;
+CREATE TABLE base_module_inputs (
+ base_module_id TEXT NOT NULL REFERENCES base_module_defs(base_module_id), item_id TEXT NOT NULL REFERENCES item_defs(item_id),
+ quantity INTEGER NOT NULL CHECK(quantity>0), PRIMARY KEY(base_module_id,item_id)
+) STRICT;
+CREATE TABLE mission_reputation_rewards (
+ mission_id TEXT NOT NULL REFERENCES mission_defs(mission_id), faction_id TEXT NOT NULL REFERENCES faction_defs(faction_id), reputation_delta INTEGER NOT NULL CHECK(reputation_delta BETWEEN 0 AND 1000),
+ PRIMARY KEY(mission_id,faction_id)
+) STRICT;
+
+CREATE TABLE signal_unlock_rewards (
+ signal_id TEXT NOT NULL REFERENCES signal_defs(signal_id), unlock_id TEXT NOT NULL REFERENCES unlock_defs(unlock_id),
+ PRIMARY KEY(signal_id,unlock_id)
+) STRICT;

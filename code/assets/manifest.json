@@ -1,0 +1,413 @@
+{
+  "asset_version": "art-full-v1",
+  "format_version": 1,
+  "coordinate_system": "meters_Y_up_negative_Z_front",
+  "resources": [
+    {
+      "asset_id": "asset_ship_battleship_bastion",
+      "resource_path": "res://assets/ships/battleship_bastion.tscn",
+      "sha256": "d8cf0ff77c1ec7d1446ba3bf67adf1bc606083e806b46e25a73eb76844724030",
+      "ship_def_id": "battleship_bastion"
+    },
+    {
+      "asset_id": "asset_ship_cruiser_horizon",
+      "resource_path": "res://assets/ships/cruiser_horizon.tscn",
+      "sha256": "ffbffb9dc7cb20b09199282847c14b24e006a423d3c3a2fdbe1400813cf7bc4b",
+      "ship_def_id": "cruiser_horizon"
+    },
+    {
+      "asset_id": "asset_ship_destroyer_raptor",
+      "resource_path": "res://assets/ships/destroyer_raptor.tscn",
+      "sha256": "c765c791bf22c4eaf7e9c8b5da7276038cbe38641763908807c1c72b19b90ce3",
+      "ship_def_id": "destroyer_raptor"
+    },
+    {
+      "asset_id": "asset_ship_enemy_silent",
+      "resource_path": "res://assets/ships/enemy_silent.tscn",
+      "sha256": "57018806214ee799cec2b0d716f0498d70993c56f93ab55a5426c093d02014b3",
+      "ship_def_id": "enemy_silent"
+    },
+    {
+      "asset_id": "asset_ship_frigate_kestrel",
+      "resource_path": "res://assets/ships/frigate_kestrel.tscn",
+      "sha256": "dfd5e383e761fc724bca626b79e41d73e652e22a22c3e7bc2e6719623b0d6f99",
+      "ship_def_id": "frigate_kestrel"
+    },
+    {
+      "asset_id": "asset_ship_frigate_lantern",
+      "resource_path": "res://assets/ships/frigate_lantern.tscn",
+      "sha256": "e7005d8ca314f6adf7f511ca243abffaa71dbfb1f33d1ae2b2e23dcf6da1597e",
+      "ship_def_id": "frigate_lantern"
+    },
+    {
+      "asset_id": "asset_ship_miner_anvil",
+      "resource_path": "res://assets/ships/miner_anvil.tscn",
+      "sha256": "b9e7656a1140c96f1d64d26072bff189d0a68be928feb213f983c9ae48410d35",
+      "ship_def_id": "miner_anvil"
+    },
+    {
+      "asset_id": "asset_ship_shuttle_swift",
+      "resource_path": "res://assets/ships/shuttle_swift.tscn",
+      "sha256": "1d0d41a641d98a4187ac8ced17b16afb832cd66c69070ab18ade843d244243d9",
+      "ship_def_id": "shuttle_swift"
+    },
+    {
+      "asset_id": "asset_ship_support_weaver",
+      "resource_path": "res://assets/ships/support_weaver.tscn",
+      "sha256": "aa0cc7abb1611e4701c022a7c914c7a72979fedb716ddc3b9f9416c4fa70632a",
+      "ship_def_id": "support_weaver"
+    },
+    {
+      "asset_id": "asset_ship_transport_caravan",
+      "resource_path": "res://assets/ships/transport_caravan.tscn",
+      "sha256": "e7f521607d7fe6ab50e0eca7711a92e0b643a2f0258025ca01012cdc3368e148",
+      "ship_def_id": "transport_caravan"
+    },
+    {
+      "asset_id": "legacy_ship_frigate_kestrel",
+      "resource_path": "res://assets/placeholders/frigate_kestrel.tscn",
+      "sha256": "f3498bfc1cf237ee37b0ac9862001e74e11279d130621f3e8810091e6ac2b0b4"
+    },
+    {
+      "asset_id": "legacy_ship_frigate_lantern",
+      "resource_path": "res://assets/placeholders/frigate_lantern.tscn",
+      "sha256": "45988558f086760e82a3bfbc1601b3cc223050644085db604264bdab4be83388"
+    },
+    {
+      "asset_id": "legacy_ship_miner_anvil",
+      "resource_path": "res://assets/placeholders/miner_anvil.tscn",
+      "sha256": "a959d2edb15ace0023a7393bf635fcb9b599bb9ae54e56f290c24081f41358d0"
+    },
+    {
+      "asset_id": "legacy_ship_shuttle_swift",
+      "resource_path": "res://assets/placeholders/shuttle_swift.tscn",
+      "sha256": "ea4d11b4aff6f06f1ccdbf59f609d0358ce6122b537e18bd3898ad2d9085f641"
+    },
+    {
+      "asset_id": "asset_object_gate_anchor",
+      "resource_path": "res://assets/objects/gate_anchor.tscn",
+      "sha256": "77af74cb66e2d302201bc72792534f8d133bd4d9c463b30ad911ee431cf23d8e"
+    },
+    {
+      "asset_id": "asset_object_ore_corrosion_titanium",
+      "resource_path": "res://assets/objects/ore_corrosion_titanium.tscn",
+      "sha256": "b8a504d698c37424b039267bdad616d056a64307a8e2b5054aa65b3dcfb3c36e"
+    },
+    {
+      "asset_id": "asset_object_ore_crystal",
+      "resource_path": "res://assets/objects/ore_crystal.tscn",
+      "sha256": "572d7405e6f6ab05384fcf955c070c1e3904cd9cf9a3f32ad26aa85c6fb39998"
+    },
+    {
+      "asset_id": "asset_object_ore_echo_silica",
+      "resource_path": "res://assets/objects/ore_echo_silica.tscn",
+      "sha256": "4b7ad569f25315b97a456d6c460f8515a84d8606295211e3782dbacf543fe41f"
+    },
+    {
+      "asset_id": "asset_object_ore_iron",
+      "resource_path": "res://assets/objects/ore_iron.tscn",
+      "sha256": "9a1151a18b1482bc126c355040aee2d02395f74a9418e7f3956817f3e13493ed"
+    },
+    {
+      "asset_id": "asset_object_ore_mirror_crystal",
+      "resource_path": "res://assets/objects/ore_mirror_crystal.tscn",
+      "sha256": "eb34f17930437950f6dd063852f8f46761aef99fd6d4903fc3e7144ad7e11570"
+    },
+    {
+      "asset_id": "asset_object_ore_phase_stone",
+      "resource_path": "res://assets/objects/ore_phase_stone.tscn",
+      "sha256": "c8989eee1ac87bb49f1604f379a29d12e8dd00c473505d1f4637ce803f5c07ca"
+    },
+    {
+      "asset_id": "asset_object_ore_pressure_steel",
+      "resource_path": "res://assets/objects/ore_pressure_steel.tscn",
+      "sha256": "28719155949a2003451e86d5b70c224c021fd9f72b3545aa2a1c4759c65ead34"
+    },
+    {
+      "asset_id": "asset_object_ore_solar_core",
+      "resource_path": "res://assets/objects/ore_solar_core.tscn",
+      "sha256": "5785fa309e9a26c221007d88168712a73198f6faa2d4f208a5e6ecde9cddbd2f"
+    },
+    {
+      "asset_id": "asset_object_station_anchor",
+      "resource_path": "res://assets/objects/station_anchor.tscn",
+      "sha256": "dc02f6ab30de28bbed490b3556db1a389ab54830b33377e8d4df4cefe9c5f05d"
+    },
+    {
+      "asset_id": "asset_object_wreck",
+      "resource_path": "res://assets/objects/wreck.tscn",
+      "sha256": "ca7e9911c83300bd5675ca197418b2b97e6ac2db1578752e9e9450271c2b05be"
+    },
+    {
+      "asset_id": "scene_sector_anchor",
+      "resource_path": "res://assets/sectors/sector_anchor.tscn",
+      "sha256": "f097b8d9754c5505b3a30f2dd3050963811f74ec846fcbd911a76a14ddc3a81d"
+    },
+    {
+      "asset_id": "scene_sector_drift",
+      "resource_path": "res://assets/sectors/sector_drift.tscn",
+      "sha256": "406e2a9d48440af13b01cb12fd8ace60e0117842d85bd9bcebef3ca4d0e2d14c"
+    },
+    {
+      "asset_id": "scene_sector_echo",
+      "resource_path": "res://assets/sectors/sector_echo.tscn",
+      "sha256": "8d752a15e8c06098e9017c3bd1bea52630b4041c7354fa9a42ef7afc86a9dd72"
+    },
+    {
+      "asset_id": "scene_sector_forge",
+      "resource_path": "res://assets/sectors/sector_forge.tscn",
+      "sha256": "b94bb8406b5098c58c403c6a74dbf44fe32e1080c1a157592df4aaea40c90acb"
+    },
+    {
+      "asset_id": "scene_sector_helios",
+      "resource_path": "res://assets/sectors/sector_helios.tscn",
+      "sha256": "9378a1e9887a06ccac6b8829e64de6b1f7ac2ab20d3066e325ca90fc7d179138"
+    },
+    {
+      "asset_id": "scene_sector_iron",
+      "resource_path": "res://assets/sectors/sector_iron.tscn",
+      "sha256": "6f1f7b44731a94ad797d534c1e8f322773166e0d40ed9958feb5ce14f5591cf9"
+    },
+    {
+      "asset_id": "scene_sector_mirror",
+      "resource_path": "res://assets/sectors/sector_mirror.tscn",
+      "sha256": "78d33999a3dbc9b13de1b3f67e5e885c328e6d37607b02aa9536160158fb29cc"
+    },
+    {
+      "asset_id": "scene_sector_mist",
+      "resource_path": "res://assets/sectors/sector_mist.tscn",
+      "sha256": "229188b20bab1bc1117d2dfcbae0e1ecf50f595eb1bdbc92a079aab309409877"
+    },
+    {
+      "asset_id": "scene_sector_rift",
+      "resource_path": "res://assets/sectors/sector_rift.tscn",
+      "sha256": "bd9bd6f96ed90942d45a229b87516c37d37fb3f814eededda5f392a4018088fd"
+    },
+    {
+      "asset_id": "scene_sector_silent",
+      "resource_path": "res://assets/sectors/sector_silent.tscn",
+      "sha256": "6ca292183df6feb514774e83577f8bd37e1d1577171af8ed489b808cca9ed2a5"
+    },
+    {
+      "asset_id": "model_ore_corrosion_titanium",
+      "resource_path": "res://assets/models/environment/ore_corrosion_titanium.glb",
+      "sha256": "8db745dbfb0053656534636e2673f4ebd4d69af32b11ef796d1da488bb230f71"
+    },
+    {
+      "asset_id": "model_ore_crystal",
+      "resource_path": "res://assets/models/environment/ore_crystal.glb",
+      "sha256": "2cf9e9fed00b7c2b525e47846790f5508ef0973c2825747124d1cc7583b19745"
+    },
+    {
+      "asset_id": "model_ore_echo_silica",
+      "resource_path": "res://assets/models/environment/ore_echo_silica.glb",
+      "sha256": "6cb95c5eafb12df2460485e92ace66f2f4ec784333b9ee77475640189af32e23"
+    },
+    {
+      "asset_id": "model_ore_iron",
+      "resource_path": "res://assets/models/environment/ore_iron.glb",
+      "sha256": "443847aa8d1981910f9b691116a1ca28462ad4a2788929998ed56e4629b058d1"
+    },
+    {
+      "asset_id": "model_ore_mirror_crystal",
+      "resource_path": "res://assets/models/environment/ore_mirror_crystal.glb",
+      "sha256": "3a001c0aae4eda186bafa11efe3a1c577a0bb8e982a12ad5b5389abd6991a291"
+    },
+    {
+      "asset_id": "model_ore_phase_stone",
+      "resource_path": "res://assets/models/environment/ore_phase_stone.glb",
+      "sha256": "65c18da2f4412754bc279ed9ef36e86da30bc275ce4ed558771e4ea716718fb6"
+    },
+    {
+      "asset_id": "model_ore_pressure_steel",
+      "resource_path": "res://assets/models/environment/ore_pressure_steel.glb",
+      "sha256": "a9d5ddbc819c8bda1d9716700b62980efd9f3488c3db188828c880f7a50991ee"
+    },
+    {
+      "asset_id": "model_ore_solar_core",
+      "resource_path": "res://assets/models/environment/ore_solar_core.glb",
+      "sha256": "b54841348f22d1b3d36197a29407f9af7a387deb3f8646370c464d6c6ba8a923"
+    },
+    {
+      "asset_id": "model_wreck",
+      "resource_path": "res://assets/models/environment/wreck.glb",
+      "sha256": "7867cc3fa5e70349f039cdcd8c5563ec6eb6a80d22b99f87f50398c64ad1afc4"
+    },
+    {
+      "asset_id": "model_battleship_bastion",
+      "resource_path": "res://assets/models/ships/battleship_bastion.glb",
+      "sha256": "589e2ee8916117358d7b37531d6a44fd02f7a697459c3ab19ffad204d059d465"
+    },
+    {
+      "asset_id": "model_cruiser_horizon",
+      "resource_path": "res://assets/models/ships/cruiser_horizon.glb",
+      "sha256": "81733ec6b8a610300caae0c70bee4ae4830e213ad024d5dc9f16409a207b2894"
+    },
+    {
+      "asset_id": "model_destroyer_raptor",
+      "resource_path": "res://assets/models/ships/destroyer_raptor.glb",
+      "sha256": "87db3615f1cec006c7d14b31a3765fe82e5d45c5c817ba09ce9cc51ea8bb79be"
+    },
+    {
+      "asset_id": "model_enemy_silent",
+      "resource_path": "res://assets/models/ships/enemy_silent.glb",
+      "sha256": "7e443bf3a7c3bb6afac828e5a75b765a9a8804333c166363ed01a19641404fd2"
+    },
+    {
+      "asset_id": "model_frigate_kestrel",
+      "resource_path": "res://assets/models/ships/frigate_kestrel.glb",
+      "sha256": "6ad6c89229eb429caef3477ae1d8379982d79a2302d0a1db84ab83a9ae380c76"
+    },
+    {
+      "asset_id": "model_frigate_lantern",
+      "resource_path": "res://assets/models/ships/frigate_lantern.glb",
+      "sha256": "2fc9e54b9d0e6f6afd6c8a82236e12956e741a9072d6e98ff7ae00067a17108b"
+    },
+    {
+      "asset_id": "model_miner_anvil",
+      "resource_path": "res://assets/models/ships/miner_anvil.glb",
+      "sha256": "94a74efb060a721e0b68e9e7b3cc44ff6e857e53a9b9bf59ba2dccfebf1bd0cd"
+    },
+    {
+      "asset_id": "model_shuttle_swift",
+      "resource_path": "res://assets/models/ships/shuttle_swift.glb",
+      "sha256": "c8813a1c61baf2a36c8855e7b6c621e62a13602702233aa47373219b1984a495"
+    },
+    {
+      "asset_id": "model_support_weaver",
+      "resource_path": "res://assets/models/ships/support_weaver.glb",
+      "sha256": "88d70f9efbbe6f3bac25eb7c9dc2a95b7cd8e571c9c2a44a2c1ba3541801253b"
+    },
+    {
+      "asset_id": "model_transport_caravan",
+      "resource_path": "res://assets/models/ships/transport_caravan.glb",
+      "sha256": "c381d5a007355629acddbea5935304f6a6ef05b5314f2f96f10dd435076bd3c8"
+    },
+    {
+      "asset_id": "model_gate_anchor",
+      "resource_path": "res://assets/models/structures/gate_anchor.glb",
+      "sha256": "2ab7f662ec6cb425870e9076279278a889b64d1519262215f127447c8996a935"
+    },
+    {
+      "asset_id": "model_station_anchor",
+      "resource_path": "res://assets/models/structures/station_anchor.glb",
+      "sha256": "ef8e5b2c37a7422b016e147813cb8bbc889093130ba125ed124e36d54cbc9b38"
+    },
+    {
+      "asset_id": "asset_geometry_fleet",
+      "resource_path": "res://assets/models/geometry.json",
+      "sha256": "7d8bc7a3eac3ffa5a09806843bc81b9a2bab7006c8a8abf043757ef2cd8e3cfc"
+    },
+    {
+      "asset_id": "sound_armor_hit",
+      "resource_path": "res://assets/audio/armor_hit.wav",
+      "sha256": "1eb7bb093c378c6af07872e2c580b6c6fae449f11b7ca4d8fe418a5ddb432559"
+    },
+    {
+      "asset_id": "sound_engine_loop",
+      "resource_path": "res://assets/audio/engine_loop.wav",
+      "sha256": "2f9d632d34ba6c832a1847279c2cf72215c4bfd3c1f65dd73b74c1a7d6c926c1"
+    },
+    {
+      "asset_id": "sound_explosion",
+      "resource_path": "res://assets/audio/explosion.wav",
+      "sha256": "0d42b5ee5ece7dc205e3fefe46de187897dcf635424cc2f880036514162a0302"
+    },
+    {
+      "asset_id": "sound_jump_arrival",
+      "resource_path": "res://assets/audio/jump_arrival.wav",
+      "sha256": "6b0973b1409be2013400bf87300bf77b96b493e74770fd9e93f88d1d5d0fe8a7"
+    },
+    {
+      "asset_id": "sound_jump_charge",
+      "resource_path": "res://assets/audio/jump_charge.wav",
+      "sha256": "98c101e6b6ee391259fa399c20d08301636d3bfc57f479b1e1f77b56a03ce976"
+    },
+    {
+      "asset_id": "sound_mining_loop",
+      "resource_path": "res://assets/audio/mining_loop.wav",
+      "sha256": "b53f420170b4bd3838e1ede5424a06c2e76a073cc923870a3c60a0a903a794ee"
+    },
+    {
+      "asset_id": "sound_repair_loop",
+      "resource_path": "res://assets/audio/repair_loop.wav",
+      "sha256": "502a942265abf939ab568e246129d237e63d02fe0a3c77a7a3d2174bd9494c1b"
+    },
+    {
+      "asset_id": "sound_scan_pulse",
+      "resource_path": "res://assets/audio/scan_pulse.wav",
+      "sha256": "6e7c916dc13989d08e32731b2bfff318691debcdc27a069c81a8e2afea355c7f"
+    },
+    {
+      "asset_id": "sound_shield_hit",
+      "resource_path": "res://assets/audio/shield_hit.wav",
+      "sha256": "a83d2cdb804639363c1111bb7d9a45caadd709cea0e80504f078146d7d33de0f"
+    },
+    {
+      "asset_id": "sound_station_ambience",
+      "resource_path": "res://assets/audio/station_ambience.wav",
+      "sha256": "0449cb8235f25b67d27ba8a56b8fc3485f8b225bb4c1b9fcc7d6122a19cc7655"
+    },
+    {
+      "asset_id": "sound_ui_confirm",
+      "resource_path": "res://assets/audio/ui_confirm.wav",
+      "sha256": "64fa7b719c5c24e5434572853d2fe28de411626bdc5654b768fafbadccc1c4b2"
+    },
+    {
+      "asset_id": "sound_ui_error",
+      "resource_path": "res://assets/audio/ui_error.wav",
+      "sha256": "a91648e41bac3971efa5e5502f896067acb9348becc7f34ebc5d94b48c7e6415"
+    },
+    {
+      "asset_id": "sound_weapon_kinetic",
+      "resource_path": "res://assets/audio/weapon_kinetic.wav",
+      "sha256": "a232d89ec30baf5a2847e28ead232253da21456b5f0e545b16b0994ffc9660bb"
+    },
+    {
+      "asset_id": "sound_weapon_pulse",
+      "resource_path": "res://assets/audio/weapon_pulse.wav",
+      "sha256": "ba7c30ce60c03d2d40b200bd7f779903e1535507a3b54985e6e36543a7c5fca4"
+    },
+    {
+      "asset_id": "sound_weapon_thermal",
+      "resource_path": "res://assets/audio/weapon_thermal.wav",
+      "sha256": "a123d51655ffdf4f5ad11dd5fe2c2a5c306198fb82ff44b067940714641b5627"
+    },
+    {
+      "asset_id": "visual_code_visual_effect_node",
+      "resource_path": "res://runtime/visuals/visual_effect_node.gd",
+      "sha256": "a82d07c03caab0ca1fd16ae7d213aaf3b5545114c85e0697d871401f4a9cf02a"
+    },
+    {
+      "asset_id": "visual_code_visual_effects",
+      "resource_path": "res://runtime/visuals/visual_effects.gd",
+      "sha256": "35956315bdcf0a873476f767376b329527bb8bfd1584f4bb926b050475d876ce"
+    },
+    {
+      "asset_id": "visual_code_visual_factory",
+      "resource_path": "res://runtime/visuals/visual_factory.gd",
+      "sha256": "754c2a48e8d5ae9ccdee32982132084850024a47661d01a18f475e258a1d1fc1"
+    },
+    {
+      "asset_id": "visual_shader_beam",
+      "resource_path": "res://runtime/visuals/shaders/beam.gdshader",
+      "sha256": "87c05bb4ab67f3c4ec270c386587ba1672f7d3eeb7e298191c9c3c97c319662b"
+    },
+    {
+      "asset_id": "visual_shader_shield",
+      "resource_path": "res://runtime/visuals/shaders/shield.gdshader",
+      "sha256": "46c6760f80a232cad5d77ea0ebab898c2bcfb95c191d9358417b27f94394cee1"
+    },
+    {
+      "asset_id": "visual_shader_space_sky",
+      "resource_path": "res://runtime/visuals/shaders/space_sky.gdshader",
+      "sha256": "0e61498604051d2fc0bd45e398bf13aa48d55c563910b62d275b93b9cbcae7c1"
+    },
+    {
+      "asset_id": "visual_shader_wormhole",
+      "resource_path": "res://runtime/visuals/shaders/wormhole.gdshader",
+      "sha256": "1512a3f1c4afcc3ef673c7df24be59b4ab9ff7af70dcab07256c2afa9e7e7b1a"
+    }
+  ],
+  "manifest_sha256": "1ec8b2bfdcbd1fc75d0d9749b416f651df564f6b3a4eeec1a4e348da4e9a0e6e"
+}

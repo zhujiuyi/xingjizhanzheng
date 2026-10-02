@@ -1,0 +1,23 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/models/environment/ore_solar_core.glb" id="1_model"]
+
+[sub_resource type="BoxShape3D" id="Collision"]
+size = Vector3(48.54066086, 37.02942276, 47.64962769)
+
+[node name="ObjectBody" type="StaticBody3D"]
+collision_layer = 1
+collision_mask = 2
+metadata/asset_id = "asset_object_ore_solar_core"
+metadata/asset_version = "art-full-v1"
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="Model" parent="VisualRoot" instance=ExtResource("1_model")]
+
+[node name="InteractionAnchor" type="Marker3D" parent="."]
+position = Vector3(0.01847839, 0.38327599, -0.27339935)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+position = Vector3(0.01847839, 0.38327599, -0.27339935)
+shape = SubResource("Collision")

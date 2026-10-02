@@ -1,0 +1,23 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/models/structures/station_anchor.glb" id="1_model"]
+
+[sub_resource type="BoxShape3D" id="Collision"]
+size = Vector3(440.00000000, 230.00000000, 440.00000000)
+
+[node name="ObjectBody" type="StaticBody3D"]
+collision_layer = 1
+collision_mask = 2
+metadata/asset_id = "asset_object_station_anchor"
+metadata/asset_version = "art-full-v1"
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="Model" parent="VisualRoot" instance=ExtResource("1_model")]
+
+[node name="InteractionAnchor" type="Marker3D" parent="."]
+position = Vector3(0.00000000, 0.00000000, 0.00000000)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+position = Vector3(0.00000000, 0.00000000, 0.00000000)
+shape = SubResource("Collision")

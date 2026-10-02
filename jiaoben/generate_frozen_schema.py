@@ -90,6 +90,8 @@ def generate(output: Path = OUTPUT) -> dict[str, object]:
     connection = sqlite3.connect(source.as_uri() + "?mode=ro", uri=True)
     try:
         connection.execute("PRAGMA foreign_keys=ON")
+        if output == OUTPUT and connection.execute("SELECT schema_version FROM catalog_meta").fetchone()[0] != 2:
+            raise ValueError("Historical 002 migration is immutable. Use reviewed additive generators store_generate_v4.py/store_generate_r2.py for newer schemas.")
         catalog_builder.validate_database(connection)
         logical_hash = catalog_builder.logical_content_hash(connection)
         stored = connection.execute("SELECT content_hash FROM catalog_meta").fetchone()[0]

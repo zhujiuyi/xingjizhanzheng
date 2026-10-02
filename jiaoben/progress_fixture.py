@@ -22,10 +22,10 @@ sys.path.insert(0, str(ROOT / "jiaoben"))
 import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
-MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql")
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_3.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_3"
-RULE_CODE_VERSION = "singleplayer_b_v1"
+MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql")
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_4_r2.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_4_r2"
+RULE_CODE_VERSION = "singleplayer_full_v1"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
 STATE_TABLES = (
@@ -36,7 +36,7 @@ STATE_TABLES = (
     "loan_state", "loan_asset_state", "loan_issue_state", "manufacture_input_state",
     "discovery_state", "unlock_state", "reputation_state", "resource_state", "gate_state",
     "ship_gate_cooldown_state", "sector_state", "station_economy_state", "shop_stock_state",
-    "shop_ship_stock_state", "npc_state", "production_state", "rng_state", "action_receipt_state", "transfer_state",
+    "shop_ship_stock_state", "npc_state", "production_state", "rng_state", "action_receipt_state", "transfer_state", "base_module_state",
 )
 
 
@@ -55,7 +55,7 @@ def connect(path=":memory:"):
 
 def apply_migrations(connection, fault_after=None):
     if connection.execute("SELECT count(*) FROM sqlite_schema WHERE type='table'").fetchone()[0]:
-        if connection.execute("SELECT application_id,format_version FROM database_meta").fetchone() != ("xingjizhanjian", 1):
+        if connection.execute("SELECT application_id,format_version FROM database_meta").fetchone() != ("xingjizhanjian", 5):
             raise ValueError("Unsupported progress identity/format; preserve source and require explicit migration")
         for name in MIGRATIONS:
             expected = hashlib.sha256((PROGRESS_DIR / name).read_bytes()).hexdigest()
@@ -75,7 +75,7 @@ def apply_migrations(connection, fault_after=None):
             pieces.append("SELECT missing_migration_fault();")
     try:
         connection.executescript("\n".join(pieces))
-        connection.execute("PRAGMA user_version=1")
+        connection.execute("PRAGMA user_version=5")
         connection.commit()
     except BaseException:
         connection.rollback()
@@ -294,7 +294,7 @@ def initial_state(connection, snapshot, world, content):
         insert(connection, "resource_state", {**ctx, "node_id": node["node_id"], "remaining_units": node["capacity_units"], "respawn_remaining_s": 0.})
     for connection_def in frozen("connection_defs"):
         gate = next(g for g in frozen("gate_class_defs") if g["gate_class_id"] == connection_def["gate_class_id"])
-        insert(connection, "gate_state", {**ctx, "connection_id": connection_def["connection_id"], "enabled": 1, "remaining_mass_budget_kg": gate["total_mass_budget_kg"]})
+        insert(connection, "gate_state", {**ctx, "connection_id": connection_def["connection_id"], "enabled": 1, "remaining_mass_budget_kg": gate["total_mass_budget_kg"], "lifetime_remaining_s": gate["lifetime_s"]})
     for sector in frozen("sector_defs"):
         insert(connection, "sector_state", {**ctx, "sector_id": sector["sector_id"], "visited": int(sector["sector_id"] == station["sector_id"]), "generation_counter": 0})
     items = {r["item_id"]: r for r in frozen("item_defs")}

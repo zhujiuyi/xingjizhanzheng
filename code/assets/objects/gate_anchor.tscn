@@ -1,0 +1,80 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/models/structures/gate_anchor.glb" id="1_model"]
+
+[sub_resource type="BoxShape3D" id="Collision"]
+size = Vector3(48.00000000, 16.00000000, 40.00000000)
+
+[node name="ObjectBody" type="StaticBody3D"]
+collision_layer = 1
+collision_mask = 2
+metadata/asset_id = "asset_object_gate_anchor"
+metadata/asset_version = "art-full-v1"
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="Model" parent="VisualRoot" instance=ExtResource("1_model")]
+
+[node name="InteractionAnchor" type="Marker3D" parent="."]
+position = Vector3(0.00000000, 0.00000000, 0.00000000)
+
+[node name="FrameCollision_0" type="CollisionShape3D" parent="."]
+position = Vector3(92.00000000, 0.00000000, 0.00000000)
+rotation = Vector3(0.00000000, 0.00000000, 1.57079637)
+shape = SubResource("Collision")
+
+[node name="FrameCollision_1" type="CollisionShape3D" parent="."]
+position = Vector3(79.67433929, 46.00000000, 0.00000000)
+rotation = Vector3(0.00000000, 0.00000000, 2.09439516)
+shape = SubResource("Collision")
+
+[node name="FrameCollision_2" type="CollisionShape3D" parent="."]
+position = Vector3(46.00000000, 79.67433929, 0.00000000)
+rotation = Vector3(0.00000000, 0.00000000, 2.61799383)
+shape = SubResource("Collision")
+
+[node name="FrameCollision_3" type="CollisionShape3D" parent="."]
+position = Vector3(0.00000000, 92.00000000, 0.00000000)
+rotation = Vector3(0.00000000, 0.00000000, 3.14159274)
+shape = SubResource("Collision")
+
+[node name="FrameCollision_4" type="CollisionShape3D" parent="."]
+position = Vector3(-46.00000000, 79.67433929, 0.00000000)
+rotation = Vector3(0.00000000, 0.00000000, 3.66519141)
+shape = SubResource("Collision")
+
+[node name="FrameCollision_5" type="CollisionShape3D" parent="."]
+position = Vector3(-79.67433929, 46.00000000, 0.00000000)
+rotation = Vector3(0.00000000, 0.00000000, 4.18879032)
+shape = SubResource("Collision")
+
+[node name="FrameCollision_6" type="CollisionShape3D" parent="."]
+position = Vector3(-92.00000000, 0.00000000, 0.00000000)
+rotation = Vector3(0.00000000, 0.00000000, 4.71238899)
+shape = SubResource("Collision")
+
+[node name="FrameCollision_7" type="CollisionShape3D" parent="."]
+position = Vector3(-79.67433929, -46.00000000, 0.00000000)
+rotation = Vector3(0.00000000, 0.00000000, 5.23598766)
+shape = SubResource("Collision")
+
+[node name="FrameCollision_8" type="CollisionShape3D" parent="."]
+position = Vector3(-46.00000000, -79.67433929, 0.00000000)
+rotation = Vector3(0.00000000, 0.00000000, 5.75958633)
+shape = SubResource("Collision")
+
+[node name="FrameCollision_9" type="CollisionShape3D" parent="."]
+position = Vector3(-0.00000000, -92.00000000, 0.00000000)
+rotation = Vector3(0.00000000, 0.00000000, 6.28318548)
+shape = SubResource("Collision")
+
+[node name="FrameCollision_10" type="CollisionShape3D" parent="."]
+position = Vector3(46.00000000, -79.67433929, 0.00000000)
+rotation = Vector3(0.00000000, 0.00000000, 6.80678415)
+shape = SubResource("Collision")
+
+[node name="FrameCollision_11" type="CollisionShape3D" parent="."]
+position = Vector3(79.67433929, -46.00000000, 0.00000000)
+rotation = Vector3(0.00000000, 0.00000000, 7.33038282)
+shape = SubResource("Collision")
+

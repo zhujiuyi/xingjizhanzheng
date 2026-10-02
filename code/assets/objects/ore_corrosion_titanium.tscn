@@ -1,0 +1,23 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/models/environment/ore_corrosion_titanium.glb" id="1_model"]
+
+[sub_resource type="BoxShape3D" id="Collision"]
+size = Vector3(47.08461380, 34.93167114, 46.68518829)
+
+[node name="ObjectBody" type="StaticBody3D"]
+collision_layer = 1
+collision_mask = 2
+metadata/asset_id = "asset_object_ore_corrosion_titanium"
+metadata/asset_version = "art-full-v1"
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="Model" parent="VisualRoot" instance=ExtResource("1_model")]
+
+[node name="InteractionAnchor" type="Marker3D" parent="."]
+position = Vector3(0.52858353, -0.19612885, -1.02057266)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+position = Vector3(0.52858353, -0.19612885, -1.02057266)
+shape = SubResource("Collision")

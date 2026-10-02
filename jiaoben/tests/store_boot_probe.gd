@@ -22,6 +22,11 @@ func _initialize() -> void:
 	var output: Array = []
 	for index in range(6): output.append("%08x" % rng.next_uint32())
 	print("RNG ", output)
+	var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/placeholders/manifest.json"))
+	var expected: String = manifest.manifest_sha256
+	manifest.erase("manifest_sha256")
+	manifest.format_version = int(manifest.format_version)
+	print("ASSET ", expected == JSON.stringify(manifest, "", true, true).sha256_text())
 	memory.close_db()
 	catalog.close()
 	quit(0)

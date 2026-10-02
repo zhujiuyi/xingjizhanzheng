@@ -591,6 +591,8 @@ class GateStateDto extends RefCounted:
 	var enabled: bool = false
 	var has_remaining_mass_budget_kg: bool = false
 	var remaining_mass_budget_kg: float = 0.0
+	var has_lifetime_remaining_s: bool = false
+	var lifetime_remaining_s: float = 0.0
 
 ## 对应 progress.ship_gate_cooldown_state；公共复合键由 WorldSnapshot.meta 注入。
 class ShipGateCooldownStateDto extends RefCounted:
@@ -622,6 +624,14 @@ class TransferStateDto extends RefCounted:
 	var ship_instance_id: String = ""
 	var connection_id: String = ""
 	var endpoint: Types.TransferEndpoint = Types.TransferEndpoint.ORIGIN
+
+## 对应format2 progress.base_module_state：站点设施，无Node引用。
+class BaseModuleStateDto extends RefCounted:
+	var player_id: String = ""
+	var base_instance_id: String = ""
+	var base_module_id: String = ""
+	var station_id: String = ""
+	var enabled: bool = false
 
 ## 完整世界快照：所有已初始化星区状态都在数组中，不限当前已加载星区。
 class WorldSnapshotDto extends RefCounted:
@@ -658,6 +668,7 @@ class WorldSnapshotDto extends RefCounted:
 	var rng_state_rows: Array[RngStateDto] = []
 	var action_receipt_state_rows: Array[ActionReceiptStateDto] = []
 	var transfer_state_rows: Array[TransferStateDto] = []
+	var base_module_state_rows: Array[BaseModuleStateDto] = []
 
 ## 表现派生值不是另一份定义：每次由 frozen catalog + 当前状态计算。
 class ShipMetricsViewDto extends RefCounted:

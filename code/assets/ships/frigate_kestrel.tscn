@@ -1,0 +1,81 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/models/ships/frigate_kestrel.glb" id="1_model"]
+
+[sub_resource type="BoxShape3D" id="ShipCollision"]
+size = Vector3(18, 9, 30)
+
+[node name="ShipBody" type="CharacterBody3D"]
+motion_mode = 1
+collision_layer = 2
+collision_mask = 3
+metadata/ship_def_id = "frigate_kestrel"
+metadata/asset_id = "asset_ship_frigate_kestrel"
+metadata/asset_version = "art-full-v1"
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("ShipCollision")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="Model" parent="VisualRoot" instance=ExtResource("1_model")]
+
+[node name="Hardpoints" type="Node3D" parent="."]
+
+[node name="weapon_0" type="Marker3D" parent="Hardpoints"]
+position = Vector3(-6, 1, -12)
+metadata/slot_type = "weapon"
+metadata/slot_index = 0
+
+[node name="muzzle" type="Marker3D" parent="Hardpoints/weapon_0"]
+
+[node name="weapon_1" type="Marker3D" parent="Hardpoints"]
+position = Vector3(6, 1, -12)
+metadata/slot_type = "weapon"
+metadata/slot_index = 1
+
+[node name="muzzle" type="Marker3D" parent="Hardpoints/weapon_1"]
+
+[node name="utility_0" type="Marker3D" parent="Hardpoints"]
+position = Vector3(-5, 2, 2)
+metadata/slot_type = "utility"
+metadata/slot_index = 0
+
+[node name="utility_1" type="Marker3D" parent="Hardpoints"]
+position = Vector3(0, 3, 3)
+metadata/slot_type = "utility"
+metadata/slot_index = 1
+
+[node name="utility_2" type="Marker3D" parent="Hardpoints"]
+position = Vector3(5, 2, 2)
+metadata/slot_type = "utility"
+metadata/slot_index = 2
+
+[node name="structure_0" type="Marker3D" parent="Hardpoints"]
+position = Vector3(-4, -2, 4)
+metadata/slot_type = "structure"
+metadata/slot_index = 0
+
+[node name="structure_1" type="Marker3D" parent="Hardpoints"]
+position = Vector3(4, -2, 4)
+metadata/slot_type = "structure"
+metadata/slot_index = 1
+
+[node name="FXAnchors" type="Node3D" parent="."]
+
+[node name="engine_left" type="Marker3D" parent="FXAnchors"]
+position = Vector3(-3.24, 0, 13.8)
+rotation = Vector3(0, 3.141592653589793, 0)
+
+[node name="engine_right" type="Marker3D" parent="FXAnchors"]
+position = Vector3(3.24, 0, 13.8)
+rotation = Vector3(0, 3.141592653589793, 0)
+
+[node name="CameraTarget" type="Marker3D" parent="."]
+position = Vector3(0, 3, 0)
+
+[node name="FrontCamera" type="Marker3D" parent="."]
+position = Vector3(0, 3, -16)
+
+[node name="InteractionAnchor" type="Marker3D" parent="."]
+position = Vector3(0, 0, 0)
