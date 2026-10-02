@@ -1,0 +1,95 @@
+[gd_scene load_steps=7 format=3]
+
+[sub_resource type="StandardMaterial3D" id="HullMaterial"]
+albedo_color = Color(0.36, 0.67, 0.88, 1)
+metallic = 0.65
+roughness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="NoseMaterial"]
+albedo_color = Color(0.2, 0.95, 1, 1)
+
+[sub_resource type="BoxMesh" id="HullMesh"]
+size = Vector3(5.5, 6, 18)
+material = SubResource("HullMaterial")
+
+[sub_resource type="BoxMesh" id="SideMesh"]
+size = Vector3(2.25, 3.0, 9.9)
+material = SubResource("HullMaterial")
+
+[sub_resource type="BoxMesh" id="NoseMesh"]
+size = Vector3(1.7999999999999998, 0.72, 0.6)
+material = SubResource("NoseMaterial")
+
+[sub_resource type="BoxShape3D" id="ShipCollision"]
+size = Vector3(10, 6, 18)
+
+[node name="ShipBody" type="CharacterBody3D"]
+motion_mode = 1
+collision_layer = 2
+collision_mask = 3
+metadata/ship_def_id = "shuttle_swift"
+metadata/asset_id = "asset_ship_shuttle_swift"
+metadata/asset_version = "placeholder-b-v1"
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("ShipCollision")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="Hull" type="MeshInstance3D" parent="VisualRoot"]
+mesh = SubResource("HullMesh")
+
+[node name="PortSilhouette" type="MeshInstance3D" parent="VisualRoot"]
+position = Vector3(-3.875, 0, 1.8)
+mesh = SubResource("SideMesh")
+
+[node name="StarboardSilhouette" type="MeshInstance3D" parent="VisualRoot"]
+position = Vector3(3.875, 0, 1.8)
+mesh = SubResource("SideMesh")
+
+[node name="NoseMarker" type="MeshInstance3D" parent="VisualRoot"]
+position = Vector3(0, 0, -9.3)
+mesh = SubResource("NoseMesh")
+
+[node name="Hardpoints" type="Node3D" parent="."]
+
+[node name="weapon_0" type="Marker3D" parent="Hardpoints"]
+position = Vector3(0, 1, -8)
+metadata/slot_type = "weapon"
+metadata/slot_index = 0
+
+[node name="muzzle" type="Marker3D" parent="Hardpoints/weapon_0"]
+
+[node name="utility_0" type="Marker3D" parent="Hardpoints"]
+position = Vector3(-3, 1, 1)
+metadata/slot_type = "utility"
+metadata/slot_index = 0
+
+[node name="utility_1" type="Marker3D" parent="Hardpoints"]
+position = Vector3(3, 1, 1)
+metadata/slot_type = "utility"
+metadata/slot_index = 1
+
+[node name="structure_0" type="Marker3D" parent="Hardpoints"]
+position = Vector3(0, -1, 2)
+metadata/slot_type = "structure"
+metadata/slot_index = 0
+
+[node name="FXAnchors" type="Node3D" parent="."]
+
+[node name="engine_left" type="Marker3D" parent="FXAnchors"]
+position = Vector3(-1.7999999999999998, 0, 8.280000000000001)
+rotation = Vector3(0, 3.141592653589793, 0)
+
+[node name="engine_right" type="Marker3D" parent="FXAnchors"]
+position = Vector3(1.7999999999999998, 0, 8.280000000000001)
+rotation = Vector3(0, 3.141592653589793, 0)
+
+[node name="CameraTarget" type="Marker3D" parent="."]
+position = Vector3(0, 2, 0)
+
+[node name="FrontCamera" type="Marker3D" parent="."]
+position = Vector3(0, 2, -10)
+
+[node name="InteractionAnchor" type="Marker3D" parent="."]
+position = Vector3(0, 0, 0)

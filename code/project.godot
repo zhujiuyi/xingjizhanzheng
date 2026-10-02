@@ -1,0 +1,11 @@
+; Development skeleton. Gameplay bootstrap and scenes are implemented after readiness validation.
+config_version=5
+
+[application]
+config/name="星际战舰"
+config/features=PackedStringArray("4.7", "Forward Plus")
+
+[rendering]
+renderer/rendering_method="forward_plus"
+textures/vram_compression/import_etc2_astc=true
+textures/vram_compression/import_s3tc_bptc=true

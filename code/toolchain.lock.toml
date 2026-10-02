@@ -1,0 +1,42 @@
+# 工程依赖元数据，不是游戏数值来源。2026-10-03 实际安装和验证。
+format_version = 1
+godot_version = "4.7.2.stable.official.ed1daf0bf"
+godot_edition = "standard"
+godot_precision = "single"
+export_templates_version = "4.7.2.stable"
+gdscript = "typed"
+renderer = "forward_plus"
+macos_architecture = "universal"
+windows_architecture = "x86_64"
+macos_codesign = "native_ad_hoc"
+notarization = false
+
+[godot]
+release = "https://github.com/godotengine/godot/releases/tag/4.7.2-stable"
+editor_archive = "Godot_v4.7.2-stable_macos.universal.zip"
+editor_sha256 = "c58a24e31d720be9d62f60cb5627c4e695fb72f21b0cfe1bc9ccaa9a3b3ba63e"
+templates_archive = "Godot_v4.7.2-stable_export_templates.tpz"
+templates_sha256 = "f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011"
+license = "MIT"
+
+[godot_sqlite]
+version = "4.9"
+release = "https://github.com/2shady4u/godot-sqlite/releases/tag/v4.9"
+minimum_godot = "4.7"
+runtime_sqlite_version = "3.51.0"
+archive = "addons.zip"
+archive_sha256 = "95e91b72fe32984a84edaf6357a78753661f37a170cb362f5b948e0ede7c2cb0"
+vendored = "addons/godot-sqlite"
+file_manifest = "third_party/godot-sqlite-v4.9.sha256"
+license = "MIT"
+sqlite_license = "public-domain"
+# 原生库原样保留；gdextension 仅登记实际交付的 Mac/Windows x64 库。
+platform_subset = ["macos-universal-debug", "macos-universal-release", "windows-x86_64-debug", "windows-x86_64-release"]
+
+[blender]
+version = "4.5.14 LTS"
+build_hash = "62c1db4208e8"
+archive = "blender-4.5.14-macos-arm64.dmg"
+archive_sha256 = "65134d9b07b20e2fa8d3c9e44f6f44ffb5c9774dd521b95f50387310241ca170"
+source = "https://download.blender.org/release/Blender4.5/"
+license = "GPL-3.0-or-later"

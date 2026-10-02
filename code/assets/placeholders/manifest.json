@@ -1,0 +1,32 @@
+{
+  "asset_version": "placeholder-b-v1",
+  "format_version": 1,
+  "coordinate_system": "meters_Y_up_negative_Z_front",
+  "resources": [
+    {
+      "asset_id": "asset_ship_shuttle_swift",
+      "ship_def_id": "shuttle_swift",
+      "resource_path": "res://assets/placeholders/shuttle_swift.tscn",
+      "sha256": "ea4d11b4aff6f06f1ccdbf59f609d0358ce6122b537e18bd3898ad2d9085f641"
+    },
+    {
+      "asset_id": "asset_ship_frigate_lantern",
+      "ship_def_id": "frigate_lantern",
+      "resource_path": "res://assets/placeholders/frigate_lantern.tscn",
+      "sha256": "45988558f086760e82a3bfbc1601b3cc223050644085db604264bdab4be83388"
+    },
+    {
+      "asset_id": "asset_ship_frigate_kestrel",
+      "ship_def_id": "frigate_kestrel",
+      "resource_path": "res://assets/placeholders/frigate_kestrel.tscn",
+      "sha256": "f3498bfc1cf237ee37b0ac9862001e74e11279d130621f3e8810091e6ac2b0b4"
+    },
+    {
+      "asset_id": "asset_ship_miner_anvil",
+      "ship_def_id": "miner_anvil",
+      "resource_path": "res://assets/placeholders/miner_anvil.tscn",
+      "sha256": "a959d2edb15ace0023a7393bf635fcb9b599bb9ae54e56f290c24081f41358d0"
+    }
+  ],
+  "manifest_sha256": "d0b0e29be0db58cb96f066be2dbbc284d9ae8915189322b1d2168e758b103890"
+}

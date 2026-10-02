@@ -1,0 +1,28 @@
+.DS_Store
+._*
+
+# 本机工具缓存；保留 Serena 的项目配置。
+.serena/*
+!.serena/project.yml
+
+# 凭据与本地环境配置。
+.env
+.env.*
+!.env.example
+
+# 临时文件和检查日志。
+/jiaoben/tmp/*
+!/jiaoben/tmp/.gitkeep
+/jiaoben/logs/*
+!/jiaoben/logs/.gitkeep
+
+# 常见依赖、缓存和构建输出。
+node_modules/
+.venv/
+__pycache__/
+*.py[cod]
+.godot/
+/code/build/
+/code/dist/
+/code/exports/
+/jiaoben/coverage/
