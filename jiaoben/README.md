@@ -39,7 +39,7 @@ UI 生命周期补充检查为 `tests/ui_lifecycle_v2.gd`。对应v0.5及存档�
 | `tests/font_v3_glyphs.py`、`tests/font_theme_v3.gd` | 官方OTF字形/UTF-8检查、共享字体、九项资源、Theme与人员Label3D。最终报告`logs/font-v3-final-coverage.json`覆盖103文件、84张内容表、816字符，缺字/编码替换字0；独立字体headless29、原生34项/5图通过，不代替Windows实机。 |
 | `tests/interaction_v3.gd`、`tests/interaction_v3_run.py` | 真实Main的F候选/指定鼠标目标、范围速度权限、门充能取消、暂停与键盘/指针阻塞。headless51、原生55项通过；原生OS鼠标检查与headless分开。 |
 | `build_navigation_v3.py`、`tests/navigation_v3.gd` | 重建只读导航SQLite；雷达范围、选中连线/离屏、天体只航向和高缩放布局。最新headless62、整机原生67项/5图通过，使用当前星空/地貌；最终日志`logs/navigation-v3-native-final.log`。 |
-| `art/build_station_v3.py`、`art/build_station_manifest_v3.py`、`art/test_station_v3.gd`、`art/preview_station_v3.gd` | 原创空间站构建、清单、模型/材质及原碰撞锚点保持；headless与原生各114项通过。预览产物在tmp，最终游戏/包整合另验。 |
+| `art/build_station_v3.py`、`art/build_station_manifest_v3.py`、`art/test_station_v3.gd`、`art/preview_station_v3.gd` | 原创空间站构建、清单、模型/材质及原碰撞锚点保持；headless与原生各114项通过。预览产物在tmp，整机结果见下文，实际最终包另验。 |
 | `art/build_ships_v3.py`、`art/build_ship_v3_manifest.py`、`art/test_ship_v3.gd`、`art/preview_ship_v3.gd` | 九类舰与静默敌舰工业视觉、原wrapper碰撞/挂点保持；headless与原生契约各410项通过，10个GLB＋shader共11运行资源。模型合计673,622三角；自动导入LOD不等于手工LOD或性能保证。 |
 | `tests/presentation_failures.gd`、`tests/failure_factory.gd` | 真实Main/Store准备路径注入玩家/NPC模型失败，验证模拟不推进和旧world/epoch/slot保持，恢复后可再加载保存。headless＋显式CoreAudio28项通过、严格诊断0；不向个人库写入故障对象。 |
 

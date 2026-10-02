@@ -62,7 +62,7 @@
 | [交互headless](../jiaoben/logs/interaction-v3.log)、[原生交互](../jiaoben/logs/interaction-v3-native.log) | 51/51、55/55 PASS，严格进程检查通过 | 键盘/指针阻塞分离、真实OS鼠标悬停目标面板后按F停靠与写入队列排空、暂停阻断、充能取消及条件反馈。headless不冒充OS鼠标检查；未走完整目的地提交。 |
 | [导航headless当前结果](../jiaoben/logs/navigation-v3-headless-final.log) | 62/62 PASS | 雷达与定义、投影/离屏、竖直天体外圈、四组尺寸/缩放避让、选中说明避免紧凑布局重复、靠站和暂停隐藏；没有原生画面。 |
 | [最终原生导航](../jiaoben/logs/navigation-v3-native-final.log)、[独立引擎日志](../jiaoben/logs/navigation-v3-native-final-engine.log) | 67/67 PASS、5图，严格诊断0 | 实际飞行场景/相机、当前星空/地貌、选中/离屏、四组尺寸/缩放、靠站和暂停隐藏。 |
-| [空间站headless](../jiaoben/logs/station-v3-test-headless.log)、[空间站原生](../jiaoben/logs/station-v3-test-native.log) | 各114/114 PASS；3项运行资源 | 原资产/核心内容摘要、实际模型导入、材质、碰撞/锚点/世界姿态保持、幂等和错误对象拒绝。独立空间站验收不替代游戏窗口/最终包整合。 |
+| [空间站headless](../jiaoben/logs/station-v3-test-headless.log)、[空间站原生](../jiaoben/logs/station-v3-test-native.log) | 各114/114 PASS；3项运行资源 | 原资产/核心内容摘要、实际模型导入、材质、碰撞/锚点/世界姿态保持、幂等和错误对象拒绝。整机结果另列下方，实际最终包仍另验。 |
 | [舰船headless](../jiaoben/logs/ships-v3-contract.log)、[舰船原生](../jiaoben/logs/ships-v3-native-contract.log) | 各410/410 PASS；10个GLB＋shader，共11项运行资源 | 全舰模型/材质、尺寸与原挂点/碰撞保持；原始清单已生成，不代替最终导出包校验。 |
 | [资源加载失败](../jiaoben/logs/presentation-failures.log) | headless＋显式CoreAudio 28/28 PASS，严格诊断0 | 真实Main/Store准备路径，玩家/NPC模型失败不推进模拟；读档准备失败保留旧世界/epoch/槽，恢复真实工厂后可再加载并保存。故障对象只属于夹具。 |
 | [内置发布端点源码原生](../jiaoben/logs/source-v3-presentation2.log) | 33/33 PASS、6图 | 当次源码运行，包含档案工作台和条件交互；实际最终包待验，新资源整合仍须构建校验。 |
