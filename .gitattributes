@@ -10,3 +10,6 @@
 *.blend binary
 *.ttf binary
 *.woff2 binary
+# Vendored distributions are checked against upstream byte hashes.
+/code/addons/godot-sqlite/** -text
+/code/addons/godot-sqlite/bin/** binary
