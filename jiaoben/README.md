@@ -30,7 +30,7 @@ UI 生命周期补充检查为 `tests/ui_lifecycle_v2.gd`。对应v0.5及存档�
 
 与实际游戏并行运行测试时，必须显式传入 `--log-file` 的独立绝对路径，例如 `--log-file /Users/a0000/workspace/xingjizhanjian/jiaoben/logs/ui-lifecycle-v2-engine-native.log`，不与 AppSupport 的实际 `godot.log` 共用。headless 和原生运行分别保留进程输出与引擎日志；原生音频检查传入 `--audio-driver CoreAudio`。
 
-实际发布诊断使用内置 `--xj-verify-presentation` 入口，不加载外部脚本。`build_client.py` 为每次检查创建独立 fresh `jiaoben/tmp/release-presentation/<UUID>/progress.db`，通过 `XJ_TEST_DATABASE` 传入；主程序拒绝已有数据库及 tmp 外路径。构建脚本要求实际Mac包的Metal/CoreAudio **33项检查、6张截图**，包括首页、机库、NPC、飞行、档案卡片和靠站提示，使用独立 `--log-file`。当前源码原生33/33 PASS、6图，日志为 `logs/source-v3-presentation2.log` 和独立引擎日志；实际最终包尚待复验，不能将源码诊断等同发布通过。最终发布PASS、包路径和摘要以 [交付记录](../doc/26-开发阶段与交付记录.md) 为准。
+实际发布诊断使用内置 `--xj-verify-presentation` 入口，不加载外部脚本。`build_client.py` 为每次检查创建独立 fresh `jiaoben/tmp/release-presentation/<UUID>/progress.db`，通过 `XJ_TEST_DATABASE` 传入；主程序拒绝已有数据库及 tmp 外路径。构建脚本要求实际Mac包的Metal/CoreAudio **33项检查、6张截图**，包括首页、机库、NPC、飞行、档案卡片和靠站提示，使用独立 `--log-file`。先行源码33/33 PASS的 `logs/source-v3-presentation2.log` 保留；实际最终Release `0.6.0-3196c031-20261003-054157` 已另行33/33 PASS，见 [实际包日志](logs/0.6.0-3196c031-20261003-054157-mac-presentation.log) 与 [引擎日志](logs/0.6.0-3196c031-20261003-054157-mac-presentation-engine.log)。截图在 `tmp/release-presentation/b7a35a15-15ad-4fca-bad4-a65372ff10b6/`，该目录内进度库只属于夹具。额外人工操作复查因Mac锁屏尚未完成，不记录为人工PASS。最终包路径和摘要见 [交付记录](../doc/26-开发阶段与交付记录.md)。
 
 ## v0.6表现与易用性检查
 
@@ -39,10 +39,10 @@ UI 生命周期补充检查为 `tests/ui_lifecycle_v2.gd`。对应v0.5及存档�
 | `tests/font_v3_glyphs.py`、`tests/font_theme_v3.gd` | 官方OTF字形/UTF-8检查、共享字体、九项资源、Theme与人员Label3D。最终报告`logs/font-v3-final-coverage.json`覆盖103文件、84张内容表、816字符，缺字/编码替换字0；独立字体headless29、原生34项/5图通过，不代替Windows实机。 |
 | `tests/interaction_v3.gd`、`tests/interaction_v3_run.py` | 真实Main的F候选/指定鼠标目标、范围速度权限、门充能取消、暂停与键盘/指针阻塞。headless51、原生55项通过；原生OS鼠标检查与headless分开。 |
 | `build_navigation_v3.py`、`tests/navigation_v3.gd` | 重建只读导航SQLite；雷达范围、选中连线/离屏、天体只航向和高缩放布局。最新headless62、整机原生67项/5图通过，使用当前星空/地貌；最终日志`logs/navigation-v3-native-final.log`。 |
-| `art/build_station_v3.py`、`art/build_station_manifest_v3.py`、`art/test_station_v3.gd`、`art/preview_station_v3.gd` | 原创空间站构建、清单、模型/材质及原碰撞锚点保持；headless与原生各114项通过。预览产物在tmp，整机结果见下文，实际最终包另验。 |
+| `art/build_station_v3.py`、`art/build_station_manifest_v3.py`、`art/test_station_v3.gd`、`art/preview_station_v3.gd` | 原创空间站构建、清单、模型/材质及原碰撞锚点保持；headless与原生各114项通过。预览产物在tmp；整机与实际包固定诊断分开记录。 |
 | `art/build_ships_v3.py`、`art/build_ship_v3_manifest.py`、`art/test_ship_v3.gd`、`art/preview_ship_v3.gd` | 九类舰与静默敌舰工业视觉、原wrapper碰撞/挂点保持；headless与原生契约各410项通过，10个GLB＋shader共11运行资源。模型合计673,622三角；自动导入LOD不等于手工LOD或性能保证。 |
 | `tests/presentation_failures.gd`、`tests/failure_factory.gd` | 真实Main/Store准备路径注入玩家/NPC模型失败，验证模拟不推进和旧world/epoch/slot保持，恢复后可再加载保存。headless＋显式CoreAudio28项通过、严格诊断0；不向个人库写入故障对象。 |
 
-最终整机原生回归汇总在 `logs/v3-final-native-acceptance.log`：导航67/5图、布局75/42图、镜头208、客户端36、物理战斗18、生命周期27，六脚本均PASS、退出0、diagnostics=0。对应日志前缀为 `navigation-v3-native-final`、`ui-v3-layout-final`、`camera-v3-final`、`client-v3-final`、`combat-v3-final`、`lifecycle-v3-final`，各有独立引擎日志。当前原始运行资源清单124项；这些源码检查不代替实际最终包的资源字节、签名及33项内置诊断，包验收仍待构建阶段完成。
+最终整机原生回归汇总在 `logs/v3-final-native-acceptance.log`：导航67/5图、布局75/42图、镜头208、客户端36、物理战斗18、生命周期27，六脚本均PASS、退出0、diagnostics=0。对应日志前缀为 `navigation-v3-native-final`、`ui-v3-layout-final`、`camera-v3-final`、`client-v3-final`、`combat-v3-final`、`lifecycle-v3-final`，各有独立引擎日志。实际Release另行校验124项原始资源、ad-hoc签名、六项数据库与33项表现诊断并通过；[构建身份](../code/dist/0.6.0-3196c031-20261003-054157/build-manifest.json)记录源提交与构建时 `source_dirty=false`。Windows x64导出、PE/PCK/DLL检查通过，Windows原生运行未验收；源码、实际包固定诊断和人工复查保持独立结论。
 
 星空和地貌来源见 `../code/assets/navigation_v3/sources.json`；正式生成图放code，下载/制作中间文件、预览和日志仍放tmp/logs。新版资源说明分别在 `navigation_v3`、`station_v3`、`ship_v3` 的README；验证范围汇总见 [31](../doc/31-EVE第二银河参考与易用性改版.md)。不要启动第二个Godot原生测试或同时编辑器导入，先与正在验收的整合者协调运行窗口。所有夹具继续使用独立临时库，不复用个人存档。

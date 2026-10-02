@@ -1,6 +1,6 @@
 # EVE、第二银河参考与易用性改版
 
-状态：v0.6条件交互、导航、字体、工业舰船/空间站与六项整机原生源码回归已通过，源码内置发布端点33项已通过；实际最终包仍待构建验收，Windows尚未原生验收。本文不宣布最终交付，也不把参考游戏的画面或机制当作本项目已实现功能。
+状态：v0.6条件交互、导航、字体、工业舰船/空间站与六项整机原生源码回归已通过；实际Mac Release已通过原始资源、签名、六项数据及33项表现固定诊断。Windows导出通过但原生运行未验收，额外人工操作复查尚未完成。参考游戏的画面或机制不作为本项目已实现功能。
 
 ## 官方参考与原创边界
 
@@ -35,7 +35,7 @@
 
 远景表面已加入imagegen生成的原创地貌贴图，由本项目行星shader结合只读定义表现地貌与云层；此前原生第三轮截图使用该贴图，不以旧程序白斑占位效果作为完成图。新增暗色星云全景按星区旋转天球，保留大面积暗部，使舰船和浅色HUD可辨。两个生成请求均未使用EVE或其他游戏的输入图，没有复制游戏截图或贴图。
 
-`navigation-v3`当前清单登记导航SQLite、行星shader、地貌PNG与星空全景PNG共4项资源，来源与生成边界见 [资源说明](../code/assets/navigation_v3/README.md) 和 [来源记录](../code/assets/navigation_v3/sources.json)。生成请求强调经度包裹，但不据此宣称严格数学无缝；当前含星空的整机原生67项/5图已通过，实际导出包仍待验。地貌、星云和天球旋转都是视觉表现，不新增地表玩法、可到达星云或物理天文尺度。
+`navigation-v3`当前清单登记导航SQLite、行星shader、地貌PNG与星空全景PNG共4项资源，来源与生成边界见 [资源说明](../code/assets/navigation_v3/README.md) 和 [来源记录](../code/assets/navigation_v3/sources.json)。生成请求强调经度包裹，但不据此宣称严格数学无缝；当前含星空的整机原生67项/5图与实际Mac包资源/固定诊断已通过。地貌、星云和天球旋转都是视觉表现，不新增地表玩法、可到达星云或物理天文尺度。
 
 ## 工业舰船与空间站
 
@@ -62,16 +62,19 @@
 | [交互headless](../jiaoben/logs/interaction-v3.log)、[原生交互](../jiaoben/logs/interaction-v3-native.log) | 51/51、55/55 PASS，严格进程检查通过 | 键盘/指针阻塞分离、真实OS鼠标悬停目标面板后按F停靠与写入队列排空、暂停阻断、充能取消及条件反馈。headless不冒充OS鼠标检查；未走完整目的地提交。 |
 | [导航headless当前结果](../jiaoben/logs/navigation-v3-headless-final.log) | 62/62 PASS | 雷达与定义、投影/离屏、竖直天体外圈、四组尺寸/缩放避让、选中说明避免紧凑布局重复、靠站和暂停隐藏；没有原生画面。 |
 | [最终原生导航](../jiaoben/logs/navigation-v3-native-final.log)、[独立引擎日志](../jiaoben/logs/navigation-v3-native-final-engine.log) | 67/67 PASS、5图，严格诊断0 | 实际飞行场景/相机、当前星空/地貌、选中/离屏、四组尺寸/缩放、靠站和暂停隐藏。 |
-| [空间站headless](../jiaoben/logs/station-v3-test-headless.log)、[空间站原生](../jiaoben/logs/station-v3-test-native.log) | 各114/114 PASS；3项运行资源 | 原资产/核心内容摘要、实际模型导入、材质、碰撞/锚点/世界姿态保持、幂等和错误对象拒绝。整机结果另列下方，实际最终包仍另验。 |
+| [空间站headless](../jiaoben/logs/station-v3-test-headless.log)、[空间站原生](../jiaoben/logs/station-v3-test-native.log) | 各114/114 PASS；3项运行资源 | 原资产/核心内容摘要、实际模型导入、材质、碰撞/锚点/世界姿态保持、幂等和错误对象拒绝。整机与实际包固定诊断另列。 |
 | [舰船headless](../jiaoben/logs/ships-v3-contract.log)、[舰船原生](../jiaoben/logs/ships-v3-native-contract.log) | 各410/410 PASS；10个GLB＋shader，共11项运行资源 | 全舰模型/材质、尺寸与原挂点/碰撞保持；原始清单已生成，不代替最终导出包校验。 |
 | [资源加载失败](../jiaoben/logs/presentation-failures.log) | headless＋显式CoreAudio 28/28 PASS，严格诊断0 | 真实Main/Store准备路径，玩家/NPC模型失败不推进模拟；读档准备失败保留旧世界/epoch/槽，恢复真实工厂后可再加载并保存。故障对象只属于夹具。 |
-| [内置发布端点源码原生](../jiaoben/logs/source-v3-presentation2.log) | 33/33 PASS、6图 | 当次源码运行，包含档案工作台和条件交互；实际最终包待验，新资源整合仍须构建校验。 |
+| [内置发布端点源码原生](../jiaoben/logs/source-v3-presentation2.log) | 33/33 PASS、6图 | 先行源码运行，包含档案工作台和条件交互；与后续实际包执行分开记录。 |
+| [实际Mac Release表现](../jiaoben/logs/0.6.0-3196c031-20261003-054157-mac-presentation.log)、[引擎日志](../jiaoben/logs/0.6.0-3196c031-20261003-054157-mac-presentation-engine.log) | 33/33 PASS、6图，完整日志无错误/警告/泄漏 | 实际打包客户端、Metal/CoreAudio、fresh临时库，非个人档案；不等于额外人工操作或Windows实机验收。 |
 | 暂停/档案阶段检查 | 原生布局75/42图，业务headless200/native201，生命周期各27 PASS | 卡片改版时的必要范围；后续HUD修改需对应重验，详见29。 |
 
 原生导航首轮截图发现夹具未切换至飞行相机，已纠正测试路径并增加世界/相机断言；同时修正相机平面投影、竖直天体落雷达中心及紧凑高缩放遮挡。首轮47项不作为最终飞行画面依据；最终headless62项和当前含星空的原生67项/5图已通过。
 
 [整机最终原生汇总](../jiaoben/logs/v3-final-native-acceptance.log) 的六脚本全部PASS、diagnostics=0：导航67/5图、布局75/42图、镜头208、客户端36、物理战斗18和生命周期27。完整独立日志无ERROR、WARNING或泄漏。原始运行资源清单共124项；工业舰船清单文件SHA256为 `fa24829b2f7bbe4923e0535a0dbca32afaacbb94a2254256a70bdd373489a8cb`。这些证明源码和当前本机运行，不推导长期经济平衡、自然通关或稳定帧率。
 
-实际最终包仍待资源字节、签名与内置诊断复验；不能把源码33项或上述整机日志当作最终发布PASS。
+最终构建 `0.6.0-3196c031-20261003-054157` 已复制到code/dist，源提交 `3196c0313110363f203a28eaddc6fb12d9489d76`，构建时 `source_dirty=false`；[构建身份](../code/dist/0.6.0-3196c031-20261003-054157/build-manifest.json)记录124项原始资源、Mac ad-hoc签名、实际包六项数据库和33项表现检查通过。Windows x64 PE/PCK/DLL与导出通过，原生运行仍未验收。这里采用实际包日志作为发布诊断证据，不拿源码33项代替。
+
+实际包生成首页、机库、NPC、飞行、档案和靠站6图。整合者已查看 [NPC近景](../jiaoben/tmp/release-presentation/b7a35a15-15ad-4fca-bad4-a65372ff10b6/release-npc.png)与 [靠站提示](../jiaoben/tmp/release-presentation/b7a35a15-15ad-4fca-bad4-a65372ff10b6/release-approach.png)；额外人工操作复查当时因Mac锁屏未完成，尚无新人工PASS记录。固定诊断的资格与状态刺激属于明确夹具，不代表自然通关、长期平衡或低配置帧率。
 
 最终结果与包身份由 [26](26-开发阶段与交付记录.md) 记录。所有测试使用独立临时库与独立`--log-file`，不覆盖玩家档案或实际AppSupport日志；Windows实机仍待补验。
