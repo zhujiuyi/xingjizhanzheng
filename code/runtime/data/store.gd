@@ -238,7 +238,7 @@ func resume(prepare: Callable = Callable()) -> State:
 func preferences() -> Dictionary:
 	if _db == null: return {}
 	var stored: Array[Dictionary] = _records("SELECT * FROM profile_preference WHERE profile_id='local-profile'")
-	return stored[0] if not stored.is_empty() else {"profile_id": "local-profile", "mouse_sensitivity": 1.0, "master_volume": 1.0, "vfx_intensity": 1.0, "quality_mode": "medium"}
+	return stored[0] if not stored.is_empty() else {"profile_id": "local-profile", "mouse_sensitivity": 0.002, "master_volume": 1.0, "vfx_intensity": 1.0, "quality_mode": "medium"}
 
 func set_preference(field: String, value: Variant) -> bool:
 	if busy or field not in ["mouse_sensitivity", "master_volume", "vfx_intensity", "quality_mode"]: return _fail("Invalid/busy preference update")
