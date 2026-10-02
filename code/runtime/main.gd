@@ -39,13 +39,17 @@ func _ready() -> void:
 		var diagnostic := preload("res://runtime/data/diagnostic.gd")
 		get_tree().quit(0 if diagnostic.run(OS.get_environment("XJ_TEST_DATABASE"), arguments.has("--xj-verify-upgrade")) else 1)
 		return
-	if arguments.has("--xj-validation-profile"):
+	if arguments.has("--xj-validation-profile") or arguments.has("--xj-verify-presentation"):
 		var validation_path := OS.get_environment("XJ_TEST_DATABASE").replace("\\", "/")
 		if not validation_path.is_absolute_path() or validation_path.contains("..") or not validation_path.contains("/jiaoben/tmp/"):
 			push_error("Validation profile requires an absolute jiaoben/tmp database path")
 			get_tree().quit(2)
 			return
 		progress_database_path = validation_path
+		if arguments.has("--xj-verify-presentation") and FileAccess.file_exists(validation_path):
+			push_error("Presentation diagnostic requires a fresh test database")
+			get_tree().quit(2)
+			return
 	last_error = XJPresentationResources.validate()
 	if not last_error.is_empty():
 		push_error(last_error)
@@ -85,6 +89,10 @@ func _ready() -> void:
 	camera.camera.make_current()
 	ui.show_title(store.list_slots())
 	services_ready = true
+	if arguments.has("--xj-verify-presentation"):
+		var diagnostic := preload("res://runtime/presentation_diagnostic.gd")
+		var verified: bool = await diagnostic.run(self, progress_database_path.get_base_dir())
+		get_tree().quit(0 if verified else 1)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and is_instance_valid(ui):

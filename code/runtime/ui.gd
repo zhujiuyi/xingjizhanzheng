@@ -216,7 +216,7 @@ func show_title(save_slots: Array[Dictionary]) -> void:
 	_build_panel("星际战舰", "断航星域  /  单人远征")
 	_text("从失联边疆，重建你的航路。", 17)
 	if not slots.is_empty():
-		var resume: Button = _button(body, "继续最近航行", func(): requested.emit("continue", "", 1, ""))
+		var resume: Button = _button(body, "继续航行", func(): requested.emit("continue", "", 1, ""))
 		_primary(resume)
 	new_name = LineEdit.new()
 	new_name.name = "ExpeditionName"
@@ -827,7 +827,12 @@ func _show_slots() -> void:
 func _refresh_targets() -> void:
 	if sector == null or not is_instance_valid(sector.flight):
 		return
-	var sorted: Array = sector.targets.values()
+	# Target nodes may disappear between business settlement and visual refresh.
+	# Check the raw reference before sorting or casting it to Node3D.
+	var sorted: Array[Dictionary] = []
+	for entry: Variant in sector.targets.values():
+		if entry is Dictionary and is_instance_valid(entry.get("node")) and entry.node is Node3D:
+			sorted.append(entry)
 	sorted.sort_custom(func(a: Dictionary, b: Dictionary): return sector.flight.position.distance_squared_to(a.node.position) < sector.flight.position.distance_squared_to(b.node.position))
 	var visible_ids: Array[String] = []
 	for target: Dictionary in sorted:
@@ -865,8 +870,11 @@ func _draw_markers() -> void:
 		marker_layer.draw_line(start, finish, UISkin.ICE, 1.5, true)
 	marker_layer.draw_circle(center, 1.5, UISkin.ICE)
 	for target: Dictionary in sector.targets.values():
-		var node: Node3D = target.node
-		if not is_instance_valid(node) or camera.camera.is_position_behind(node.global_position):
+		var candidate: Variant = target.get("node")
+		if not is_instance_valid(candidate) or not candidate is Node3D:
+			continue
+		var node: Node3D = candidate
+		if camera.camera.is_position_behind(node.global_position):
 			continue
 		var point := camera.camera.unproject_position(node.global_position)
 		var selected: bool = target.id == target_id
@@ -1545,10 +1553,14 @@ func _responsive_title() -> void:
 	panel.offset_top = 28 if compact else 120
 	panel.offset_bottom = -50 if compact else -100
 
-func _button_feedback(button: Button, hovering: bool) -> void:
-	if not is_instance_valid(button) or button.disabled: return
-	var old: Tween = button.get_meta("hover_tween", null)
-	if old != null and old.is_valid(): old.kill()
+func _button_feedback(candidate: Variant, hovering: bool) -> void:
+	# A queued signal can outlive the page; validate before casting a freed Object.
+	if not is_instance_valid(candidate) or not candidate is Button: return
+	var button: Button = candidate
+	if button.is_queued_for_deletion() or not button.is_inside_tree() or button.disabled: return
+	# A null get_meta default still reports a missing key; first hover has no tween.
+	var old: Variant = button.get_meta("hover_tween") if button.has_meta("hover_tween") else null
+	if is_instance_valid(old) and old is Tween and old.is_valid(): old.kill()
 	var animation: Tween = button.create_tween()
 	animation.tween_property(button, "modulate", Color(1.09, 1.09, 1.09, 1.0) if hovering else Color.WHITE, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	button.set_meta("hover_tween", animation)

@@ -101,6 +101,19 @@ def main() -> None:
                 raise RuntimeError('Exported app database diagnostic did not pass')
             if 'PRESENTATION_RELEASE_RESULT PASS' not in text:
                 raise RuntimeError('Exported presentation package diagnostic did not pass')
+            visual_folder = ROOT / 'jiaoben/tmp/release-presentation' / str(uuid.uuid4())
+            visual_folder.mkdir(parents=True)
+            env['XJ_TEST_DATABASE'] = str(visual_folder / 'progress.db')
+            text = run([str(output / 'Contents/MacOS/星际战舰'), '--audio-driver', 'CoreAudio',
+                        '--log-file', str(logs / f'{build_id}-mac-presentation-engine.log'),
+                        '--', '--xj-verify-presentation'], logs / f'{build_id}-mac-presentation.log', env)
+            if not re.search(r'PRESENTATION_CLIENT_RESULT PASS checks=19 failures=0', text):
+                raise RuntimeError('Actual exported presentation lifecycle did not pass')
+            if re.search(r'^(WARNING:|.*Leaked instance:|.*Resource still in use)', text, re.M):
+                raise RuntimeError('Actual exported presentation exited with diagnostics')
+            evidence['verification']['mac_presentation'] = {
+                'result': 'actual release Metal/CoreAudio UI, hangar/NPC, hover, freed-node/audio lifecycle, departure and SQLite save PASS',
+                'capture_folder': str(visual_folder), 'checks': 19}
             evidence['verification']['mac'] = 'actual exported app: resource hashes/new/save/reopen/resume PASS; ad-hoc signature PASS'
             archive = staging / '星际战舰-macOS.zip'
             run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(folder), str(archive)],

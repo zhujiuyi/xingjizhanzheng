@@ -17,6 +17,7 @@ var beam_clock: float = 0.0
 var gates: Array[Node3D] = []
 
 func _exit_tree() -> void:
+	_prune_nodes(voices)
 	for voice: Node in voices:
 		if is_instance_valid(voice):
 			voice.call("stop")
@@ -43,6 +44,8 @@ func setup(sector: XJSector, business: RefCounted, definitions: XJCatalog, effec
 			gates.append(gate)
 
 func set_paused(stopped: bool) -> void:
+	_prune_nodes(gates)
+	_prune_nodes(voices)
 	for gate: Node3D in gates:
 		if is_instance_valid(gate): gate.process_mode = Node.PROCESS_MODE_DISABLED if stopped else Node.PROCESS_MODE_INHERIT
 	for voice in voices:
@@ -96,16 +99,23 @@ func consume(delta: float) -> void:
 	else:
 		_stop_loop("station")
 	for key in loops:
-		var voice: AudioStreamPlayer3D = loops[key]
+		var voice: Variant = loops[key]
 		if is_instance_valid(voice): voice.global_position = world.flight.global_position
-	effects = effects.filter(func(node: Node3D): return is_instance_valid(node))
-	voices = voices.filter(func(node: Node): return is_instance_valid(node))
+	_prune_nodes(effects)
+	_prune_nodes(voices)
+
+func _prune_nodes(nodes: Array) -> void:
+	# Freed Node references cannot be converted into a typed lambda argument.
+	# Validate the Variant slot first, then keep the original typed array alive.
+	for index: int in range(nodes.size() - 1, -1, -1):
+		if not is_instance_valid(nodes[index]): nodes.remove_at(index)
 
 func hit(target_id: String, shielded: bool, point: Vector3) -> void:
 	var node := _node(target_id)
 	if node == null:
 		return
 	if shielded:
+		_prune_nodes(effects)
 		var count: int = 0
 		for active: Node3D in effects:
 			if is_instance_valid(active) and active.get_meta("shield_entity", "") == target_id:
@@ -127,7 +137,7 @@ func jump(charging: bool) -> void:
 	_play("jump_charge" if charging else "jump_arrival", world.flight.global_position, "SFX")
 
 func _add(node: Node3D) -> void:
-	effects = effects.filter(func(active: Node3D): return is_instance_valid(active))
+	_prune_nodes(effects)
 	var particle_count: int = _particles(node)
 	for active in effects:
 		particle_count += _particles(active)
@@ -147,7 +157,8 @@ func _node(id: String) -> Node3D:
 	if id == world.state.ship().ship_instance_id:
 		return world.flight
 	if world.targets.has(id):
-		return world.targets[id].node as Node3D
+		var target: Variant = world.targets[id].node
+		return target as Node3D if is_instance_valid(target) else null
 	return null
 
 func _radius(node: Node3D) -> float:
@@ -159,7 +170,7 @@ func _radius(node: Node3D) -> float:
 	return 1.0
 
 func _play(sound_id: String, point: Vector3, bus: String = "SFX", loop_id: String = "") -> void:
-	voices = voices.filter(func(node: Node): return is_instance_valid(node))
+	_prune_nodes(voices)
 	if voices.size() >= int(config.audio_voice_limit):
 		return
 	var stream := Factory.sound(sound_id)
@@ -167,6 +178,7 @@ func _play(sound_id: String, point: Vector3, bus: String = "SFX", loop_id: Strin
 		return
 	if bus == "UI":
 		var voice := AudioStreamPlayer.new()
+		voice.process_mode = Node.PROCESS_MODE_ALWAYS
 		voice.stream = stream
 		voice.bus = bus
 		voice.finished.connect(voice.queue_free)
@@ -186,7 +198,7 @@ func _play(sound_id: String, point: Vector3, bus: String = "SFX", loop_id: Strin
 
 func _stop_loop(id: String) -> void:
 	if loops.has(id):
-		var voice: Node = loops[id]
+		var voice: Variant = loops[id]
 		if is_instance_valid(voice):
 			voice.call("stop")
 			voice.set("stream", null)
