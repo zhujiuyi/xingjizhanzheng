@@ -24,14 +24,14 @@ func _run() -> void:
 	var expected := Vector2(120, -75) * sensitivity
 	for hz: int in [30, 60, 144]:
 		var input := XJFlightLook.new()
-		input.add_motion(Vector2(120, -75), sensitivity)
 		var integrated := Vector2.ZERO
 		var bounded := true
-		for frame: int in range(hz * 3):
+		for frame: int in range(hz):
+			input.add_motion(Vector2(120, -75) / hz, sensitivity)
 			var request := input.consume(turn, 1.0 / hz)
 			bounded = bounded and request.length() <= 1.00001
 			integrated -= request * turn / hz
-		check(bounded and integrated.distance_to(expected) < 0.00001, "relative angle retained under catalog limit at %d Hz" % hz)
+		check(bounded and integrated.distance_to(expected) < 0.00001, "steady relative motion below catalog limit is time-consistent at %d Hz" % hz)
 		check(input.consume(turn, 1.0 / hz).is_zero_approx(), "no cursor-offset spin after finite request at %d Hz" % hz)
 	var invalid := XJFlightLook.new()
 	invalid.add_motion(Vector2(INF, NAN), sensitivity)
@@ -42,6 +42,24 @@ func _run() -> void:
 	check(invalid.consume(turn, 0).is_zero_approx() and invalid.pending_angles == held, "zero time cannot consume motion")
 	invalid.clear()
 	check(invalid.consume(turn, 1.0 / 60).is_zero_approx(), "clear discards pending steering")
+	var simulation_hz := int(catalog.rule("simulation_hz"))
+	for definition: Dictionary in catalog.rows("ship_defs"):
+		var flick := XJFlightLook.new()
+		flick.add_motion(Vector2(100000, 50000), sensitivity)
+		var first := flick.consume(float(definition.turn_rad_s), 1.0 / simulation_hz)
+		var second := flick.consume(float(definition.turn_rad_s), 1.0 / simulation_hz)
+		check(first.length() <= 1.00001 and second.length() <= 1.00001 and flick.consume(float(definition.turn_rad_s), 1.0 / simulation_hz).is_zero_approx(), "%s large flick stops by two physics ticks, including slow hulls" % definition.ship_id)
+	for render_hz: int in [30, 60, 144]:
+		var stream := XJFlightLook.new()
+		var event_index: int = 0
+		var total: float = 0.0
+		for step_index: int in range(simulation_hz):
+			var elapsed := (step_index + 0.5) / simulation_hz
+			while float(event_index) / render_hz <= elapsed:
+				stream.add_motion(Vector2(10000.0 / render_hz, 0), sensitivity)
+				event_index += 1
+			total += stream.consume(turn, 1.0 / simulation_hz).length() * turn / simulation_hz
+		check(absf(total - turn) < 0.00001, "sustained saturated input preserves turn limit with %d render Hz/%d physics Hz" % [render_hz,simulation_hz])
 
 	var stage := Node3D.new()
 	root.add_child(stage)

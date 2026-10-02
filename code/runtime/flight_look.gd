@@ -15,7 +15,9 @@ func consume(turn_radps: float, delta: float) -> Vector2:
 	if budget <= 0.0 or pending_angles.is_zero_approx():
 		return Vector2.ZERO
 	var step := pending_angles.limit_length(budget)
-	pending_angles -= step
+	# Retain at most one extra fixed step for motion arriving between render
+	# frames. A large flick must not keep a slow capital ship turning for seconds.
+	pending_angles = (pending_angles - step).limit_length(budget)
 	return -step / budget
 
 func clear() -> void:
