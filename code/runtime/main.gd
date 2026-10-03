@@ -213,12 +213,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("interact"):
 		if not ui.keyboard_blocked(): _command("interact", "", 1, "")
 		return
+	if event.is_action_pressed("camera") and not event.is_echo():
+		# HUD hover blocks steering, but must not trap the player in cockpit view.
+		if not ui.keyboard_blocked():
+			camera.cycle_mode()
+			state.player().camera_mode = camera.mode
+			ui.update_camera_status()
+			get_viewport().set_input_as_handled()
+		return
 	if ui.input_blocked():
 		return
-	if event.is_action_pressed("camera"):
-		camera.cycle_mode()
-		state.player().camera_mode = camera.mode
-	elif event.is_action_pressed("target"):
+	if event.is_action_pressed("target"):
 		ui.select_next()
 	elif event.is_action_pressed("fire"):
 		fire_held = not pointer_mode and not observing
@@ -364,6 +369,14 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		return
 	match action:
 		"interact", "interact_target": _interact(target)
+		"show_ship":
+			if state == null or world == null or camera == null or state.ship().status != Types.ShipStatus.FLYING or ui.keyboard_blocked(): return
+			_release_observation()
+			camera.bind(world.flight, store.catalog, Types.CameraMode.FOLLOW)
+			state.player().camera_mode = camera.mode
+			_center_steering()
+			camera.step(0.0)
+			ui.update_camera_status()
 		"new_world":
 			if not services_ready:
 				ui.notify("存档服务未就绪，无法新建远征。", true)

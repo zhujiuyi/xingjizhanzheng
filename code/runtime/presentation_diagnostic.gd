@@ -90,6 +90,18 @@ static func run(host: Node, output_dir: String) -> bool:
 	host._business_action("undock", "", 1, "")
 	while host.busy: await host.get_tree().process_frame
 	_check(evidence, host.state.ship().status == Types.ShipStatus.FLYING, "packed authoritative departure")
+	var flight_process_mode: int = host.process_mode
+	host.process_mode = Node.PROCESS_MODE_DISABLED
+	host.camera.bind(host.world.flight, host.store.catalog, Types.CameraMode.FRONT)
+	host.state.player().camera_mode = Types.CameraMode.FRONT
+	host.camera.step(0.0)
+	host.ui.update_camera_status()
+	_check(evidence, not host.world.flight.visual.visible and host.ui.instrument_title.text.contains("舰体隐藏") and host.ui.show_ship_button.is_visible_in_tree(), "packed cockpit identifies hidden hull and exposes recovery control")
+	var flight_pose: Transform3D = host.world.flight.global_transform
+	var flight_velocity: Vector3 = host.world.flight.velocity
+	host.ui.show_ship_button.pressed.emit()
+	_check(evidence, host.camera.mode == Types.CameraMode.FOLLOW and host.state.player().camera_mode == Types.CameraMode.FOLLOW and host.world.flight.visual.is_visible_in_tree() and host.world.flight.global_transform.is_equal_approx(flight_pose) and host.world.flight.velocity.is_equal_approx(flight_velocity) and host.ui.instrument_title.text.contains("跟随视角"), "packed recovery shows centered ship without changing flight motion")
+	host.process_mode = flight_process_mode as Node.ProcessMode
 	var nav: XJNavigationHUD = host.ui.navigation_hud
 	host.ui.tick(1.0)
 	_check(evidence, nav.visible and nav.scales.size() == 3, "packed local radar reads three SQLite ranges")

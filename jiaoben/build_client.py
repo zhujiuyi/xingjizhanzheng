@@ -112,13 +112,13 @@ def main() -> None:
             text = run([str(output / 'Contents/MacOS/星际战舰'), '--audio-driver', 'CoreAudio',
                         '--log-file', str(logs / f'{build_id}-mac-presentation-engine.log'),
                         '--', '--xj-verify-presentation'], logs / f'{build_id}-mac-presentation.log', env)
-            if not re.search(r'PRESENTATION_CLIENT_RESULT PASS checks=33 failures=0', text):
+            if not re.search(r'PRESENTATION_CLIENT_RESULT PASS checks=35 failures=0', text):
                 raise RuntimeError('Actual exported presentation lifecycle did not pass')
             if re.search(r'^(WARNING:|.*Leaked instance:|.*Resource still in use)', text, re.M):
                 raise RuntimeError('Actual exported presentation exited with diagnostics')
             evidence['verification']['mac_presentation'] = {
-                'result': 'actual release Metal/CoreAudio Chinese font, archive cards, radar, celestial bearing, selected line, station F qualification, hangar/NPC, lifecycle, departure and SQLite save PASS',
-                'capture_folder': str(visual_folder), 'checks': 33}
+                'result': 'actual release Metal/CoreAudio Chinese font, archive cards, radar, celestial bearing, selected line, station F qualification, hangar/NPC, lifecycle, departure, cockpit visibility recovery without flight mutation and SQLite save PASS',
+                'capture_folder': str(visual_folder), 'checks': 35}
             evidence['verification']['mac'] = 'actual exported app: resource hashes/new/save/reopen/resume PASS; ad-hoc signature PASS'
             archive = staging / '星际战舰-macOS.zip'
             run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(folder), str(archive)],

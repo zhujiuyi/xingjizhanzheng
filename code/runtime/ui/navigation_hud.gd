@@ -230,9 +230,9 @@ func _draw() -> void:
 	var delta: Vector2 = finish - start
 	var direction: Vector2 = delta.normalized()
 	var color: Color = contact_color(str(geometry.kind))
-	draw_line(start, finish, Color(0.003, 0.008, 0.013, 0.9), 3.4, true)
+	# A subdued white dashed bearing; target/radar colors keep their own meaning.
 	for offset: float in range(14, int(delta.length()), 17):
-		draw_line(start + direction * offset, start + direction * minf(offset + 9, delta.length()), Color(color, 0.78), 1.2, true)
+		draw_line(start + direction * offset, start + direction * minf(offset + 9, delta.length()), Color(1, 1, 1, 0.45), 1.1, true)
 	draw_arc(finish, 18, 0, TAU, 40, color, 1.8, true)
 	if not geometry.on_screen:
 		var normal := direction.orthogonal()

@@ -67,6 +67,7 @@ var heat_label: Label
 var heat_bar: ProgressBar
 var cargo_label: Label
 var instrument_title: Label
+var show_ship_button: Button
 var navigation: PanelContainer
 var station_layer: Control
 var station_services: PanelContainer
@@ -1255,9 +1256,11 @@ func _responsive() -> void:
 	if is_instance_valid(navigation_hud): navigation_hud.responsive(root.size)
 	if is_instance_valid(navigation):
 		var gutter: float = 196 if compact else 0
-		var width: float = minf(440, root.size.x - safe * 2 - gutter)
+		var width: float = minf(560, root.size.x - safe * 2 - gutter)
 		navigation.offset_left = -width * 0.5 + gutter * 0.5
 		navigation.offset_right = width * 0.5 + gutter * 0.5
+		for button: Node in navigation.find_children("*", "Button", true, false):
+			button.add_theme_font_size_override("font_size", 11 if compact else 12)
 	if is_instance_valid(controls): controls.visible = root.size.x >= 1100 and navigation_hud.visible
 	if is_instance_valid(target_panel):
 		target_panel.offset_left = -(196 if compact else 270)
@@ -1546,19 +1549,27 @@ func _build_instrument() -> void:
 func _build_navigation() -> void:
 	navigation = _frame(root, "FlightNavigation")
 	navigation.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	navigation.offset_left = -220
-	navigation.offset_right = 220
+	navigation.offset_left = -280
+	navigation.offset_right = 280
 	navigation.offset_top = -58
 	navigation.offset_bottom = -8
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	navigation.add_child(row)
-	for key: String in ["missions", "map", "pause"]:
-		var title: String = {"missions": "任务  J", "map": "星图  M", "pause": "系统  Esc"}[key]
-		var button: Button = _button(row, title, show_page.bind(key))
+	for key: String in ["show_ship", "missions", "map", "pause"]:
+		var title: String = {"show_ship": "显示舰船", "missions": "任务  J", "map": "星图  M", "pause": "系统  Esc"}[key]
+		var callback: Callable = func(): requested.emit("show_ship", "", 1, "")
+		if key != "show_ship": callback = show_page.bind(key)
+		var button: Button = _button(row, title, callback)
 		button.focus_mode = Control.FOCUS_NONE
-		button.custom_minimum_size = Vector2(104, 25)
+		button.custom_minimum_size = Vector2(0, 25)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.autowrap_mode = TextServer.AUTOWRAP_OFF
 		button.add_theme_font_size_override("font_size", 12)
+		if key == "show_ship":
+			show_ship_button = button
+			button.name = "ShowPlayerShip"
+			button.tooltip_text = "恢复跟随视角和默认镜头距离，舰船居中显示。Alt 释放光标；V 切换视角。"
 		_secondary(button)
 		button.add_theme_stylebox_override("normal", UISkin.flat(Color(0.08, 0.105, 0.125, 0.65), Color("384650"), 4))
 		button.add_theme_stylebox_override("hover", UISkin.flat(Color("253b45"), UISkin.ICE, 4))
@@ -1607,13 +1618,12 @@ func _build_target_module() -> void:
 	scroll.add_child(target_list)
 
 func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
+	update_camera_status()
 	var values: Array[float] = [ship.shield, ship.armor, ship.hull]
 	var maximums: Array[float] = [float(metrics.shield_max), float(metrics.armor_max), float(metrics.hull_max)]
 	var signature: String = JSON.stringify([ship.ship_def_id, ship.shield, ship.armor, ship.hull, ship.energy, ship.heat, ship.overheated, Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length(), metrics.shield_max, metrics.armor_max, metrics.hull_max, metrics.energy_max, metrics.heat_max, metrics.cargo_used_l, metrics.cargo_capacity_l, metrics.mineral_used_l, metrics.mineral_capacity_l])
 	if signature == telemetry_signature: return
 	telemetry_signature = signature
-	instrument_title.text = _ship_name(ship.ship_def_id) + "  /  " + ("过热警报" if ship.overheated else "巡航状态")
-	instrument_title.modulate = UISkin.AMBER if ship.overheated else Color.WHITE
 	for index: int in range(3):
 		condition_bars[index].label.text = "%s  %.0f / %.0f" % [condition_bars[index].name, values[index], maximums[index]]
 		condition_bars[index].bar.max_value = maxf(maximums[index], 1.0)
@@ -1628,6 +1638,14 @@ func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 	heat_bar.max_value = maxf(float(metrics.heat_max), 1.0)
 	heat_bar.value = ship.heat
 	cargo_label.text = "货 %.0f/%.0f L · 矿 %.0f/%.0f L" % [float(metrics.cargo_used_l), float(metrics.cargo_capacity_l), float(metrics.mineral_used_l), float(metrics.mineral_capacity_l)]
+
+func update_camera_status() -> void:
+	if state == null or camera == null or not is_instance_valid(instrument_title): return
+	var ship: Dtos.ShipStateDto = state.ship()
+	var view: String = ["跟随视角", "舰首视角（舰体隐藏）", "战术视角"][int(camera.mode)]
+	instrument_title.text = _ship_name(ship.ship_def_id) + "  /  " + view + " · V" + (" · 过热警报" if ship.overheated else "")
+	instrument_title.modulate = UISkin.AMBER if ship.overheated else Color.WHITE
+	instrument_title.tooltip_text = "V 循环切换跟随、舰首、战术视角。舰首视角从船头观察，不显示外部舰体；点击下方‘显示舰船’回到跟随视角。"
 
 func _update_station_info() -> void:
 	if state == null or not is_instance_valid(station_ship_status): return
