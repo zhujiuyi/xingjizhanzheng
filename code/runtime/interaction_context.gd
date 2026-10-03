@@ -102,8 +102,11 @@ static func inspect(sector: XJSector, state: XJRuntimeState, catalog: XJCatalog,
 		"resource":
 			var location := catalog.one("resource_node_locations", "node_id", target_id)
 			if location.is_empty() or state.find("unlock_state", "unlock_id", location.required_unlock_id) == null: return _deny(result, "资源权限尚未解锁")
-			var resource: RefCounted = state.find("resource_node_state", "node_id", target_id)
-			if resource == null or resource.remaining_units <= 0: return _deny(result, "资源已耗尽，等待补生")
+			if not gameplay.get("work").call("_loan_target_allowed", target_id): return _deny(result, "教学借船仅可采集当前任务指定矿点")
+			var resource := XJResourceStatus.inspect(state, catalog, target_id)
+			if not resource.available: return _deny(result, "资源状态不可用")
+			if resource.depleted: return _deny(result, XJResourceStatus.summary(resource))
+			if int(gameplay.get("work").call("available_resource_units", target_id)) <= 0: return _deny(result, str(gameplay.get("work").call("resource_limit_reason", target_id)))
 			var definition := catalog.one("resource_node_defs", "node_id", target_id)
 			var limit: Dictionary = gameplay.get("work").call("_output_limit", str(definition.item_id), 1)
 			if int(limit.count) <= 0: return _deny(result, "货舱、载荷或借船采集额度不足")

@@ -8,6 +8,7 @@ const NavigationHUD = preload("res://runtime/ui/navigation_hud.gd")
 const OverviewPanel = preload("res://runtime/ui/overview_panel.gd")
 const EquipmentBar = preload("res://runtime/ui/equipment_bar.gd")
 const Context = preload("res://runtime/interaction_context.gd")
+const ResourceStatus = preload("res://runtime/resource_status.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
 var gameplay: RefCounted
@@ -99,6 +100,8 @@ var equipment_bar: PanelContainer
 var navigation_frame: PanelContainer
 var navigation_status: Label
 var navigation_stop_button: Button
+var map_resource_readouts: Array[Dictionary] = []
+var resource_chart: Control
 
 func set_operation_status(kind: String, message: String, waiting: bool = false) -> void:
 	operation_kind = kind
@@ -180,6 +183,7 @@ func _ready() -> void:
 	work_box.add_theme_constant_override("separation", 5)
 	hud_left.add_child(work_box)
 	work_label = _text_to(work_box, "", 13)
+	work_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	work_progress = _bar(work_box, UISkin.AMBER, 6)
 	work_progress.show_percentage = true
 	work_stop = _button(work_box, "停止作业", func(): requested.emit("stop_scan" if work_mode == "scan" else "stop_mining", "", 1, ""))
@@ -367,6 +371,7 @@ func tick(delta: float) -> void:
 	if page == "station": _update_station_info()
 	_update_work()
 	_update_live_missions()
+	_update_map_resources()
 	_refresh_targets()
 	_update_npc_target()
 	_update_navigation()
@@ -408,6 +413,8 @@ func _build_panel(title: String, description: String) -> void:
 		child.queue_free()
 	quotes.clear()
 	live_missions.clear()
+	map_resource_readouts.clear()
+	resource_chart = null
 	quantity_input = null
 	card_grid = null
 	panel.visible = true
@@ -594,7 +601,9 @@ func _ships() -> void:
 		var definition: Dictionary = _one("loan_service_defs", "loan_service_id", loan.loan_service_id)
 		var loadout: Dictionary = _one("ship_loadout_defs", "loadout_id", str(definition.get("loadout_id", "")))
 		var card: VBoxContainer = _card("借船管理 · " + _ship_name(str(loadout.get("ship_id", ""))))
-		if loan.has_quota_remaining_units: _text_to(card, "剩余可采额度 %d · 补领不会恢复额度" % loan.quota_remaining_units)
+		if loan.has_quota_remaining_units:
+			var quota_note := "教学样本丢失可补采缺额，已有有效样本不会重复补领" if definition.get("gathered_policy_id", "") == "mission_bound" else "普通合同累计额度；补领不会恢复额度"
+			_text_to(card, "剩余可采额度 %d · %s" % [loan.quota_remaining_units, quota_note])
 		_text_to(card, "返航 %s 后归还；普通战利品转入当地仓库。" % _station_name(str(definition.get("return_station_id", ""))), 14)
 		var handoff: Button = _command(card, "归还借船并切换替代舰", "handoff_loan", loan.loan_id)
 		handoff.disabled = definition.get("return_station_id") != state.player().docked_station_id
@@ -832,6 +841,7 @@ func _map() -> void:
 		var chart: Control = chart_script.new()
 		body.add_child(chart)
 		chart.call("configure", catalog, state)
+		resource_chart = chart
 	for system: Dictionary in _defs("system_defs"):
 		var card: VBoxContainer = _card(str(system.display_name))
 		_text_to(card, str(system.get("description", "")), 14)
@@ -843,7 +853,13 @@ func _map() -> void:
 					_text_to(card, "站点 · " + _station_name(str(station.station_id)), 14)
 					if station.sector_id == state.current_sector(): _button(card, "定位 " + _station_name(str(station.station_id)), func(): target_id = str(station.station_id); _back())
 			for resource: Dictionary in _defs("resource_node_defs"):
-				if resource.sector_id == sector_def.sector_id: _text_to(card, "产出 · " + _item_name(str(resource.item_id)), 14)
+				if resource.sector_id != sector_def.sector_id: continue
+				var readout: Label = _text_to(card, _resource_map_readout(str(resource.node_id), str(resource.sector_id)), 13)
+				readout.name = "ResourceIntel_" + str(resource.node_id).validate_node_name()
+				readout.tooltip_text = readout.text + "\n矿量来自当前世界的SQLite状态；再生按世界时间推进，暂停与退出不推进。"
+				map_resource_readouts.append({"node_id": str(resource.node_id), "sector_id": str(resource.sector_id), "label": readout})
+				if resource.sector_id == state.current_sector():
+					_button(card, "定位 " + _item_name(str(resource.item_id)) + "矿点", func(): _select_target(str(resource.node_id)); _back())
 			for endpoint: Dictionary in _defs("gate_endpoint_defs"):
 				if endpoint.origin_sector_id != sector_def.sector_id: continue
 				_text_to(card, "航路 → " + _sector_name(str(endpoint.target_sector_id)), 14)
@@ -963,6 +979,10 @@ func _refresh_targets() -> void:
 			var npc: Dtos.NpcStateDto = state.find("npc_state", "npc_instance_id", str(entry.id))
 			if npc != null and not npc.alive: continue
 		var record: Dictionary = {"id": str(entry.id), "title": _target_title(entry), "kind": kind, "type_title": _target_type(kind), "distance_m": distance, "navigation_only": bool(entry.get("navigation_only", false)), "known": kind != "npc"}
+		if kind == "resource":
+			var resource_info: Dictionary = ResourceStatus.inspect(state, catalog, str(entry.id))
+			record["resource_info"] = resource_info
+			record["resource_summary"] = ResourceStatus.summary(resource_info)
 		entries.append(record)
 		detected_ids.append(str(entry.id))
 	if not target_id.is_empty() and target_id not in detected_ids:
@@ -984,7 +1004,9 @@ func _selected_details() -> Dictionary:
 	var entry: Dictionary = sector.targets[target_id]
 	var node: Variant = entry.get("node")
 	if not is_instance_valid(node) or not node is Node3D: return {}
-	return {"id": target_id, "title": _target_title(entry), "kind": str(entry.kind), "type_title": _target_type(str(entry.kind)), "distance_m": sector.flight.global_position.distance_to(node.global_position), "navigation_only": bool(entry.get("navigation_only", false))}
+	var details: Dictionary = {"id": target_id, "title": _target_title(entry), "kind": str(entry.kind), "type_title": _target_type(str(entry.kind)), "distance_m": sector.flight.global_position.distance_to(node.global_position), "navigation_only": bool(entry.get("navigation_only", false))}
+	if str(entry.kind) == "resource": details["resource_info"] = ResourceStatus.inspect(state, catalog, target_id)
+	return details
 
 func _navigation_context() -> Dictionary:
 	var host: Node = get_parent()
@@ -1244,22 +1266,24 @@ func _update_navigation() -> void:
 	if operation_kind == "travel":
 		interaction_candidate = {}
 		interaction_button.visible = true
-		interaction_label.visible = root.size.x >= 950
+		interaction_label.visible = true
 		interaction_button.text = "[F] 取消虫洞充能" if operation_waiting else "虫洞传送处理中"
 		interaction_button.disabled = not operation_waiting
 		interaction_label.text = "充能期间可取消；提交开始后等待传送完成。" if operation_waiting else "航行进度正在提交，请等待传送完成。"
+		interaction_label.tooltip_text = interaction_label.text
 		interaction_button.tooltip_text = interaction_label.text
 		return
 	interaction_candidate = Context.choose(sector, state, catalog, gameplay, target_id)
 	var candidate_id: String = str(interaction_candidate.get("target_id", ""))
 	interaction_button.visible = not candidate_id.is_empty() and (bool(interaction_candidate.in_range) or candidate_id == target_id)
-	interaction_label.visible = interaction_button.visible and root.size.x >= 950
+	interaction_label.visible = interaction_button.visible
 	if not interaction_button.visible: return
 	var label: String = {"dock": "停靠空间站", "travel": "进入虫洞", "pickup_wreck": "回收残骸", "start_scan": "扫描信号", "start_mining": "开采矿体", "recover_resource": "回收组件"}.get(str(interaction_candidate.action), "交互")
 	interaction_button.text = "[F] " + label
 	interaction_button.disabled = not bool(interaction_candidate.ready)
 	interaction_button.tooltip_text = str(interaction_candidate.title) + " · " + str(interaction_candidate.reason)
 	interaction_label.text = str(interaction_candidate.title) + "\n" + ("接口就绪 · %.0f m" % float(interaction_candidate.distance_m) if interaction_candidate.ready else _friendly(str(interaction_candidate.reason)))
+	interaction_label.tooltip_text = interaction_label.text
 	interaction_label.add_theme_color_override("font_color", UISkin.ICE if interaction_candidate.ready else UISkin.AMBER)
 
 func _update_hud_visibility() -> void:
@@ -1307,6 +1331,8 @@ func _responsive() -> void:
 		if heading != null: heading.visible = not compact or not work_box.visible
 		work_progress.show_percentage = not compact
 		work_label.add_theme_font_size_override("font_size", 10 if compact else 13)
+		work_label.autowrap_mode = TextServer.AUTOWRAP_OFF if compact else TextServer.AUTOWRAP_WORD_SMART
+		work_label.clip_text = compact
 		work_label.max_lines_visible = 1 if compact else 3
 	if is_instance_valid(instrument):
 		var width: float = middle_width if compact else minf(620, root.size.x - 2 * sidebar_width - safe * 2)
@@ -1445,8 +1471,38 @@ func _update_work() -> void:
 			if equipment != null: cycle_s = float(_one("module_defs", "module_id", equipment.module_def_id).get("cycle_s", 1.0))
 			break
 		work_progress.value = clampf((1.0 - remaining / maxf(cycle_s, 0.0001)) * 100.0, 0, 100) if not cycles.is_empty() else 0.0
-		work_label.text = "采矿 · %s\n%s" % [_item_name(str(definition.get("item_id", ""))), "当前周期剩余 %.1f 秒" % remaining if not cycles.is_empty() else "等待可用采集周期"]
+		var cycle_text: String = "周期 %.1f 秒" % remaining if not cycles.is_empty() else "等待可用采集周期"
+		var resource_info: Dictionary = ResourceStatus.inspect(state, catalog, mining)
+		var reserve_text: String = ResourceStatus.summary(resource_info)
+		# Compact work space owns one visible line; keep the actual reserve there
+		# and retain the complete mineral/cycle readout in its existing tooltip.
+		work_label.text = "采矿 · " + OverviewPanel.compact_resource_summary(resource_info) if root.size.x < 950 else "采矿 · %s · %s\n%s" % [_item_name(str(definition.get("item_id", ""))), cycle_text, reserve_text]
+		work_label.tooltip_text = "采矿 · %s\n%s\n%s" % [_item_name(str(definition.get("item_id", ""))), cycle_text, reserve_text]
+		return
 	work_label.tooltip_text = work_label.text
+
+func _resource_map_readout(node_id: String, sector_id: String) -> String:
+	var definition: Dictionary = _one("resource_node_defs", "node_id", node_id)
+	var heading: String = "矿点 · " + _item_name(str(definition.get("item_id", "")))
+	var visit: Dtos.SectorStateDto = state.find("sector_state", "sector_id", sector_id)
+	if sector_id != state.current_sector() and (visit == null or not visit.visited):
+		return heading + "\n尚未到访 · 实时矿量未知"
+	var info: Dictionary = ResourceStatus.inspect(state, catalog, node_id)
+	var summary: String = ResourceStatus.summary(info)
+	if bool(info.get("available", false)) and int(info.get("capacity_units", 0)) > 0:
+		summary += " · %.0f%%" % (float(info.remaining_units) / float(info.capacity_units) * 100.0)
+	return heading + "\n" + summary
+
+func _update_map_resources() -> void:
+	if page != "map": return
+	# Reuse the existing telemetry cadence and nodes; preserve scroll/focus.
+	for readout: Dictionary in map_resource_readouts:
+		if not is_instance_valid(readout.label): continue
+		var text: String = _resource_map_readout(str(readout.node_id), str(readout.sector_id))
+		if readout.label.text != text:
+			readout.label.text = text
+			readout.label.tooltip_text = text + "\n矿量来自当前世界的SQLite状态；再生按世界时间推进，暂停与退出不推进。"
+	if is_instance_valid(resource_chart): resource_chart.call("refresh_resource_status")
 
 func _update_live_missions() -> void:
 	for row: Dictionary in live_missions:

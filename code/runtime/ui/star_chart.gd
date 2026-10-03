@@ -3,6 +3,7 @@ extends VBoxContainer
 ## A schematic of actual frozen wormhole connections, never a teleport command.
 signal sector_selected(sector_id: String)
 const UISkin = preload("res://runtime/ui_theme.gd")
+const ResourceStatus = preload("res://runtime/resource_status.gd")
 var catalog: XJCatalog
 var state: XJRuntimeState
 var selected_sector: String = ""
@@ -10,6 +11,8 @@ var sectors: Dictionary = {}
 var links: Array[Dictionary] = []
 var diagram: ChartDrawing
 var information: Label
+var resource_information: Label
+var _resource_nodes: Array[Dictionary] = []
 
 class ChartDrawing extends Control:
 	var chart: XJStarChart
@@ -67,6 +70,12 @@ func _ready() -> void:
 	information.add_theme_font_size_override("font_size", 13)
 	information.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(information)
+	resource_information = Label.new()
+	resource_information.name = "ResourceIntelligence"
+	resource_information.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	resource_information.add_theme_font_size_override("font_size", 13)
+	resource_information.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(resource_information)
 	_update_information()
 
 func configure(definitions: XJCatalog, runtime: XJRuntimeState) -> void:
@@ -110,6 +119,7 @@ func _update_information() -> void:
 		var title: String = str(faction.get("display_name", "未知势力"))
 		if not factions.has(title): factions.append(title)
 	var resources: Array[String] = []
+	_resource_nodes.clear()
 	for location: Dictionary in catalog.rows("resource_node_locations"):
 		var anchor: Dictionary = catalog.one("anchor_defs", "anchor_id", location.anchor_id)
 		if anchor.get("sector_id", "") != selected_sector: continue
@@ -117,10 +127,31 @@ func _update_information() -> void:
 		var item: Dictionary = catalog.one("item_defs", "item_id", node.get("item_id", ""))
 		var title: String = str(item.get("display_name", "未知资源"))
 		if not resources.has(title): resources.append(title)
+		_resource_nodes.append({"node_id": str(location.node_id), "title": title})
 	var route: Array[String] = _route(state.current_sector(), selected_sector)
 	var names: Array[String] = []
 	for id: String in route: names.append(str(sectors[id].title))
 	information.text = "%s  ·  %s  ·  NPC 等级 %d–%d\n势力：%s  /  空间站：%s\n资源：%s\n%s\n示意图按安全区排列；星系间仍需实际进入虫洞门并满足权限。" % [row.title, risk.get("display_name", "未知安全区"), int(risk.get("npc_level_min", 0)), int(risk.get("npc_level_max", 0)), "、".join(factions), "、".join(station_names), "、".join(resources), "当前位置" if selected_sector == state.current_sector() else ("虫洞路线：" + " → ".join(names) if not route.is_empty() else "暂无虫洞连接路线")]
+	refresh_resource_status()
+
+func refresh_resource_status() -> void:
+	if not is_instance_valid(resource_information) or state == null or catalog == null: return
+	var visit: RefCounted = state.find("sector_state", "sector_id", selected_sector)
+	var known: bool = selected_sector == state.current_sector() or (visit != null and visit.visited)
+	var lines: Array[String] = ["矿点情报 · 世界时间"]
+	for entry: Dictionary in _resource_nodes:
+		var status: String = "尚未到访 · 实时矿量未知"
+		if known:
+			var info: Dictionary = ResourceStatus.inspect(state, catalog, str(entry.node_id))
+			status = ResourceStatus.summary(info)
+			if bool(info.get("available", false)) and int(info.get("capacity_units", 0)) > 0:
+				status += " · %.0f%%" % (float(info.remaining_units) / float(info.capacity_units) * 100.0)
+		lines.append(str(entry.title) + "：" + status)
+	if _resource_nodes.is_empty(): lines.append("未记录矿点")
+	var text: String = "\n".join(lines)
+	if resource_information.text != text:
+		resource_information.text = text
+		resource_information.tooltip_text = text + "\n未到访星区只显示已知产出；矿量与再生时间以当前世界SQLite状态为准。暂停与退出不推进。"
 
 func _route(origin: String, destination: String) -> Array[String]:
 	var queue: Array[String] = [origin]

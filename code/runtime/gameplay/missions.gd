@@ -80,6 +80,7 @@ func accept(mission_id: String) -> bool:
 			if signal_def.occurrence_mode=="fixed" and g.state.find("discovery_state","signal_id",obj.target_signal_id)!=null:p.progress_units=obj.required_count
 		g.state.add("mission_objective_state",p)
 	var w:D.MissionWindowStateDto=window(mission_id);w.accepted_window_count+=1;w.has_last_accept_tick=true;w.last_accept_tick=g.state.snapshot.meta.simulation_tick
+	g.work.ensure_tutorial_supplies()
 	g._sync_spawns();refresh()
 	return true
 
@@ -178,13 +179,18 @@ func loan(service_id: String) -> bool:
 	var loanrow:D.LoanStateDto=null
 	for row in g.state.rows("loan_state"):
 		if row.status not in [T.LoanStatus.ACTIVE,T.LoanStatus.LOST]:continue
-		if row.mission_instance_id!=mission.mission_instance_id:return g.fail("已有另一份有效借船")
+		if row.mission_instance_id!=mission.mission_instance_id or row.loan_service_id!=service_id:return g.fail("已有另一份有效借船")
 		loanrow=row
+	if loanrow==null:
+		for row in g.state.rows("loan_state"):
+			if row.status==T.LoanStatus.RETURNED and row.mission_instance_id==mission.mission_instance_id and row.loan_service_id==service_id:loanrow=row
 	if loanrow!=null:
-		if loanrow.status!=T.LoanStatus.LOST or not def.replace_destroyed or loanrow.replacement_remaining_s>0:return g.fail("借船尚在使用或替换冷却")
+		if loanrow.replacement_remaining_s>0 or (loanrow.status!=T.LoanStatus.RETURNED and (loanrow.status!=T.LoanStatus.LOST or not def.replace_destroyed)):return g.fail("借船尚在使用或替换冷却")
 		_cleanup_assets(loanrow)
 	else:
 		loanrow=D.LoanStateDto.new();loanrow.loan_id=g.id("loan");loanrow.player_id=g.state.player().player_id;loanrow.loan_service_id=service_id;loanrow.mission_instance_id=mission.mission_instance_id;loanrow.has_quota_remaining_units=def.operation_quota_units!=null;loanrow.quota_remaining_units=def.operation_quota_units if def.operation_quota_units!=null else 0;g.state.add("loan_state",loanrow)
+	# SQL permits one loan per player/service/attempt. Reissuing its returned
+	# hull preserves the same quota and appends to its issuance history.
 	if g.state.player().credit<def.fee_credit:return g.fail("借船费用不足")
 	g.state.player().credit-=def.fee_credit
 	var loadout:Dictionary=g.definition("ship_loadout_defs","loadout_id",def.loadout_id)
@@ -192,6 +198,7 @@ func loan(service_id: String) -> bool:
 	loanrow.status=T.LoanStatus.ACTIVE;loanrow.has_current_ship_id=true;loanrow.current_ship_id=ship.ship_instance_id;loanrow.issuance_count+=1
 	var issue:D.LoanIssueStateDto=D.LoanIssueStateDto.new();issue.loan_id=loanrow.loan_id;issue.issuance_index=loanrow.issuance_count;issue.ship_instance_id=ship.ship_instance_id;issue.status="active";g.state.add("loan_issue_state",issue)
 	g.state.player().controlled_ship_id=ship.ship_instance_id
+	g.work.ensure_tutorial_supplies()
 	record("loan_checkout",service_id,1);record("fit_validate",service_id,1)
 	return true
 
@@ -201,7 +208,7 @@ func _cleanup_assets(loan:D.LoanStateDto) -> void:
 		var item:RefCounted=g.state.find("item_instance_state","item_instance_id",asset.item_instance_id)
 		if item!=null:g.inventory.erase_item(item)
 	for stack in g.state.rows("inventory_stack_state").duplicate():
-		if stack.loan_id==loan.loan_id:g.state.remove("inventory_stack_state",stack)
+		if stack.loan_id==loan.loan_id or (stack.policy_id=="mission_bound" and stack.bound_mission_instance_id==loan.mission_instance_id):g.state.remove("inventory_stack_state",stack)
 func _cleanup_loan(loan:D.LoanStateDto) -> void:
 	var ship:D.ShipStateDto=g.state.find("ship_state","ship_instance_id",loan.current_ship_id)
 	if ship!=null:

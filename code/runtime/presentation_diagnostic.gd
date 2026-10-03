@@ -259,6 +259,8 @@ static func run(host: Node, output_dir: String) -> bool:
 	_check(evidence, docking and dock_steps < 1800 and host.state.ship().status == Types.ShipStatus.DOCKED and host.hangar.is_visible_in_tree() and host.ui.page == "station", "packed dock command completes the actual validated station entry")
 	host.set_process(true)
 	host.set_physics_process(true)
+	await _mineral_checks(host, evidence, output_dir)
+	presentation = host.presentation
 	host.ui.show_page("pause")
 	_check(evidence, host.store.save(host.state, "manual", 0), "packed presentation world saves to isolated SQLite")
 	# Leave a freed reference immediately before quit to exercise cleanup too.
@@ -268,6 +270,94 @@ static func run(host: Node, output_dir: String) -> bool:
 	exit_voice.free()
 	if DisplayServer.get_name() != "headless": host.get_viewport().warp_mouse(original_pointer)
 	return _finish(evidence)
+
+static func _mineral_checks(host: Node, evidence: Dictionary, output_dir: String) -> void:
+	# A separate fresh world and a legal inventory-created miner are explicit diagnostic
+	# prerequisites; this endpoint does not claim to naturally complete the tutorial.
+	await host._command("new_world", "发布包矿点检查", 1, "")
+	host.set_process(false)
+	host.set_physics_process(false)
+	var node_id := "node_echo_conductive"
+	var definition: Dictionary = host.store.catalog.one("resource_node_defs", "node_id", node_id)
+	var location: Dictionary = host.store.catalog.one("resource_node_locations", "node_id", node_id)
+	var anchor: Dictionary = host.store.catalog.one("anchor_defs", "anchor_id", location.anchor_id)
+	var miner: RefCounted = host.gameplay.get("inventory").call("create_ship", "miner_anvil", "station_anchor_port", "normal_owned", "loadout_miner_anvil")
+	host.state.player().controlled_ship_id = miner.ship_instance_id
+	host.state.player().has_docked_station_id = false
+	host.state.player().docked_station_id = ""
+	miner.status = Types.ShipStatus.FLYING
+	host.state.player().camera_mode = Types.CameraMode.FOLLOW
+	miner.has_station_id = false
+	miner.station_id = ""
+	miner.sector_id = definition.sector_id
+	host.gameplay.call("grant_unlock", location.required_unlock_id)
+	host.state.find("sector_state", "sector_id", definition.sector_id).visited = true
+	var range_m := 0.0
+	var cycle_s := 0.0
+	for equipment: RefCounted in host.gameplay.call("equipped", miner):
+		var mining: Dictionary = host.store.catalog.one("mining_defs", "module_id", equipment.module_def_id)
+		if mining.is_empty(): continue
+		var module: Dictionary = host.store.catalog.one("module_defs", "module_id", equipment.module_def_id)
+		range_m = maxf(range_m, float(module.range_m))
+		cycle_s = maxf(cycle_s, float(module.cycle_s))
+	var position := Vector3(float(anchor.x_m), float(anchor.y_m), float(anchor.z_m)) + Vector3.UP * range_m * 0.7
+	miner.pos_x = position.x; miner.pos_y = position.y; miner.pos_z = position.z
+	var facing := Basis.looking_at(Vector3.DOWN, Vector3.FORWARD).get_rotation_quaternion()
+	miner.quat_x = facing.x; miner.quat_y = facing.y; miner.quat_z = facing.z; miner.quat_w = facing.w
+	for container: RefCounted in host.state.rows("container_state"):
+		if container.ship_instance_id == miner.ship_instance_id: container.sector_id = miner.sector_id
+	var staged: bool = host._stage_candidate(host.state, host.store.catalog)
+	_check(evidence, staged, "packed mineral fixture stages a legal miner and real resource sector")
+	if not staged: return
+	host._activate(host.state)
+	await host.get_tree().physics_frame
+	await host.get_tree().process_frame
+	host.ui.target_id = node_id
+	host.ui.tick(1.0)
+	var info := XJResourceStatus.inspect(host.state, host.store.catalog, node_id)
+	var context := XJInteractionContext.inspect(host.world, host.state, host.store.catalog, host.gameplay, node_id)
+	_check(evidence, info.available and info.remaining_units == int(definition.capacity_units) and context.ready and not host.ui.interaction_button.disabled, "packed resource_state supplies actual full mineral pool and usable interaction")
+	host.world.flight.global_position += Vector3.UP * maxf(range_m * 4.0, float(host.store.catalog.rule("target_marker_detection_range_m")) * 2.0)
+	host.world.flight.write_back()
+	host.world.flight.get_global_transform_interpolated()
+	host.world.flight.reset_physics_interpolation()
+	host.ui.tick(1.0)
+	for frame: int in range(2): await host.get_tree().process_frame
+	var resource_label: Label = host.ui.overview.resource_label
+	var font_height: float = resource_label.get_theme_font("font").get_height(resource_label.get_theme_font_size("font_size"))
+	_check(evidence, host.ui.overview.resource_detail.visible and resource_label.text.contains(str(definition.capacity_units)) and resource_label.size.y >= font_height and not resource_label.clip_text and is_equal_approx(host.ui.overview.resource_bar.value, 100.0) and not host.ui.interaction_candidate.in_range, "packed known mineral intelligence has visible text geometry beyond interaction and sensor distance")
+	host.ui.show_page("map")
+	await host.get_tree().process_frame
+	var chart: Node = host.ui.body.find_child("StarChart", true, false)
+	_check(evidence, chart != null and chart.resource_information.text.contains(str(definition.capacity_units)) and host.ui.map_resource_readouts.any(func(row: Dictionary): return row.node_id == node_id and row.label.text.contains(str(definition.capacity_units))), "packed star chart and sector cards show real mineral reserve")
+	host.ui._back()
+	host.world.flight.global_position = position
+	host.world.flight.velocity = Vector3.ZERO
+	host.world.flight.write_back()
+	host.world.flight.get_global_transform_interpolated()
+	host.world.flight.reset_physics_interpolation()
+	await host.get_tree().physics_frame
+	await host.get_tree().process_frame
+	var resource: RefCounted = host.state.find("resource_state", "node_id", node_id)
+	# Bound the fixture to a final unit, then consume it through the real mining cycle.
+	resource.remaining_units = 1
+	var mineral_hold: String = host.gameplay.get("inventory").call("hold", host.state.ship(), Types.ContainerKind.MINERAL)
+	var before_units: int = host.gameplay.get("inventory").call("count", mineral_hold, definition.item_id)
+	var started: bool = host.gameplay.get("work").call("start_mining", node_id)
+	host.gameplay.call("tick", cycle_s + 1.0 / float(host.store.catalog.rule("simulation_hz")))
+	host.ui.tick(1.0)
+	var after_units: int = host.gameplay.get("inventory").call("count", mineral_hold, definition.item_id)
+	_check(evidence, started and after_units == before_units + 1 and resource.remaining_units == 0 and resource.respawn_remaining_s > 0.0 and host.gameplay.get("work").mining_target.is_empty() and host.ui.overview.resource_label.text.contains("再生"), "packed real mining cycle grants exactly its last finite unit and displays a respawn countdown")
+	host.camera.snapped = false
+	host.camera.step(1.0)
+	host.ui.tick(1.0)
+	await _capture(host, output_dir, "resources")
+	var left: float = resource.respawn_remaining_s
+	host.ui.show_page("pause")
+	host._physics_process(1.0)
+	_check(evidence, is_equal_approx(resource.respawn_remaining_s, left) and not host.gameplay.get("work").call("start_mining", node_id), "packed paused world preserves mineral clock and depleted pool rejects mining")
+	host.set_process(true)
+	host.set_physics_process(true)
 
 static func _capture(host: Node, directory: String, name: String) -> void:
 	if DisplayServer.get_name() == "headless": return

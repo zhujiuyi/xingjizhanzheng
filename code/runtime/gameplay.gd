@@ -44,6 +44,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog) -> void:
 	missions = Missions.new(self)
 	work = Work.new(self)
 	missions.refresh()
+	work.ensure_tutorial_supplies()
 	_sync_spawns()
 
 func set_spatial_validator(callback: Callable) -> void:

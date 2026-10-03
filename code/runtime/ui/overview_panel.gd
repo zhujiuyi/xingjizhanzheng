@@ -4,6 +4,7 @@ extends PanelContainer
 signal selected(id: String)
 signal command(action: String, id: String)
 const UISkin = preload("res://runtime/ui_theme.gd")
+const ResourceStatus = preload("res://runtime/resource_status.gd")
 var filter_mode: String = "all"
 var sort_key: String = "distance"
 var sort_ascending: bool = true
@@ -24,6 +25,10 @@ var selection_card: PanelContainer
 var selected_title: Label
 var selected_distance: Label
 var status_label: Label
+var resource_detail: VBoxContainer
+var resource_label: Label
+var resource_fraction: Label
+var resource_bar: ProgressBar
 var count_label: Label
 var interaction_button: Button
 var interaction_label: Label
@@ -90,9 +95,31 @@ func _ready() -> void:
 	_label(details, "选中目标", 10, UISkin.AMBER)
 	selected_title = _label(details, "尚未选择目标", 14, UISkin.TEXT)
 	selected_distance = _label(details, "左键选目标 · Tab切换", 11, UISkin.MUTED)
+	resource_detail = VBoxContainer.new()
+	resource_detail.name = "SelectedResourceDetails"
+	resource_detail.add_theme_constant_override("separation", 2)
+	details.add_child(resource_detail)
+	resource_label = _label(resource_detail, "", 11, UISkin.TEXT)
+	resource_label.name = "ResourceReserveSummary"
+	resource_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	resource_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Wrapped labels must contribute their font/line height to the VBox. With
+	# clip_text enabled their minimum height is 1px, hiding the actual readout.
+	resource_label.clip_text = false
+	resource_label.max_lines_visible = 3
+	resource_fraction = _label(resource_detail, "", 10, UISkin.MUTED)
+	resource_fraction.name = "ResourceReservePercentage"
+	resource_bar = ProgressBar.new()
+	resource_bar.name = "ResourceReserveBar"
+	resource_bar.show_percentage = false
+	resource_bar.custom_minimum_size.y = 4
+	resource_bar.add_theme_stylebox_override("fill", UISkin.flat(UISkin.ICE, UISkin.ICE, 0))
+	resource_detail.add_child(resource_bar)
+	resource_detail.hide()
 	status_label = _label(details, "", 11, UISkin.AMBER)
 	for readout: Label in [selected_title, selected_distance, status_label]: readout.mouse_filter = Control.MOUSE_FILTER_PASS
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_label.clip_text = false
 	status_label.max_lines_visible = 2
 	action_grid = GridContainer.new()
 	action_grid.columns = 3
@@ -130,6 +157,8 @@ func _ready() -> void:
 	interaction_button.pressed.connect(func(): command.emit("context_interact", selected_id))
 	interaction_label = _label(details, "", 10, UISkin.MUTED)
 	interaction_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	interaction_label.clip_text = false
+	interaction_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	interaction_label.max_lines_visible = 2
 	interaction_button.hide()
 	interaction_label.hide()
@@ -149,6 +178,17 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 	selected_title.tooltip_text = selected_title.text
 	selected_distance.text = "航向参考 · 远景天体" if bool(details.get("navigation_only", false)) else ("%s · %s" % [str(details.get("type_title", "目标")), format_distance(float(details.get("distance_m", 0.0)))]) if not selected_id.is_empty() else "左键选目标 · Tab切换"
 	selected_distance.tooltip_text = selected_distance.text if not selected_id.is_empty() else "左键短击模型、总览行或雷达回波选择目标；Tab 切换目标。总览双击会下令转向并接近；单次选择不攻击或改变当前开火目标。"
+	resource_detail.visible = kind == "resource" and not selected_id.is_empty()
+	if resource_detail.visible:
+		var info: Dictionary = details.get("resource_info", {})
+		resource_label.text = ResourceStatus.summary(info)
+		resource_label.tooltip_text = resource_label.text + "\n本星系矿点可远距离读取；采矿仍需满足距离、设备和权限。再生按世界时间推进，暂停与退出不推进。"
+		resource_bar.visible = bool(info.get("available", false)) and int(info.get("capacity_units", 0)) > 0
+		resource_fraction.visible = resource_bar.visible
+		if resource_bar.visible:
+			resource_bar.value = clampf(float(info.remaining_units) / float(info.capacity_units) * 100.0, 0, 100)
+			resource_fraction.text = "矿量 %.0f%%" % resource_bar.value
+			resource_bar.tooltip_text = resource_label.tooltip_text
 	action_grid.columns = 2 if kind == "npc" else 3
 	var running: bool = bool(navigation.get("active", false))
 	status_label.text = UISkin.navigation_phase(str(navigation.get("phase", ""))) if running else str(navigation.get("reason", ""))
@@ -189,6 +229,7 @@ func responsive(compact: bool) -> void:
 	content.move_child(selection_card, 0 if compact else content.get_child_count() - 1)
 	target_scroll.custom_minimum_size.y = 66 if compact else 154
 	selected_title.add_theme_font_size_override("font_size", 12 if compact else 14)
+	resource_label.add_theme_font_size_override("font_size", 10 if compact else 11)
 	status_label.max_lines_visible = 1 if compact else 2
 	for button: Variant in action_buttons.values(): button.add_theme_font_size_override("font_size", 10 if compact else 11)
 	for entry: Dictionary in npc_bars: entry.label.custom_minimum_size.x = 58 if compact else 70
@@ -230,15 +271,34 @@ func _refresh_rows() -> void:
 			title.name = "Name"; title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			var type: Label = _label(row, "", 9, UISkin.MUTED)
 			type.name = "Type"; type.custom_minimum_size.x = 38
+			var resource_readout: Label = _label(button, "", 10, UISkin.MUTED)
+			resource_readout.name = "ResourceState"
+			resource_readout.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+			resource_readout.offset_left = 4; resource_readout.offset_right = -4
+			resource_readout.offset_top = -20; resource_readout.offset_bottom = -2
+			resource_readout.clip_text = true
+			resource_readout.max_lines_visible = 1
+			resource_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			resource_readout.hide()
 			target_buttons[id] = button
 		button.tooltip_text = "%s · %s\n%s" % [str(record.title), str(record.get("type_title", "")), "远景天体仅作航向参考" if bool(record.get("navigation_only", false)) else format_distance(float(record.distance_m)) + (" · 本星系已知位置" if bool(record.get("known", false)) else " · 传感器接触") + "\n单击选择 · 双击转向并接近"]
+		var resource: bool = str(record.get("kind", "")) == "resource"
+		var reserve: Label = button.get_node("ResourceState")
+		reserve.visible = resource
+		button.get_child(0).offset_bottom = -20 if resource else 0
+		if resource:
+			var full_summary: String = str(record.get("resource_summary", "资源状态不可用"))
+			reserve.text = compact_resource_summary(record.get("resource_info", {})) if _compact else full_summary
+			reserve.add_theme_font_size_override("font_size", 9 if _compact else 10)
+			reserve.add_theme_color_override("font_color", UISkin.AMBER if bool(record.get("resource_info", {}).get("depleted", false)) else UISkin.MUTED)
+			button.tooltip_text += "\n" + full_summary + "\n再生按世界时间推进；暂停与退出不推进。"
 		button.get_child(0).get_node("Distance").text = "方位" if bool(record.get("navigation_only", false)) else format_distance(float(record.distance_m))
 		button.get_child(0).get_node("Name").text = str(record.title)
 		var name_label: Label = button.get_child(0).get_node("Name")
 		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if _compact else TextServer.AUTOWRAP_OFF
 		name_label.max_lines_visible = 2 if _compact else 1
 		name_label.clip_text = not _compact
-		button.custom_minimum_size.y = 34 if _compact else 24
+		button.custom_minimum_size.y = (54 if _compact else 44) if resource else (34 if _compact else 24)
 		button.get_child(0).get_node("Name").add_theme_color_override("font_color", UISkin.AMBER if id == selected_id else UISkin.TEXT)
 		button.get_child(0).get_node("Type").text = str(record.get("type_title", ""))
 		button.add_theme_stylebox_override("normal", UISkin.hud_button(id == selected_id))
@@ -268,6 +328,17 @@ func _target_gui_input(event: InputEvent, id: String, button: Button) -> void:
 
 static func format_distance(distance_m: float) -> String:
 	return "%.1f km" % (distance_m / 1000.0) if distance_m >= 1000.0 else "%.0f m" % distance_m
+
+static func compact_resource_summary(info: Dictionary) -> String:
+	# Presentation only: preserve all stock/reservation digits in narrow HUDs.
+	# The selected card and tooltip retain ResourceStatus.summary verbatim.
+	if not bool(info.get("available", false)): return "资源状态不可用"
+	if bool(info.get("depleted", false)):
+		return "耗尽 · 再生 %s" % ResourceStatus.countdown(float(info.get("respawn_remaining_s", 0.0)))
+	var text: String = "%d/%d" % [int(info.get("remaining_units", 0)), int(info.get("capacity_units", 0))]
+	if int(info.get("reserved_units", 0)) > 0: text += " · 教学预留%d" % int(info.reserved_units)
+	else: text = "剩余 " + text
+	return text
 
 func _button(parent: Node, title: String) -> Button:
 	var button: Button = Button.new()
