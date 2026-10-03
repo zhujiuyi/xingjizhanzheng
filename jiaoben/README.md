@@ -49,3 +49,6 @@ UI 生命周期补充检查为 `tests/ui_lifecycle_v2.gd`。对应v0.5及存档�
 
 
 v0.6.1航行视角补丁：`tests/flight_visibility_v4.gd` 验证独立SQLite中舰首存读档、HUD说明、“显示舰船”按钮、镜头恢复不改变运动、V阻断与高缩放布局；本轮验收结果见26。实际发布入口现要求35项检查和6张截图，新增舰首模式说明与找回舰船检查；上文v0.6的33项属于历史结果。源码原生四项回归汇总为 `logs/v061-native-acceptance.log`；各测试和发布包均使用独立tmp库及独立引擎日志。
+
+
+v0.6.1专项已完成：`flight_visibility_v4.gd` headless/CoreAudio44项、Metal/CoreAudio49项（真实OS hover3项/2图）均通过且严格诊断0。真实SQLite保存舰首、重启继续、按钮恢复跟随并保存再重启全部通过。实际新包 `0.6.1-74ccdab4-20261003-133018` 的35项表现/6图、六项数据库、资源摘要及临时签名另行通过；相关日志前缀为构建ID，截图目录 `tmp/release-presentation/444a75a5-5b57-43fc-b5ca-8ac9701337be/`。窗口已释放，未写个人进度；Windows原生仍待实机验收，最新包位置见26。
