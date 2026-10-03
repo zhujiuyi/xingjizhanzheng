@@ -29,15 +29,32 @@ func bind(row: Dtos.ShipStateDto, definitions: RefCounted) -> void:
 		reset_physics_interpolation()
 
 func simulate(delta: float) -> void:
-	if record == null or blocked or record.status != Types.ShipStatus.FLYING:
+	if record == null or blocked or record.status != Types.ShipStatus.FLYING or delta <= 0.0 or not is_finite(delta):
 		return
 	if metrics.is_empty():
 		return
 	var turn: float = float(metrics.turn_radps)
-	var local_spin := (Vector3(intent.pitch_request, intent.yaw_request, -intent.roll_request) * turn).limit_length(turn)
-	if local_spin.length_squared() > 0.0:
-		var rotation_step := Quaternion(local_spin.normalized(), minf(local_spin.length(), turn) * delta)
-		quaternion = (quaternion * rotation_step).normalized()
+	var requested_spin := (Vector3(intent.pitch_request, intent.yaw_request, -intent.roll_request) * turn).limit_length(turn)
+	var before: Quaternion = quaternion.normalized()
+	var desired: Quaternion = before
+	if requested_spin.length_squared() > 0.0:
+		desired = (before * Quaternion(requested_spin.normalized(), requested_spin.length() * delta)).normalized()
+	# Preserve the requested heading, but never retain accidental roll after a
+	# composite pitch/yaw turn. Explicit Q/E owns roll while held. A single
+	# bounded rotation shares the catalog turn budget with this stabilization.
+	if is_zero_approx(intent.roll_request):
+		desired = leveled_basis(Basis(desired)).get_rotation_quaternion().normalized()
+	var difference: Quaternion = (before.inverse() * desired).normalized()
+	if difference.w < 0.0: difference = -difference
+	var rotation_axis := Vector3(difference.x, difference.y, difference.z)
+	var angle: float = 2.0 * atan2(rotation_axis.length(), difference.w)
+	if angle > 0.0:
+		quaternion = before.slerp(desired, minf(1.0, turn * delta / angle)).normalized()
+	var applied: Quaternion = (before.inverse() * quaternion).normalized()
+	if applied.w < 0.0: applied = -applied
+	var applied_axis := Vector3(applied.x, applied.y, applied.z)
+	var applied_angle: float = 2.0 * atan2(applied_axis.length(), applied.w)
+	var local_spin: Vector3 = applied_axis.normalized() * applied_angle / delta
 	var thrust := Vector3(intent.thrust_x, intent.thrust_y, -intent.thrust_z)
 	if thrust.length_squared() > 1.0:
 		thrust = thrust.normalized()
@@ -57,6 +74,20 @@ func simulate(delta: float) -> void:
 		velocity = velocity.move_toward(velocity.normalized() * top_speed, acceleration * float(metrics.brake_multiplier) * delta)
 	move_and_slide()
 	write_back(local_spin)
+
+static func leveled_basis(source: Basis) -> Basis:
+	# World-up is the shared navigation reference, not a flattened pitch. At
+	# a vertical heading roll has no unique reference: preserve the existing
+	# right axis rather than passing parallel vectors to looking_at().
+	var pose: Basis = source.orthonormalized()
+	var forward: Vector3 = -pose.z.normalized()
+	var up: Vector3 = Vector3.UP.slide(forward)
+	if up.length_squared() < 0.000001:
+		var right: Vector3 = pose.x.slide(forward)
+		if right.length_squared() < 0.000001: right = Vector3.RIGHT.slide(forward)
+		if right.length_squared() < 0.000001: right = Vector3.FORWARD.slide(forward)
+		up = right.normalized().cross(forward)
+	return Basis.looking_at(forward, up.normalized()).orthonormalized()
 
 func write_back(spin: Vector3 = Vector3.ZERO) -> void:
 	if record == null:

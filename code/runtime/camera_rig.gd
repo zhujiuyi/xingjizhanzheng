@@ -46,7 +46,7 @@ func reset_observation() -> void:
 	orbit = Vector2.ZERO
 	# A deliberate V / show-ship action recenters on the current vessel heading.
 	# Afterward this world-space reference remains independent of ship attitude.
-	observation_basis = ship.global_basis.orthonormalized() if mode == Types.CameraMode.FOLLOW and is_instance_valid(ship) and ship.is_inside_tree() else Basis.IDENTITY
+	observation_basis = XJFlight.leveled_basis(ship.global_basis) if mode == Types.CameraMode.FOLLOW and is_instance_valid(ship) and ship.is_inside_tree() else Basis.IDENTITY
 
 func begin_observation() -> void:
 	observing = true
@@ -63,12 +63,12 @@ func control_forward() -> Vector3:
 
 func steer_yaw(radians: float) -> void:
 	if not is_finite(radians) or is_zero_approx(radians) or camera == null: return
-	var up: Vector3 = render_ship_transform().basis.y if mode == Types.CameraMode.FRONT else observation_basis.y
+	var up: Vector3 = render_ship_transform().basis.y if mode == Types.CameraMode.FRONT else Vector3.UP
 	var rotation_step := Basis(up.normalized(), radians)
 	if mode != Types.CameraMode.FRONT:
 		# Rotate both the visible view and its retained destination. W + A/D then
 		# curves along the new heading instead of steering back toward an old view.
-		orbit.x = wrapf(orbit.x + radians, -PI, PI)
+		observation_basis = (rotation_step * observation_basis).orthonormalized()
 		var pivot: Vector3 = render_position()
 		camera.global_position = pivot + rotation_step * (camera.global_position - pivot)
 	# FRONT follows the next physical ship yaw. Retaining the existing orbit
@@ -170,7 +170,7 @@ func step(delta: float) -> void:
 		var offset := Vector3(0.0, float(profile.height_m), distance)
 		offset = Basis(Vector3.UP, orbit.x) * Basis(Vector3.RIGHT, orbit.y) * offset
 		desired = target_point + observation_basis * offset
-		up = observation_basis.y
+		up = Vector3.UP
 		var query := PhysicsRayQueryParameters3D.create(target_point, desired, 64, [ship.get_rid()])
 		var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 		if not hit.is_empty():
@@ -180,12 +180,21 @@ func step(delta: float) -> void:
 	camera.global_position = desired if not snapped else camera.global_position.lerp(desired, mix)
 	if camera.global_position.distance_squared_to(target_point) > 0.0001:
 		var direction := camera.global_position.direction_to(target_point)
+		var reference_right: Vector3 = camera.global_basis.x if snapped else observation_basis.x
 		if direction.cross(up).length_squared() < 0.000001:
 			# A moving dolly can transiently pass directly above its target. Project
-			# the preceding up axis first to retain orientation through that point.
-			up = camera.global_basis.y.slide(direction)
+			# the preceding up axis; deliberate resets use the leveled ship frame.
+			up = (camera.global_basis.y if snapped else observation_basis.y).slide(direction)
+			if up.length_squared() < 0.000001:
+				var right: Vector3 = reference_right.slide(direction)
+				if right.length_squared() >= 0.000001: up = right.normalized().cross(direction)
 			if up.length_squared() < 0.000001:
 				up = (Vector3.RIGHT if absf(direction.x) < 0.9 else Vector3.FORWARD).slide(direction)
+		else:
+			# Keep screen-right horizontal and continuous across the world-up
+			# pole. Near vertical headings the local camera height can cross that
+			# pole, so an unconditional +UP would invert a recentered vessel.
+			if direction.cross(up).dot(reference_right) < 0.0: up = -up
 		var aim: Basis = Transform3D(Basis.IDENTITY, camera.global_position).looking_at(target_point, up.normalized()).basis
 		# Smooth the dolly position, then aim at the current vessel, so center
 		# framing is exact even while the ship moves and the camera catches up.

@@ -140,6 +140,7 @@ static func run(host: Node, output_dir: String) -> bool:
 	_check(evidence, Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and not InputMap.has_action("pointer") and not InputMap.has_action("observe") and not host.observing and host.camera.orbit == view_before_right, "packed cursor is always visible and right button does not operate the ship or camera")
 	await _hud_layout_checks(host, evidence)
 	await _capture(host, output_dir, "flight")
+	await _attitude_checks(host, evidence, output_dir)
 	var station_id: String = "station_anchor_port"
 	var station: Node3D = host.world.targets[station_id].node
 	host.set_process(false)
@@ -392,6 +393,71 @@ static func _hud_layout_checks(host: Node, evidence: Dictionary) -> void:
 		var text_size: Vector2 = button.get_theme_font("font").get_string_size(button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, button.get_theme_font_size("font_size"))
 		readable = readable and tools.encloses(button.get_global_rect()) and text_size.x <= button.size.x - padding.x + 1.0
 	_check(evidence, readable and ui.show_ship_button.is_visible_in_tree(), "packed top tools keep real menu labels and ship-recovery control readable")
+
+static func _attitude_checks(host: Node, evidence: Dictionary, output_dir: String) -> void:
+	# A legacy tilted pose in this fresh diagnostic world exercises the actual
+	# packed Flight/Camera paths. It never opens or repairs the player's save.
+	host.set_process(false)
+	host.set_physics_process(false)
+	var body: XJFlight = host.world.flight
+	var original_pose: Transform3D = body.global_transform
+	var original_velocity: Vector3 = body.velocity
+	var original_mode: Types.CameraMode = host.camera.mode
+	var legacy_pose: Transform3D = original_pose
+	legacy_pose.basis = (legacy_pose.basis * Basis(Vector3.FORWARD, 0.6)).orthonormalized()
+	body.global_transform = legacy_pose
+	body.velocity = Vector3.ZERO
+	body.clear_intent()
+	body.write_back()
+	var forward: Vector3 = -body.global_basis.z.normalized()
+	var step_s: float = 1.0 / float(host.store.catalog.rule("simulation_hz"))
+	var budget: float = float(body.metrics.turn_radps) * step_s
+	var bounded: bool = true
+	for tick: int in range(int(ceil(PI / budget)) + 2):
+		var before: Quaternion = body.quaternion
+		body.simulate(step_s)
+		var difference: Quaternion = (before.inverse() * body.quaternion).normalized()
+		var actual_angle: float = 2.0 * atan2(Vector3(difference.x, difference.y, difference.z).length(), absf(difference.w))
+		bounded = bounded and actual_angle <= budget + 0.00002 and body.global_basis.is_finite()
+	var reference_up: Vector3 = Vector3.UP.slide(forward).normalized()
+	_check(evidence, bounded and body.global_basis.y.dot(reference_up) > 0.99999 and (-body.global_basis.z).dot(forward) > 0.99999 and body.velocity == Vector3.ZERO and body.global_position.is_equal_approx(original_pose.origin), "packed old tilted pose levels smoothly inside one turn budget without changing its heading or velocity")
+	var leveled: Quaternion = body.quaternion
+	body.intent.roll_request = 1.0
+	body.simulate(step_s)
+	var explicit_rotation: Quaternion = (leveled.inverse() * body.quaternion).normalized()
+	var explicit_angle: float = 2.0 * atan2(Vector3(explicit_rotation.x, explicit_rotation.y, explicit_rotation.z).length(), absf(explicit_rotation.w))
+	_check(evidence, explicit_angle > 0.0 and explicit_angle <= budget + 0.00002 and body.global_basis.y.dot(reference_up) < 0.99999, "packed explicit roll request remains available while held")
+	body.global_transform = legacy_pose
+	body.clear_intent()
+	body.write_back()
+	body.reset_physics_interpolation()
+	host.camera.bind(body, host.store.catalog, Types.CameraMode.FRONT)
+	host.state.player().camera_mode = Types.CameraMode.FRONT
+	host.ui.show_ship_button.pressed.emit()
+	host.camera.step(0.0)
+	_check(evidence, host.camera.mode == Types.CameraMode.FOLLOW and absf(host.camera.camera.global_basis.x.y) < 0.00001 and body.global_transform.is_equal_approx(legacy_pose) and body.velocity == Vector3.ZERO, "packed ship-recovery view removes inherited roll without instantly changing the physical vessel")
+	var pole_safe: bool = true
+	for pitch: float in [-PI * 0.5, PI * 0.5]:
+		var source: Basis = Basis(Vector3.RIGHT, pitch) * Basis(Vector3.FORWARD, 0.6)
+		var aligned: Basis = XJFlight.leveled_basis(source)
+		pole_safe = pole_safe and aligned.is_finite() and aligned.is_orthonormal() and aligned.z.dot(source.z) > 0.99999
+	_check(evidence, pole_safe, "packed exact vertical headings preserve a finite orthonormal orientation and their heading")
+	for tick: int in range(int(ceil(PI / budget)) + 2): body.simulate(step_s)
+	body.reset_physics_interpolation()
+	host.camera.reset_observation()
+	host.camera.step(0.0)
+	host.ui.tick(1.0)
+	await _capture(host, output_dir, "attitude-level")
+	body.global_transform = original_pose
+	body.velocity = original_velocity
+	body.clear_intent()
+	body.write_back()
+	body.reset_physics_interpolation()
+	host.camera.bind(body, host.store.catalog, original_mode)
+	host.state.player().camera_mode = original_mode
+	host.camera.step(0.0)
+	host.set_process(true)
+	host.set_physics_process(true)
 
 static func _capture(host: Node, directory: String, name: String) -> void:
 	if DisplayServer.get_name() == "headless": return

@@ -232,7 +232,7 @@ func component_checks(catalog: XJCatalog) -> void:
 			check(rig.orbit.is_zero_approx() and not rig.observing, "%s mode%d only explicit reset recenters observation" % [definition.ship_id, camera_mode])
 			var forward_before: Vector3 = rig.control_forward()
 			var yaw_step: float = float(definition.turn_rad_s) / float(Engine.physics_ticks_per_second)
-			var yaw_axis: Vector3 = rig.render_ship_transform().basis.y if camera_mode == T.CameraMode.FRONT else rig.observation_basis.y
+			var yaw_axis: Vector3 = rig.render_ship_transform().basis.y if camera_mode == T.CameraMode.FRONT else Vector3.UP
 			rig.steer_yaw(yaw_step)
 			check(rig.control_forward().is_equal_approx(Basis(yaw_axis, yaw_step) * forward_before) and flight.global_position.is_equal_approx(pose.origin) and velocity.is_equal_approx(flight.velocity), "%s mode%d manual camera yaw exposes the newly visible thrust heading without moving ship" % [definition.ship_id, camera_mode])
 		if definition.ship_id == "shuttle_swift": await interpolation_checks(stage, flight, rig, catalog)
@@ -423,8 +423,14 @@ func view_thrust_checks(origin: Vector3) -> void:
 		check(actual_velocity.length() > 0.0 and actual_velocity.normalized().dot(heading * sign_value) > 0.999 and absf(actual_velocity.y) > 0.001, "actual " + action + " acceleration follows the current observed 3D direction")
 		check(turned > 0.0 and turned <= float(host.world.flight.metrics.turn_radps) / float(Engine.physics_ticks_per_second) + 0.0001, "ship aligns toward view using the authoritative finite turn budget: " + action)
 		var released: Basis = host.world.flight.global_basis
+		var released_rotation: Quaternion = host.world.flight.quaternion
+		var released_up: Vector3 = Vector3.UP.slide(-released.z).normalized()
 		await fixed_step()
-		check(host.world.flight.global_basis.is_equal_approx(released), "view-following attitude has no residual request after WS is released: " + action)
+		var recovered: Basis = host.world.flight.global_basis
+		var recovered_up: Vector3 = Vector3.UP.slide(-recovered.z).normalized()
+		var applied: Quaternion = (released_rotation.inverse() * host.world.flight.quaternion).normalized()
+		var applied_angle: float = 2.0 * atan2(Vector3(applied.x, applied.y, applied.z).length(), absf(applied.w))
+		check((-recovered.z).dot(-released.z) > 0.999999 and recovered.y.dot(recovered_up) >= released.y.dot(released_up) - 0.00001 and applied_angle <= float(host.world.flight.metrics.turn_radps) / float(Engine.physics_ticks_per_second) + 0.0001, "released WS preserves heading while any roll error only converges within the real turn budget: " + action)
 	reset_pose(Transform3D(Basis.IDENTITY, origin))
 	if not await prepare_native_world_input(): return
 	var initial_heading: Vector3 = host.camera.control_forward()

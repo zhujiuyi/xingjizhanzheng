@@ -253,7 +253,7 @@ func _heading_delta(direction: Vector3, delta: float) -> float:
 	var body: XJFlight = world.flight
 	var up: Vector3 = body.global_basis.y
 	if direction.normalized().cross(up).length_squared() < 0.000001: up = body.global_basis.x
-	var desired: Basis = Transform3D(Basis.IDENTITY, body.global_position).looking_at(body.global_position + direction, up).basis
+	var desired: Basis = XJFlight.leveled_basis(Transform3D(Basis.IDENTITY, body.global_position).looking_at(body.global_position + direction, up).basis)
 	var current: Quaternion = body.global_basis.get_rotation_quaternion()
 	var destination_attitude: Quaternion = desired.get_rotation_quaternion()
 	var angle: float = current.angle_to(destination_attitude)

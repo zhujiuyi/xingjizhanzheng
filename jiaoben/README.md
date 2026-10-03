@@ -108,3 +108,12 @@ v0.6.2实际新包 `0.6.2-8d86553e-20261003-141501` 已通过37项Metal/CoreAudi
 
 
 最终实际交付`0.8.2-f9063ee1-20261003-212516`来自干净已推送源`f9063ee1`。Mac实际包6项数据库、66项Metal/CoreAudio表现/11图、125项资源与临时签名通过，8份独立构建日志严格诊断0；ZIP与11图摘要重算一致、CRC及使用说明齐备。Windows Release组件导出通过，原生仍待实机。包路径、SHA和定位/业务夹具边界见26；本轮未修改正式数值、存档DDL或资产。
+
+
+## v0.8.3舰船姿态回正
+
+`/usr/local/bin/python3.14 jiaoben/tests/attitude_v10_run.py`运行真实Main/物理/独立SQLite；`--native`需独占Mac窗口、真实焦点与OS指针，使用Metal/CoreAudio。最终headless138项、原生146项/5图通过，完整输出及独立引擎日志严格诊断0，路径为`logs/attitude-v10-{headless,native}{,-engine}.log`及`tmp/attitude-v10/native/`。覆盖俯仰A/D、观察航向WS、总转速预算、Q/E按住与释放、四组精确/近垂直姿态、极点右轴连续、明确回正后相机/舰体右轴一致、实际导航保持及SQLite保存/关闭/重开两类姿态。初始位置、旧倾角和合法持久端点为明确夹具，未修改个人存档。
+
+当前操控headless280、原生294/2图复验通过。旧“释放WS后完整Basis冻结”契约改为前向不漂移、实际输入清零、残余滚转在同转速预算内收敛；non-FRONT A/D观察轴明确为世界上轴。导航渲染567、雷达/标记69、物理战斗18、生命周期27及源码内置70项通过；最终日志`logs/v083-{navigation-render,navigation,combat,lifecycle,presentation-source}-final{,-engine}.log`。导航tooltip检查维护为操控首行与完整紧凑雷达说明，未减少标记/虚线/插值覆盖。字体111文件/84表/858字符，无缺字或编码缺陷。
+
+发布门槛现为**70项表现检查、12张截图**，新增真实Flight回正及其总转速预算、显式滚转、真实镜头回正、精确垂直姿态，并新增`release-attitude-level.png`。实际Mac包必须独立运行6项数据库与70项表现，不以源测试代替；最终包身份与结果见26。Windows原生运行仍待实机。规则及镜头穿越极点的±上轴连续边界见[36](../doc/36-舰船姿态回正与相机基准.md)。

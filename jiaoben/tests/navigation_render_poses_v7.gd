@@ -86,7 +86,7 @@ func _run() -> void:
 	viewport.add_child(hud)
 	await process_frame
 	hud.configure(world, rig, store.catalog)
-	check(hud.radar.tooltip_text == "左键拖动观察 · 双击总览接近 · 滚轮缩放", "navigation hint matches the current pointer controls")
+	check(hud.radar.tooltip_text.begins_with("左键拖动观察 · 双击总览接近 · 滚轮缩放\n") and hud.radar.tooltip_text.contains("雷达以舰首向上") and hud.radar.tooltip_text.contains("相对高度"), "navigation hint retains pointer controls and the full compact-radar explanation")
 	target.set_physics_process(true)
 	for frame: int in range(80):
 		await process_frame
