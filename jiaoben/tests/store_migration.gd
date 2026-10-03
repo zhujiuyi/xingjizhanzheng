@@ -28,6 +28,24 @@ class FaultStore extends Store:
 	func _checkpoint(point: String) -> bool:
 		return point != fault
 
+class Format5Store extends Store:
+	# The reviewed prefix constructs a real closed pre-009 schema. It uses the
+	# checked-in B catalog, so this regression does not depend on a local release.
+	func _migrate() -> bool:
+		if not _q("BEGIN IMMEDIATE; PRAGMA defer_foreign_keys=ON;"): return false
+		for name in Store.MIGRATIONS.slice(0, 8):
+			var source: String = "res://database/progress/" + name
+			if not _q(FileAccess.get_file_as_string(source)) or not _insert("migration_history", {"migration_id": name, "sql_sha256": FileAccess.get_sha256(source), "applied_utc": Store._utc()}): return _rollback()
+		return _q("COMMIT")
+	func _validate_registered_schema() -> bool:
+		var actual: Array[String] = []
+		for entry: Dictionary in _records("SELECT name FROM sqlite_schema WHERE type='table' AND name LIKE '%_state' ORDER BY name COLLATE BINARY"): actual.append(entry.name)
+		var expected: Array[String] = State.TABLES.duplicate()
+		expected.erase("encounter_state"); expected.erase("salvage_package_state"); expected.sort()
+		return actual == expected
+	func _verify_assets(_manifest_path: String = Store.ASSET_PATH) -> bool:
+		return super._verify_assets("res://assets/placeholders/manifest.json")
+
 func check(value: bool, label: String) -> void:
 	checks += 1
 	print(("PASS " if value else "FAIL ") + label)
@@ -66,8 +84,8 @@ func _initialize() -> void:
 		check(trial._records("SELECT current_snapshot_id FROM save_slot WHERE slot_id=?", [selected.slot_id])[0].current_snapshot_id == selected.current_snapshot_id and trial._records("PRAGMA foreign_key_check").is_empty(), "upgrade rollback retains endpoint/FK " + name)
 		trial.close()
 		trial.fault = ""
-		check(trial.open(), "retry native format1 to5 migration " + trial.last_error)
-		check(trial._records("SELECT format_version FROM database_meta")[0].format_version == 5 and trial._records("SELECT count(*) AS n FROM migration_history")[0].n == 8, "eight exact migrations registered")
+		check(trial.open(), "retry native format1 to6 migration " + trial.last_error)
+		check(trial._records("SELECT format_version FROM database_meta")[0].format_version == 6 and trial._records("SELECT count(*) AS n FROM migration_history")[0].n == Store.MIGRATIONS.size(), "every reviewed migration registered through format6")
 		check(trial._records("PRAGMA integrity_check")[0].values()[0] == "ok" and trial._records("PRAGMA foreign_key_check").is_empty(), "upgraded physical and FK integrity")
 		var recovered: State = trial.load(selected.slot_id, selected.current_snapshot_id, selected.generation)
 		check(recovered != null and recovered.player().credit == 4987 and trial.catalog.table_names.size() == 73, "legacy frozen content and credit restored")
@@ -75,6 +93,38 @@ func _initialize() -> void:
 		check(recovered != null and trial.save(recovered), "migrated session can commit complete current state")
 		check(FileAccess.file_exists(directory.path_join("migration-format1-backup.db")), "pre-upgrade native backup published")
 		trial.close()
+	var format5_path: String = directory.path_join("store-legacy-format5.db")
+	DirAccess.remove_absolute(format5_path)
+	var format5: Format5Store = Format5Store.new(format5_path)
+	format5.catalog_path = ProjectSettings.globalize_path("res://../jiaoben/tests/store_fixtures/catalog-b-baseline.db")
+	check(format5.open(), "construct actual pre-009 format5 schema " + format5.last_error)
+	var format5_state: State = format5.new_world("格式5历史世界", 42) if format5._db != null and not format5.busy and format5.phase == "READY" else null
+	check(format5_state != null, "seal pre-009 format5 historical state " + format5.last_error)
+	if format5_state != null:
+		format5_state.player().credit -= 23
+		check(format5.save(format5_state, "manual", 0), "format5 historical manual endpoint")
+		var format5_slot: Dictionary = format5._records("SELECT * FROM save_slot WHERE slot_kind='manual'")[0]
+		var format5_history: Array[Dictionary] = format5._records("SELECT * FROM migration_history ORDER BY migration_id")
+		var format5_snapshot_count: int = int(format5._records("SELECT count(*) AS n FROM save_snapshot")[0].n)
+		check(int(format5._records("SELECT format_version FROM database_meta")[0].format_version) == 5, "fixture closes with format5 identity")
+		format5.close()
+		var interrupted: FaultStore = FaultStore.new(format5_path)
+		interrupted.fault = "migration:009_encounters_and_salvage.sql"
+		check(not interrupted.open(), "format5 to6 interrupted after reviewed 009")
+		check(int(interrupted._records("SELECT format_version FROM database_meta")[0].format_version) == 5 and interrupted._records("SELECT * FROM migration_history ORDER BY migration_id") == format5_history, "009 rollback retains format5 and exact prior migration hashes")
+		check(interrupted._records("SELECT name FROM sqlite_schema WHERE name IN ('frozen_encounter_defs','encounter_state','salvage_package_state','content_upgrade_record')").is_empty(), "009 rollback leaves no partial new content or state tables")
+		check(int(interrupted._records("SELECT count(*) AS n FROM save_snapshot")[0].n) == format5_snapshot_count and interrupted._records("SELECT current_snapshot_id FROM save_slot WHERE slot_id=?", [format5_slot.slot_id])[0].current_snapshot_id == format5_slot.current_snapshot_id, "009 rollback retains old sealed snapshots and manual endpoint")
+		interrupted.close(); interrupted.fault = ""
+		check(interrupted.open(), "retry real format5 to6 migration " + interrupted.last_error)
+		check(int(interrupted._records("SELECT format_version FROM database_meta")[0].format_version) == 6 and interrupted._records("SELECT * FROM migration_history ORDER BY migration_id").slice(0, 8) == format5_history, "format6 appends 009 without altering old eight migration records")
+		var format5_loaded: State = interrupted.load(format5_slot.slot_id, format5_slot.current_snapshot_id, format5_slot.generation)
+		check(format5_loaded != null and format5_loaded.player().credit == 4977 and format5_loaded.rows("encounter_state").is_empty(), "format6 loads historical frozen closure without adding content or grants")
+		check(format5_loaded != null and interrupted.save(format5_loaded), "recovered format5 world commits under complete current schema")
+		check(interrupted._records("PRAGMA foreign_key_check").is_empty(), "format5 recovery reference closure valid")
+		check(FileAccess.file_exists(directory.path_join("migration-format5-backup.db")), "pre-009 closed backup published")
+		interrupted.close()
+	else:
+		format5.close()
 	var corrupt_path: String = directory.path_join("store-migration-checksum.db")
 	DirAccess.remove_absolute(corrupt_path)
 	DirAccess.copy_absolute(legacy_path, corrupt_path)

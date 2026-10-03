@@ -133,7 +133,7 @@ func _run() -> void:
 		if bool(node.get_meta("mission_row", false)):
 			first_title = str(node.find_child("BusinessName", true, false).text)
 			break
-	check(first_title == "出航准备", "first tutorial remains first visible mission list row")
+	check(first_title == "新手教学 1 · 出航准备", "first tutorial remains first visible mission list row with its chapter classification")
 	ui.market_filter = "buy"
 	ui.show_page("market")
 	ui.quantity_input.value = 5

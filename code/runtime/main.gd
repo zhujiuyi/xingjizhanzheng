@@ -480,6 +480,8 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		ui.notify("正在等待稳定保存后离开；取消保存请求后可继续操作。")
 		return
 	match action:
+		"mission_locate", "mission_travel", "mission_station":
+			_mission_navigation(action, target)
 		"nav_warp", "nav_approach", "nav_orbit", "nav_dock":
 			_navigation_command(action.trim_prefix("nav_"), target)
 		"nav_stop":
@@ -535,6 +537,7 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			await get_tree().process_frame
 			var loaded := store.load(target, extra, quantity, _prepare_loaded)
 			if loaded != null:
+				loaded = _upgrade_loaded(loaded)
 				_activate(loaded)
 				ui.notify("存档已读取。")
 			else:
@@ -549,6 +552,7 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			await get_tree().process_frame
 			var resumed := store.resume(_prepare_loaded)
 			if resumed != null:
+				resumed = _upgrade_loaded(resumed)
 				_activate(resumed)
 			else:
 				_discard_staged()
@@ -585,6 +589,9 @@ func _business_action(action: String, target: String, quantity: int, extra: Stri
 		return
 	if local_navigation != null and local_navigation.warp_active():
 		ui.notify("本星系跃迁中，请先停船取消。", true)
+		return
+	if action == "open_salvage":
+		_identify_salvage(target, quantity)
 		return
 	if action in ["dock", "request_rescue", "undock", "switch_ship"]:
 		auto_fire_target = ""
@@ -623,9 +630,43 @@ func _business_action(action: String, target: String, quantity: int, extra: Stri
 		if not result.autosave_request_id.is_empty():
 			_queue_autosave()
 		ui.refresh_page()
+		if action == "accept_mission": ui.show_mission(target)
+		if action == "undock": _mission_navigation("mission_locate", "", false)
 	else:
 		if presentation != null: presentation.ui_result(false)
 		ui.notify(feedback, true)
+
+func _identify_salvage(package_id: String, quantity: int) -> void:
+	# Identification consumes the sealed package, awards its frozen result and
+	# records its receipt on a detached candidate. No success reaches the UI
+	# until the complete snapshot and resume pointer have committed.
+	var candidate: XJRuntimeState = store.clone_state(state)
+	if candidate == null:
+		ui.notify("无法准备鉴定，回收包保留。", true)
+		return
+	var actor: RefCounted = preload("res://runtime/gameplay.gd").new()
+	actor.call("setup", candidate, store.catalog)
+	var result: Dtos.ActionResultDto = actor.call("act", "open_salvage", package_id, quantity)
+	var feedback: String = str(actor.get("status_text")) if result.phase == Types.ActionPhase.APPLIED else str(actor.get("last_error"))
+	actor.call("dispose")
+	if result.phase != Types.ActionPhase.APPLIED:
+		ui.notify(feedback, true)
+		return
+	var old_page: String = ui.page
+	busy = true
+	ui.set_operation_status("save", "正在提交打捞鉴定")
+	if not _stage_candidate(candidate, store.catalog) or not store.save(candidate, "auto", auto_slot):
+		_discard_staged()
+		busy = false
+		ui.set_operation_status("idle", "")
+		ui.notify("鉴定未提交，回收包与资金保留。" + store.last_error, true)
+		return
+	auto_slot = (auto_slot + 1) % 3
+	_activate(candidate)
+	busy = false
+	ui.set_operation_status("idle", "")
+	ui.show_page(old_page)
+	ui.notify(feedback)
 
 func _stage_candidate(candidate: XJRuntimeState, definitions: XJCatalog) -> bool:
 	_discard_staged()
@@ -646,6 +687,59 @@ func _stage_candidate(candidate: XJRuntimeState, definitions: XJCatalog) -> bool
 
 func _prepare_loaded(candidate: XJRuntimeState) -> bool:
 	return _stage_candidate(candidate, store.staging_catalog)
+
+func _upgrade_loaded(candidate: XJRuntimeState) -> XJRuntimeState:
+	# Keep the original validated staging scene until the complete replacement
+	# commits. Failed new construction must never require rebuilding the fallback.
+	var previous_world: XJSector = staged_world
+	var previous_gameplay: RefCounted = staged_gameplay
+	staged_world = null; staged_gameplay = null
+	var upgraded: XJRuntimeState = store.upgrade_content(candidate, _prepare_loaded)
+	if upgraded == candidate:
+		staged_world = previous_world; staged_gameplay = previous_gameplay
+		return candidate
+	if upgraded != null:
+		if is_instance_valid(previous_world): remove_child(previous_world); previous_world.queue_free()
+		if previous_gameplay != null: previous_gameplay.call("dispose")
+		return upgraded
+	# Failure preserves the validated original world and all its save pointers.
+	ui.notify("新版战斗内容未能安全升级；继续使用原档案。" + store.last_error, true)
+	_discard_staged()
+	staged_world = previous_world; staged_gameplay = previous_gameplay
+	return candidate
+
+func _mission_navigation(action: String, mission_id: String, announce: bool = true) -> void:
+	if state == null or world == null or gameplay == null: return
+	var missions: RefCounted = gameplay.get("missions")
+	var info: Dictionary = missions.station_guidance(mission_id) if action == "mission_station" else missions.guidance(mission_id)
+	if info.is_empty():
+		if announce: ui.notify("当前没有可定位的任务；可在航路与委托中查看教学或主线。")
+		return
+	if state.ship().status == Types.ShipStatus.DOCKED:
+		if info.get("local", false) and str(info.get("target_id", "")) == gameplay.call("station"):
+			var service: String = str(info.get("required_page", ""))
+			if not service.is_empty(): ui.show_page(service)
+			elif announce: ui.show_mission(str(info.mission_id))
+		if announce: ui.notify("任务地点：" + str(info.target_title) + "；出港后可按“前往”导航。")
+		return
+	world.sync_entities()
+	var id: String = str(info.get("waypoint_id", ""))
+	if id.is_empty() or not world.targets.has(id):
+		if announce: ui.notify(str(info.get("route_reason", "目的地暂不可达；请查看任务前置条件。")), true)
+		return
+	ui.show_page("")
+	ui._select_target(id)
+	ui._update_mission_guidance()
+	if camera != null:
+		var direction: Vector3 = world.flight.global_position.direction_to(world.targets[id].node.global_position)
+		if direction.length_squared() > 0.000001:
+			_release_observation()
+			camera.orbit = Vector2.ZERO
+			camera.observation_basis = Basis.looking_at(direction, Vector3.UP if absf(direction.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT)
+	if announce: ui.notify("已定位：" + str(info.waypoint_title) + (" · " + str(info.route_reason) if not str(info.route_reason).is_empty() else ""))
+	if action == "mission_travel":
+		var context: Dictionary = navigation_context(id)
+		_navigation_command("warp" if bool(context.get("warp_ready", false)) else "approach", id)
 
 func _prepare_travel(candidate: XJRuntimeState) -> bool:
 	return _stage_candidate(candidate, store.catalog)

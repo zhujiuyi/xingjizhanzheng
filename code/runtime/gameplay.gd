@@ -7,12 +7,14 @@ const Inventory = preload("res://runtime/gameplay/inventory.gd")
 const Economy = preload("res://runtime/gameplay/economy.gd")
 const Missions = preload("res://runtime/gameplay/missions.gd")
 const Work = preload("res://runtime/gameplay/work.gd")
+const Encounters = preload("res://runtime/gameplay/encounters.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
 var inventory: RefCounted
 var economy: RefCounted
 var missions: RefCounted
 var work: RefCounted
+var encounters: RefCounted
 var events: Array[D.EventDto] = []
 var pending_autosave_request_id: String = ""
 var status_text: String = ""
@@ -43,6 +45,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog) -> void:
 	economy = Economy.new(self)
 	missions = Missions.new(self)
 	work = Work.new(self)
+	encounters = Encounters.new(self)
 	missions.refresh()
 	work.ensure_tutorial_supplies()
 	_sync_spawns()
@@ -109,7 +112,7 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 	command.actor_player_id = state.player().player_id
 	command.target_entity_id = target
 	command.requested_tick = state.snapshot.meta.simulation_tick
-	var names: Array[String] = ["thrust","fire","start_scan","stop_scan","start_mining","stop_mining","dock","undock","switch_ship","move_stack","move_item","fit_module","unfit_module","buy_item","sell_item","buy_ship","sell_ship","repair","manufacture","recycle","accept_mission","abandon_mission","deliver_mission","claim_loan","handoff_loan","request_rescue","start_travel","cancel_travel","save_request","load_request","set_camera","set_module_enabled","request_engine_cycle","research","build_base","recover_resource","pickup_wreck"]
+	var names: Array[String] = ["thrust","fire","start_scan","stop_scan","start_mining","stop_mining","dock","undock","switch_ship","move_stack","move_item","fit_module","unfit_module","buy_item","sell_item","buy_ship","sell_ship","repair","manufacture","recycle","accept_mission","abandon_mission","deliver_mission","claim_loan","handoff_loan","request_rescue","start_travel","cancel_travel","save_request","load_request","set_camera","set_module_enabled","request_engine_cycle","research","build_base","recover_resource","pickup_wreck","open_salvage","move_salvage"]
 	command.action_kind = names.find(action) if names.has(action) else T.ActionKind.MANUFACTURE
 	_active_action = command
 	_active_payload = _request_for(action, target, quantity, extra)
@@ -146,6 +149,8 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 			"stop_mining": work.stop_mining(); ok = true
 			"recover_resource": ok = work.recover_resource(target, quantity)
 			"pickup_wreck": ok = inventory.pickup_wreck(target)
+			"open_salvage": ok = encounters.open_package(target)
+			"move_salvage": ok = encounters.move_package(target, extra)
 			"set_module_enabled": ok = _set_enabled(target, extra != "off")
 			"request_engine_cycle": ok = _engine_cycle()
 			_: fail("不支持的动作：" + action)
@@ -169,7 +174,8 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 	if ok:
 		state.ship().state_version += 1
 		missions.refresh()
-		status_text = "操作完成：" + action
+		if action in ["accept_mission", "abandon_mission", "deliver_mission", "claim_loan", "handoff_loan", "request_rescue"]: _sync_spawns()
+		if action != "open_salvage": status_text = "操作完成：" + action
 	else: status_text = last_error
 	return result
 
@@ -434,13 +440,16 @@ func damage_npc(instance_id: String, raw_vector: Vector3) -> float:
 		npc.alive = false; npc.behavior_phase = T.NpcPhase.DEAD
 		npc.respawn_remaining_s = float(spawn.respawn_s) if spawn.respawn_s != null else 0.0
 		if spawn.bounty_enabled and not npc.bounty_claimed: state.player().credit += def.reward_credit; npc.bounty_claimed = true
-		if spawn.loot_enabled and not npc.loot_claimed:
+		var packaged: bool = encounters.on_destroy(npc)
+		if spawn.loot_enabled and not npc.loot_claimed and not packaged:
 			var wreck: String = inventory.wreck(npc.sector_id, position(npc))
 			for loot in rows("npc_loot_defs"):
 				if loot.archetype_id == def.archetype_id: inventory.grant(wreck, loot.item_id, loot.quantity, "normal_owned")
 			npc.loot_claimed = true
+		if packaged: npc.loot_claimed = true
 		record_event("destroy_spawn", npc.spawn_id, 1)
 		event(T.EventKind.SHIP_DESTROYED, instance_id, "")
+		request_autosave()
 	return amount
 
 func damage_ship(raw_vector: Vector3) -> float:
@@ -459,11 +468,20 @@ func damage_ship(raw_vector: Vector3) -> float:
 	return amount
 
 func _sync_spawns(delta: float = 0.0) -> void:
+	encounters.tick(delta)
 	for spawn in rows("npc_spawn_defs"):
+		if encounters.handles(spawn.spawn_id): continue
 		if not unlocked(spawn.required_unlock_id): continue
 		var mission: D.MissionStateDto = missions.active_for_target("destroy_spawn", spawn.spawn_id)
-		if spawn.occurrence_mode == "mission_scoped" and mission == null: continue
+		if spawn.occurrence_mode == "mission_scoped" and mission == null:
+			for retired in state.rows("npc_state").duplicate():
+				if retired.spawn_id == spawn.spawn_id: state.remove("npc_state", retired)
+			continue
 		var existing: D.NpcStateDto = state.find("npc_state", "spawn_id", spawn.spawn_id)
+		if existing != null:
+			if spawn.occurrence_mode == "mission_scoped" and existing.mission_instance_id != mission.mission_instance_id:
+				state.remove("npc_state", existing)
+				existing = null
 		if existing != null:
 			if existing.alive: continue
 			if spawn.occurrence_mode == "mission_scoped":
@@ -539,9 +557,9 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work]:
+	for service in [inventory,economy,missions,work,encounters]:
 		if service != null: service.g = null
-	inventory = null; economy = null; missions = null; work = null
+	inventory = null; economy = null; missions = null; work = null; encounters = null
 	pending_autosave_request_id=""; events.clear(); _pending_repairs.clear(); _definition_cache.clear(); _index_cache.clear(); _rules.clear()
 	_active_action = null; _active_payload = null; state = null; catalog = null; spatial_validator = Callable()
 

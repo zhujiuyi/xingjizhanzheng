@@ -17,9 +17,11 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 CODE = ROOT / 'code'
 
-def run(command: list[str], log: Path, env: dict[str, str] | None = None) -> str:
+def run(command: list[str], log: Path, env: dict[str, str] | None = None,
+        timeout: int | None = None) -> str:
     with log.open('w') as output:
-        result = subprocess.run(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, env=env)
+        result = subprocess.run(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT,
+                                env=env, timeout=timeout)
     text = log.read_text(errors='replace')
     if result.returncode or re.search(r'^(SCRIPT ERROR|ERROR):', text, re.M):
         raise RuntimeError(f'Command failed; inspect {log}')
@@ -27,6 +29,62 @@ def run(command: list[str], log: Path, env: dict[str, str] | None = None) -> str
 
 def sha(path: Path) -> str:
     return hashlib.file_digest(path.open('rb'), 'sha256').hexdigest()
+
+def verify_exported_encounters(executable: Path, build_id: str, logs: Path) -> dict:
+    # The executable supplies res:// from its own exported PCK. This external
+    # acceptance script must never switch the process to the source project.
+    script = (ROOT / 'jiaoben/tests/encounter_mission_v12.gd').resolve()
+    test_folder = (ROOT / 'jiaoben/tmp/release-encounters' / str(uuid.uuid4())).resolve()
+    test_folder.mkdir(parents=True)
+    stdout_log = (logs / f'{build_id}-mac-encounter-mission.log').resolve()
+    engine_log = (logs / f'{build_id}-mac-encounter-mission-engine.log').resolve()
+    environment = os.environ.copy()
+    environment.pop('XJ_TEST_DATABASE', None)
+    environment.pop('XJ_ENCOUNTER_V12_LEGACY', None)
+    environment['XJ_ENCOUNTER_V12_OUTPUT'] = str(test_folder)
+    command = [str(executable.resolve()), '--audio-driver', 'CoreAudio',
+               '--log-file', str(engine_log), '--script', str(script)]
+    text = run(command, stdout_log, environment, timeout=420)
+    if not engine_log.is_file():
+        raise RuntimeError(f'Actual exported encounter engine log is absent: {engine_log}')
+    diagnostic = re.compile(r'^(?:\s*(?:SCRIPT ERROR|ERROR|WARNING):|.*[Ll]eak(?:ed|ing)?\b|.*Resource still in use)', re.M)
+    for label, content in (('stdout', text), ('engine', engine_log.read_text(errors='replace'))):
+        if diagnostic.search(content):
+            raise RuntimeError(f'Actual exported encounter {label} has diagnostics; inspect {stdout_log} and {engine_log}')
+    results = re.findall(r'^ENCOUNTER_MISSION_V12_FINAL_JSON (.+)$', text, re.M)
+    if len(results) != 1:
+        raise RuntimeError(f'Actual exported encounter final JSON is absent or repeated: {stdout_log}')
+    try:
+        result = json.loads(results[0])
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f'Actual exported encounter final JSON is invalid: {stdout_log}') from error
+    if (not isinstance(result, dict) or result.get('result') != 'PASS'
+            or type(result.get('checks')) is not int or result['checks'] <= 0
+            or type(result.get('failures')) is not int or result['failures'] != 0
+            or result.get('failure_labels') != []
+            or type(result.get('captures')) is not int or result['captures'] <= 0
+            or not isinstance(result.get('directory'), str)
+            or Path(result['directory']).resolve() != test_folder):
+        raise RuntimeError(f'Actual exported encounter acceptance did not pass completely: {stdout_log}')
+    marker = re.search(r'^ENCOUNTER_MISSION_V12_RESULT PASS checks=(\d+) failures=0 captures=(\d+)$', text, re.M)
+    if not marker or (int(marker[1]), int(marker[2])) != (result['checks'], result['captures']):
+        raise RuntimeError(f'Actual exported encounter PASS marker disagrees with final JSON: {stdout_log}')
+    captures = []
+    for capture in sorted(test_folder.glob('*.png')):
+        if not capture.is_file() or capture.resolve().parent != test_folder or capture.read_bytes()[:8] != b'\x89PNG\r\n\x1a\n':
+            raise RuntimeError(f'Actual exported encounter capture is invalid: {capture}')
+        captures.append({'name': capture.stem, 'path': str(capture), 'sha256': sha(capture)})
+    if len(captures) != result['captures']:
+        raise RuntimeError(f'Actual exported encounter capture count disagrees with final JSON: {test_folder}')
+    return {'result': 'PASS', 'checks': result['checks'], 'failures': 0, 'failure_labels': [],
+            'scope': 'actual exported Mac PCK: task navigation, mainline entry, encounter groups, salvage and one-time SQLite rewards; isolated fresh world, no legacy archive requested',
+            'executable': str(executable.resolve()), 'acceptance_script': str(script),
+            'acceptance_script_sha256': sha(script), 'audio_driver': 'CoreAudio',
+            'legacy_archive_requested': False,
+            'stdout_log': str(stdout_log), 'stdout_log_sha256': sha(stdout_log),
+            'engine_log': str(engine_log), 'engine_log_sha256': sha(engine_log),
+            'engine_diagnostics': 0, 'capture_folder': str(test_folder),
+            'capture_count': len(captures), 'captures': captures}
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -128,6 +186,8 @@ def main() -> None:
                 'result': 'actual release Metal/CoreAudio Chinese font, archive cards, radar, celestial bearing, selected line, station F qualification, hangar/NPC, lifecycle, departure, cockpit visibility recovery without flight mutation and SQLite save, graphical star chart, actual equipment, local warp source commit/exterior arrival/physical selection/validated docking, interpolated render poses, visible pointer, disabled right mouse and left-drag/release preserving accepted warp, canonical resource_state qualification, distant reserve intelligence, actual finite last-unit mining and inventory output, mineral countdown and paused clock, top flight tools, full-height overview, side-by-side ship and equipment row, one compact real deferred-save notice and cancellation preserving its paid mining cycle, bounded ship leveling, explicit roll, upright recovery view and finite vertical headings, shared business lists with item/hull portraits and final operation column, authoritative taxed unit/total quotes and stock, same-row quantity updates, disabled purchasing with readable prices, all station business pages and station restoration without economic or physical mutation PASS',
                 'capture_folder': str(visual_folder), 'checks': 78, 'captures': captures}
             evidence['verification']['mac'] = 'actual exported app: resource hashes/new/save/reopen/resume PASS; ad-hoc signature PASS'
+            evidence['verification']['mac_encounter_mission'] = verify_exported_encounters(
+                output / 'Contents/MacOS/星际战舰', build_id, logs)
             archive = staging / '星际战舰-macOS.zip'
             run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(folder), str(archive)],
                 logs / f'{build_id}-mac-archive.log')

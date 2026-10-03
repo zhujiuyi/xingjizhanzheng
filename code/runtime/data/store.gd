@@ -8,10 +8,10 @@ const Codec = preload("res://runtime/data/codec.gd")
 const Initial = preload("res://runtime/data/initial_state.gd")
 const Validation = preload("res://runtime/data/validation.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
-const MIGRATIONS: Array[String] = ["001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql"]
+const MIGRATIONS: Array[String] = ["001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql"]
 const RULE_CODE_VERSION: String = "singleplayer_full_v1"
 const ADAPTER_VERSION: String = "frozen_catalog_v0_4_r2"
-const ADAPTERS: Dictionary = {"frozen_catalog_v0_3": "res://database/progress/catalog_adapter_v0_3.sql", "frozen_catalog_v0_4": "res://database/progress/catalog_adapter_v0_4.sql", "frozen_catalog_v0_4_r2": "res://database/progress/catalog_adapter_v0_4_r2.sql"}
+const ADAPTERS: Dictionary = {"frozen_catalog_v0_3": "res://database/progress/catalog_adapter_v0_3.sql", "frozen_catalog_v0_4": "res://database/progress/catalog_adapter_v0_4.sql", "frozen_catalog_v0_4_r2": "res://database/progress/catalog_adapter_v0_4_r2.sql", "frozen_catalog_v0_5": "res://database/progress/catalog_adapter_v0_5.sql"}
 const ASSET_PATH: String = "res://assets/manifest.json"
 const ASSET_MANIFESTS: Dictionary = {"art-full-v1": ASSET_PATH, "placeholder-b-v1": "res://assets/placeholders/manifest.json"}
 var path: String = "user://database/progress.db"
@@ -225,6 +225,93 @@ func load(slot_id: String, expected_snapshot: String = "", expected_generation: 
 func list_slots() -> Array[Dictionary]:
 	return _records("SELECT s.*,w.display_name AS world_name FROM save_slot s JOIN world w USING(world_id) ORDER BY s.updated_utc DESC,s.slot_id") if _db != null else []
 
+func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
+	# A reviewed additive content branch never edits frozen definitions or sealed
+	# state. Existing manual slots and a closed backup remain recoverable.
+	if not _active_context(state):
+		_fail("STALE_EPOCH while upgrading content")
+		return null
+	if catalog.table_names.has("encounter_defs"): return state
+	if not _source.table_names.has("encounter_defs") or not _additive_content(catalog, _source): return null
+	var existing_upgrade: Array[Dictionary] = _records("SELECT r.upgraded_snapshot_id FROM content_upgrade_record r JOIN content_snapshot c ON c.content_snapshot_id=r.new_content_id WHERE r.world_id=? AND r.source_snapshot_id=? AND c.content_hash=?", [state.world_id, state.snapshot.meta.snapshot_id, _source.content_hash])
+	if not existing_upgrade.is_empty(): return self.load("snapshot:" + str(existing_upgrade[0].upgraded_snapshot_id), "", -1, prepare)
+	var destination: String = ProjectSettings.globalize_path(path).get_base_dir().path_join("content-upgrade-%s-%s-backup.db" % [state.world_id, state.snapshot.meta.snapshot_id])
+	if not backup(destination): return null
+	if not _begin_operation("UPGRADING"): return null
+	var candidate: State = clone_state(state)
+	if candidate == null:
+		_end_operation(false)
+		return null
+	if not _q("BEGIN IMMEDIATE; PRAGMA defer_foreign_keys=ON;"):
+		_end_operation(false)
+		return null
+	var content_id: String = _freeze()
+	if content_id.is_empty():
+		_rollback()
+		return null
+	var source_snapshot: String = state.snapshot.meta.snapshot_id
+	var old_content: String = state.snapshot.content.content_snapshot_id
+	_copy_content(candidate, _records("SELECT * FROM content_snapshot WHERE content_snapshot_id=?", [content_id])[0])
+	for definition in _source.rows("encounter_defs"):
+		if candidate.find("encounter_state", "encounter_id", definition.encounter_id) == null:
+			var encounter: Dtos.EncounterStateDto = Dtos.EncounterStateDto.new()
+			encounter.encounter_id = definition.encounter_id
+			var living: bool = false
+			for member in _source.rows("encounter_members"):
+				if member.encounter_id != definition.encounter_id: continue
+				var npc: RefCounted = candidate.find("npc_state", "spawn_id", member.spawn_id)
+				if npc != null:
+					encounter.generation = maxi(encounter.generation, npc.generation)
+					living = living or npc.alive
+					encounter.respawn_remaining_s = maxf(encounter.respawn_remaining_s, npc.respawn_remaining_s)
+			if living: encounter.respawn_remaining_s = 0.0
+			candidate.add("encounter_state", encounter)
+	candidate.capture_sequence += 1
+	_prepare_meta(candidate, "migration", "")
+	var frozen: Catalog = Catalog.new()
+	if not _verify_frozen(content_id, frozen):
+		frozen.close(); _rollback(); return null
+	staging_catalog = frozen
+	if prepare.is_valid() and prepare.call(candidate) != true:
+		staging_catalog = null; frozen.close(); _rollback("CONTENT_UPGRADE_STAGING_FAILED"); return null
+	var selection: Array[Dictionary] = _records("SELECT generation FROM save_slot WHERE slot_id=?", [_slot_id(state.world_id, "auto", 0)])
+	var generation: int = 0 if selection.is_empty() else int(selection[0].generation)
+	if not _write_snapshot(candidate) or not _insert("snapshot_lineage", {"child_snapshot_id": candidate.snapshot.meta.snapshot_id, "parent_snapshot_id": source_snapshot}) or not _insert("content_upgrade_record", {"world_id": state.world_id, "source_snapshot_id": source_snapshot, "upgraded_snapshot_id": candidate.snapshot.meta.snapshot_id, "old_content_id": old_content, "new_content_id": content_id, "upgrade_kind": "additive_encounters_v1", "created_utc": _utc()}) or not _publish(candidate, "auto", 0, generation) or not _checkpoint("content_upgrade") or not _q("COMMIT"):
+		staging_catalog = null; frozen.close(); _rollback("CONTENT_UPGRADE_FAILED: " + last_error); return null
+	if catalog != _source: catalog.close()
+	catalog = frozen; staging_catalog = null; active_state = candidate
+	_end_operation(true)
+	return candidate
+
+func _additive_content(previous: Catalog, next: Catalog) -> bool:
+	var before_meta: Dictionary = previous.rows("catalog_meta")[0]
+	var after_meta: Dictionary = next.rows("catalog_meta")[0]
+	if before_meta.pack_id != after_meta.pack_id or after_meta.content_version != "v0.5-encounters": return _fail("Unreviewed additive content upgrade")
+	var extensible: Array[String] = ["npc_defs", "anchor_defs", "npc_spawn_defs", "npc_patrol_points"]
+	for table in previous.table_names:
+		if table == "catalog_meta": continue
+		if not next.table_names.has(table) or Catalog.schema_signature(previous.column_info[table], table) != Catalog.schema_signature(next.column_info[table], table): return _fail("Content upgrade changes existing schema: " + table)
+		var keys: Array[String] = []
+		for column in previous.column_info[table]:
+			if int(column.pk) > 0: keys.append(str(column.name))
+		var index: Dictionary = {}
+		for entry in next.rows(table): index[_content_key(entry, keys)] = entry
+		if next.rows(table).size() != previous.rows(table).size() and not extensible.has(table): return _fail("Content upgrade appends unreviewed existing rules: " + table)
+		for entry in previous.rows(table):
+			var key: String = _content_key(entry, keys)
+			if not index.has(key) or index[key] != entry: return _fail("Content upgrade changes existing definition: " + table + ":" + key)
+	for name in previous.view_sql:
+		if not next.view_sql.has(name) or next.view_sql[name] != previous.view_sql[name]: return _fail("Content upgrade changes existing derived view: " + str(name))
+	return true
+
+static func _content_key(entry: Dictionary, keys: Array[String]) -> String:
+	var result: String = ""
+	var fields: Array = keys if not keys.is_empty() else entry.keys()
+	for key in fields:
+		var value: String = str(entry[key])
+		result += "%d:%s" % [value.length(), value]
+	return result
+
 func resume(prepare: Callable = Callable()) -> State:
 	if busy or _db == null:
 		_fail("Store is busy/closed")
@@ -297,6 +384,7 @@ func prune(keep_recent: int = 3) -> bool:
 		for row in _records("SELECT current_snapshot_id AS id FROM save_slot WHERE world_id=? UNION SELECT initial_snapshot_id FROM world_initialization_grant WHERE world_id=? UNION SELECT loaded_snapshot_id FROM runtime_session WHERE world_id=? UNION SELECT resume_snapshot_id FROM runtime_session WHERE world_id=?", [world.world_id, world.world_id, world.world_id, world.world_id]):
 			if row.id != null: protected.append(row.id)
 		for row in _records("SELECT snapshot_id FROM save_snapshot WHERE world_id=? AND status='sealed' ORDER BY rowid DESC LIMIT ?", [world.world_id, keep_recent]): protected.append(row.snapshot_id)
+		for row in _records("SELECT source_snapshot_id AS id FROM content_upgrade_record WHERE world_id=? UNION SELECT upgraded_snapshot_id FROM content_upgrade_record WHERE world_id=?", [world.world_id, world.world_id]): protected.append(row.id)
 		for row in _records("SELECT snapshot_id FROM save_snapshot WHERE world_id=?", [world.world_id]):
 			if not protected.has(row.snapshot_id) and not _q("DELETE FROM save_snapshot WHERE snapshot_id=?", [row.snapshot_id]): return _rollback()
 	return _q("COMMIT")
@@ -305,7 +393,7 @@ func _migrate() -> bool:
 	var existing: Array[Dictionary] = _records("SELECT name FROM sqlite_schema WHERE type='table'")
 	if not existing.is_empty():
 		var meta: Array[Dictionary] = _records("SELECT application_id,format_version FROM database_meta")
-		if meta.is_empty() or meta[0].application_id != "xingjizhanjian" or meta[0].format_version not in [1,2,3,4,5]: return _fail("Unsupported progress format; preserved")
+		if meta.is_empty() or meta[0].application_id != "xingjizhanjian" or meta[0].format_version not in [1,2,3,4,5,6]: return _fail("Unsupported progress format; preserved")
 		var applied_count: int = int(meta[0].format_version) + 3
 		if int(_records("SELECT count(*) AS n FROM migration_history")[0].n) != applied_count: return _fail("Migration history/format mismatch; preserved")
 		for name in MIGRATIONS.slice(0, applied_count):
@@ -323,7 +411,7 @@ func _migrate() -> bool:
 	for name in MIGRATIONS:
 		var source_path: String = "res://database/progress/" + name
 		if not _q(FileAccess.get_file_as_string(source_path)) or not _insert("migration_history", {"migration_id": name, "sql_sha256": FileAccess.get_sha256(source_path), "applied_utc": _utc()}) or not _checkpoint("migration:" + name): return _rollback("Migration interrupted: " + name)
-	return _q("PRAGMA user_version=5; COMMIT;")
+	return _q("PRAGMA user_version=6; COMMIT;")
 
 func _freeze() -> String:
 	var hash_value: String = _source.logical_hash()
@@ -373,7 +461,7 @@ func _verify_frozen(content_id: String, result: Catalog) -> bool:
 
 func _write_snapshot(state: State) -> bool:
 	var validator: Validation = Validation.new()
-	var definitions: Catalog = _source if state.snapshot.meta.reason == "initial" else catalog
+	var definitions: Catalog = staging_catalog if staging_catalog != null else _source if state.snapshot.meta.reason == "initial" else catalog
 	if not validator.validate(state, definitions): return _fail(validator.last_error)
 	var values: Dictionary = _plain_object(state.snapshot.meta)
 	values.erase("has_transfer_id")
@@ -531,6 +619,7 @@ static func _rule_version(definitions: Catalog) -> String:
 
 static func _adapter_version(definitions: Catalog) -> String:
 	if int(definitions.rows("catalog_meta")[0].schema_version) <= 2: return "frozen_catalog_v0_3"
+	if definitions.table_names.has("encounter_defs"): return "frozen_catalog_v0_5"
 	return ADAPTER_VERSION if definitions.table_names.has("signal_unlock_rewards") else "frozen_catalog_v0_4"
 
 func _validate_registered_schema() -> bool:

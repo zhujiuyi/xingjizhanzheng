@@ -16,6 +16,13 @@ func check(value: bool, label: String) -> void:
 	print(("PASS " if value else "FAIL ") + label)
 	if not value: failures.append(label)
 
+func encoded_rows(state: State, table: String) -> Array[String]:
+	var result: Array[String] = []
+	var codec: Codec = Codec.new()
+	for row: RefCounted in state.rows(table): result.append(JSON.stringify(codec.encode_row(table, row), "", true, true))
+	result.sort()
+	return result
+
 func _initialize() -> void:
 	var full: bool = OS.get_cmdline_user_args().has("current")
 	var path: String = ProjectSettings.globalize_path("res://../jiaoben/tmp/store-native-full.db" if full else "res://../jiaoben/tmp/store-native-b.db")
@@ -26,6 +33,11 @@ func _initialize() -> void:
 	if not failures.is_empty():
 		quit(1)
 		return
+	var registered: Array[String] = []
+	for entry: Dictionary in store._records("SELECT name FROM sqlite_schema WHERE type='table' AND name LIKE '%_state' ORDER BY name COLLATE BINARY"): registered.append(entry.name)
+	var expected_registry: Array[String] = State.TABLES.duplicate()
+	expected_registry.sort()
+	check(registered == expected_registry, "actual migrated SQL state registry equals every runtime DTO group")
 	var state: State = store.new_world("新档原生测试", 42)
 	check(state != null, "native new world " + store.last_error)
 	if state == null:
@@ -34,6 +46,10 @@ func _initialize() -> void:
 		return
 	check(state.player().credit == int(store.catalog.rows("starting_profile_defs")[0].starting_credit), "initial grant derived from DB")
 	check(state.rows("mission_state").is_empty() and not state.rows("mission_availability_state").is_empty(), "offers separate from attempts")
+	if full:
+		check(state.rows("encounter_state").size() == store.catalog.rows("encounter_defs").size(), "fresh world includes every frozen combat site state")
+	else:
+		check(state.rows("encounter_state").is_empty() and state.rows("salvage_package_state").is_empty(), "historical frozen world gains no unrelated new content state")
 	var cursor: Rng = Rng.new(state.rows("rng_state")[0])
 	var official: Array[int] = [0xa15c02b7, 0x7b47f409, 0xba1d3330, 0x83d2f293, 0xbfa4784b, 0xcbed606e]
 	var golden: bool = cursor.valid()
@@ -63,6 +79,27 @@ func _initialize() -> void:
 		var decoded: RefCounted = codec.decode_row(table, encoded)
 		check(decoded != null and codec.encode_row(table, decoded) == encoded, "every typed field roundtrip " + table)
 	if full:
+		# Historical source identities deliberately have no live NPC row: their
+		# packages must survive retiring an old combat generation.
+		var package_definition: Dictionary = store.catalog.rows("salvage_package_defs")[0]
+		var reward: Dictionary = store.catalog.one("salvage_reward_defs", "package_def_id", package_definition.package_def_id)
+		for opened: bool in [false, true]:
+			var package: Dtos.SalvagePackageStateDto = Dtos.SalvagePackageStateDto.new()
+			package.package_id = "native-opened-package" if opened else "native-sealed-package"
+			package.package_def_id = package_definition.package_def_id
+			package.source_npc_instance_id = "retired-native-npc-opened" if opened else "retired-native-npc-sealed"
+			package.source_generation = 3
+			package.reward_id = reward.reward_id
+			package.status = "opened" if opened else "sealed"
+			package.has_host_container_id = not opened
+			package.host_container_id = "" if opened else "hold-cargo"
+			package.has_opened_station_id = opened
+			package.opened_station_id = state.player().docked_station_id if opened else ""
+			package.opened_tick = state.snapshot.meta.simulation_tick if opened else 0
+			check(state.add("salvage_package_state", package), "add valid independent " + package.status + " recovery package")
+		var group: Dtos.EncounterStateDto = state.rows("encounter_state")[0]
+		group.generation = 3
+		group.respawn_remaining_s = float(store.catalog.one("encounter_defs", "encounter_id", group.encounter_id).respawn_seconds) / 4.0
 		var facility: Dtos.BaseModuleStateDto = Dtos.BaseModuleStateDto.new()
 		facility.player_id = state.player().player_id
 		facility.base_instance_id = "native-test-facility"
@@ -119,6 +156,8 @@ func _initialize() -> void:
 	if loaded != null:
 		check(loaded.player().credit == credit, "committed credit restored")
 		check(loaded.rows("equipment_state").size() == old.rows("equipment_state").size(), "typed equipment restored")
+		for table: String in State.TABLES:
+			check(encoded_rows(loaded, table) == encoded_rows(old, table), "SQL reopen restores complete typed row payload " + table)
 		var resumed_rng: Rng = Rng.new(loaded.rows("rng_state")[0])
 		var reference_rng: Rng = Rng.new(old.rows("rng_state")[0])
 		var sequence_matches: bool = true

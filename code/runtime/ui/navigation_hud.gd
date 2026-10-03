@@ -165,6 +165,7 @@ func refresh() -> void:
 		var node: Variant = target.get("node")
 		if not is_instance_valid(node) or not node is Node3D: continue
 		var distance: float = world.flight.global_position.distance_to(node.global_position)
+		if world.has_method("contact_visible") and not world.call("contact_visible", target, distance): continue
 		var relative: Vector3 = render_ship.basis.inverse() * (_render_target_position(node) - render_ship.origin)
 		var bearing: bool = bool(target.get("navigation_only", false))
 		if not bearing and distance > minf(radius_m(), sensor_limit): continue
@@ -274,6 +275,7 @@ func marker_geometry() -> Array[Dictionary]:
 		if str(entry.id) == selected_id: continue
 		var node: Variant = entry.get("node")
 		if not is_instance_valid(node) or not node is Node3D: continue
+		if world.has_method("contact_visible") and not world.call("contact_visible", entry, world.flight.global_position.distance_to(node.global_position)): continue
 		if not bool(entry.get("navigation_only", false)) and world.flight.global_position.distance_to(node.global_position) > sensor_limit: continue
 		var render_target_position: Vector3 = _render_target_position(node)
 		if (rig.camera.global_transform.affine_inverse() * render_target_position).z >= -0.001: continue

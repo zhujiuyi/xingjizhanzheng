@@ -65,6 +65,9 @@ func create(catalog: XJCatalog, seed_value: int) -> State:
 		_add("gate_state", {"connection_id": connection.connection_id, "enabled": 1, "remaining_mass_budget_kg": gate.total_mass_budget_kg, "lifetime_remaining_s": gate.lifetime_s})
 	for sector in catalog.rows("sector_defs"):
 		_add("sector_state", {"sector_id": sector.sector_id, "visited": 1 if sector.sector_id == station.sector_id else 0})
+	if catalog.table_names.has("encounter_defs"):
+		for encounter in catalog.rows("encounter_defs"):
+			_add("encounter_state", {"encounter_id": encounter.encounter_id})
 	for stock in catalog.rows("station_stock_defs"):
 		var item: Dictionary = catalog.one("item_defs", "item_id", stock.item_id)
 		_add("shop_stock_state", {"station_id": stock.station_id, "item_def_id": stock.item_id, "quantity": stock.initial_units, "buyback_remaining_units": stock.buyback_units_per_refresh, "ask_credit": item.base_ask_credit, "bid_credit": item.base_bid_credit, "refresh_remaining_s": catalog.one("station_defs", "station_id", stock.station_id).stock_refresh_s})

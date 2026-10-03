@@ -49,6 +49,10 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual(p.verify_frozen_content(self.db, self.content), build_catalog.logical_content_hash(self.source))
         names = {r[0] for r in self.db.execute("SELECT table_name FROM content_table_manifest")}
         self.assertEqual(names, set(build_catalog.CONTENT_TABLES))
+        registered = {r[0] for r in self.db.execute("SELECT name FROM sqlite_schema WHERE type='table' AND name LIKE '%_state'")}
+        self.assertEqual(registered, set(p.STATE_TABLES))
+        self.assertEqual({r["encounter_id"] for r in p.rows(self.db, "encounter_state", "snapshot_id=?", (self.initial,))},
+                         {r["encounter_id"] for r in p.rows(self.source, "encounter_defs")})
         self.assertEqual({r[0] for r in self.db.execute("SELECT view_name FROM content_view_manifest")}, set(build_catalog.CONTENT_VIEWS))
         self.assertEqual(self.db.execute("PRAGMA foreign_key_check").fetchall(), [])
         self.assertEqual(self.db.execute("PRAGMA integrity_check").fetchall(), [("ok",)])
@@ -65,7 +69,11 @@ class ProgressTests(unittest.TestCase):
         for sql in ("UPDATE frozen_ship_defs SET max_speed_mps=max_speed_mps+1",
                     "DELETE FROM frozen_recipe_inputs", "UPDATE content_table_manifest SET row_count=0",
                     "UPDATE content_view_manifest SET reviewed_source_sql='SELECT 1'",
-                    "UPDATE content_snapshot SET ruleset_version='wrong'"):
+                    "UPDATE content_snapshot SET ruleset_version='wrong'",
+                    "UPDATE frozen_encounter_defs SET respawn_seconds=respawn_seconds+1",
+                    "DELETE FROM frozen_encounter_members",
+                    "UPDATE frozen_salvage_package_defs SET mass_kg=mass_kg+1",
+                    "DELETE FROM frozen_salvage_reward_defs", "DELETE FROM frozen_npc_salvage_defs"):
             with self.subTest(sql=sql), self.assertRaises(sqlite3.IntegrityError):
                 self.db.execute(sql)
 
@@ -164,6 +172,92 @@ class ProgressTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             p.apply_migrations(self.db)
 
+    def test_format5_009_failure_preserves_prior_schema_and_retry(self):
+        database = p.connect()
+        self.addCleanup(database.close)
+        pieces = ["BEGIN IMMEDIATE;"]
+        for name in p.MIGRATIONS[:-1]:
+            path = p.PROGRESS_DIR / name
+            pieces.append(path.read_text(encoding="utf-8"))
+            pieces.append("INSERT INTO migration_history VALUES(" + repr(name) + "," +
+                          repr(hashlib.sha256(path.read_bytes()).hexdigest()) + "," + repr(p.utc_now()) + ");")
+        pieces.append("COMMIT;")
+        database.executescript("\n".join(pieces))
+        p.insert(database, "profile", {"profile_id": "format5-profile", "display_name": "保留旧资料", "created_utc": p.utc_now()})
+        history = database.execute("SELECT * FROM migration_history ORDER BY migration_id").fetchall()
+        prior_schema = database.execute("SELECT type,name,sql FROM sqlite_schema ORDER BY type,name").fetchall()
+        self.assertEqual(database.execute("SELECT format_version FROM database_meta").fetchone(), (5,))
+        with self.assertRaises(sqlite3.OperationalError):
+            p.apply_migrations(database, fault_after=len(p.MIGRATIONS))
+        self.assertEqual(database.execute("SELECT type,name,sql FROM sqlite_schema ORDER BY type,name").fetchall(), prior_schema)
+        self.assertEqual(database.execute("SELECT * FROM migration_history ORDER BY migration_id").fetchall(), history)
+        self.assertEqual(database.execute("SELECT display_name FROM profile").fetchall(), [("保留旧资料",)])
+        self.assertEqual(database.execute("PRAGMA user_version").fetchone(), (5,))
+        p.apply_migrations(database)
+        self.assertEqual(database.execute("SELECT format_version FROM database_meta").fetchone(), (p.FORMAT_VERSION,))
+        self.assertEqual(database.execute("SELECT * FROM migration_history ORDER BY migration_id").fetchall()[:-1], history)
+        self.assertEqual({r[0] for r in database.execute("SELECT name FROM sqlite_schema WHERE type='table' AND name LIKE '%_state'")}, set(p.STATE_TABLES))
+        self.assertEqual(database.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_every_registered_state_group_copies_and_loads_complete_payload(self):
+        package_def = p.rows(self.source, "salvage_package_defs")[0]
+        reward = p.rows(self.source, "salvage_reward_defs", "package_def_id=?", (package_def["package_def_id"],))[0]
+        station = p.rows(self.db, "player_state", "snapshot_id=?", (self.initial,))[0]["docked_station_id"]
+
+        def add_new_state(database, snapshot):
+            ctx = p.context(snapshot, "world-a", self.content)
+            # The origin NPC is historical and may already have been retired.
+            for status in ("sealed", "opened"):
+                p.insert(database, "salvage_package_state", {**ctx, "package_id": "copy-" + status,
+                    "package_def_id": package_def["package_def_id"], "source_npc_instance_id": "retired-" + status,
+                    "source_generation": 3, "host_container_id": "warehouse" if status == "sealed" else None,
+                    "reward_id": reward["reward_id"], "status": status,
+                    "opened_station_id": station if status == "opened" else None, "opened_tick": 0})
+            database.execute("UPDATE encounter_state SET generation=3,respawn_remaining_s=15.25 WHERE snapshot_id=?", (snapshot,))
+
+        p.save_copy(self.db, self.initial, "all-groups", "auto-world-a", 1, mutate=add_new_state)
+        p.save_copy(self.db, "all-groups", "copied-groups", "auto-world-a", 2)
+        snapshot, payload = p.load_slot(self.db, "auto-world-a", "all-groups-loader")
+        self.assertEqual(snapshot["snapshot_id"], "copied-groups")
+        self.assertEqual(set(payload), set(p.STATE_TABLES))
+        strip_context = lambda row: {key: value for key, value in row.items() if key not in ("snapshot_id", "world_id", "content_snapshot_id")}
+        for table in p.STATE_TABLES:
+            with self.subTest(table=table):
+                expected = [strip_context(row) for row in p.rows(self.db, table, "snapshot_id=?", ("all-groups",))]
+                actual = [strip_context(row) for row in payload[table]]
+                self.assertEqual(sorted(expected, key=lambda row: json.dumps(row, sort_keys=True)),
+                                 sorted(actual, key=lambda row: json.dumps(row, sort_keys=True)))
+        self.assertEqual(len(payload["salvage_package_state"]), 2)
+        self.assertTrue(all(row["generation"] == 3 and row["respawn_remaining_s"] == 15.25 for row in payload["encounter_state"]))
+        for table, sql in (("encounter_state", "UPDATE encounter_state SET generation=4 WHERE snapshot_id='copied-groups'"),
+                           ("salvage_package_state", "DELETE FROM salvage_package_state WHERE snapshot_id='copied-groups'")):
+            with self.subTest(immutable=table), self.assertRaises(sqlite3.IntegrityError):
+                self.db.execute(sql)
+
+    def test_new_state_rejects_cross_pool_reward_duplicate_source_and_overlong_refresh(self):
+        package_def = p.rows(self.source, "salvage_package_defs")[0]
+        rewards = p.rows(self.source, "salvage_reward_defs")
+        reward = next(row for row in rewards if row["package_def_id"] == package_def["package_def_id"])
+        different = next(row for row in rewards if row["package_def_id"] != package_def["package_def_id"])
+        ctx = self.candidate()
+        package = {**ctx, "package_id": "package-a", "package_def_id": package_def["package_def_id"],
+                   "source_npc_instance_id": "historical-origin", "source_generation": 1, "host_container_id": "warehouse",
+                   "reward_id": reward["reward_id"], "status": "sealed", "opened_station_id": None, "opened_tick": 0}
+        p.insert(self.db, "salvage_package_state", package)
+        with self.assertRaises(sqlite3.IntegrityError):
+            p.insert(self.db, "salvage_package_state", {**package, "package_id": "same-source-second-package"})
+        self.db.execute("UPDATE salvage_package_state SET reward_id=? WHERE snapshot_id='candidate'", (different["reward_id"],))
+        with self.assertRaisesRegex(ValueError, "FK"):
+            p.validate_snapshot(self.db, "candidate")
+        self.db.rollback()
+        self.candidate()
+        definition = p.rows(self.source, "encounter_defs")[0]
+        self.db.execute("UPDATE encounter_state SET respawn_remaining_s=? WHERE snapshot_id='candidate' AND encounter_id=?",
+                        (definition["respawn_seconds"] + 1, definition["encounter_id"]))
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "refresh over frozen definition"):
+            p.validate_snapshot(self.db, "candidate")
+        self.db.rollback()
+
     def test_invalid_quantities_and_quaternion_rejected(self):
         self.candidate()
         for sql in ("UPDATE inventory_stack_state SET quantity=-1 WHERE snapshot_id='candidate'",
@@ -217,7 +311,7 @@ class ProgressTests(unittest.TestCase):
         self.db.rollback()
 
     def test_incomplete_snapshot_cannot_seal(self):
-        for table in ("player_state", "rng_state", "resource_state", "shop_stock_state", "gate_state", "sector_state"):
+        for table in ("player_state", "rng_state", "resource_state", "shop_stock_state", "gate_state", "sector_state", "encounter_state"):
             with self.subTest(missing=table):
                 self.candidate()
                 self.db.execute(f'DELETE FROM "{table}" WHERE snapshot_id=?', ("candidate",))

@@ -710,3 +710,44 @@ CREATE TABLE signal_unlock_rewards (
  signal_id TEXT NOT NULL REFERENCES signal_defs(signal_id), unlock_id TEXT NOT NULL REFERENCES unlock_defs(unlock_id),
  PRIMARY KEY(signal_id,unlock_id)
 ) STRICT;
+
+-- Schema4 additive combat sites and station salvage. Existing definitions are unchanged.
+CREATE TABLE encounter_defs (
+    encounter_id TEXT PRIMARY KEY,
+    sector_id TEXT NOT NULL UNIQUE REFERENCES sector_runtime_defs(sector_id),
+    display_name TEXT NOT NULL,
+    anchor_id TEXT NOT NULL UNIQUE,
+    reveal_range_m REAL NOT NULL CHECK(reveal_range_m > 0 AND reveal_range_m < 1e100),
+    respawn_seconds REAL NOT NULL CHECK(respawn_seconds > 0 AND respawn_seconds < 1e100),
+    warp_arrival_m REAL NOT NULL CHECK(warp_arrival_m > 0 AND warp_arrival_m < reveal_range_m),
+    required_unlock_id TEXT NOT NULL REFERENCES unlock_defs(unlock_id),
+    FOREIGN KEY(anchor_id,sector_id) REFERENCES anchor_defs(anchor_id,sector_id)
+) STRICT;
+CREATE TABLE encounter_members (
+    encounter_id TEXT NOT NULL REFERENCES encounter_defs(encounter_id),
+    spawn_id TEXT NOT NULL UNIQUE REFERENCES npc_spawn_defs(spawn_id),
+    member_index INTEGER NOT NULL CHECK(member_index >= 0),
+    PRIMARY KEY(encounter_id,spawn_id),
+    UNIQUE(encounter_id,member_index)
+) STRICT;
+CREATE TABLE salvage_package_defs (
+    package_def_id TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    volume_m3 REAL NOT NULL CHECK(volume_m3 > 0 AND volume_m3 < 1e100),
+    mass_kg REAL NOT NULL CHECK(mass_kg > 0 AND mass_kg < 1e100)
+) STRICT;
+CREATE TABLE salvage_reward_defs (
+    reward_id TEXT PRIMARY KEY,
+    package_def_id TEXT NOT NULL REFERENCES salvage_package_defs(package_def_id),
+    weight INTEGER NOT NULL CHECK(weight > 0 AND weight <= 4294967295),
+    credit_units INTEGER NOT NULL CHECK(credit_units >= 0),
+    item_def_id TEXT REFERENCES item_defs(item_id),
+    quantity INTEGER NOT NULL CHECK(quantity >= 0),
+    UNIQUE(reward_id,package_def_id),
+    CHECK((item_def_id IS NULL AND quantity=0) OR (item_def_id IS NOT NULL AND quantity>0)),
+    CHECK(credit_units>0 OR item_def_id IS NOT NULL)
+) STRICT;
+CREATE TABLE npc_salvage_defs (
+    npc_def_id TEXT PRIMARY KEY REFERENCES npc_defs(npc_id),
+    package_def_id TEXT NOT NULL REFERENCES salvage_package_defs(package_def_id)
+) STRICT;

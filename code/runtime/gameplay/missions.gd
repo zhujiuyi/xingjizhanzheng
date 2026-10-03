@@ -113,6 +113,201 @@ func active_for_target(kind: String,target: String) -> D.MissionStateDto:
 			if obj[key]!=null and obj[key]==target:return mission
 	return null
 
+func guidance(mission_id: String = "", origin_sector: String = "") -> Dictionary:
+	# Location intelligence belongs to the frozen objective definition. A combat
+	# site remains navigable before individual ships enter sensor range.
+	var mission: D.MissionStateDto = active() if mission_id.is_empty() else resolve(mission_id)
+	if mission == null:
+		return station_guidance(mission_id, origin_sector) if not mission_id.is_empty() else {}
+	var def: Dictionary = g.definition("mission_defs", "mission_id", mission.mission_def_id)
+	var result: Dictionary = {}
+	if mission.status == "ready":
+		result = _station_location(str(def.turnin_station_id))
+		result["objective_kind"] = "turnin"
+	else:
+		for obj: Dictionary in objectives(mission.mission_def_id):
+			var current: D.MissionObjectiveStateDto = progress(mission, int(obj.objective_index))
+			if current != null and current.progress_units >= int(obj.required_count): continue
+			result = objective_guidance(obj, origin_sector)
+			result["progress_units"] = current.progress_units if current != null else 0
+			break
+	if result.is_empty():
+		result = _station_location(str(def.turnin_station_id))
+		result["objective_kind"] = "turnin"
+	result["mission_id"] = mission.mission_def_id
+	result["mission_instance_id"] = mission.mission_instance_id
+	result["status"] = mission.status
+	return _route_location(result, origin_sector)
+
+func station_guidance(mission_id: String, origin_sector: String = "") -> Dictionary:
+	var def: Dictionary = g.definition("mission_defs", "mission_id", mission_id)
+	if def.is_empty(): return {}
+	var result: Dictionary = _station_location(str(def.accept_station_id))
+	result["mission_id"] = mission_id
+	result["objective_kind"] = "accept"
+	result["status"] = "completed" if completed(mission_id) else "unaccepted"
+	return _route_location(result, origin_sector)
+
+func objective_guidance(obj: Dictionary, origin_sector: String = "") -> Dictionary:
+	var kind: String = str(obj.get("objective_kind", ""))
+	var result: Dictionary = {}
+	match kind:
+		"destroy_spawn":
+			var spawn: Dictionary = g.definition("npc_spawn_defs", "spawn_id", str(obj.get("target_spawn_id", "")))
+			if not spawn.is_empty():
+				var enemy: Dictionary = g.definition("npc_full_defs", "npc_id", str(spawn.npc_id))
+				result = _anchor_location(str(spawn.anchor_id), "encounter:" + str(spawn.spawn_id), "encounter", str(enemy.get("display_name", "敌方舰船")) + "群 · 任务地点")
+				result["spawn_id"] = str(spawn.spawn_id)
+		"scan_signal":
+			var signal_def: Dictionary = g.definition("signal_defs", "signal_id", str(obj.get("target_signal_id", "")))
+			if not signal_def.is_empty(): result = _anchor_location(str(signal_def.anchor_id), str(signal_def.signal_id), "signal", str(signal_def.display_name))
+		"collect":
+			var node: Dictionary = g.definition("resource_node_locations", "node_id", str(obj.get("target_node_id", "")))
+			var item: Dictionary = g.definition("item_defs", "item_id", str(obj.get("target_item_id", "")))
+			if not node.is_empty(): result = _anchor_location(str(node.anchor_id), str(node.node_id), "resource", str(item.get("display_name", "指定矿物")) + "矿点")
+		"reach_anchor", "brake_at_anchor":
+			var anchor_id: String = str(obj.get("target_anchor_id", ""))
+			result = _anchor_location(anchor_id, anchor_id, "marker", "教学航路标")
+		"loan_checkout", "fit_validate":
+			var service: Dictionary = g.definition("loan_service_defs", "loan_service_id", str(obj.get("target_loan_service_id", "")))
+			if not service.is_empty():
+				result = _station_location(str(service.station_id))
+				result["required_page"] = "ships" if kind == "loan_checkout" else "fitting"
+		"dock", "undock", "deliver":
+			result = _station_location(str(obj.get("target_station_id", "")))
+		"transit_connection":
+			var source: String = origin_sector if not origin_sector.is_empty() else g.state.current_sector()
+			var connection_id: String = str(obj.get("target_connection_id", ""))
+			for endpoint: Dictionary in g.rows("gate_endpoint_defs"):
+				if str(endpoint.connection_id) != connection_id: continue
+				if result.is_empty() or str(endpoint.origin_sector_id) == source:
+					result = _anchor_location(str(endpoint.entry_anchor_id), str(endpoint.endpoint_id), "gate", "任务虫洞门")
+					result["connection_id"] = connection_id
+					result["destination_sector_id"] = str(endpoint.target_sector_id)
+				if str(endpoint.origin_sector_id) == source: break
+	if result.is_empty(): return {}
+	result["objective_kind"] = kind
+	result["objective_index"] = int(obj.get("objective_index", -1))
+	result["required_count"] = int(obj.get("required_count", 1))
+	return _route_location(result, origin_sector)
+
+func _station_location(station_id: String) -> Dictionary:
+	var station_def: Dictionary = g.definition("station_defs", "station_id", station_id)
+	if station_def.is_empty(): return {}
+	return _anchor_location(str(station_def.station_anchor_id), station_id, "station", str(station_def.display_name))
+
+func _anchor_location(anchor_id: String, target_id: String, kind: String, title: String) -> Dictionary:
+	var anchor: Dictionary = g.definition("anchor_defs", "anchor_id", anchor_id)
+	if anchor.is_empty(): return {}
+	return {"target_id": target_id, "target_kind": kind, "target_title": title, "anchor_id": anchor_id, "sector_id": str(anchor.sector_id), "position": Vector3(float(anchor.x_m), float(anchor.y_m), float(anchor.z_m)), "required_page": ""}
+
+func _route_location(location: Dictionary, origin_sector: String) -> Dictionary:
+	if location.is_empty(): return {}
+	var source: String = origin_sector if not origin_sector.is_empty() else g.state.current_sector()
+	var destination: String = str(location.get("sector_id", ""))
+	location["local"] = source == destination
+	location["waypoint_id"] = str(location.get("target_id", "")) if source == destination else ""
+	location["waypoint_kind"] = str(location.get("target_kind", "")) if source == destination else ""
+	location["waypoint_title"] = str(location.get("target_title", "")) if source == destination else ""
+	location["route_reason"] = ""
+	location["route_sectors"] = [source]
+	if source == destination:
+		if str(location.get("target_kind", "")) == "gate":
+			var endpoint: Dictionary = g.definition("gate_endpoint_defs", "endpoint_id", str(location.get("target_id", "")))
+			location["route_reason"] = _gate_route_reason(endpoint, float(g.metrics(g.state.ship()).total_mass_kg))
+		return location
+	var route: Array[Dictionary] = _route(source, destination, true)
+	if route.is_empty(): route = _route(source, destination, false)
+	if route.is_empty():
+		location["route_reason"] = "未找到通往任务地点的虫洞航路"
+		return location
+	var first: Dictionary = route[0]
+	location["waypoint_id"] = str(first.endpoint_id)
+	location["waypoint_kind"] = "gate"
+	location["waypoint_title"] = "通往 " + _sector_title(str(first.target_sector_id)) + " 的虫洞门"
+	var sectors: Array[String] = [source]
+	var mass: float = float(g.metrics(g.state.ship()).total_mass_kg)
+	for endpoint: Dictionary in route:
+		sectors.append(str(endpoint.target_sector_id))
+		if str(location.route_reason).is_empty():
+			var reason: String = _gate_route_reason(endpoint, mass)
+			if not reason.is_empty(): location["route_reason"] = _sector_title(str(endpoint.origin_sector_id)) + " → " + _sector_title(str(endpoint.target_sector_id)) + "：" + reason
+	location["route_sectors"] = sectors
+	return location
+
+func _route(source: String, destination: String, unlocked_only: bool) -> Array[Dictionary]:
+	var queue: Array[String] = [source]
+	var seen: Dictionary = {source: true}
+	var paths: Dictionary = {source: []}
+	var endpoints: Array[Dictionary] = g.rows("gate_endpoint_defs").duplicate()
+	endpoints.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.endpoint_id) < str(b.endpoint_id))
+	var mass: float = float(g.metrics(g.state.ship()).total_mass_kg)
+	while not queue.is_empty():
+		var current: String = queue.pop_front()
+		for endpoint: Dictionary in endpoints:
+			if str(endpoint.origin_sector_id) != current: continue
+			if unlocked_only and not _gate_route_reason(endpoint, mass).is_empty(): continue
+			var next: String = str(endpoint.target_sector_id)
+			if seen.has(next): continue
+			seen[next] = true
+			var path: Array[Dictionary] = []
+			for previous: Dictionary in paths[current]: path.append(previous)
+			path.append(endpoint)
+			if next == destination: return path
+			paths[next] = path
+			queue.append(next)
+	return []
+
+func _gate_route_reason(endpoint: Dictionary, mass: float) -> String:
+	# Route intelligence excludes doors this loaded hull cannot currently cross.
+	# Entry distance, cooldown, fees and combat are revalidated at the door.
+	if endpoint.is_empty(): return "任务虫洞定义不可用"
+	if not g.unlocked(str(endpoint.required_unlock_id)):
+		var unlock: Dictionary = g.definition("unlock_defs", "unlock_id", str(endpoint.required_unlock_id))
+		return "航路需解锁 " + str(unlock.get("display_name", "虫洞权限"))
+	var connection: Dictionary = g.definition("effective_connection_defs", "connection_id", str(endpoint.connection_id))
+	var gate: D.GateStateDto = g.state.find("gate_state", "connection_id", str(endpoint.connection_id))
+	if connection.is_empty() or gate == null: return "航门状态不可用"
+	if gate.has_lifetime_remaining_s and gate.lifetime_remaining_s <= 0.0: return "虫洞寿命已耗尽"
+	if not gate.enabled: return "航门处于关闭状态"
+	if mass > float(connection.max_gross_mass_kg): return "当前舰船总质量超过单舰通行上限；卸货或换用较小舰船"
+	if gate.has_remaining_mass_budget_kg and mass > gate.remaining_mass_budget_kg: return "虫洞剩余总质量额度不足；选择其他航路"
+	return ""
+
+func _sector_title(sector_id: String) -> String:
+	var sector_def: Dictionary = g.definition("sector_defs", "sector_id", sector_id)
+	var system_def: Dictionary = g.definition("system_defs", "system_id", str(sector_def.get("system_id", "")))
+	return str(system_def.get("display_name", "任务星系"))
+
+func chain(kind: String) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for def: Dictionary in g.rows("mission_defs"):
+		if str(def.mission_kind) == kind: result.append(def)
+	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var depth_a: int = _chain_depth(str(a.mission_id), {})
+		var depth_b: int = _chain_depth(str(b.mission_id), {})
+		return str(a.mission_id) < str(b.mission_id) if depth_a == depth_b else depth_a < depth_b)
+	return result
+
+func missing_prerequisite(mission_id: String, visited: Dictionary = {}) -> String:
+	if visited.has(mission_id): return ""
+	visited = visited.duplicate()
+	visited[mission_id] = true
+	for dependency: Dictionary in g.rows("mission_prerequisites"):
+		if str(dependency.mission_id) != mission_id or completed(str(dependency.prerequisite_mission_id)): continue
+		var prior: String = str(dependency.prerequisite_mission_id)
+		var earlier: String = missing_prerequisite(prior, visited)
+		return prior if earlier.is_empty() else earlier
+	return ""
+
+func _chain_depth(mission_id: String, visited: Dictionary) -> int:
+	if visited.has(mission_id): return 0
+	visited[mission_id] = true
+	var depth: int = 0
+	for dependency: Dictionary in g.rows("mission_prerequisites"):
+		if str(dependency.mission_id) == mission_id: depth = maxi(depth, 1 + _chain_depth(str(dependency.prerequisite_mission_id), visited.duplicate()))
+	return depth
+
 func _delivery_sources(mission:D.MissionStateDto,obj:Dictionary) -> Array[String]:
 	var sources:Array[String]=[g.inventory.warehouse(g.station())]
 	for kind in [T.ContainerKind.CARGO,T.ContainerKind.MINERAL]:

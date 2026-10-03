@@ -91,8 +91,14 @@ static func inspect(sector: XJSector, state: XJRuntimeState, catalog: XJCatalog,
 				if row.container_id != target_id: continue
 				has_cargo = true
 				if int(inventory.call("room", destination, row.item_def_id, 1)) > 0: has_room = true
+			var encounters: RefCounted = gameplay.get("encounters")
+			for package: RefCounted in state.rows("salvage_package_state"):
+				if package.status != "sealed" or not package.has_host_container_id or package.host_container_id != target_id: continue
+				has_cargo = true
+				if encounters != null and bool(encounters.call("can_hold", destination, str(package.package_def_id))): has_room = true
 			if not has_cargo: return _deny(result, "残骸为空")
 			if not has_room: return _deny(result, "货舱或载荷已满")
+			if not _line_of_sight(sector, target_id, node.global_position): return _deny(result, "残骸被遮挡")
 		"signal":
 			var signal_def := catalog.one("signal_defs", "signal_id", target_id)
 			if signal_def.is_empty() or state.find("unlock_state", "unlock_id", signal_def.required_unlock_id) == null: return _deny(result, "扫描权限尚未解锁")
@@ -120,7 +126,9 @@ static func _gate_reason(sector: XJSector, state: XJRuntimeState, catalog: XJCat
 	if state.find("unlock_state", "unlock_id", endpoint.required_unlock_id) == null: return "航门权限未解锁，完成对应任务"
 	var connection := catalog.one("effective_connection_defs", "connection_id", endpoint.connection_id)
 	var gate: RefCounted = state.find("gate_state", "connection_id", endpoint.connection_id)
-	if connection.is_empty() or gate == null or not gate.enabled: return "航门处于关闭状态"
+	if connection.is_empty() or gate == null: return "航门状态不可用"
+	if gate.has_lifetime_remaining_s and gate.lifetime_remaining_s <= 0.0: return "虫洞寿命已耗尽"
+	if not gate.enabled: return "航门处于关闭状态"
 	var cooldown: RefCounted = state.find("ship_gate_cooldown_state", "ship_instance_id", state.ship().ship_instance_id)
 	if cooldown != null and cooldown.remaining_s > 0.0: return "舰船航门冷却 · %.1f s" % cooldown.remaining_s
 	var mass: float = float(gameplay.call("metrics", state.ship()).total_mass_kg)

@@ -59,7 +59,7 @@ func inspect(id: String) -> Dictionary:
 	result.ready = true
 	result.dock_ready = entry.kind == "station" and not bool(gameplay.call("in_combat"))
 	result.dock_reason = "交战中不能停靠" if entry.kind == "station" and not result.dock_ready else ("仅空间站可以停靠" if entry.kind != "station" else "")
-	var target_rule: Dictionary = rules.target(str(entry.kind))
+	var target_rule: Dictionary = _target_rule(entry)
 	if target_rule.warp_arrival_m == null:
 		result.warp_reason = "此目标只支持接近和环绕"
 	elif active():
@@ -93,7 +93,7 @@ func begin(requested_mode: String, id: String) -> bool:
 		origin = world.flight.global_position
 		last_safe_position = origin
 		_safe_positions = [origin]
-		destination = _arrival_point(node, float(rules.target(str(context.kind)).warp_arrival_m))
+		destination = _arrival_point(node, float(_target_rule(world.targets[id]).warp_arrival_m))
 		remaining_s = rules.value("warmup_s")
 		world.flight.velocity = Vector3.ZERO
 		world.flight.write_back()
@@ -139,7 +139,7 @@ func tick(delta: float) -> void:
 		world.flight.write_back()
 		if next.is_equal_approx(destination): _arrive()
 		return
-	var target_rule: Dictionary = rules.target(str(world.targets[target_id].kind))
+	var target_rule: Dictionary = _target_rule(world.targets[target_id])
 	var offset: Vector3 = world.flight.global_position - node.global_position
 	var distance: float = offset.length()
 	var radial: Vector3 = offset / distance if distance > 0.000001 else -world.flight.global_basis.z
@@ -220,7 +220,7 @@ func _target_reason(id: String) -> String:
 	if state.ship() == null or state.ship().status != T.ShipStatus.FLYING: return "出港后才能自动航行"
 	if not world.targets.has(id): return "目标不在当前星系"
 	var entry: Dictionary = world.targets[id]
-	if bool(entry.get("navigation_only", false)) or not rules.targets.has(str(entry.kind)): return "远景天体仅供航向参考"
+	if bool(entry.get("navigation_only", false)) or (str(entry.kind) != "encounter" and not rules.targets.has(str(entry.kind))): return "远景天体仅供航向参考"
 	var candidate: Variant = entry.get("node")
 	if not is_instance_valid(candidate) or not candidate is Node3D or not candidate.is_inside_tree(): return "目标已离开或失效"
 	var definition: Dictionary
@@ -235,6 +235,9 @@ func _target_reason(id: String) -> String:
 			if signal_def.is_empty(): return "导航信号定义不可用"
 			definition = gameplay.call("definition", "anchor_defs", "anchor_id", str(signal_def.anchor_id))
 		"marker": definition = gameplay.call("definition", "anchor_defs", "anchor_id", id)
+		"encounter":
+			definition = gameplay.call("definition", "anchor_defs", "anchor_id", str(entry.anchor_id))
+			if definition.is_empty() or str(definition.sector_id) != state.current_sector(): return "战斗地点不在当前星系"
 		"wreck":
 			var container: RefCounted = state.find("container_state", "container_id", id)
 			if container == null or container.kind != T.ContainerKind.WRECK or container.sector_id != state.current_sector(): return "残骸不在当前星系"
@@ -247,6 +250,13 @@ func _target_reason(id: String) -> String:
 		var sensor: float = float(catalog.rule("target_marker_detection_range_m"))
 		if world.flight.global_position.distance_to((candidate as Node3D).global_position) > sensor: return "敌舰超出探测范围"
 	return ""
+
+func _target_rule(entry: Dictionary) -> Dictionary:
+	# A site is a navigation marker, while its stand-off distance is frozen
+	# with the combat encounter. No new balancing constants enter this controller.
+	var result: Dictionary = rules.target("marker" if entry.kind == "encounter" else str(entry.kind))
+	if entry.kind == "encounter": result.warp_arrival_m = entry.warp_arrival_m
+	return result
 
 func _heading_delta(direction: Vector3, delta: float) -> float:
 	if direction.length_squared() < 0.000001: return 0.0

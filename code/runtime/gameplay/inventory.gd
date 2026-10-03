@@ -33,7 +33,7 @@ func accessible(container_id: String) -> bool:
 	return c.ship_instance_id == g.state.ship().ship_instance_id and g.state.ship().status not in [T.ShipStatus.DESTROYED,T.ShipStatus.RETURNED]
 
 func totals(container_id: String) -> Dictionary:
-	var mass: float = 0; var volume: int = 0
+	var mass: float = 0; var volume: float = 0
 	for s in g.state.rows("inventory_stack_state"):
 		if s.container_id != container_id: continue
 		var def: Dictionary = g.definition("item_defs", "item_id", s.item_def_id)
@@ -42,6 +42,11 @@ func totals(container_id: String) -> Dictionary:
 		if item.container_id != container_id: continue
 		var def: Dictionary = g.definition("item_defs", "item_id", item.item_def_id)
 		mass += def.unit_mass_kg; volume += def.unit_volume_l
+	for package: D.SalvagePackageStateDto in g.state.rows("salvage_package_state"):
+		if package.status != "sealed" or not package.has_host_container_id or package.host_container_id != container_id: continue
+		var def: Dictionary = g.definition("salvage_package_defs", "package_def_id", package.package_def_id)
+		mass += float(def.mass_kg)
+		volume += float(def.volume_m3) * 1000.0
 	return {"mass":mass,"volume":volume}
 
 func room(container_id: String, item_id: String, requested: int, moved_mass_credit: float = 0.0) -> int:
@@ -54,7 +59,7 @@ func room(container_id: String, item_id: String, requested: int, moved_mass_cred
 	var ship: D.ShipStateDto = g.state.find("ship_state", "ship_instance_id", c.ship_instance_id)
 	var m: Dictionary = g.metrics(ship)
 	var cap: int = m.mineral_capacity_l if c.kind == T.ContainerKind.MINERAL else m.cargo_capacity_l
-	var used: int = totals(container_id).volume
+	var used: float = float(totals(container_id).volume)
 	var by_volume: int = int(floor(float(cap-used)/item.unit_volume_l)) if item.unit_volume_l > 0 else requested
 	var by_mass: int = int(floor(maxf(0,m.max_payload_mass_kg-m.payload_mass_kg+moved_mass_credit)/item.unit_mass_kg)) if item.unit_mass_kg>0 else requested
 	return maxi(0, mini(requested, mini(by_volume,by_mass)))
@@ -125,6 +130,7 @@ func move_stack(stack_id: String, quantity: int, destination: String) -> bool:
 	grant(destination,stack.item_def_id,quantity,stack.policy_id,stack.bound_mission_instance_id,stack.loan_id)
 	stack.quantity -= quantity
 	if stack.quantity == 0: g.state.remove("inventory_stack_state",stack)
+	remove_empty_wreck(str(source_container.container_id))
 	return true
 
 func move_item(item_id: String, destination: String) -> bool:
@@ -136,6 +142,7 @@ func move_item(item_id: String, destination: String) -> bool:
 	var mass_credit: float = g.definition("item_defs","item_id",item.item_def_id).unit_mass_kg if source_container.has_ship_instance_id and source_container.ship_instance_id==target_container.ship_instance_id else 0.0
 	if room(destination,item.item_def_id,1,mass_credit) < 1: return g.fail("载荷不足")
 	item.container_id = destination
+	remove_empty_wreck(str(source_container.container_id))
 	return true
 
 func fit(item_id: String, _quantity_index: int, target_slot: String) -> bool:
@@ -221,6 +228,11 @@ func unload(ship: D.ShipStateDto, station_id: String, normal_only: bool = true) 
 			if stack.container_id == c.container_id and (not normal_only or stack.policy_id == "normal_owned"): stack.container_id = dest
 		for item in g.state.rows("item_instance_state"):
 			if item.container_id == c.container_id and (not normal_only or item.policy_id == "normal_owned"): item.container_id = dest
+		# A sealed package is ordinary cargo, independently of the hull's loan
+		# policy. Move the original record so its predetermined reward survives.
+		for package: D.SalvagePackageStateDto in g.state.rows("salvage_package_state"):
+			if package.status == "sealed" and package.has_host_container_id and package.host_container_id == c.container_id:
+				package.host_container_id = dest
 
 func retire(ship: D.ShipStateDto) -> void:
 	for c in g.state.rows("container_state"):
@@ -229,6 +241,8 @@ func retire(ship: D.ShipStateDto) -> void:
 			if stack.container_id == c.container_id: g.state.remove("inventory_stack_state",stack)
 		for item in g.state.rows("item_instance_state").duplicate():
 			if item.container_id == c.container_id: erase_item(item)
+		for package: D.SalvagePackageStateDto in g.state.rows("salvage_package_state").duplicate():
+			if package.status == "sealed" and package.has_host_container_id and package.host_container_id == c.container_id: g.state.remove("salvage_package_state", package)
 	ship.status = T.ShipStatus.RETURNED; ship.hull = 0; ship.has_station_id = false; ship.station_id = ""
 
 func wreck(sector: String, pos: Vector3) -> String:
@@ -239,6 +253,7 @@ func ship_destroyed(ship: D.ShipStateDto) -> void:
 	var dest: String = wreck(ship.sector_id,g.position(ship))
 	var stack_groups:Dictionary={}
 	var item_groups:Dictionary={}
+	var packages: Array[D.SalvagePackageStateDto] = []
 	for c in g.state.rows("container_state"):
 		if c.ship_instance_id != ship.ship_instance_id: continue
 		for stack in g.state.rows("inventory_stack_state").duplicate():
@@ -256,6 +271,8 @@ func ship_destroyed(ship: D.ShipStateDto) -> void:
 			var key:String="%s|%s|%s|%s|%s"%[item.item_def_id,item.origin_kind,item.salvage_recipe_id,item.quality_multiplier,item.durability]
 			if not item_groups.has(key):item_groups[key]=[]
 			item_groups[key].append(item)
+		for package: D.SalvagePackageStateDto in g.state.rows("salvage_package_state"):
+			if package.status == "sealed" and package.has_host_container_id and package.host_container_id == c.container_id: packages.append(package)
 	var ratio:float=g.rule("wreck_cargo_recovery_ratio")
 	for key in stack_groups:
 		var group:Array=stack_groups[key];var units:int=0
@@ -272,16 +289,41 @@ func ship_destroyed(ship: D.ShipStateDto) -> void:
 		for index in range(group.size()):
 			if index<survived:group[index].container_id=dest
 			else:erase_item(group[index])
+	packages.sort_custom(func(a: D.SalvagePackageStateDto, b: D.SalvagePackageStateDto) -> bool: return a.package_id < b.package_id)
+	var recovered: int = floori(float(packages.size()) * ratio)
+	for index: int in range(packages.size()):
+		if index < recovered: packages[index].host_container_id = dest
+		else: g.state.remove("salvage_package_state", packages[index])
+	remove_empty_wreck(dest)
 
 func pickup_wreck(container_id: String) -> bool:
 	var c: D.ContainerStateDto = g.state.find("container_state","container_id",container_id)
 	if c==null or c.kind!=T.ContainerKind.WRECK or not accessible(container_id): return g.fail("残骸不在打捞范围")
+	if g.spatial_validator.is_valid() and g.spatial_validator.call(g.position(g.state.ship()), Vector3(c.pos_x, c.pos_y, c.pos_z), container_id) != true: return g.fail("残骸被障碍物遮挡，请调整舰船位置")
 	var dest: String = hold(g.state.ship(),T.ContainerKind.CARGO)
 	var moved: bool = false
 	for stack in g.state.rows("inventory_stack_state").duplicate():
 		if stack.container_id==container_id:
 			var units: int = room(dest,stack.item_def_id,stack.quantity)
-			if units>0: move_stack(stack.stack_id,units,dest);moved=true
+			if units>0 and move_stack(stack.stack_id,units,dest): moved=true
 	for item in g.state.rows("item_instance_state"):
 		if item.container_id==container_id and room(dest,item.item_def_id,1)>0: item.container_id=dest;moved=true
+	var encounters: RefCounted = g.get("encounters")
+	for package: D.SalvagePackageStateDto in g.state.rows("salvage_package_state"):
+		if package.status != "sealed" or not package.has_host_container_id or package.host_container_id != container_id: continue
+		if encounters == null or not bool(encounters.call("can_hold", dest, package.package_def_id)): continue
+		package.host_container_id = dest
+		moved = true
+	remove_empty_wreck(container_id)
 	return moved or g.fail("残骸为空或货舱已满")
+
+func remove_empty_wreck(container_id: String) -> void:
+	var container: D.ContainerStateDto = g.state.find("container_state", "container_id", container_id)
+	if container == null or container.kind != T.ContainerKind.WRECK: return
+	for stack: D.InventoryStackStateDto in g.state.rows("inventory_stack_state"):
+		if stack.container_id == container_id and stack.quantity > 0: return
+	for item: D.ItemInstanceStateDto in g.state.rows("item_instance_state"):
+		if item.container_id == container_id: return
+	for package: D.SalvagePackageStateDto in g.state.rows("salvage_package_state"):
+		if package.status == "sealed" and package.has_host_container_id and package.host_container_id == container_id: return
+	g.state.remove("container_state", container)

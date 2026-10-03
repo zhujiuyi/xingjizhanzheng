@@ -9,7 +9,7 @@ const TABLES: Array[String] = [
 	"loan_state", "loan_asset_state", "loan_issue_state", "manufacture_input_state",
 	"discovery_state", "unlock_state", "reputation_state", "resource_state", "gate_state",
 	"ship_gate_cooldown_state", "sector_state", "station_economy_state", "shop_stock_state",
-	"shop_ship_stock_state", "npc_state", "production_state", "rng_state", "action_receipt_state", "transfer_state", "base_module_state"]
+	"shop_ship_stock_state", "npc_state", "production_state", "rng_state", "action_receipt_state", "transfer_state", "base_module_state", "encounter_state", "salvage_package_state"]
 
 var snapshot: Dtos.WorldSnapshotDto = Dtos.WorldSnapshotDto.new()
 var world_id: String = ""
@@ -93,4 +93,6 @@ static func new_row(table: String) -> RefCounted:
 		"action_receipt_state": return Dtos.ActionReceiptStateDto.new()
 		"transfer_state": return Dtos.TransferStateDto.new()
 		"base_module_state": return Dtos.BaseModuleStateDto.new()
+		"encounter_state": return Dtos.EncounterStateDto.new()
+		"salvage_package_state": return Dtos.SalvagePackageStateDto.new()
 	return null

@@ -52,13 +52,18 @@ var operation_cancel: Button
 var page_scroll: ScrollContainer
 var mission_filter: String = "local"
 var mission_page: int = 0
+var mission_focus_id: String = ""
+var mission_navigation_row: HFlowContainer
+var mission_locate_button: Button
+var mission_travel_button: Button
+var mission_guide_button: Button
 var market_filter: String = "buy"
 var quantity_value: int = 1
 var quotes: Array[Dictionary] = []
 var live_missions: Array[Dictionary] = []
 var definition_cache: Dictionary = {}
 var friendly_names: Dictionary = {}
-const PAGE_TITLES: Dictionary = {"station": "空间站服务", "ships": "舰队与借船", "warehouse": "仓库与货舱", "fitting": "舰船配装", "market": "站点市场", "industry": "工业与回收", "missions": "任务与合同", "research": "科技与设施", "map": "星域航路", "pause": "暂停与存读档"}
+const PAGE_TITLES: Dictionary = {"station": "空间站服务", "ships": "舰队与借船", "warehouse": "仓库与货舱", "fitting": "舰船配装", "market": "站点市场", "industry": "工业与回收", "salvage": "打捞鉴定", "missions": "任务与合同", "research": "科技与设施", "map": "星域航路", "pause": "暂停与存读档"}
 const ACTION_NAMES: Dictionary = {"undock": "已出港", "dock": "已停靠", "switch_ship": "已切换驾驶舰", "buy_item": "购买完成", "sell_item": "出售完成", "buy_ship": "船体购买完成", "sell_ship": "船体出售完成", "move_stack": "货物转移完成", "move_item": "设备转移完成", "fit_module": "配装完成", "unfit_module": "设备已卸下", "repair": "维修完成", "manufacture": "生产完成", "recycle": "拆解完成", "accept_mission": "任务已接取", "abandon_mission": "任务已放弃", "deliver_mission": "任务已交付", "claim_loan": "任务舰已交接", "handoff_loan": "借船已归还", "request_rescue": "救援完成", "start_scan": "扫描已开始", "stop_scan": "扫描已停止", "start_mining": "采矿已开始", "stop_mining": "采矿已停止", "set_module_enabled": "设备开关已更新", "request_engine_cycle": "增推已启用", "research": "研究完成", "build_base": "设施已建成", "recover_resource": "组件已回收", "pickup_wreck": "残骸已回收"}
 var preferences: Dictionary = {}
 var title_background: TextureRect
@@ -186,6 +191,24 @@ func _ready() -> void:
 	mission_heading.add_theme_color_override("font_color", UISkin.AMBER)
 	objective = _text_to(hud_left, "", 14)
 	objective.max_lines_visible = 4
+	mission_navigation_row = HFlowContainer.new()
+	mission_navigation_row.name = "MissionNavigationActions"
+	mission_navigation_row.add_theme_constant_override("h_separation", 4)
+	mission_navigation_row.add_theme_constant_override("v_separation", 3)
+	hud_left.add_child(mission_navigation_row)
+	mission_locate_button = _button(mission_navigation_row, "定位任务", func(): requested.emit("mission_locate", "", 1, ""))
+	mission_locate_button.name = "MissionLocate"
+	mission_travel_button = _button(mission_navigation_row, "前往目标", func(): requested.emit("mission_travel", "", 1, ""))
+	mission_travel_button.name = "MissionTravel"
+	mission_guide_button = _button(mission_navigation_row, "主线指引", func(): mission_filter = "story"; mission_focus_id = ""; mission_page = 0; show_page("missions"))
+	mission_guide_button.name = "MissionGuide"
+	for action_button: Button in [mission_locate_button, mission_travel_button, mission_guide_button]:
+		action_button.custom_minimum_size = Vector2(76, 24)
+		action_button.add_theme_font_size_override("font_size", 11)
+		action_button.add_theme_stylebox_override("normal", UISkin.hud_button(false))
+		# A focused HUD button must still leave W/S and other flight controls usable.
+		action_button.focus_mode = Control.FOCUS_NONE
+	mission_navigation_row.hide()
 	work_box = VBoxContainer.new()
 	work_box.add_theme_constant_override("separation", 5)
 	hud_left.add_child(work_box)
@@ -272,6 +295,7 @@ func bind(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted, world: X
 	menu_open = false
 	target_id = ""
 	mission_page = 0
+	mission_focus_id = ""
 	show_page("station" if state.player().has_docked_station_id else "")
 	navigation_hud.configure(sector, camera, catalog)
 	_refresh_targets()
@@ -330,7 +354,7 @@ func show_page(next_page: String) -> void:
 		_responsive()
 		return
 	_build_panel(str(PAGE_TITLES.get(next_page, "航行服务")), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
-	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "research"] and not state.player().has_docked_station_id:
+	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
 		_text("此服务需要停靠空间站。使用星图找到站点，进入停靠范围并减速后按 F。")
 		_focus_page.call_deferred()
 		return
@@ -340,6 +364,7 @@ func show_page(next_page: String) -> void:
 		"fitting": _fitting()
 		"market": _market()
 		"industry": _industry()
+		"salvage": _salvage()
 		"missions": _missions()
 		"research": _research()
 		"map": _map()
@@ -387,6 +412,7 @@ func tick(delta: float) -> void:
 	_update_module_bar(ship, metrics)
 	if page == "station": _update_station_info()
 	_update_work()
+	_update_mission_guidance()
 	_reflow_flight_left()
 	_update_live_missions()
 	_update_map_resources()
@@ -399,7 +425,7 @@ func input_blocked() -> bool:
 	return ui_input_blocked()
 
 func ui_input_blocked() -> bool:
-	return keyboard_blocked() or _pointer_over(target_panel) or _pointer_over(work_box) or _pointer_over(operation_bar) or _pointer_over(navigation) or _pointer_over(flight_dock) or _pointer_over(instrument) or _pointer_over(equipment_bar) or _pointer_over(navigation_frame) or _pointer_over(controls) or _pointer_over(toast) or (is_instance_valid(navigation_hud) and _pointer_over(navigation_hud.radar_frame))
+	return keyboard_blocked() or _pointer_over(target_panel) or _pointer_over(work_box) or _pointer_over(mission_navigation_row) or _pointer_over(operation_bar) or _pointer_over(navigation) or _pointer_over(flight_dock) or _pointer_over(instrument) or _pointer_over(equipment_bar) or _pointer_over(navigation_frame) or _pointer_over(controls) or _pointer_over(toast) or (is_instance_valid(navigation_hud) and _pointer_over(navigation_hud.radar_frame))
 
 func keyboard_blocked() -> bool:
 	var focus: Control = root.get_viewport().gui_get_focus_owner()
@@ -418,7 +444,7 @@ func select_next() -> void:
 	for entry: Dictionary in sector.targets.values():
 		var node: Variant = entry.get("node")
 		if not is_instance_valid(node) or not node is Node3D: continue
-		if str(entry.get("kind", "")) != "npc" or sector.flight.global_position.distance_to(node.global_position) <= float(catalog.rule("target_marker_detection_range_m")):
+		if str(entry.get("kind", "")) != "npc" or _npc_visible(entry, sector.flight.global_position.distance_to(node.global_position)):
 			keys.append(str(entry.id))
 	if keys.is_empty():
 		target_id = ""
@@ -450,7 +476,7 @@ func _build_panel(title: String, description: String) -> void:
 	if state != null and page not in ["title", "settings"]:
 		_module_heading(sidebar, "舰载终端", "服务 / 航路")
 		var available: Array[String] = ["missions", "map", "pause"]
-		if state.player().has_docked_station_id: available = ["station", "ships", "warehouse", "fitting", "market", "industry", "missions", "research", "map", "pause"]
+		if state.player().has_docked_station_id: available = ["station", "ships", "warehouse", "fitting", "market", "industry", "salvage", "missions", "research", "map", "pause"]
 		for key: String in available:
 			var item: Button = _button(sidebar, str(PAGE_TITLES[key]), show_page.bind(key))
 			item.custom_minimum_size.x = 178
@@ -542,6 +568,9 @@ func _station() -> void:
 	_secondary(_button(shortcuts, "舰队", show_page.bind("ships")))
 	_secondary(_button(shortcuts, "配装", show_page.bind("fitting")))
 	_secondary(_button(shortcuts, "仓储", show_page.bind("warehouse")))
+	var salvage_shortcut: Button = _button(shortcuts, "打捞鉴定", show_page.bind("salvage"))
+	salvage_shortcut.name = "StationSalvage"
+	_secondary(salvage_shortcut)
 	var overview_button: Button = _command(shortcuts, "观察舰船", "hangar_focus")
 	overview_button.name = "HangarOverview"
 	_secondary(overview_button)
@@ -668,7 +697,42 @@ func _warehouse() -> void:
 		if item.policy_id != "normal_owned": continue
 		if item.container_id != warehouse and not warehouse.is_empty(): _command(entry.actions, "移至站点仓库", "move_item", item.item_instance_id, warehouse)
 		if item.container_id != cargo and not cargo.is_empty(): _command(entry.actions, "装入当前舰货舱", "move_item", item.item_instance_id, cargo)
+	count += _salvage_rows(list)
 	if count == 0: _text("本地没有可整理的货物。")
+
+func _salvage() -> void:
+	_text("击毁普通遭遇群 → 靠近并回收残骸 → 将未鉴定打捞包运到任意空间站 → 鉴定并领取真实战利品。", 14)
+	_text("这里只显示本站仓库或当前舰货舱中的密封包；远方仓库与其他舰船的包需先运到本站。内容在包生成时确定，读档不会改变包内内容，已鉴定的包不能重复领取。", 13)
+	var reason: String = _service_reason("warehouse")
+	if not reason.is_empty(): _text(reason, 14)
+	var list: VBoxContainer = _business_list("未鉴定打捞包", "鉴定费用", "数量")
+	if _salvage_rows(list, false) == 0: _text("本地没有未鉴定打捞包。出港后可从目标总览的敌舰群选择遭遇地点；击毁后选择残骸，进入回收范围再按 F。教学目标只推进教学，不产生普通战利品。", 14)
+
+func _salvage_rows(list: VBoxContainer, section: bool = true) -> int:
+	var service: RefCounted = gameplay.get("encounters")
+	if service == null or not service.has_method("packages"): return 0
+	var count: int = 0
+	var warehouse: String = _warehouse_id()
+	var cargo: String = _ship_container(Types.ContainerKind.CARGO)
+	var packages: Array[Dictionary] = service.call("packages")
+	for package: Dictionary in packages:
+		var container_id: String = str(package.get("container_id", ""))
+		if not _local_container(container_id): continue
+		var container: Dtos.ContainerStateDto = state.find("container_state", "container_id", container_id)
+		if container == null or container.kind not in [Types.ContainerKind.STATION, Types.ContainerKind.CARGO]: continue
+		if count == 0 and section: list.call("add_section", "密封打捞包 · 鉴定后揭示内容")
+		count += 1
+		var package_id: String = str(package.package_id)
+		var description: String = "未鉴定密封包 · 体积 %.0f L · 质量 %.2f kg\n可能内容 · %s\n鉴定后包消耗，战利品进入当前站仓库，信用点进入钱包。" % [float(package.get("volume_l", 0.0)), float(package.get("mass_kg", 0.0)), str(package.get("possible_rewards", "见数据库打捞说明"))]
+		# The established unidentified industrial crate mark conveys a sealed
+		# package; it does not imply that a specific module is inside.
+		var entry: Dictionary = _asset_row(list, package_id, "generic", "item", str(package.get("title", "未鉴定打捞包")), description, "包", "1", "—", "—", _container_name(container) + "\n等待站内鉴定")
+		entry.row.set_meta("salvage_package", true)
+		var open: Button = _command(entry.actions, "鉴定战利品", "open_salvage", package_id)
+		open.disabled = not state.player().has_docked_station_id or not _service_reason("warehouse").is_empty()
+		if container_id != warehouse and not warehouse.is_empty(): _command(entry.actions, "移至站点仓库", "move_salvage", package_id, warehouse)
+		if container_id != cargo and not cargo.is_empty(): _command(entry.actions, "装入当前舰货舱", "move_salvage", package_id, cargo)
+	return count
 
 func _fitting() -> void:
 	var metrics: Dictionary = gameplay.call("metrics", state.ship())
@@ -800,23 +864,13 @@ func _industry() -> void:
 
 func _missions() -> void:
 	_text("本页不暂停飞行。目标按顺序完成；舰船损失保留当前任务，交付需要指定实物。", 14)
+	_campaign_summary()
 	var filter_row: HFlowContainer = HFlowContainer.new()
 	body.add_child(filter_row)
-	for filter: String in ["local", "available", "active", "all"]:
-		_button(filter_row, str({"local": "当前站点 / 星系", "available": "可接取", "active": "进行中", "all": "全部任务"}[filter]) + (" · 当前" if filter == mission_filter else ""), func(): mission_filter = filter; mission_page = 0; show_page("missions"))
-	var filtered: Array[Dictionary] = []
-	for definition: Dictionary in _defs("mission_summary_defs"):
-		var current: Dtos.MissionStateDto = _latest_mission(str(definition.mission_id))
-		var active: bool = current != null and current.status in ["active", "ready"]
-		var local: bool = definition.accept_station_id == state.player().docked_station_id if state.player().has_docked_station_id else _one("station_defs", "station_id", str(definition.accept_station_id)).get("sector_id") == state.current_sector()
-		if mission_filter == "local" and not local and not active: continue
-		if mission_filter == "available" and not _mission_reason(definition, current).is_empty(): continue
-		if mission_filter == "active" and not active: continue
-		filtered.append(definition)
-	filtered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		var rank_a: int = _mission_rank(a)
-		var rank_b: int = _mission_rank(b)
-		return str(a.mission_id) < str(b.mission_id) if rank_a == rank_b else rank_a < rank_b)
+	for filter: String in ["local", "available", "active", "tutorial", "story", "contract", "all"]:
+		var filter_button: Button = _button(filter_row, str({"local": "当前站点 / 星系", "available": "可接取", "active": "进行中", "tutorial": "新手教学", "story": "主线剧情", "contract": "地区合同", "all": "全部任务"}[filter]) + (" · 当前" if filter == mission_filter else ""), func(): mission_filter = filter; mission_focus_id = ""; mission_page = 0; show_page("missions"))
+		filter_button.set_meta("mission_filter", filter)
+	var filtered: Array[Dictionary] = _filtered_mission_definitions()
 	var pages: int = maxi(1, ceili(float(filtered.size()) / 6.0))
 	mission_page = clampi(mission_page, 0, pages - 1)
 	var navigation: HBoxContainer = HBoxContainer.new()
@@ -828,26 +882,121 @@ func _missions() -> void:
 	next.disabled = mission_page >= pages - 1
 	if filtered.is_empty(): _text("此筛选没有任务。可切换“全部任务”查看前置条件。")
 	var list: VBoxContainer = _business_list("任务与合同清单", "接取费用", "合同数")
+	var focused_action: Button
 	for definition: Dictionary in filtered.slice(mission_page * 6, mini((mission_page + 1) * 6, filtered.size())):
 		var current: Dtos.MissionStateDto = _latest_mission(str(definition.mission_id))
 		var active: bool = current != null and current.status in ["active", "ready"]
 		var reason: String = _mission_reason(definition, current)
-		var entry: Dictionary = _asset_row(list, str(definition.mission_id), "mission", str(definition.mission_id), _mission_name(str(definition.mission_id)), _mission_list_description(definition, current), "份", "1", "—", "奖励 %d" % int(definition.get("reward_credit", 0)), _mission_status(current.status) if active else reason if not reason.is_empty() else "可接取")
+		var entry: Dictionary = _asset_row(list, str(definition.mission_id), "mission", str(definition.mission_id), _mission_category_title(definition) + " · " + _mission_name(str(definition.mission_id)), _mission_list_description(definition, current), "份", "1", "—", "奖励 %d" % int(definition.get("reward_credit", 0)), _mission_status(current.status) if active else reason if not reason.is_empty() else "可接取")
 		entry.row.set_meta("mission_row", true)
+		entry.row.set_meta("mission_kind", str(definition.mission_kind))
 		if active:
 			live_missions.append({"label": entry.status, "mission": current, "description": entry.description, "definition": definition, "progress": []})
-			var target: String = _current_mission_target(current)
-			if not target.is_empty() and sector != null and sector.targets.has(target):
-				var locate: Button = _button(entry.actions, "定位目标", func(): target_id = target; _back())
-				locate.set_meta("action", "locate_mission")
-				locate.set_meta("target", target)
+			var locate: Button = _mission_action(entry.actions, "定位任务目标", "mission_locate", str(definition.mission_id))
+			if str(definition.mission_id) == mission_focus_id: focused_action = locate
+			_mission_action(entry.actions, "前往任务目标", "mission_travel", str(definition.mission_id))
 			var deliver: Button = _command(entry.actions, "交付任务", "deliver_mission", current.mission_instance_id)
 			deliver.disabled = current.status != "ready" or state.player().docked_station_id != definition.turnin_station_id
 			_command(entry.actions, "放弃任务", "abandon_mission", current.mission_instance_id)
 		else:
 			var accept: Button = _command(entry.actions, "接取任务" if current == null else "重新接取", "accept_mission", str(definition.mission_id))
 			accept.disabled = not reason.is_empty()
+			var station_action: Button = _mission_action(entry.actions, "定位接取站点", "mission_station", str(definition.mission_id))
+			if str(definition.mission_id) == mission_focus_id: focused_action = station_action
+		var prerequisite_id: String = str(gameplay.get("missions").call("missing_prerequisite", str(definition.mission_id)))
+		if not prerequisite_id.is_empty():
+			var predecessor: Button = _button(entry.actions, "查看前置任务", show_mission.bind(prerequisite_id))
+			predecessor.set_meta("action", "show_mission")
+			predecessor.set_meta("target", prerequisite_id)
+		if str(definition.mission_id) == mission_focus_id:
+			entry.row.set_meta("mission_focused", true)
+			entry.name.add_theme_color_override("font_color", UISkin.AMBER)
 	_update_live_missions()
+	if focused_action != null: _focus_mission_action.call_deferred(focused_action)
+
+func _filtered_mission_definitions() -> Array[Dictionary]:
+	var filtered: Array[Dictionary] = []
+	for definition: Dictionary in _defs("mission_summary_defs"):
+		var current: Dtos.MissionStateDto = _latest_mission(str(definition.mission_id))
+		var active: bool = current != null and current.status in ["active", "ready"]
+		var local: bool = definition.accept_station_id == state.player().docked_station_id if state.player().has_docked_station_id else _one("station_defs", "station_id", str(definition.accept_station_id)).get("sector_id") == state.current_sector()
+		if mission_filter == "local" and not local and not active: continue
+		if mission_filter == "available" and not _mission_reason(definition, current).is_empty(): continue
+		if mission_filter == "active" and not active: continue
+		if mission_filter in ["tutorial", "story", "contract"] and str(definition.mission_kind) != mission_filter: continue
+		filtered.append(definition)
+	filtered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if mission_filter in ["tutorial", "story"]: return _mission_chain_index(a) < _mission_chain_index(b)
+		var rank_a: int = _mission_rank(a)
+		var rank_b: int = _mission_rank(b)
+		return str(a.mission_id) < str(b.mission_id) if rank_a == rank_b else rank_a < rank_b)
+	return filtered
+
+func show_mission(mission_id: String) -> void:
+	var definition: Dictionary = _one("mission_defs", "mission_id", mission_id)
+	if definition.is_empty(): notify("未找到此任务的冻结定义。", true); return
+	mission_focus_id = mission_id
+	mission_filter = str(definition.mission_kind)
+	var index: int = 0
+	for entry: Dictionary in _filtered_mission_definitions():
+		if str(entry.mission_id) == mission_id: break
+		index += 1
+	mission_page = floori(float(index) / 6.0)
+	show_page("missions")
+
+func _focus_mission_action(button: Button) -> void:
+	if not is_instance_valid(button) or not button.is_inside_tree() or not button.is_visible_in_tree() or page != "missions": return
+	button.grab_focus()
+	if is_instance_valid(page_scroll) and page_scroll.is_ancestor_of(button): page_scroll.ensure_control_visible(button)
+
+func _mission_action(parent: Node, title: String, action: String, mission_id: String) -> Button:
+	var button: Button = _button(parent, title, func(): requested.emit(action, mission_id, 1, ""))
+	button.set_meta("action", action)
+	button.set_meta("target", mission_id)
+	return button
+
+func _mission_chain_index(definition: Dictionary) -> int:
+	var index: int = 0
+	for entry: Dictionary in gameplay.get("missions").call("chain", str(definition.mission_kind)):
+		if str(entry.mission_id) == str(definition.mission_id): return index
+		index += 1
+	return index
+
+func _mission_category_title(definition: Dictionary) -> String:
+	var kind: String = str(definition.get("mission_kind", ""))
+	var title: String = str({"tutorial": "新手教学", "story": "主线剧情", "contract": "地区合同"}.get(kind, "任务"))
+	if kind in ["tutorial", "story"]: title += " %d" % (_mission_chain_index(definition) + 1)
+	return title
+
+func _campaign_summary() -> void:
+	var service: RefCounted = gameplay.get("missions")
+	var summary: Array[String] = []
+	var next_id: String = ""
+	for kind: String in ["tutorial", "story"]:
+		var nodes: Array[Dictionary] = service.call("chain", kind)
+		var done: int = 0
+		for node: Dictionary in nodes:
+			if _mission_completed(str(node.mission_id)): done += 1
+			elif next_id.is_empty(): next_id = str(node.mission_id)
+		summary.append("%s %d/%d" % ["新手教学" if kind == "tutorial" else "主线剧情", done, nodes.size()])
+	_text_to(body, "航路重建进度 · " + "   /   ".join(summary), 16).add_theme_color_override("font_color", UISkin.AMBER)
+	if next_id.is_empty(): _text("主线航路已全部重建，可继续接取地区合同、研究与自由探索。", 13); return
+	var next_def: Dictionary = _one("mission_defs", "mission_id", next_id)
+	var missing: String = str(service.call("missing_prerequisite", next_id))
+	var note: String = "下一步 · " + _mission_category_title(next_def) + " · " + _mission_name(next_id) + "\n接取地点 · " + _sector_name(str(_one("station_defs", "station_id", str(next_def.accept_station_id)).get("sector_id", ""))) + " / " + _station_name(str(next_def.accept_station_id))
+	if not missing.is_empty(): note += "\n尚需完成 · " + _mission_name(missing)
+	if str(next_def.mission_kind) == "tutorial":
+		var story_nodes: Array[Dictionary] = service.call("chain", "story")
+		if not story_nodes.is_empty():
+			var first_story_station: String = str(story_nodes[0].accept_station_id)
+			note += "\n完成新手教学后开启主线；第一章接取点 · " + _station_name(first_story_station)
+	_text(note, 13)
+	var actions: HFlowContainer = HFlowContainer.new()
+	body.add_child(actions)
+	var show_next: Button = _button(actions, "查看下一步", show_mission.bind(next_id))
+	show_next.set_meta("action", "show_mission")
+	show_next.set_meta("target", next_id)
+	_mission_action(actions, "定位接取地点", "mission_station", next_id)
 
 func _research() -> void:
 	var station_faction: String = str(_one("station_defs", "station_id", state.player().docked_station_id).get("faction_id", ""))
@@ -865,9 +1014,21 @@ func _research() -> void:
 		if not done and reason.is_empty(): reason = _materials_reason("research_inputs", "research_id", str(definition.research_id), 1)
 		if not done and state.player().credit < int(definition.required_credit): reason = "信用点不足"
 		var description: String = "解锁 " + _unlock_name(str(definition.reward_unlock_id)) + " · 需声望 %d\n" % int(definition.required_reputation) + _inputs_text("research_inputs", "research_id", str(definition.research_id))
+		for prerequisite: Dictionary in _defs("research_prerequisites"):
+			if str(prerequisite.research_id) == str(definition.research_id): description += "\n前置科技 · " + _unlock_name(str(prerequisite.unlock_id)) + ("（已解锁）" if _unlocked(str(prerequisite.unlock_id)) else "（未解锁）")
+		var verification_id: String = str(definition.verification_mission_id) if definition.get("verification_mission_id") != null else ""
+		if not verification_id.is_empty():
+			var verification: Dictionary = _one("mission_defs", "mission_id", verification_id)
+			description += "\n验证要求 · " + _mission_category_title(verification) + " · " + _mission_name(verification_id) + ("（已完成）" if _mission_completed(verification_id) else "（未完成）")
+			description += "\n接取地点 · " + _sector_name(str(_one("station_defs", "station_id", str(verification.accept_station_id)).get("sector_id", ""))) + " / " + _station_name(str(verification.accept_station_id))
 		var entry: Dictionary = _asset_row(list, str(definition.research_id), "research", str(definition.research_id), str(definition.display_name), description, "项", "1", str(int(definition.required_credit)), str(int(definition.required_credit)), reason if not reason.is_empty() else "可研究")
 		var button: Button = _command(entry.actions, "完成研究", "research", str(definition.research_id))
 		button.disabled = not reason.is_empty()
+		if not verification_id.is_empty():
+			var prerequisite_button: Button = _button(entry.actions, "查看主线前置" if not _mission_completed(verification_id) else "查看验证任务", show_mission.bind(verification_id))
+			prerequisite_button.set_meta("action", "show_mission")
+			prerequisite_button.set_meta("target", verification_id)
+			prerequisite_button.tooltip_text = "打开 " + _mission_name(verification_id) + "，显示前置链、接取站点与任务目标。"
 	list.call("add_section", "本站个人设施")
 	for definition: Dictionary in _defs("base_module_defs"):
 		var built: bool = false
@@ -1028,7 +1189,7 @@ func _refresh_targets() -> void:
 		var distance: float = sector.flight.global_position.distance_to(node.global_position)
 		var kind: String = str(entry.get("kind", ""))
 		if kind == "npc":
-			if distance > float(catalog.rule("target_marker_detection_range_m")): continue
+			if not _npc_visible(entry, distance): continue
 			var npc: Dtos.NpcStateDto = state.find("npc_state", "npc_instance_id", str(entry.id))
 			if npc != null and not npc.alive: continue
 		var record: Dictionary = {"id": str(entry.id), "title": _target_title(entry), "kind": kind, "type_title": _target_type(kind), "distance_m": distance, "navigation_only": bool(entry.get("navigation_only", false)), "known": kind != "npc"}
@@ -1043,6 +1204,9 @@ func _refresh_targets() -> void:
 	overview.call("set_entries", entries, target_id)
 	target_buttons = overview.get("target_buttons")
 
+func _npc_visible(entry: Dictionary, distance: float) -> bool:
+	return sector.contact_visible(entry, distance)
+
 func _select_target(id: String) -> void:
 	target_id = id
 	_refresh_targets()
@@ -1050,7 +1214,7 @@ func _select_target(id: String) -> void:
 	_update_navigation()
 
 func _target_type(kind: String) -> String:
-	return str({"station": "空间站", "gate": "虫洞门", "npc": "敌舰", "resource": "矿体", "signal": "信号", "wreck": "残骸", "marker": "航标", "planet": "天体"}.get(kind, "目标"))
+	return str({"station": "空间站", "gate": "虫洞门", "npc": "敌舰", "encounter": "敌舰群", "group": "敌舰群", "resource": "矿体", "signal": "信号", "wreck": "残骸", "marker": "航标", "planet": "天体"}.get(kind, "目标"))
 
 func _selected_details() -> Dictionary:
 	if sector == null or not is_instance_valid(sector.flight) or not sector.targets.has(target_id): return {}
@@ -1059,6 +1223,9 @@ func _selected_details() -> Dictionary:
 	if not is_instance_valid(node) or not node is Node3D: return {}
 	var details: Dictionary = {"id": target_id, "title": _target_title(entry), "kind": str(entry.kind), "type_title": _target_type(str(entry.kind)), "distance_m": sector.flight.global_position.distance_to(node.global_position), "navigation_only": bool(entry.get("navigation_only", false))}
 	if str(entry.kind) == "resource": details["resource_info"] = ResourceStatus.inspect(state, catalog, target_id)
+	if str(entry.kind) == "encounter":
+		details["encounter_info"] = _encounter_summary(entry)
+		details["type_title"] = _encounter_summary(entry)
 	return details
 
 func _navigation_context() -> Dictionary:
@@ -1085,15 +1252,55 @@ func _objective_text() -> String:
 	for mission: Dtos.MissionStateDto in state.rows("mission_state"):
 		if mission.status not in ["active", "ready"]: continue
 		var definition: Dictionary = _one("mission_defs", "mission_id", mission.mission_def_id)
-		var heading: String = "当前任务 · " + _mission_name(mission.mission_def_id)
-		if mission.status == "ready": return heading + "\n返回 " + _station_name(str(definition.get("turnin_station_id", ""))) + " 交付"
+		var heading: String = _mission_category_title(definition) + " · " + _mission_name(mission.mission_def_id)
+		var location: String = _mission_location_text(_mission_guidance(mission))
+		if mission.status == "ready": return heading + "\n返回 " + _station_name(str(definition.get("turnin_station_id", ""))) + " 交付\n" + location
 		for objective_def: Dictionary in _defs("mission_objective_defs"):
 			if objective_def.mission_id != mission.mission_def_id: continue
 			var progress: Dtos.MissionObjectiveStateDto = _mission_progress(mission.mission_instance_id, int(objective_def.objective_index))
 			if progress != null and progress.progress_units < int(objective_def.required_count) and objective_def.objective_kind != "deliver":
-				return heading + "\n" + _objective_description(objective_def) + " · %d/%d" % [progress.progress_units, int(objective_def.required_count)]
+				var instruction: String = _objective_description(objective_def) + " · %d/%d" % [progress.progress_units, int(objective_def.required_count)]
+				return (instruction if root.size.x < 950 else heading + "\n" + instruction) + "\n" + location
 		return heading + "\n检查实物并返航交付。"
 	return "J 任务 · M 星图\n在空间站接取教学、地区合同和主线。"
+
+func _mission_guidance(mission: Dtos.MissionStateDto = null) -> Dictionary:
+	if gameplay == null or gameplay.get("missions") == null: return {}
+	return gameplay.get("missions").call("guidance", mission.mission_def_id if mission != null else "")
+
+func _mission_location_text(info: Dictionary) -> String:
+	if info.is_empty(): return "任务地点暂不可用，打开任务页查看目标。"
+	var result: String = "地点 · " + _sector_name(str(info.get("sector_id", ""))) + " / " + str(info.get("target_title", "任务地点"))
+	if not bool(info.get("local", false)):
+		result += "\n下一航点 · " + str(info.get("waypoint_title", "查看星图航路"))
+	elif not str(info.get("required_page", "")).is_empty():
+		result += "\n站内操作 · " + str(PAGE_TITLES.get(str(info.required_page), "空间站服务"))
+	if not str(info.get("route_reason", "")).is_empty(): result += "\n" + str(info.route_reason)
+	return result
+
+func _update_mission_guidance() -> void:
+	if not is_instance_valid(mission_navigation_row) or gameplay == null: return
+	var current: Dtos.MissionStateDto = gameplay.get("missions").call("active")
+	var has_mission: bool = current != null
+	mission_navigation_row.visible = root.size.x >= 950 or work_mode.is_empty()
+	mission_locate_button.visible = has_mission
+	mission_travel_button.visible = has_mission
+	mission_guide_button.visible = not has_mission
+	if not has_mission: return
+	var info: Dictionary = _mission_guidance(current)
+	var flight: bool = state.ship().status == Types.ShipStatus.FLYING
+	var target: String = str(info.get("waypoint_id", ""))
+	var route_ok: bool = not target.is_empty() and str(info.get("route_reason", "")).is_empty()
+	mission_locate_button.disabled = info.is_empty() or operation_waiting
+	mission_travel_button.disabled = not flight or not route_ok or operation_waiting
+	mission_travel_button.text = "前往目标" if bool(info.get("local", false)) else "前往虫洞"
+	var note: String = _mission_location_text(info)
+	mission_locate_button.tooltip_text = "选择并指示任务地点；不会自动移动舰船。\n" + note
+	mission_travel_button.tooltip_text = "明确下达前往指令：可跃迁时跃迁，否则自动接近。跨星系只到下一虫洞门，减速后按 F 穿越。\n" + note
+	mission_locate_button.set_meta("action", "mission_locate")
+	mission_travel_button.set_meta("action", "mission_travel")
+	mission_locate_button.set_meta("target", current.mission_def_id)
+	mission_travel_button.set_meta("target", current.mission_def_id)
 
 func _objective_description(definition: Dictionary) -> String:
 	var kind: String = str(definition.get("objective_kind", ""))
@@ -1120,19 +1327,9 @@ func _objective_description(definition: Dictionary) -> String:
 	return "完成指定目标"
 
 func _objective_target(definition: Dictionary) -> String:
-	for field: String in ["target_anchor_id", "target_signal_id", "target_node_id", "target_spawn_id", "target_connection_id", "target_station_id"]:
-		if definition.get(field) == null: continue
-		var id: String = str(definition[field])
-		if field == "target_spawn_id":
-			for npc: Dtos.NpcStateDto in state.rows("npc_state"):
-				if npc.spawn_id == id and npc.alive and npc.sector_id == state.current_sector(): return npc.npc_instance_id
-			return ""
-		if field == "target_connection_id":
-			for endpoint: Dictionary in _defs("gate_endpoint_defs"):
-				if endpoint.connection_id == id and endpoint.origin_sector_id == state.current_sector(): return str(endpoint.endpoint_id)
-			return ""
-		return id
-	return ""
+	if gameplay == null or gameplay.get("missions") == null: return ""
+	var info: Dictionary = gameplay.get("missions").call("objective_guidance", definition)
+	return str(info.get("waypoint_id", ""))
 
 func _quantity() -> void:
 	var toolbar: HBoxContainer = HBoxContainer.new()
@@ -1284,6 +1481,9 @@ func _recycle_reason(item: Dtos.ItemInstanceStateDto) -> String:
 
 func _mission_list_description(definition: Dictionary, current: Dtos.MissionStateDto) -> String:
 	var description: String = "接取 " + _station_name(str(definition.accept_station_id)) + " · 交付 " + _station_name(str(definition.turnin_station_id))
+	for prerequisite: Dictionary in _defs("mission_prerequisites"):
+		if str(prerequisite.mission_id) == str(definition.mission_id): description += "\n前置 · " + _mission_name(str(prerequisite.prerequisite_mission_id)) + ("（已完成）" if _mission_completed(str(prerequisite.prerequisite_mission_id)) else "（未完成）")
+	if not _unlocked(str(definition.get("required_unlock_id", ""))): description += "\n许可 · " + _unlock_name(str(definition.get("required_unlock_id", ""))) + "（未解锁）"
 	if current == null or current.status not in ["active", "ready"]:
 		for objective_def: Dictionary in _defs("mission_objective_defs"):
 			if str(objective_def.mission_id) == str(definition.mission_id): description += "\n" + _objective_description(objective_def)
@@ -1294,6 +1494,7 @@ func _mission_list_description(definition: Dictionary, current: Dtos.MissionStat
 		if progress == null: continue
 		description += "\n" + _objective_description(objective_def) + " · %d/%d" % [progress.progress_units, int(objective_def.required_count)]
 	if current.status == "ready": description += "\n将所需实物带入当前舰或交付站仓库。"
+	description += "\n" + _mission_location_text(_mission_guidance(current))
 	return description
 
 func _button(parent: Node, title: String, callback: Callable) -> Button:
@@ -1440,7 +1641,21 @@ func _target_title(target: Dictionary) -> String:
 	var id: String = str(target.get("id", ""))
 	if friendly_names.has(id):
 		return str(friendly_names[id])
-	return _friendly(str(target.get("title", "未知目标"))).replace("Lv.", "等级 ")
+	var title: String = _friendly(str(target.get("title", "未知目标"))).replace("Lv.", "等级 ")
+	if str(target.get("kind", "")) == "encounter":
+		title += " · %d/%d" % [int(target.get("remaining_count", 0)), int(target.get("total_count", 0))]
+		if int(target.get("remaining_count", 0)) == 0:
+			var remaining: float = float(target.get("respawn_remaining_s", 0.0))
+			title += " · %.0f 秒后复生" % remaining if remaining > 0.0 else " · 已肃清"
+	return title
+
+func _encounter_summary(entry: Dictionary) -> String:
+	var title: String = "任务战斗地点" if bool(entry.get("mission_target", false)) else "星系敌舰群"
+	title += " · 等级 %d · %d/%d 艘" % [int(entry.get("level", 0)), int(entry.get("remaining_count", 0)), int(entry.get("total_count", 0))]
+	if int(entry.get("remaining_count", 0)) == 0:
+		var remaining: float = float(entry.get("respawn_remaining_s", 0.0))
+		title += " · %.0f 秒后复生" % remaining if remaining > 0.0 else " · 已肃清"
+	return title
 
 func _pointer_over(control: Control) -> bool:
 	return is_instance_valid(control) and control.is_visible_in_tree() and control.get_global_rect().has_point(control.get_global_mouse_position())
@@ -1553,7 +1768,11 @@ func _responsive() -> void:
 		hud_left.add_theme_constant_override("separation", 3 if compact else 7)
 		top.add_theme_font_size_override("font_size", 10 if compact else 14)
 		objective.add_theme_font_size_override("font_size", 10 if compact else 13)
-		objective.max_lines_visible = 1 if compact else 4
+		objective.max_lines_visible = 2 if compact else 4
+		for action_button: Button in [mission_locate_button, mission_travel_button, mission_guide_button]:
+			if not is_instance_valid(action_button): continue
+			action_button.custom_minimum_size = Vector2(76, 22 if compact else 24)
+			action_button.add_theme_font_size_override("font_size", 10 if compact else 11)
 		var heading: Control = hud_left.find_child("MissionHeading", false, false)
 		if heading != null: heading.visible = not compact or not work_box.visible
 		work_progress.show_percentage = not compact
@@ -1832,12 +2051,7 @@ func _mission_progress(id: String, index: int) -> Dtos.MissionObjectiveStateDto:
 	return null
 
 func _current_mission_target(mission: Dtos.MissionStateDto) -> String:
-	if mission.status == "ready": return str(_one("mission_defs", "mission_id", mission.mission_def_id).get("turnin_station_id", ""))
-	for definition: Dictionary in _defs("mission_objective_defs"):
-		if definition.mission_id != mission.mission_def_id: continue
-		var progress: Dtos.MissionObjectiveStateDto = _mission_progress(mission.mission_instance_id, int(definition.objective_index))
-		if progress != null and progress.progress_units < int(definition.required_count) and definition.objective_kind != "deliver": return _objective_target(definition)
-	return ""
+	return str(_mission_guidance(mission).get("waypoint_id", ""))
 
 func _mission_reason(definition: Dictionary, current: Dtos.MissionStateDto) -> String:
 	if current != null and current.status in ["active", "ready"]: return "任务正在进行"
@@ -2286,6 +2500,11 @@ func _focus_page() -> void:
 		entries[index].focus_previous = entries[(index - 1 + entries.size()) % entries.size()].get_path()
 		entries[index].focus_neighbor_bottom = entries[index].focus_next
 		entries[index].focus_neighbor_top = entries[index].focus_previous
+	if page == "missions" and not mission_focus_id.is_empty():
+		for entry: Control in entries:
+			if entry is Button and not entry.disabled and str(entry.get_meta("target", "")) == mission_focus_id and str(entry.get_meta("action", "")) in ["mission_locate", "mission_station"]:
+				_focus_mission_action(entry)
+				return
 	var default: Array[Control] = _focus_controls(body)
 	for entry: Control in default:
 		if entry is Button and not entry.disabled:

@@ -267,7 +267,7 @@ func _refresh_rows() -> void:
 	if target_list == null: return
 	var visible_rows: Array[Dictionary] = []
 	for entry: Dictionary in entry_rows:
-		var combat: bool = str(entry.get("kind", "")) in ["npc", "wreck"]
+		var combat: bool = str(entry.get("kind", "")) in ["npc", "wreck", "encounter"]
 		if filter_mode == "combat" and not combat: continue
 		if filter_mode == "navigation" and combat: continue
 		visible_rows.append(entry)

@@ -77,7 +77,11 @@ func _eligible() -> bool:
 	if state.find("unlock_state", "unlock_id", endpoint.required_unlock_id) == null:
 		return _fail("航门权限未解锁，完成对应任务")
 	var gate := state.find("gate_state", "connection_id", connection.connection_id) as Dtos.GateStateDto
-	if gate == null or not gate.enabled:
+	if gate == null:
+		return _fail("航门状态不可用")
+	if gate.has_lifetime_remaining_s and gate.lifetime_remaining_s <= 0.0:
+		return _fail("虫洞寿命已耗尽")
+	if not gate.enabled:
 		return _fail("航门处于关闭状态")
 	var cooldown := state.find("ship_gate_cooldown_state", "ship_instance_id", ship.ship_instance_id) as Dtos.ShipGateCooldownStateDto
 	if cooldown != null and cooldown.remaining_s > 0.0:
@@ -104,6 +108,9 @@ func _mass(ship: Dtos.ShipStateDto) -> float:
 	for stack: Dtos.InventoryStackStateDto in state.rows("inventory_stack_state"):
 		if containers.has(stack.container_id):
 			result += float(catalog.one("item_defs", "item_id", stack.item_def_id).unit_mass_kg) * stack.quantity
+	for package: Dtos.SalvagePackageStateDto in state.rows("salvage_package_state"):
+		if package.status == "sealed" and package.has_host_container_id and containers.has(package.host_container_id):
+			result += float(catalog.one("salvage_package_defs", "package_def_id", package.package_def_id).mass_kg)
 	return result
 
 func _commit() -> void:

@@ -635,6 +635,26 @@ class BaseModuleStateDto extends RefCounted:
 	var station_id: String = ""
 	var enabled: bool = false
 
+## 战斗地点的整群代次与世界时间冷却，和成员 NPC 一同封存。
+class EncounterStateDto extends RefCounted:
+	var encounter_id: String = ""
+	var generation: int = 0
+	var respawn_remaining_s: float = 0.0
+
+## 独立回收包：结果在击毁时预定，打开后保留唯一来源记录。
+class SalvagePackageStateDto extends RefCounted:
+	var package_id: String = ""
+	var package_def_id: String = ""
+	var source_npc_instance_id: String = ""
+	var source_generation: int = 0
+	var has_host_container_id: bool = false
+	var host_container_id: String = ""
+	var reward_id: String = ""
+	var status: String = "sealed"
+	var has_opened_station_id: bool = false
+	var opened_station_id: String = ""
+	var opened_tick: int = 0
+
 ## 完整世界快照：所有已初始化星区状态都在数组中，不限当前已加载星区。
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
@@ -671,6 +691,8 @@ class WorldSnapshotDto extends RefCounted:
 	var action_receipt_state_rows: Array[ActionReceiptStateDto] = []
 	var transfer_state_rows: Array[TransferStateDto] = []
 	var base_module_state_rows: Array[BaseModuleStateDto] = []
+	var encounter_state_rows: Array[EncounterStateDto] = []
+	var salvage_package_state_rows: Array[SalvagePackageStateDto] = []
 
 ## 表现派生值不是另一份定义：每次由 frozen catalog + 当前状态计算。
 class ShipMetricsViewDto extends RefCounted:

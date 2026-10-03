@@ -22,9 +22,10 @@ sys.path.insert(0, str(ROOT / "jiaoben"))
 import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
-MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql")
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_4_r2.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_4_r2"
+MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql")
+FORMAT_VERSION = 6
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_5.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_5"
 RULE_CODE_VERSION = "singleplayer_full_v1"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
@@ -37,6 +38,7 @@ STATE_TABLES = (
     "discovery_state", "unlock_state", "reputation_state", "resource_state", "gate_state",
     "ship_gate_cooldown_state", "sector_state", "station_economy_state", "shop_stock_state",
     "shop_ship_stock_state", "npc_state", "production_state", "rng_state", "action_receipt_state", "transfer_state", "base_module_state",
+    "encounter_state", "salvage_package_state",
 )
 
 
@@ -54,28 +56,40 @@ def connect(path=":memory:"):
 
 
 def apply_migrations(connection, fault_after=None):
+    applied = []
     if connection.execute("SELECT count(*) FROM sqlite_schema WHERE type='table'").fetchone()[0]:
-        if connection.execute("SELECT application_id,format_version FROM database_meta").fetchone() != ("xingjizhanjian", 5):
+        identity = connection.execute("SELECT application_id,format_version FROM database_meta").fetchone()
+        if not identity or identity[0] != "xingjizhanjian" or identity[1] not in range(1, FORMAT_VERSION + 1):
             raise ValueError("Unsupported progress identity/format; preserve source and require explicit migration")
-        for name in MIGRATIONS:
+        history = dict(connection.execute("SELECT migration_id,sql_sha256 FROM migration_history"))
+        applied = sorted(history)
+        if tuple(applied) != MIGRATIONS[:len(applied)]:
+            raise ValueError("Unknown or noncontiguous migration history")
+        if len(applied) != identity[1] + 3:
+            raise ValueError("Migration history and progress format disagree")
+        for name in applied:
             expected = hashlib.sha256((PROGRESS_DIR / name).read_bytes()).hexdigest()
-            stored = connection.execute("SELECT sql_sha256 FROM migration_history WHERE migration_id=?", (name,)).fetchone()
-            if stored != (expected,):
+            if history[name] != expected:
                 raise ValueError(f"Migration checksum mismatch: {name}")
-        return
+        if len(applied) == len(MIGRATIONS):
+            if identity[1] != FORMAT_VERSION or connection.execute("PRAGMA user_version").fetchone()[0] != FORMAT_VERSION:
+                raise ValueError("Migration history and progress format disagree")
+            return
     # executescript can implicitly commit an existing transaction: exactly one
     # combined script starts BEGIN, no nested executescript during freeze/save.
     pieces = ["BEGIN IMMEDIATE;"]
     for index, name in enumerate(MIGRATIONS, 1):
+        if name in applied:
+            continue
         text = (PROGRESS_DIR / name).read_text(encoding="utf-8")
         pieces.append(text)
         checksum = hashlib.sha256(text.encode()).hexdigest()
         pieces.append("INSERT INTO migration_history VALUES(" + repr(name) + "," + repr(checksum) + "," + repr(utc_now()) + ");")
         if index == fault_after:
             pieces.append("SELECT missing_migration_fault();")
+    pieces.append(f"PRAGMA user_version={FORMAT_VERSION};")
     try:
         connection.executescript("\n".join(pieces))
-        connection.execute("PRAGMA user_version=5")
         connection.commit()
     except BaseException:
         connection.rollback()
@@ -297,6 +311,8 @@ def initial_state(connection, snapshot, world, content):
         insert(connection, "gate_state", {**ctx, "connection_id": connection_def["connection_id"], "enabled": 1, "remaining_mass_budget_kg": gate["total_mass_budget_kg"], "lifetime_remaining_s": gate["lifetime_s"]})
     for sector in frozen("sector_defs"):
         insert(connection, "sector_state", {**ctx, "sector_id": sector["sector_id"], "visited": int(sector["sector_id"] == station["sector_id"]), "generation_counter": 0})
+    for encounter in frozen("encounter_defs"):
+        insert(connection, "encounter_state", {**ctx, "encounter_id": encounter["encounter_id"], "generation": 0, "respawn_remaining_s": 0.})
     items = {r["item_id"]: r for r in frozen("item_defs")}
     ships = {r["ship_id"]: r for r in frozen("ship_defs")}
     stations = {r["station_id"]: r for r in frozen("station_defs")}
@@ -393,6 +409,8 @@ def validate_ship_aggregates(connection, snapshot):
             maximum = definition[layer + "_max"] + added_hp[layer + "_max"]
             if ship[layer] > maximum + 1e-7:
                 raise ValueError(f"Ship {layer} exceeds fitted maximum")
+        package_defs = {r["package_def_id"]: r for r in frozen("salvage_package_defs")}
+        packages = rows(connection, "salvage_package_state", "snapshot_id=? AND status='sealed'", (snapshot,))
         payload_mass = 0.0
         for container in containers.values():
             if container["ship_instance_id"] != ship["ship_instance_id"] or container["kind"] not in ("cargo", "mineral"):
@@ -401,11 +419,16 @@ def validate_ship_aggregates(connection, snapshot):
             cargo += [(stack["item_def_id"], stack["quantity"]) for stack in stacks if stack["container_id"] == container["container_id"]]
             if container["kind"] == "mineral" and any(items[item]["item_type"] != "ore" for item, _ in cargo):
                 raise ValueError("Non-ore in mineral hold")
+            held_packages = [package_defs[p["package_def_id"]] for p in packages if p["host_container_id"] == container["container_id"]]
+            if held_packages and container["kind"] != "cargo":
+                raise ValueError("Recovery package outside ordinary cargo hold")
             volume = sum(items[item]["unit_volume_l"] * quantity for item, quantity in cargo)
+            volume += sum(package["volume_m3"] * 1000 for package in held_packages)
             capacity = definition["cargo_l"] if container["kind"] == "cargo" else definition["mineral_cargo_l"]
             if volume > capacity:
                 raise ValueError("Cargo volume exceeded")
             payload_mass += sum(items[item]["unit_mass_kg"] * quantity for item, quantity in cargo)
+            payload_mass += sum(package["mass_kg"] for package in held_packages)
         if payload_mass > definition["max_payload_mass_kg"] + 1e-7:
             raise ValueError("Shared cargo/mineral payload mass exceeded")
 
@@ -543,6 +566,7 @@ def prune_unreferenced(connection, keep_recent):
             protected.update(r[0] for r in connection.execute("SELECT initial_snapshot_id FROM world_initialization_grant WHERE world_id=?", (world,)))
             protected.update(r[0] for r in connection.execute("SELECT loaded_snapshot_id FROM runtime_session WHERE world_id=? AND loaded_snapshot_id IS NOT NULL", (world,)))
             protected.update(r[0] for r in connection.execute("SELECT resume_snapshot_id FROM runtime_session WHERE world_id=? AND resume_snapshot_id IS NOT NULL", (world,)))
+            protected.update(r[0] for r in connection.execute("SELECT source_snapshot_id FROM content_upgrade_record WHERE world_id=? UNION SELECT upgraded_snapshot_id FROM content_upgrade_record WHERE world_id=?", (world, world)))
             for snapshot, in connection.execute("SELECT snapshot_id FROM save_snapshot WHERE world_id=?", (world,)).fetchall():
                 if snapshot not in protected:
                     connection.execute("DELETE FROM save_snapshot WHERE snapshot_id=?", (snapshot,))

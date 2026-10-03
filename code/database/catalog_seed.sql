@@ -2932,3 +2932,124 @@ WHERE s.station_id=station_ship_stock_defs.station_id AND s.faction_id=r.faction
 AND NOT(ship_id='battleship_bastion' AND station_id='station_silent_hub');
 -- Relic III products require completed research and production or the relic exchange, not universal ordinary stores.
 UPDATE station_stock_defs SET allow_buy=0 WHERE item_id LIKE '%_iii' AND station_id<>'station_silent_hub';
+
+-- Schema4 additive encounter and salvage content. Earlier rows stay byte-equivalent.
+INSERT INTO npc_defs VALUES
+('npc_encounter_scout_l2_high','npc_scout_light',2,'risk_high'),
+('npc_encounter_scout_l1_high','npc_scout_light',1,'risk_high'),
+('npc_encounter_scout_l3_medium','npc_scout_light',3,'risk_medium'),
+('npc_encounter_scout_l4_medium','npc_scout_light',4,'risk_medium'),
+('npc_encounter_scout_l6_low','npc_scout_light',6,'risk_low'),
+('npc_encounter_scout_l8_low','npc_scout_light',8,'risk_low');
+INSERT INTO anchor_defs VALUES
+('anchor_anchor_patrol_leader','sector_anchor','npc_spawn',6800.0,400.0,-6000.0,0.0,50.0,0.0),
+('anchor_anchor_patrol_leader_patrol','sector_anchor','patrol',6900.0,400.0,-5850.0,0.0,50.0,0.0),
+('anchor_anchor_patrol_escort','sector_anchor','npc_spawn',7000.0,500.0,-6000.0,0.0,50.0,0.0),
+('anchor_anchor_patrol_escort_patrol','sector_anchor','patrol',7100.0,500.0,-5850.0,0.0,50.0,0.0),
+('anchor_echo_patrol_escort','sector_echo','npc_spawn',5400.0,400.0,-4500.0,0.0,50.0,0.0),
+('anchor_echo_patrol_escort_patrol','sector_echo','patrol',5500.0,400.0,-4350.0,0.0,50.0,0.0),
+('anchor_mirror_patrol_escort','sector_mirror','npc_spawn',7000.0,500.0,-6000.0,0.0,50.0,0.0),
+('anchor_mirror_patrol_escort_patrol','sector_mirror','patrol',7100.0,500.0,-5850.0,0.0,50.0,0.0),
+('anchor_forge_patrol_escort','sector_forge','npc_spawn',7000.0,500.0,-6000.0,0.0,50.0,0.0),
+('anchor_forge_patrol_escort_patrol','sector_forge','patrol',7100.0,500.0,-5850.0,0.0,50.0,0.0),
+('anchor_iron_patrol_escort','sector_iron','npc_spawn',7000.0,500.0,-6000.0,0.0,50.0,0.0),
+('anchor_iron_patrol_escort_patrol','sector_iron','patrol',7100.0,500.0,-5850.0,0.0,50.0,0.0),
+('anchor_helios_patrol_escort','sector_helios','npc_spawn',7000.0,500.0,-6000.0,0.0,50.0,0.0),
+('anchor_helios_patrol_escort_patrol','sector_helios','patrol',7100.0,500.0,-5850.0,0.0,50.0,0.0),
+('anchor_drift_patrol_escort','sector_drift','npc_spawn',7000.0,500.0,-6000.0,0.0,50.0,0.0),
+('anchor_drift_patrol_escort_patrol','sector_drift','patrol',7100.0,500.0,-5850.0,0.0,50.0,0.0),
+('anchor_mist_patrol_escort','sector_mist','npc_spawn',7000.0,500.0,-6000.0,0.0,50.0,0.0),
+('anchor_mist_patrol_escort_patrol','sector_mist','patrol',7100.0,500.0,-5850.0,0.0,50.0,0.0),
+('anchor_rift_patrol_escort','sector_rift','npc_spawn',7000.0,500.0,-6000.0,0.0,50.0,0.0),
+('anchor_rift_patrol_escort_patrol','sector_rift','patrol',7100.0,500.0,-5850.0,0.0,50.0,0.0),
+('anchor_silent_patrol_escort','sector_silent','npc_spawn',7000.0,500.0,-6000.0,0.0,50.0,0.0),
+('anchor_silent_patrol_escort_patrol','sector_silent','patrol',7100.0,500.0,-5850.0,0.0,50.0,0.0);
+INSERT INTO npc_spawn_defs VALUES
+('spawn_anchor_patrol_leader','npc_encounter_scout_l2_high','sector_anchor','anchor_anchor_patrol_leader','behavior_scout','ambient','unlock_combat_contracts',600.0,1,1),
+('spawn_anchor_patrol_escort','npc_encounter_scout_l1_high','sector_anchor','anchor_anchor_patrol_escort','behavior_scout','ambient','unlock_combat_contracts',600.0,1,1),
+('spawn_echo_patrol_escort','npc_encounter_scout_l2_high','sector_echo','anchor_echo_patrol_escort','behavior_scout','ambient','unlock_exploration_contracts',600.0,1,1),
+('spawn_mirror_patrol_escort','npc_encounter_scout_l2_high','sector_mirror','anchor_mirror_patrol_escort','behavior_scout','ambient','unlock_open_routes',600.0,1,1),
+('spawn_forge_patrol_escort','npc_encounter_scout_l3_medium','sector_forge','anchor_forge_patrol_escort','behavior_scout','ambient','unlock_open_routes',600.0,1,1),
+('spawn_iron_patrol_escort','npc_encounter_scout_l4_medium','sector_iron','anchor_iron_patrol_escort','behavior_scout','ambient','unlock_open_routes',600.0,1,1),
+('spawn_helios_patrol_escort','npc_encounter_scout_l6_low','sector_helios','anchor_helios_patrol_escort','behavior_scout','ambient','unlock_open_routes',600.0,1,1),
+('spawn_drift_patrol_escort','npc_encounter_scout_l3_medium','sector_drift','anchor_drift_patrol_escort','behavior_scout','ambient','unlock_open_routes',600.0,1,1),
+('spawn_mist_patrol_escort','npc_encounter_scout_l6_low','sector_mist','anchor_mist_patrol_escort','behavior_scout','ambient','unlock_open_routes',600.0,1,1),
+('spawn_rift_patrol_escort','npc_encounter_scout_l6_low','sector_rift','anchor_rift_patrol_escort','behavior_scout','ambient','unlock_open_routes',600.0,1,1),
+('spawn_silent_patrol_escort','npc_encounter_scout_l8_low','sector_silent','anchor_silent_patrol_escort','behavior_scout','ambient','unlock_open_routes',600.0,1,1);
+INSERT INTO npc_patrol_points VALUES
+('spawn_anchor_patrol_leader',0,'anchor_anchor_patrol_leader_patrol'),
+('spawn_anchor_patrol_escort',0,'anchor_anchor_patrol_escort_patrol'),
+('spawn_echo_patrol_escort',0,'anchor_echo_patrol_escort_patrol'),
+('spawn_mirror_patrol_escort',0,'anchor_mirror_patrol_escort_patrol'),
+('spawn_forge_patrol_escort',0,'anchor_forge_patrol_escort_patrol'),
+('spawn_iron_patrol_escort',0,'anchor_iron_patrol_escort_patrol'),
+('spawn_helios_patrol_escort',0,'anchor_helios_patrol_escort_patrol'),
+('spawn_drift_patrol_escort',0,'anchor_drift_patrol_escort_patrol'),
+('spawn_mist_patrol_escort',0,'anchor_mist_patrol_escort_patrol'),
+('spawn_rift_patrol_escort',0,'anchor_rift_patrol_escort_patrol'),
+('spawn_silent_patrol_escort',0,'anchor_silent_patrol_escort_patrol');
+INSERT INTO encounter_defs VALUES
+('encounter_anchor_patrol','sector_anchor','锚港星系 · 侦察小队','anchor_anchor_patrol_leader',3000.0,600.0,1250.0,'unlock_combat_contracts'),
+('encounter_echo_patrol','sector_echo','回声带星系 · 侦察小队','anchor_echo_raider',3000.0,600.0,1550.0,'unlock_exploration_contracts'),
+('encounter_mirror_patrol','sector_mirror','镜湖星系 · 侦察小队','anchor_mirror_enemy',3000.0,600.0,1550.0,'unlock_open_routes'),
+('encounter_forge_patrol','sector_forge','熔脊星系 · 掠袭团','anchor_forge_enemy',3000.0,600.0,1550.0,'unlock_open_routes'),
+('encounter_iron_patrol','sector_iron','铁环星系 · 掠袭团','anchor_iron_enemy',3000.0,600.0,1550.0,'unlock_open_routes'),
+('encounter_helios_patrol','sector_helios','曜炉星系 · 遗构警戒群','anchor_helios_enemy',3000.0,600.0,1850.0,'unlock_open_routes'),
+('encounter_drift_patrol','sector_drift','游弋渡星系 · 掠袭团','anchor_drift_enemy',3000.0,600.0,1550.0,'unlock_open_routes'),
+('encounter_mist_patrol','sector_mist','雾帆星系 · 遗构警戒群','anchor_mist_enemy',3000.0,600.0,1850.0,'unlock_open_routes'),
+('encounter_rift_patrol','sector_rift','断弦星系 · 遗构警戒群','anchor_rift_enemy',3000.0,600.0,1850.0,'unlock_open_routes'),
+('encounter_silent_patrol','sector_silent','静默渊星系 · 遗构警戒群','anchor_silent_enemy',3000.0,600.0,1850.0,'unlock_open_routes');
+INSERT INTO encounter_members VALUES
+('encounter_anchor_patrol','spawn_anchor_patrol_leader',0),
+('encounter_anchor_patrol','spawn_anchor_patrol_escort',1),
+('encounter_echo_patrol','spawn_echo_raider',0),
+('encounter_echo_patrol','spawn_echo_patrol_escort',1),
+('encounter_mirror_patrol','spawn_mirror_sentinel',0),
+('encounter_mirror_patrol','spawn_mirror_patrol_escort',1),
+('encounter_forge_patrol','spawn_forge_sentinel',0),
+('encounter_forge_patrol','spawn_forge_patrol_escort',1),
+('encounter_iron_patrol','spawn_iron_sentinel',0),
+('encounter_iron_patrol','spawn_iron_patrol_escort',1),
+('encounter_helios_patrol','spawn_helios_sentinel',0),
+('encounter_helios_patrol','spawn_helios_patrol_escort',1),
+('encounter_drift_patrol','spawn_drift_sentinel',0),
+('encounter_drift_patrol','spawn_drift_patrol_escort',1),
+('encounter_mist_patrol','spawn_mist_sentinel',0),
+('encounter_mist_patrol','spawn_mist_patrol_escort',1),
+('encounter_rift_patrol','spawn_rift_sentinel',0),
+('encounter_rift_patrol','spawn_rift_patrol_escort',1),
+('encounter_silent_patrol','spawn_silent_sentinel',0),
+('encounter_silent_patrol','spawn_silent_patrol_escort',1);
+INSERT INTO salvage_package_defs VALUES
+('package_scout_salvage','轻型舰回收包',0.05,10.0),
+('package_raider_salvage','掠袭舰回收包',0.12,30.0),
+('package_guardian_salvage','重装舰回收包',0.3,80.0);
+INSERT INTO salvage_reward_defs VALUES
+('salvage_scout_credit','package_scout_salvage',55,25,NULL,0),
+('salvage_scout_ore','package_scout_salvage',42,0,'ore_ferrosilicate',5),
+('salvage_scout_module','package_scout_salvage',3,0,'module_kinetic_needle_i',1),
+('salvage_raider_credit','package_raider_salvage',55,80,NULL,0),
+('salvage_raider_ore','package_raider_salvage',30,0,'ore_ferrosilicate',20),
+('salvage_raider_crystal','package_raider_salvage',10,0,'ore_conductive_crystal',10),
+('salvage_raider_module','package_raider_salvage',5,0,'module_kinetic_needle_i',1),
+('salvage_guardian_credit','package_guardian_salvage',35,250,NULL,0),
+('salvage_guardian_alloy','package_guardian_salvage',35,0,'material_dense_alloy',1),
+('salvage_guardian_relic','package_guardian_salvage',25,0,'component_relic',1),
+('salvage_guardian_module','package_guardian_salvage',5,0,'module_pulse_breakwater_i',1);
+INSERT INTO npc_salvage_defs VALUES
+('npc_drift_sentinel','package_raider_salvage'),
+('npc_encounter_scout_l1_high','package_scout_salvage'),
+('npc_encounter_scout_l2_high','package_scout_salvage'),
+('npc_encounter_scout_l3_medium','package_scout_salvage'),
+('npc_encounter_scout_l4_medium','package_scout_salvage'),
+('npc_encounter_scout_l6_low','package_scout_salvage'),
+('npc_encounter_scout_l8_low','package_scout_salvage'),
+('npc_forge_sentinel','package_raider_salvage'),
+('npc_helios_sentinel','package_guardian_salvage'),
+('npc_iron_sentinel','package_raider_salvage'),
+('npc_mirror_sentinel','package_raider_salvage'),
+('npc_mist_sentinel','package_guardian_salvage'),
+('npc_raider_medium_l3_high','package_raider_salvage'),
+('npc_rift_sentinel','package_guardian_salvage'),
+('npc_silent_sentinel','package_guardian_salvage');
+UPDATE catalog_meta SET content_version='v0.5-encounters',ruleset_version='singleplayer_v0_5',schema_version=4,source_document=source_document||';doc/38-任务导航主线与战斗打捞.md';

@@ -127,6 +127,11 @@ func _clear_owners(node: Node) -> void:
 		_clear_owners(child)
 
 func sync_entities() -> bool:
+	_sync_waypoints()
+	for id: String in npcs.keys():
+		if state.find("npc_state", "npc_instance_id", id) == null:
+			npcs.erase(id)
+			_remove_target(id)
 	for row: Dtos.NpcStateDto in state.rows("npc_state"):
 		if row.sector_id != state.current_sector():
 			continue
@@ -157,6 +162,11 @@ func sync_entities() -> bool:
 			body.quaternion = Quaternion(row.quat_x, row.quat_y, row.quat_z, row.quat_w).normalized()
 			npcs[row.npc_instance_id] = body
 			_target(row.npc_instance_id, "%s · Lv.%d" % [definition.display_name, definition.level], "npc", body, spawn.anchor_id)
+		var group_id: String = gameplay.get("encounters").group_for_spawn(row.spawn_id)
+		targets[row.npc_instance_id]["group_target_id"] = "group:" + group_id if not group_id.is_empty() else "encounter:" + row.spawn_id if row.has_mission_instance_id else ""
+	for id: String in targets.keys():
+		if targets[id].kind == "wreck" and state.find("container_state", "container_id", id) == null:
+			_remove_target(id)
 	for container: Dtos.ContainerStateDto in state.rows("container_state"):
 		if container.kind != Types.ContainerKind.WRECK or container.sector_id != state.current_sector() or targets.has(container.container_id):
 			continue
@@ -165,6 +175,48 @@ func sync_entities() -> bool:
 		wreck.position = Vector3(container.pos_x, container.pos_y, container.pos_z)
 		_target(container.container_id, "可回收残骸", "wreck", wreck, "")
 	return true
+
+func _remove_target(id: String) -> void:
+	if not targets.has(id): return
+	var node: Node3D = targets[id].node
+	targets.erase(id)
+	if is_instance_valid(node):
+		node.hide()
+		remove_child(node)
+		node.queue_free()
+
+func _sync_waypoints() -> void:
+	var entries: Array[Dictionary] = gameplay.get("encounters").waypoints(state.current_sector())
+	# Task sites survive range filtering; only their actual enemies are sensor
+	# contacts. A site has no mesh or collider that could duplicate the ship.
+	for spawn in catalog.rows("npc_spawn_defs"):
+		if spawn.sector_id != state.current_sector(): continue
+		var mission: RefCounted = gameplay.get("missions").active_for_target("destroy_spawn", spawn.spawn_id)
+		if mission == null: continue
+		var outstanding: bool = false
+		for objective in gameplay.get("missions").objectives(mission.mission_def_id):
+			if objective.objective_kind != "destroy_spawn" or objective.target_spawn_id != spawn.spawn_id: continue
+			var progress: RefCounted = gameplay.get("missions").progress(mission, int(objective.objective_index))
+			if progress == null or progress.progress_units < int(objective.required_count): outstanding = true
+		if not outstanding: continue
+		var npc: RefCounted = state.find("npc_state", "spawn_id", spawn.spawn_id)
+		var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)
+		var behavior: Dictionary = catalog.one("npc_behavior_defs", "behavior_id", spawn.behavior_id)
+		entries.append({"id": "encounter:" + str(spawn.spawn_id), "title": "任务目标 · " + str(definition.display_name), "kind": "encounter", "anchor_id": spawn.anchor_id, "remaining_count": 1 if npc != null and npc.alive else 0, "total_count": 1, "respawn_remaining_s": 0.0, "level": definition.level, "mission_target": true, "reveal_range_m": float(catalog.rule("target_marker_detection_range_m")), "warp_arrival_m": float(behavior.detection_range_m) + float(behavior.return_radius_m)})
+	var retained: Dictionary = {}
+	for entry in entries:
+		var id: String = entry.id
+		retained[id] = true
+		var node: Node3D
+		if targets.has(id): node = targets[id].node
+		else:
+			node = Node3D.new()
+			add_child(node)
+			node.position = anchor_position(entry.anchor_id)
+			_target(id, entry.title, "encounter", node, entry.anchor_id)
+		for field in entry: targets[id][field] = entry[field]
+	for id: String in targets.keys():
+		if targets[id].kind == "encounter" and not retained.has(id): _remove_target(id)
 
 func simulate_npcs(delta: float) -> void:
 	if not is_instance_valid(flight):
@@ -262,6 +314,17 @@ func simulate_npcs(delta: float) -> void:
 func anchor_position(id: String) -> Vector3:
 	var anchor: Dictionary = definitions.get(id, catalog.one("anchor_defs", "anchor_id", id))
 	return Vector3(float(anchor.get("x_m", 0.0)), float(anchor.get("y_m", 0.0)), float(anchor.get("z_m", 0.0)))
+
+func contact_visible(entry: Dictionary, distance: float) -> bool:
+	if str(entry.get("kind", "")) != "npc": return true
+	var sensor: float = float(catalog.rule("target_marker_detection_range_m"))
+	if distance > sensor: return false
+	var group_id: String = str(entry.get("group_target_id", ""))
+	if group_id.is_empty() or not targets.has(group_id): return true
+	var group: Dictionary = targets[group_id]
+	var node: Variant = group.get("node")
+	var reveal: float = float(group.get("reveal_range_m", sensor))
+	return distance <= reveal or (node is Node3D and is_instance_valid(node) and flight.global_position.distance_to(node.global_position) <= reveal)
 
 func line_of_sight(from: Vector3, to: Vector3, excluded: RID = RID(), target_id: String = "") -> bool:
 	var exclusions: Array[RID] = []

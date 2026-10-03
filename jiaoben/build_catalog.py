@@ -103,11 +103,21 @@ CONTENT_TABLES = (
     "base_module_inputs",
     "mission_reputation_rewards",
     "signal_unlock_rewards",
+    "encounter_defs",
+    "encounter_members",
+    "salvage_package_defs",
+    "salvage_reward_defs",
+    "npc_salvage_defs",
 )
 
 
 # Reviewed column/type/primary-key registry. Schema drift requires explicit registration.
 CONTENT_COLUMNS = {
+    'encounter_defs': 'encounter_id:TEXT:1|sector_id:TEXT:0|display_name:TEXT:0|anchor_id:TEXT:0|reveal_range_m:REAL:0|respawn_seconds:REAL:0|warp_arrival_m:REAL:0|required_unlock_id:TEXT:0',
+    'encounter_members': 'encounter_id:TEXT:1|spawn_id:TEXT:2|member_index:INTEGER:0',
+    'salvage_package_defs': 'package_def_id:TEXT:1|display_name:TEXT:0|volume_m3:REAL:0|mass_kg:REAL:0',
+    'salvage_reward_defs': 'reward_id:TEXT:1|package_def_id:TEXT:0|weight:INTEGER:0|credit_units:INTEGER:0|item_def_id:TEXT:0|quantity:INTEGER:0',
+    'npc_salvage_defs': 'npc_def_id:TEXT:1|package_def_id:TEXT:0',
     'signal_unlock_rewards': 'signal_id:TEXT:1|unlock_id:TEXT:2',
     'ship_role_defs': 'ship_id:TEXT:1|class_id:TEXT:0|faction_id:TEXT:0|required_unlock_id:TEXT:0',
     'module_tech_defs': 'module_id:TEXT:1|faction_id:TEXT:0|tech_level:INTEGER:0|required_unlock_id:TEXT:0',
@@ -376,6 +386,48 @@ def validate_content_graph(connection: sqlite3.Connection) -> None:
                 distance = math.sqrt(sum((home[key] - safe[key]) ** 2 for key in ("x_m", "y_m", "z_m")))
                 require(distance - behavior["leash_radius_m"] > safe["safe_radius_m"],
                         f"NPC leash overlaps safe area: {spawn['spawn_id']} / {safe['anchor_id']}")
+    # Sites aggregate real spawn instances; no virtual enemy receives damage or loot.
+    encounters = indexed("encounter_defs", "encounter_id")
+    members = rows("encounter_members")
+    require({site["sector_id"] for site in encounters.values()} == set(sector_risks),
+            "Every playable system requires one combat site")
+    require({member["spawn_id"] for member in members} ==
+            {spawn_id for spawn_id, spawn in spawns.items() if spawn["occurrence_mode"] == "ambient"},
+            "Ambient spawn/site membership closure incomplete")
+    for encounter_id, site in encounters.items():
+        site_members = sorted((m for m in members if m["encounter_id"] == encounter_id),
+                              key=lambda m: m["member_index"])
+        require([m["member_index"] for m in site_members] == list(range(len(site_members))) and len(site_members) > 0,
+                f"Missing/non-contiguous encounter members: {encounter_id}")
+        center = anchors[site["anchor_id"]]
+        require(center["anchor_kind"] == "npc_spawn", f"Wrong encounter anchor kind: {encounter_id}")
+        for member in site_members:
+            spawn = spawns[member["spawn_id"]]
+            require(spawn["sector_id"] == site["sector_id"] and spawn["occurrence_mode"] == "ambient" and
+                    spawn["required_unlock_id"] == site["required_unlock_id"] and
+                    spawn["respawn_s"] == site["respawn_seconds"],
+                    f"Encounter member sector/unlock/refresh mismatch: {member['spawn_id']}")
+            home = anchors[spawn["anchor_id"]]
+            offset = math.sqrt(sum((home[key]-center[key])**2 for key in ("x_m", "y_m", "z_m")))
+            require(site["warp_arrival_m"] > behaviors[spawn["behavior_id"]]["detection_range_m"] + offset,
+                    f"Encounter warp arrival enters immediate acquisition range: {encounter_id}")
+    packages = indexed("salvage_package_defs", "package_def_id")
+    salvage_rewards = rows("salvage_reward_defs")
+    for package_id, package in packages.items():
+        package_rewards = [r for r in salvage_rewards if r["package_def_id"] == package_id]
+        require(0 < sum(r["weight"] for r in package_rewards) <= 4294967295,
+                f"Invalid salvage weight budget: {package_id}")
+        require(float(package["volume_m3"])*1000 == int(float(package["volume_m3"])*1000),
+                f"Salvage volume must convert exactly to cargo litres: {package_id}")
+        for reward in package_rewards:
+            if reward["item_def_id"] is not None and reward["item_def_id"] in indexed("module_defs", "module_id"):
+                require(reward["item_def_id"] in indexed("module_salvage_recipe_defs", "module_id"),
+                        f"Salvage equipment lacks frozen recycling provenance: {reward['reward_id']}")
+    salvage_npcs = {r["npc_def_id"] for r in rows("npc_salvage_defs")}
+    require(salvage_npcs == {spawn["npc_id"] for spawn in spawns.values() if spawn["occurrence_mode"] == "ambient"},
+            "Every ambient NPC definition requires a salvage package and mission-only NPCs must be excluded")
+    require({r["station_id"] for r in rows("station_service_defs") if r["service_id"] == "warehouse"} == set(stations),
+            "Salvage recovery must be available at every station")
     require(set(missions) == set(rewards), "Every mission requires exactly one reward definition")
     prerequisites = rows("mission_prerequisites")
     objectives = rows("mission_objective_defs")
