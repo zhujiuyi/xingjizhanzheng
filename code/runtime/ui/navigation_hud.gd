@@ -17,6 +17,8 @@ var radar: Radar
 var range_label: Label
 var selection_frame: PanelContainer
 var selection_label: Label
+var target_caption: Label
+var selection_obstructed: bool = false
 var caption_obstacles: Array[Rect2] = []
 
 class Radar extends Control:
@@ -110,6 +112,23 @@ func _ready() -> void:
 	selection_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	selection_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	selection_frame.add_child(selection_label)
+	target_caption = Label.new()
+	target_caption.name = "WorldTargetCaption"
+	target_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	target_caption.clip_text = true
+	target_caption.add_theme_font_override("font", UISkin.font())
+	target_caption.add_theme_font_size_override("font_size", 13)
+	target_caption.add_theme_constant_override("outline_size", 0)
+	target_caption.add_theme_constant_override("shadow_outline_size", 0)
+	target_caption.add_theme_constant_override("shadow_offset_x", 0)
+	target_caption.add_theme_constant_override("shadow_offset_y", 0)
+	target_caption.add_theme_color_override("font_shadow_color", Color.TRANSPARENT)
+	var backing: StyleBoxFlat = UISkin.flat(Color(0.007, 0.02, 0.03, 0.9), Color(0.2, 0.3, 0.34, 0.45), 6)
+	backing.content_margin_top = 3
+	backing.content_margin_bottom = 3
+	target_caption.add_theme_stylebox_override("normal", backing)
+	add_child(target_caption)
+	target_caption.hide()
 
 func configure(sector: Node3D, camera_rig: Node3D, catalog: RefCounted) -> void:
 	world = sector
@@ -200,13 +219,44 @@ func target_geometry() -> Dictionary:
 func _update_selection() -> void:
 	if not is_instance_valid(selection_frame): return
 	var geometry := target_geometry()
-	selection_frame.visible = not geometry.is_empty() and size.x >= 950
+	selection_frame.visible = not geometry.is_empty() and size.x >= 950 and not selection_obstructed
 	if geometry.is_empty(): return
 	selection_label.text = "已选定 · " + str(geometry.title) + "\n" + ("远景天体 · 航向参考" if geometry.bearing else "距离 %.1f km" % (float(geometry.distance_m) / 1000.0))
 	selection_label.add_theme_color_override("font_color", contact_color(str(geometry.kind)))
 
 func _process(_delta: float) -> void:
-	if is_visible_in_tree(): queue_redraw()
+	update_annotations()
+
+func update_annotations() -> void:
+	if not is_visible_in_tree():
+		if is_instance_valid(target_caption): target_caption.hide()
+		return
+	_update_selection()
+	var geometry := target_geometry()
+	if is_instance_valid(target_caption):
+		var title: String = "" if geometry.is_empty() else str(geometry.title) + (" · 远景航向" if geometry.bearing else " · %.0f m" % float(geometry.distance_m))
+		var area := Rect2() if geometry.is_empty() else caption_rect(title, geometry.end)
+		target_caption.visible = area.has_area()
+		if area.has_area():
+			target_caption.text = title
+			target_caption.tooltip_text = title
+			target_caption.position = area.position.round()
+			target_caption.size = area.size.ceil()
+			target_caption.add_theme_color_override("font_color", contact_color(str(geometry.kind)))
+	queue_redraw()
+
+func marker_geometry() -> Array[Dictionary]:
+	var markers: Array[Dictionary] = []
+	if not is_instance_valid(world) or not is_instance_valid(world.flight) or not is_instance_valid(rig) or not is_instance_valid(rig.camera): return markers
+	for entry: Dictionary in world.targets.values():
+		if str(entry.id) == selected_id: continue
+		var node: Variant = entry.get("node")
+		if not is_instance_valid(node) or not node is Node3D: continue
+		if not bool(entry.get("navigation_only", false)) and world.flight.global_position.distance_to(node.global_position) > sensor_limit: continue
+		if (rig.camera.global_transform.affine_inverse() * node.global_position).z >= -0.001: continue
+		var point: Vector2 = rig.camera.unproject_position(node.global_position)
+		if Rect2(Vector2.ZERO, size).has_point(point): markers.append({"id": str(entry.id), "point": point, "color": contact_color(str(entry.kind))})
+	return markers
 
 func caption_rect(title: String, finish: Vector2) -> Rect2:
 	# Compact HUD already repeats this information in its target module.
@@ -214,6 +264,7 @@ func caption_rect(title: String, finish: Vector2) -> Rect2:
 	var text_size: Vector2 = UISkin.font().get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, 290, 13)
 	text_size.x = minf(text_size.x, 290)
 	text_size.y = UISkin.font().get_height(13)
+	text_size += Vector2(12, 6)
 	for candidate: Vector2 in [finish + Vector2(24, -text_size.y - 5), finish - Vector2(text_size.x + 24, text_size.y + 5), finish + Vector2(-text_size.x * 0.5, 25), finish - Vector2(text_size.x * 0.5, text_size.y + 30)]:
 		var point := Vector2(clampf(candidate.x, 12, maxf(12, size.x - text_size.x - 12)), clampf(candidate.y, 12, maxf(12, size.y - text_size.y - 12)))
 		var area := Rect2(point, text_size)
@@ -223,6 +274,7 @@ func caption_rect(title: String, finish: Vector2) -> Rect2:
 
 func _draw() -> void:
 	if not is_visible_in_tree(): return
+	for marker: Dictionary in marker_geometry(): draw_arc(marker.point, 8, 0, TAU, 24, marker.color, 1.2, true)
 	var geometry := target_geometry()
 	if geometry.is_empty(): return
 	var start: Vector2 = geometry.start
@@ -233,13 +285,11 @@ func _draw() -> void:
 	# A subdued white dashed bearing; target/radar colors keep their own meaning.
 	for offset: float in range(14, int(delta.length()), 17):
 		draw_line(start + direction * offset, start + direction * minf(offset + 9, delta.length()), Color(1, 1, 1, 0.45), 1.1, true)
-	draw_arc(finish, 18, 0, TAU, 40, color, 1.8, true)
+	# Corner brackets identify the target without tracing a second model outline.
+	for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		var point := finish + corner * 20
+		draw_line(point, point - Vector2(corner.x * 7, 0), color, 1.3, true)
+		draw_line(point, point - Vector2(0, corner.y * 7), color, 1.3, true)
 	if not geometry.on_screen:
 		var normal := direction.orthogonal()
 		draw_colored_polygon(PackedVector2Array([finish + direction * 8, finish - direction * 6 + normal * 5, finish - direction * 6 - normal * 5]), color)
-	var title: String = str(geometry.title) + (" · 远景航向" if geometry.bearing else " · %.0f m" % float(geometry.distance_m))
-	var area: Rect2 = caption_rect(title, finish)
-	if not area.has_area(): return
-	var text_position: Vector2 = area.position + Vector2(0, UISkin.font().get_ascent(13))
-	draw_string_outline(UISkin.font(), text_position, title, HORIZONTAL_ALIGNMENT_LEFT, 290, 13, 3, Color("02080e"))
-	draw_string(UISkin.font(), text_position, title, HORIZONTAL_ALIGNMENT_LEFT, 290, 13, color)

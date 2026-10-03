@@ -96,3 +96,17 @@
 最终交付构建 `0.6.1-74ccdab4-20261003-133018` 使用已推送的源提交 `74ccdab49b0bc98b3402fd8b068f050b6f09f9b0`，`source_dirty=false`，原始运行资源124项。[构建身份](../code/dist/0.6.1-74ccdab4-20261003-133018/build-manifest.json)与 [构建日志](../jiaoben/logs/client-v061-build.log)登记Mac/Windows导出结果。实际Mac包Metal/CoreAudio [表现诊断](../jiaoben/logs/0.6.1-74ccdab4-20261003-133018-mac-presentation.log)35/35 PASS、6图，[数据库检查](../jiaoben/logs/0.6.1-74ccdab4-20261003-133018-mac-database.log)6/6 PASS，原始资源与ad-hoc签名通过；该构建8项导出/诊断/引擎日志未见错误、警告或泄漏，不以源码35项代替。
 
 整合者已查看实际包 [飞行](../jiaoben/tmp/release-presentation/444a75a5-5b57-43fc-b5ca-8ac9701337be/release-flight.png)和 [靠站](../jiaoben/tmp/release-presentation/444a75a5-5b57-43fc-b5ca-8ac9701337be/release-approach.png)截图：舰船可见，站点连线为淡白虚线。code/dist对应目录提供Mac `.app`与ZIP、Windows ZIP、构建身份和摘要；完整链接及摘要见 [26](26-开发阶段与交付记录.md)。Windows PE/PCK/SQLite DLL及导出检查通过，原生运行仍待验；固定诊断使用独立临时库，不等于额外人工试玩或自然通关。
+
+## v0.6.2补充：目标轮廓与名称单层显示
+
+状态：源码目标标记专项、三项原生回归及37项内置源码诊断已通过；实际发布包仍待验收。用户反馈静止时选中目标模型和名称也像两层；已确认旧UI与导航HUD在同一目标分别画半径15/18的圆圈，名称另有3像素黑描边。HUD叠层已确认，完整3D模型重复未获得同等证据，不把两者混为一个已修复原因。
+
+旧标记层只保留准星；导航HUD统一管理未选小圈和已选四角方框，避免选中圆圈叠加环形3D目标。名称仅由一个无描边、无阴影的Label显示，使用暗底和整数像素位置；目标ID每渲染帧同步，目标切换与销毁不等待遥测刷新。v0.6.1淡白虚线、离屏方向和对象类型配色继续保留。这是本项目UI实现修正，不声称复刻参考游戏的具体标记，也不改变模型、相机、物理或平衡内容。
+
+[独立几何调查](../jiaoben/logs/ghosting-geometry-audit.log)覆盖fresh Main的10星系、88目标、315个Mesh，未发现同坐标叠加、overlay、next_pass或重复Model；GLB为唯一primitive和OPAQUE材质。独立原生探针TAA未启用、3D缩放为1。调查结果只证明该场景未发现完整模型重复，不替代用户个人档案的画面复现。
+
+[目标标记headless](../jiaoben/logs/target-annotations-v5-headless.log)54/54 PASS，[原生](../jiaoben/logs/target-annotations-v5-native.log)58/58 PASS、4图，均退出0，stdout和独立引擎诊断0；[导航原生](../jiaoben/logs/navigation-v062-native.log)67项/5图、[布局](../jiaoben/logs/ui-v062-layout.log)75项/42图、[生命周期](../jiaoben/logs/lifecycle-v062.log)27项也全部PASS、退出0、严格诊断0。这里直接引用本轮独立日志，不沿用旧版汇总标签。
+
+整合者查看专项 [空间站](../jiaoben/logs/target-annotations-v5-station.png)、[虫洞门](../jiaoben/logs/target-annotations-v5-gate.png)、[NPC](../jiaoben/logs/target-annotations-v5-npc.png)样本，名称单层清晰、方框与虚线正确，未见完整模型副本。NPC是独立临时runtime SQLite原型DTO经正式`world.sync_entities`加载的视觉夹具，不表示自然任务解锁；第四图为 [运动目标](../jiaoben/logs/target-annotations-v5-moving-target.png)。这些结论限于专项场景和已查看样本，不宣称用户个人档案的全部模型重影已解决。
+
+[37项内置源码诊断](../jiaoben/logs/source-v062-presentation.log)、[独立引擎日志](../jiaoben/logs/source-v062-presentation-engine.log)已完成37/37 PASS、6图、退出0、严格诊断0，新增唯一名称、次级标记排除及单一Model检查；该执行是源码运行。实际Mac包37项及Windows导出仍待最终验收，Windows原生运行继续单独待验。结果与范围继续登记 [29](29-操控与界面重塑方案.md) 与 [26](26-开发阶段与交付记录.md)，不使用v0.6.1的35项或本轮源码/专项结果代替实际发布包。

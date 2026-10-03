@@ -304,6 +304,10 @@ func tick(delta: float) -> void:
 	if message_age > 12.0:
 		toast.text = ""
 	marker_layer.queue_redraw()
+	# Selection projection follows the current frame, independently of telemetry.
+	if is_instance_valid(navigation_hud):
+		navigation_hud.selected_id = target_id
+		navigation_hud.selection_obstructed = is_instance_valid(operation_bar) and operation_bar.visible
 	if state == null or state.ship() == null or gameplay == null:
 		return
 	hud_refresh += delta
@@ -328,6 +332,7 @@ func tick(delta: float) -> void:
 	_refresh_targets()
 	_update_npc_target()
 	_update_navigation()
+	navigation_hud.update_annotations()
 
 func input_blocked() -> bool:
 	return keyboard_blocked() or _pointer_over(target_panel) or _pointer_over(work_box) or _pointer_over(operation_bar) or _pointer_over(navigation) or _pointer_over(instrument) or (is_instance_valid(navigation_hud) and _pointer_over(navigation_hud.radar_frame))
@@ -941,21 +946,8 @@ func _draw_markers() -> void:
 		marker_layer.draw_line(start, finish, Color(0.005, 0.01, 0.015, 0.9), 3.5, true)
 		marker_layer.draw_line(start, finish, UISkin.ICE, 1.5, true)
 	marker_layer.draw_circle(center, 1.5, UISkin.ICE)
-	for target: Dictionary in sector.targets.values():
-		var candidate: Variant = target.get("node")
-		if not is_instance_valid(candidate) or not candidate is Node3D:
-			continue
-		var node: Node3D = candidate
-		if sector.flight.global_position.distance_to(node.global_position) > float(catalog.rule("target_marker_detection_range_m")) and not bool(target.get("navigation_only", false)) and target.id != target_id: continue
-		if (camera.camera.global_transform.affine_inverse() * node.global_position).z >= -0.001:
-			continue
-		var point := camera.camera.unproject_position(node.global_position)
-		var selected: bool = target.id == target_id
-		var color := Color("ff9477") if target.kind == "npc" else Color("69dbe9")
-		var radius := 15.0 if selected else 8.0
-		marker_layer.draw_arc(point, radius, 0, TAU, 16, color, 2.0)
-		# The navigation layer draws selected geometry and text once, including
-		# the line from our ship and an edge direction marker for off-screen targets.
+	# All world-target annotations belong to NavigationHUD. Drawing a second
+	# selected ring here created concentric outlines over the actual model.
 
 func _objective_text() -> String:
 	for mission: Dtos.MissionStateDto in state.rows("mission_state"):

@@ -121,6 +121,8 @@ static func run(host: Node, output_dir: String) -> bool:
 	host.ui.tick(1.0)
 	var geometry: Dictionary = nav.target_geometry()
 	_check(evidence, not geometry.is_empty() and geometry.end.distance_to(host.camera.camera.unproject_position(station.global_position)) < 0.01, "packed selected line reaches actual station projection")
+	_check(evidence, nav.target_caption.is_visible_in_tree() and nav.target_caption.text.contains(str(host.world.targets[station_id].title)) and nav.target_caption.get_theme_constant("outline_size") == 0 and nav.target_caption.get_theme_color("font_shadow_color").a == 0.0 and nav.target_caption.position == nav.target_caption.position.round(), "packed selected caption is a single crisp pixel-aligned label without shadow")
+	_check(evidence, not nav.marker_geometry().any(func(marker: Dictionary): return marker.id == station_id) and station.get_node("VisualRoot").find_children("Model", "Node3D", false, false).size() == 1, "packed selected target excludes secondary markers and keeps one model")
 	_check(evidence, host.ui.interaction_button.visible and not host.ui.interaction_button.disabled and host.ui.interaction_button.text.contains("[F]"), "packed station approach presents usable F control")
 	await _capture(host, output_dir, "approach")
 	host.world.flight.velocity = Vector3.RIGHT * (float(host.store.catalog.rule("dock_max_speed_mps")) + 1)
