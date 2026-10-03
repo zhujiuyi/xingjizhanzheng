@@ -24,6 +24,9 @@ func bind(row: Dtos.ShipStateDto, definitions: RefCounted) -> void:
 	quaternion = Quaternion(row.quat_x, row.quat_y, row.quat_z, row.quat_w).normalized()
 	velocity = Vector3(row.vel_x, row.vel_y, row.vel_z)
 	has_restore = true
+	if is_inside_tree():
+		get_global_transform_interpolated()
+		reset_physics_interpolation()
 
 func simulate(delta: float) -> void:
 	if record == null or blocked or record.status != Types.ShipStatus.FLYING:
@@ -31,7 +34,7 @@ func simulate(delta: float) -> void:
 	if metrics.is_empty():
 		return
 	var turn: float = float(metrics.turn_radps)
-	var local_spin := Vector3(intent.pitch_request, intent.yaw_request, -intent.roll_request) * turn
+	var local_spin := (Vector3(intent.pitch_request, intent.yaw_request, -intent.roll_request) * turn).limit_length(turn)
 	if local_spin.length_squared() > 0.0:
 		var rotation_step := Quaternion(local_spin.normalized(), minf(local_spin.length(), turn) * delta)
 		quaternion = (quaternion * rotation_step).normalized()
@@ -44,7 +47,10 @@ func simulate(delta: float) -> void:
 		thrust.z *= float(metrics.reverse_multiplier)
 	var acceleration: float = float(metrics.acceleration_mps2)
 	var top_speed: float = float(metrics.speed_mps)
-	velocity += basis * thrust * acceleration * delta
+	var world_thrust: Vector3 = basis * thrust
+	if intent.view_thrust_direction.is_finite() and not intent.view_thrust_direction.is_zero_approx():
+		world_thrust = (basis * Vector3(thrust.x, thrust.y, 0.0) - intent.view_thrust_direction.normalized() * thrust.z).limit_length(1.0)
+	velocity += world_thrust * acceleration * delta
 	if intent.brake_requested:
 		velocity = velocity.move_toward(Vector3.ZERO, acceleration * float(metrics.brake_multiplier) * delta)
 	if velocity.length() > top_speed:

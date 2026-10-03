@@ -102,6 +102,7 @@ func _ready() -> void:
 		row.add_child(button)
 	radar = Radar.new()
 	radar.host = self
+	radar.tooltip_text = "左键拖动观察 · 双击总览接近 · 滚轮缩放"
 	radar.custom_minimum_size = Vector2(200, 186)
 	layout.add_child(radar)
 	selection_frame = PanelContainer.new()
@@ -143,16 +144,28 @@ func configure(sector: Node3D, camera_rig: Node3D, catalog: RefCounted) -> void:
 func radius_m() -> float:
 	return minf(scales[clampi(scale_index, 0, scales.size() - 1)], sensor_limit) if not scales.is_empty() else sensor_limit
 
+func _render_ship_transform() -> Transform3D:
+	# Reuse the pose that the camera sampled for this render frame. Eligibility,
+	# distances and all gameplay keep using the current physics transforms.
+	if is_instance_valid(rig) and rig.has_method("render_ship_transform"):
+		return rig.call("render_ship_transform")
+	return world.flight.get_global_transform_interpolated()
+
+func _render_target_position(node: Node3D) -> Vector3:
+	return node.get_global_transform_interpolated().origin
+
 func refresh() -> void:
 	contacts.clear()
 	if not is_instance_valid(world) or not is_instance_valid(world.flight): return
+	var render_ship: Transform3D = _render_ship_transform()
 	for target: Dictionary in world.targets.values():
 		var node: Variant = target.get("node")
 		if not is_instance_valid(node) or not node is Node3D: continue
-		var relative: Vector3 = world.flight.global_basis.inverse() * (node.global_position - world.flight.global_position)
+		var distance: float = world.flight.global_position.distance_to(node.global_position)
+		var relative: Vector3 = render_ship.basis.inverse() * (_render_target_position(node) - render_ship.origin)
 		var bearing: bool = bool(target.get("navigation_only", false))
-		if not bearing and relative.length() > minf(radius_m(), sensor_limit): continue
-		contacts.append({"id": str(target.id), "title": str(target.title), "kind": str(target.kind), "relative": relative, "height_m": relative.y, "distance_m": relative.length(), "bearing": bearing})
+		if not bearing and distance > minf(radius_m(), sensor_limit): continue
+		contacts.append({"id": str(target.id), "title": str(target.title), "kind": str(target.kind), "relative": relative, "height_m": relative.y, "distance_m": distance, "bearing": bearing})
 	if is_instance_valid(range_label): range_label.text = ("雷达 %.1f km" if size.x < 950 else "局部态势 · %.1f km") % (radius_m() / 1000.0)
 	if is_instance_valid(radar): radar.queue_redraw()
 	_update_selection()
@@ -201,16 +214,18 @@ func target_geometry() -> Dictionary:
 	if not is_instance_valid(node) or not node is Node3D or not is_instance_valid(world.flight): return {}
 	var camera: Camera3D = rig.camera
 	var inverse: Transform3D = camera.global_transform.affine_inverse()
-	var ship_local: Vector3 = inverse * world.flight.global_position
-	var from: Vector2 = size * 0.5 if ship_local.z >= -0.001 else camera.unproject_position(world.flight.global_position)
-	var local: Vector3 = inverse * node.global_position
+	var render_ship_position: Vector3 = _render_ship_transform().origin
+	var render_target_position: Vector3 = _render_target_position(node)
+	var ship_local: Vector3 = inverse * render_ship_position
+	var from: Vector2 = size * 0.5 if ship_local.z >= -0.001 else camera.unproject_position(render_ship_position)
+	var local: Vector3 = inverse * render_target_position
 	var behind: bool = local.z >= -0.001
 	var point: Vector2
 	if behind:
 		var direction := Vector2(local.x, -local.y)
 		if direction.length_squared() < 0.001: direction = Vector2(0, -1)
 		point = size * 0.5 + direction.normalized() * size.length()
-	else: point = camera.unproject_position(node.global_position)
+	else: point = camera.unproject_position(render_target_position)
 	var bounds := Rect2(Vector2(40, 40), size - Vector2(80, 80))
 	var on_screen: bool = not behind and bounds.has_point(point)
 	if not on_screen:
@@ -257,8 +272,9 @@ func marker_geometry() -> Array[Dictionary]:
 		var node: Variant = entry.get("node")
 		if not is_instance_valid(node) or not node is Node3D: continue
 		if not bool(entry.get("navigation_only", false)) and world.flight.global_position.distance_to(node.global_position) > sensor_limit: continue
-		if (rig.camera.global_transform.affine_inverse() * node.global_position).z >= -0.001: continue
-		var point: Vector2 = rig.camera.unproject_position(node.global_position)
+		var render_target_position: Vector3 = _render_target_position(node)
+		if (rig.camera.global_transform.affine_inverse() * render_target_position).z >= -0.001: continue
+		var point: Vector2 = rig.camera.unproject_position(render_target_position)
 		if Rect2(Vector2.ZERO, size).has_point(point): markers.append({"id": str(entry.id), "point": point, "color": contact_color(str(entry.kind))})
 	return markers
 

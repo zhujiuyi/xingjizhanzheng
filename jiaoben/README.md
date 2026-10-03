@@ -64,3 +64,21 @@ v0.6.2实际新包 `0.6.2-8d86553e-20261003-141501` 已通过37项Metal/CoreAudi
 `build_local_navigation.py` 从正式 SQL 构建独立只读 v1 导航数据库，清单只存身份/摘要。`tests/local_navigation_geometry_v6.gd` 检查实际十站九舰的三维安全落点及规则/取消边界。`tests/navigation_commands_v6_run.py` 默认 headless/CoreAudio，`--native` 要求独占原生窗口，使用 fresh tmp 库检查真实 Main 导航、SQLite 到达保存和重开、实体射线选择、火力辅助并行、总览设备和布局；原生与 headless 证据分别记录。截图不能替代实际物理与持久状态检查。
 
 发布固定端点已扩展为48项检查、9张实际包截图，新增图形星图、真实设备、独立导航SQLite、先存起点再跃迁、站外停船、实际射线选站及业务进站；另检查运动后速度读数和连续渲染中的标注唯一性，构建器逐张检查PNG与摘要。此次测试结果和实际包身份见 [32](../doc/32-曦航对标与导航交互改进.md) 与 [26](../doc/26-开发阶段与交付记录.md)，旧版本结果保留为历史。
+
+## v0.8.0输入与运动检查
+
+新版采用常驻光标、左键短击选择/长按观察、WS观察航向推进、AD转弯及总览双击接近。旧v6的Alt、捕获鼠标、鼠标操舰及右键观察断言已由v7契约替代；旧源码结果只属于历史。适用导航、UI布局、生命周期、真实战斗和存读档回归仍须执行；维护旧夹具时替换失效输入契约，不删业务覆盖，也不能忽略生产错误。
+
+| 入口 | 当前headless证据与边界 |
+| --- | --- |
+| `tests/camera_pointer_v7.gd`、`tests/camera_pointer_v7_run.py` | CoreAudio280项、原生294项/2图通过：九舰三视角、真实Main输入、观察松手保持、三维航向推进/弯向、手动接管惯性、开火/交战及三镜头SQLite重开；`--components-only`只验组件，不能代替完整入口。原生由整合者独占窗口执行。 |
+| `tests/overview_commands_v7.gd` | CoreAudio52项通过、退出0：实际Viewport GUI事件检查同一目标行单击/双击及单发请求、远景无导航、Main非法替换保持原导航、真实NPC资格与交战、换选择不转火、四组布局。原生分支另检查实际tooltip生成、文字/弹窗尺寸并输出4布局+4tooltip图；最终原生68项/8图通过。 |
+| `tests/scene_rendering_v7.gd` | 851项通过：独立十星区、79实际目标与243 Mesh实例；检查单模型、材料pass与远景结构，不代表所有个人存档复现。 |
+| `tests/navigation_render_poses_v7.gd` | 567项通过：实际引擎插值与生产NavHUD，80帧插值差异，标记/虚线/雷达使用一致姿态；接触体的测试运动不写入正式平衡定义或存档。 |
+| `tests/flight_motion_visual_v7.gd` | 490项通过：实际Main物理与render回调、真实行星，120插值帧，所测中心误差0；headless没有图像证据。原生497项/6图通过，已查看代表帧，具体数据见33。 |
+
+上述当前日志分别为 `logs/camera-pointer-v7-headless{,-engine}.log`、`logs/overview-commands-v7-headless{,-engine}.log`、`logs/scene-rendering-v7-{headless,engine-headless}.log`、`logs/navigation-render-poses-v7-{headless,engine-headless}.log`、`logs/flight-motion-v7-{headless,engine-headless}.log`；各组stdout和独立引擎日志未见错误、警告、脚本错误或退出泄漏。数目对应当前完整运行，后续新增检查须以新的执行结果更新。
+
+完整输入检查可从工作区根目录执行`/usr/local/bin/python3.14 jiaoben/tests/camera_pointer_v7_run.py`。其他GDScript入口使用`sh jiaoben/run_godot.sh --headless --audio-driver CoreAudio --path code --script ../jiaoben/tests/<文件名>.gd --log-file <本轮独立引擎日志绝对路径>`，并单独保存stdout。去掉`--headless`或使用`--native`之前必须与整合者协调独占原生窗口；不要并行打开Godot原生测试或编辑器导入。
+
+新版内置发布诊断固定要求**53项检查、9张截图**，新增物理插值、常驻指针、右键禁用、普通鼠标移动及左拖/松开保留跃迁的实际状态验证；最终实际Mac包必须独立通过，不能以headless或源码结果代替。当前源码原生验收已通过，实际发布包仍待独立构建验证，实施和证据范围见 [33](../doc/33-指令式操舰与运动重影修正.md)，最终构建身份见26。模型/相机/插值修正不证明TAA是原因，也不承诺个人存档所有重影均已解决。

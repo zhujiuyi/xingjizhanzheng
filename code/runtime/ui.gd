@@ -190,7 +190,9 @@ func _ready() -> void:
 	_build_instrument()
 	_build_equipment_bar()
 	_build_navigation()
-	controls = _label(root, "Alt 操作界面 · 右键观察", 11)
+	controls = _label(root, "左拖视角 · 双击总览接近 · 滚轮缩放", 11)
+	controls.mouse_filter = Control.MOUSE_FILTER_PASS
+	controls.tooltip_text = "光标常驻；左键短击模型、总览或雷达只选择目标，长按拖动观察，松开保留角度；双击总览目标自动转向并接近。W/S 沿当前观察航向加速/反向加速，A/D 左右转弯；Space/C 升降、Q/E 滚转；Ctrl 发射、Z 自动开火、X 停船、Shift 增推、F 交互、V 视角。右键禁用。"
 	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	controls.offset_left = 22
 	controls.offset_top = -37
@@ -371,10 +373,14 @@ func tick(delta: float) -> void:
 	navigation_hud.update_annotations()
 
 func input_blocked() -> bool:
-	return keyboard_blocked() or _pointer_over(target_panel) or _pointer_over(work_box) or _pointer_over(operation_bar) or _pointer_over(navigation) or _pointer_over(instrument) or _pointer_over(equipment_bar) or _pointer_over(navigation_frame) or (is_instance_valid(navigation_hud) and _pointer_over(navigation_hud.radar_frame))
+	return ui_input_blocked()
+
+func ui_input_blocked() -> bool:
+	return keyboard_blocked() or _pointer_over(target_panel) or _pointer_over(work_box) or _pointer_over(operation_bar) or _pointer_over(navigation) or _pointer_over(instrument) or _pointer_over(equipment_bar) or _pointer_over(navigation_frame) or _pointer_over(controls) or (is_instance_valid(navigation_hud) and _pointer_over(navigation_hud.radar_frame))
 
 func keyboard_blocked() -> bool:
-	return menu_open or panel.visible or station_layer.visible or (root.get_viewport().gui_get_focus_owner() is LineEdit)
+	var focus: Control = root.get_viewport().gui_get_focus_owner()
+	return menu_open or panel.visible or station_layer.visible or focus is LineEdit or focus is TextEdit
 
 func refresh_page() -> void:
 	if not page.is_empty() and page != "settings" and page != "title":
@@ -849,6 +855,8 @@ func _pause() -> void:
 	var resume: Button = _wide_button(_button(flight_card, "继续航行", _back))
 	_primary(resume)
 	_secondary(_wide_button(_button(flight_card, "设置", show_page.bind("settings"))))
+	_text_to(flight_card, "光标常驻：左键短击只选目标，长按拖动观察；双击总览目标自动转向并接近。拖动松开后保留角度，滚轮缩放，右键禁用。", 13)
+	_text_to(flight_card, "W/S 沿当前观察航向加速/反向加速，A/D 左右转弯；Space/C 升降、Q/E 滚转；Ctrl 发射、Z 自动开火、X 停船、Shift 增推、F 交互、V 视角。X 只停船；左拖看向上方后按 W 可向上航行。", 13)
 	var rescue: Button = _wide_button(_command(flight_card, "舰船损失后返回保障站", "request_rescue"))
 	rescue.name = "RescueButton"
 	rescue.disabled = state.ship().status != Types.ShipStatus.DESTROYED
@@ -874,7 +882,7 @@ func _settings() -> void:
 		_text("偏好尚未加载，请稍后重新打开设置。")
 		return
 	for field: String in ["master_volume", "mouse_sensitivity", "vfx_intensity"]:
-		var title: String = {"master_volume": "主音量", "mouse_sensitivity": "鼠标灵敏度", "vfx_intensity": "特效强度"}[field]
+		var title: String = {"master_volume": "主音量", "mouse_sensitivity": "观察灵敏度", "vfx_intensity": "特效强度"}[field]
 		var current: float = float(preferences.get(field, 0.0))
 		var value_label: Label = _text_to(body, _setting_text(title, current, field))
 		var slider: HSlider = HSlider.new()
@@ -888,7 +896,7 @@ func _settings() -> void:
 		slider.value_changed.connect(func(value: float):
 			value_label.text = _setting_text(title, value, field)
 			requested.emit("preference", field, 1, str(value)))
-	_text("鼠标灵敏度从低到高调整；主音量为 0 时静音。")
+	_text("观察灵敏度调整左键拖动镜头；普通鼠标移动不控制舰船。主音量为 0 时静音。")
 	var quality_row: HFlowContainer = HFlowContainer.new()
 	body.add_child(quality_row)
 	for quality: String in ["high", "medium", "low"]:
@@ -1684,7 +1692,7 @@ func _build_navigation() -> void:
 		if key == "show_ship":
 			show_ship_button = button
 			button.name = "ShowPlayerShip"
-			button.tooltip_text = "恢复跟随视角和默认镜头距离，舰船居中显示。Alt 释放光标；V 切换视角。"
+			button.tooltip_text = "恢复跟随视角、默认观察角度和镜头距离，舰船居中显示。V 切换视角；左键拖动观察，松开后保留角度。"
 		_secondary(button)
 		button.add_theme_stylebox_override("normal", UISkin.flat(Color(0.08, 0.105, 0.125, 0.65), Color("384650"), 4))
 		button.add_theme_stylebox_override("hover", UISkin.flat(Color("253b45"), UISkin.ICE, 4))

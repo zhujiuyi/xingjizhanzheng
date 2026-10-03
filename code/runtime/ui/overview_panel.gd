@@ -14,6 +14,7 @@ var filter_buttons: Dictionary = {}
 var sort_buttons: Dictionary = {}
 var target_buttons: Dictionary = {}
 var action_buttons: Dictionary = {}
+var action_grid: GridContainer
 var target_list: VBoxContainer
 var target_scroll: ScrollContainer
 var body_scroll: ScrollContainer
@@ -88,17 +89,18 @@ func _ready() -> void:
 	selection_card.add_child(details)
 	_label(details, "选中目标", 10, UISkin.AMBER)
 	selected_title = _label(details, "尚未选择目标", 14, UISkin.TEXT)
-	selected_distance = _label(details, "总览/雷达/Alt点模型 · Tab切换", 11, UISkin.MUTED)
+	selected_distance = _label(details, "左键选目标 · Tab切换", 11, UISkin.MUTED)
 	status_label = _label(details, "", 11, UISkin.AMBER)
+	for readout: Label in [selected_title, selected_distance, status_label]: readout.mouse_filter = Control.MOUSE_FILTER_PASS
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.max_lines_visible = 2
-	var actions: GridContainer = GridContainer.new()
-	actions.columns = 3
-	actions.add_theme_constant_override("h_separation", 3)
-	actions.add_theme_constant_override("v_separation", 3)
-	details.add_child(actions)
-	for key: String in ["nav_warp", "nav_approach", "nav_orbit", "nav_stop", "nav_dock", "combat_toggle"]:
-		var button: Button = _button(actions, {"nav_warp": "跃迁", "nav_approach": "接近", "nav_orbit": "环绕", "nav_stop": "停止", "nav_dock": "停靠", "combat_toggle": "自动开火"}[key])
+	action_grid = GridContainer.new()
+	action_grid.columns = 3
+	action_grid.add_theme_constant_override("h_separation", 3)
+	action_grid.add_theme_constant_override("v_separation", 3)
+	details.add_child(action_grid)
+	for key: String in ["nav_warp", "nav_approach", "nav_orbit", "nav_stop", "nav_dock", "combat_engage", "combat_toggle"]:
+		var button: Button = _button(action_grid, {"nav_warp": "跃迁", "nav_approach": "接近", "nav_orbit": "环绕", "nav_stop": "停止", "nav_dock": "停靠", "combat_engage": "交战", "combat_toggle": "自动开火"}[key])
 		button.name = "SelectedAction_" + key
 		button.pressed.connect(func(): command.emit(key, selected_id))
 		button.hide()
@@ -145,16 +147,22 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 	var kind: String = str(details.get("kind", ""))
 	selected_title.text = str(details.get("title", "尚未选择目标"))
 	selected_title.tooltip_text = selected_title.text
-	selected_distance.text = "航向参考 · 远景天体" if bool(details.get("navigation_only", false)) else ("%s · %s" % [str(details.get("type_title", "目标")), format_distance(float(details.get("distance_m", 0.0)))]) if not selected_id.is_empty() else "总览/雷达/Alt点模型 · Tab切换"
-	selected_distance.tooltip_text = selected_distance.text
+	selected_distance.text = "航向参考 · 远景天体" if bool(details.get("navigation_only", false)) else ("%s · %s" % [str(details.get("type_title", "目标")), format_distance(float(details.get("distance_m", 0.0)))]) if not selected_id.is_empty() else "左键选目标 · Tab切换"
+	selected_distance.tooltip_text = selected_distance.text if not selected_id.is_empty() else "左键短击模型、总览行或雷达回波选择目标；Tab 切换目标。总览双击会下令转向并接近；单次选择不攻击或改变当前开火目标。"
+	action_grid.columns = 2 if kind == "npc" else 3
 	var running: bool = bool(navigation.get("active", false))
 	status_label.text = UISkin.navigation_phase(str(navigation.get("phase", ""))) if running else str(navigation.get("reason", ""))
 	if running and str(navigation.get("title", "")) != selected_title.text and not str(navigation.get("title", "")).is_empty(): status_label.text += " · " + str(navigation.title)
 	if running and float(navigation.get("remaining_s", 0.0)) > 0.0: status_label.text += " · %.1f s" % float(navigation.remaining_s)
 	var combat_active: bool = bool(navigation.get("combat_active", false))
 	var combat_status: String = str(navigation.get("combat_status", ""))
-	if combat_active and not combat_status.is_empty(): status_label.text = (status_label.text + "\n" + combat_status) if running else combat_status
-	status_label.max_lines_visible = 2 if not _compact or combat_active else 1
+	var combat_title: String = str(navigation.get("combat_target_title", ""))
+	var active_combat_status: String = str(navigation.get("combat_target_status", ""))
+	var combat_readout: String = "开火目标：" + combat_title if not combat_title.is_empty() else ""
+	if not combat_readout.is_empty() and not active_combat_status.is_empty(): combat_readout += " · " + active_combat_status
+	if combat_readout.is_empty() and combat_active: combat_readout = combat_status
+	if not combat_readout.is_empty(): status_label.text = (status_label.text + "\n" + combat_readout) if running else combat_readout
+	status_label.max_lines_visible = 2 if not _compact or not combat_readout.is_empty() else 1
 	status_label.tooltip_text = status_label.text
 	status_label.visible = not status_label.text.is_empty()
 	for action: String in action_buttons:
@@ -165,11 +173,14 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 			"nav_orbit": button.visible = not selected_id.is_empty() and not bool(details.get("navigation_only", false)); button.disabled = busy or not bool(navigation.get("orbit_ready", false))
 			"nav_stop": button.visible = running; button.disabled = busy
 			"nav_dock": button.visible = kind == "station"; button.disabled = busy or not bool(navigation.get("dock_ready", navigation.get("approach_ready", false)))
+			"combat_engage": button.visible = kind == "npc"; button.disabled = busy or not bool(navigation.get("combat_engage_ready", false))
 			"combat_toggle":
 				button.visible = kind == "npc"
-				button.text = "停止开火" if bool(navigation.get("combat_active", false)) else "自动开火"
+				button.text = "停止开火" if bool(navigation.get("combat_active", false)) else "对此开火"
 				button.disabled = busy or (not bool(navigation.get("combat_active", false)) and not bool(navigation.get("combat_ready", false)))
-		button.tooltip_text = str(navigation.get("combat_reason", "在真实射程、射界和可见路径内持续使用已启用武器。")) if action == "combat_toggle" else str(navigation.get(action.trim_prefix("nav_") + "_reason", navigation.get("reason", "由航行控制器检查资格。")))
+		button.tooltip_text = str(navigation.get(action.trim_prefix("nav_") + "_reason", navigation.get("reason", "由航行控制器检查资格。")))
+		if action == "combat_engage": button.tooltip_text = "交战：自动接近所选敌舰，并明确切换对此目标自动开火。\n" + str(navigation.get("combat_engage_reason", "由战斗控制器检查目标与航行资格。"))
+		if action == "combat_toggle": button.tooltip_text = "按钮明确切换对所选敌舰开火；保留接近或环绕。Z 有开火指令时停止当前开火，无指令时启动所选敌舰。武器仍检查射程、射界、视线、冷却、电容与热量。\n" + str(navigation.get("combat_reason", "由战斗控制器检查资格。"))
 		if action == "nav_dock": button.tooltip_text = "接近所选空间站，满足停靠条件后入站。F 仅进行当前范围内的即时交互。"
 
 func responsive(compact: bool) -> void:
@@ -206,6 +217,7 @@ func _refresh_rows() -> void:
 			button = _button(target_list, "")
 			button.name = "OverviewTarget_" + id.validate_node_name()
 			button.pressed.connect(func(): selected.emit(id))
+			button.gui_input.connect(_target_gui_input.bind(id, button))
 			var row: HBoxContainer = HBoxContainer.new()
 			row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 			row.offset_left = 4; row.offset_right = -4
@@ -219,7 +231,7 @@ func _refresh_rows() -> void:
 			var type: Label = _label(row, "", 9, UISkin.MUTED)
 			type.name = "Type"; type.custom_minimum_size.x = 38
 			target_buttons[id] = button
-		button.tooltip_text = "%s · %s\n%s" % [str(record.title), str(record.get("type_title", "")), "远景天体仅作航向参考" if bool(record.get("navigation_only", false)) else format_distance(float(record.distance_m)) + (" · 本星系已知位置" if bool(record.get("known", false)) else " · 传感器接触")]
+		button.tooltip_text = "%s · %s\n%s" % [str(record.title), str(record.get("type_title", "")), "远景天体仅作航向参考" if bool(record.get("navigation_only", false)) else format_distance(float(record.distance_m)) + (" · 本星系已知位置" if bool(record.get("known", false)) else " · 传感器接触") + "\n单击选择 · 双击转向并接近"]
 		button.get_child(0).get_node("Distance").text = "方位" if bool(record.get("navigation_only", false)) else format_distance(float(record.distance_m))
 		button.get_child(0).get_node("Name").text = str(record.title)
 		var name_label: Label = button.get_child(0).get_node("Name")
@@ -242,6 +254,17 @@ func _refresh_rows() -> void:
 	for key: String in sort_buttons:
 		sort_buttons[key].text = {"distance": "距离", "name": "名称", "type": "类型"}[key] + (" +" if sort_ascending else " −") if sort_key == key else {"distance": "距离", "name": "名称", "type": "类型"}[key]
 		sort_buttons[key].add_theme_stylebox_override("normal", UISkin.hud_button(key == sort_key))
+
+func _target_gui_input(event: InputEvent, id: String, button: Button) -> void:
+	if not event is InputEventMouseButton: return
+	var mouse: InputEventMouseButton = event
+	if mouse.button_index != MOUSE_BUTTON_LEFT or not mouse.pressed or not mouse.double_click: return
+	button.accept_event()
+	selected.emit(id)
+	for record: Dictionary in entry_rows:
+		if str(record.get("id", "")) != id: continue
+		if not bool(record.get("navigation_only", false)): command.emit("nav_approach", id)
+		return
 
 static func format_distance(distance_m: float) -> String:
 	return "%.1f km" % (distance_m / 1000.0) if distance_m >= 1000.0 else "%.0f m" % distance_m

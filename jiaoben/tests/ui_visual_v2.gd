@@ -29,6 +29,14 @@ func capture(name: String) -> void:
 	captures += 1
 	print("CAPTURE " + path)
 
+func settle_fixture_pose(node: Node3D) -> void:
+	# This manually placed NPC is a layout fixture. Its interpolation history
+	# must start at that pose; the real UI/camera keep their normal render loop.
+	await physics_frame
+	node.get_global_transform_interpolated()
+	node.reset_physics_interpolation()
+	for frame: int in range(3): await process_frame
+
 func check_instrument_content(ui: Node, label: String) -> void:
 	var compact: bool = ui.root.size.x < 950
 	var readouts: Array[Label] = []
@@ -226,6 +234,7 @@ func _run() -> void:
 	host.world.add_child(visual)
 	visual.position = host.world.flight.position + Vector3(35, 20, -500)
 	host.world.targets[npc.npc_instance_id] = {"id": npc.npc_instance_id, "title": str(definition.display_name), "kind": "npc", "node": visual, "anchor_id": ""}
+	await settle_fixture_pose(visual)
 	ui.target_id = npc.npc_instance_id
 	host.gameplay.work.scan_target = "signal_anchor_gate_calibration"
 	host.gameplay.work.scan_progress = 30.0

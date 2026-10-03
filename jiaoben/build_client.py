@@ -113,7 +113,7 @@ def main() -> None:
             text = run([str(output / 'Contents/MacOS/星际战舰'), '--audio-driver', 'CoreAudio',
                         '--log-file', str(logs / f'{build_id}-mac-presentation-engine.log'),
                         '--', '--xj-verify-presentation'], logs / f'{build_id}-mac-presentation.log', env)
-            if not re.search(r'PRESENTATION_CLIENT_RESULT PASS checks=48 failures=0', text):
+            if not re.search(r'PRESENTATION_CLIENT_RESULT PASS checks=53 failures=0', text):
                 raise RuntimeError('Actual exported presentation lifecycle did not pass')
             if re.search(r'^(WARNING:|.*Leaked instance:|.*Resource still in use)', text, re.M):
                 raise RuntimeError('Actual exported presentation exited with diagnostics')
@@ -125,8 +125,8 @@ def main() -> None:
                     raise RuntimeError(f'Actual release capture is absent or invalid: {name}')
                 captures.append({'name': name, 'sha256': sha(capture)})
             evidence['verification']['mac_presentation'] = {
-                'result': 'actual release Metal/CoreAudio Chinese font, archive cards, radar, celestial bearing, selected line, station F qualification, hangar/NPC, lifecycle, departure, cockpit visibility recovery without flight mutation and SQLite save, graphical star chart, actual equipment, local warp source commit/exterior arrival/physical selection/validated docking PASS',
-                'capture_folder': str(visual_folder), 'checks': 48, 'captures': captures}
+                'result': 'actual release Metal/CoreAudio Chinese font, archive cards, radar, celestial bearing, selected line, station F qualification, hangar/NPC, lifecycle, departure, cockpit visibility recovery without flight mutation and SQLite save, graphical star chart, actual equipment, local warp source commit/exterior arrival/physical selection/validated docking, interpolated render poses, visible pointer, disabled right mouse and left-drag/release preserving accepted warp PASS',
+                'capture_folder': str(visual_folder), 'checks': 53, 'captures': captures}
             evidence['verification']['mac'] = 'actual exported app: resource hashes/new/save/reopen/resume PASS; ad-hoc signature PASS'
             archive = staging / '星际战舰-macOS.zip'
             run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(folder), str(archive)],

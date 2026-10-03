@@ -26,6 +26,18 @@ func capture(label: String) -> void:
 	check(root.get_texture().get_image().save_png(path) == OK, "capture " + label)
 	captures += 1
 
+func settle_fixture_poses(nodes: Array[Node3D]) -> void:
+	# Direct fixture relocations are discontinuities, unlike gameplay movement.
+	# Prime/reset at a physical boundary, then let actual render callbacks see
+	# the new history before using the camera's shared presentation pose.
+	await physics_frame
+	for node: Node3D in nodes:
+		node.get_global_transform_interpolated()
+		node.reset_physics_interpolation()
+	for frame: int in range(3): await process_frame
+	host.camera.step(0.0)
+	host.ui.tick(0.0)
+
 func _run() -> void:
 	host = Main.new()
 	host.progress_database_path = ProjectSettings.globalize_path("res://../jiaoben/tmp/navigation-v3-%d.db" % Time.get_ticks_usec())
@@ -67,6 +79,7 @@ func _run() -> void:
 	far.global_position = body.global_position + Vector3(0, 0, -6001)
 	host.world.targets["nav_near"] = {"id": "nav_near", "title": "测试敌舰", "kind": "npc", "node": near, "anchor_id": ""}
 	host.world.targets["nav_far"] = {"id": "nav_far", "title": "探测外敌舰", "kind": "npc", "node": far, "anchor_id": ""}
+	await settle_fixture_poses([body, near, far])
 	nav.scale_index = 2
 	nav.selected_id = "nav_near"
 	host.ui.target_id = "nav_near"
@@ -78,6 +91,7 @@ func _run() -> void:
 	check(host.ui.target_id.is_empty() and nav.target_geometry().is_empty(), "selected hostile lost beyond sensor cap clears its live line")
 	host.ui.target_id = "nav_near"; nav.selected_id = "nav_near"
 	far.global_position = body.global_position + Vector3(0, 0, -6000)
+	await settle_fixture_poses([far])
 	nav.refresh()
 	check(nav.contacts.any(func(row: Dictionary): return row.id == "nav_far"), "inclusive 6000m echo boundary")
 	nav.scale_index = 0; nav.refresh()
@@ -108,18 +122,22 @@ func _run() -> void:
 		await physics_frame
 		host.camera.step(1.0)
 		near.global_position = host.camera.camera.global_position - host.camera.camera.global_basis.z * 500
+		await settle_fixture_poses([near])
 		nav.selected_id = "nav_near"
 		var geometry: Dictionary = nav.target_geometry()
 		check(not geometry.is_empty() and geometry.on_screen, "selected target is projected in camera " + str(mode))
-		check(geometry.end.distance_to(host.camera.camera.unproject_position(near.global_position)) < 0.01, "line ends at actual target projection " + str(mode))
-		var ship_point: Vector2 = nav.size * 0.5 if host.camera.camera.is_position_behind(body.global_position) else host.camera.camera.unproject_position(body.global_position)
+		check(geometry.end.distance_to(host.camera.camera.unproject_position(near.get_global_transform_interpolated().origin)) < 0.01, "line ends at actual rendered target projection " + str(mode))
+		var render_ship: Vector3 = host.camera.render_ship_transform().origin
+		var ship_point: Vector2 = nav.size * 0.5 if host.camera.camera.is_position_behind(render_ship) else host.camera.camera.unproject_position(render_ship)
 		check(geometry.start.distance_to(ship_point) < 0.01, "line starts at ship or cockpit center " + str(mode))
 	near.global_position = host.camera.camera.global_position + host.camera.camera.global_basis.z * 100
+	await settle_fixture_poses([near])
 	var behind: Dictionary = nav.target_geometry()
 	check(behind.behind and not behind.on_screen, "behind-camera target becomes an edge arrow")
 	check(Rect2(Vector2(39, 39), nav.size - Vector2(78, 78)).has_point(behind.end), "behind-camera arrow remains inside viewport")
 	for local_point: Vector3 in [Vector3.ZERO, Vector3(100, 0, 0), Vector3(0, 100, 0)]:
 		near.global_position = host.camera.camera.global_transform * local_point
+		await settle_fixture_poses([near])
 		var plane: Dictionary = nav.target_geometry()
 		check(not plane.is_empty() and plane.behind and plane.end.is_finite(), "exact camera plane safely maps to edge " + str(local_point))
 		host.ui.marker_layer.queue_redraw()
@@ -128,6 +146,7 @@ func _run() -> void:
 	await physics_frame
 	host.camera.step(1.0)
 	near.global_position = body.global_position + Vector3(30, 20, -450)
+	await settle_fixture_poses([near])
 	nav.scale_index = 1
 	var standalone := XJNavigationHUD.new()
 	root.add_child(standalone)
@@ -171,6 +190,7 @@ func _run() -> void:
 	var station: Node3D = host.world.targets[station_id].node
 	body.global_position = station.global_position + Vector3.RIGHT * (float(host.store.catalog.rule("dock_radius_m")) - 1)
 	host.world.flight.write_back()
+	await settle_fixture_poses([body])
 	host.ui.target_id = ""; host.ui.tick(1.0)
 	check(host.ui.interaction_button.visible and not host.ui.interaction_button.disabled and host.ui.interaction_button.text.contains("[F]"), "approaching station exposes a ready F button without preselection")
 	host.world.flight.velocity = Vector3.RIGHT * (float(host.store.catalog.rule("dock_max_speed_mps")) + 1)

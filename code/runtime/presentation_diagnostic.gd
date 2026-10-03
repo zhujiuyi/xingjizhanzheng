@@ -5,6 +5,21 @@ const Types = preload("res://contracts/contract_types.gd")
 
 static func run(host: Node, output_dir: String) -> bool:
 	var evidence := {"checks": 0, "failures": 0}
+	var original_pointer: Vector2 = host.get_viewport().get_mouse_position()
+	if DisplayServer.get_name() != "headless":
+		host.get_window().grab_focus()
+		# A background CLI launch on macOS cannot activate its application.
+		# Allow the external native-window runner to raise this test window;
+		# never bypass the production focus guard to satisfy injected events.
+		var focus_deadline: int = Time.get_ticks_msec() + 60000
+		print("PRESENTATION_NATIVE_FOCUS awaiting active test window")
+		while not host.get_window().has_focus() and Time.get_ticks_msec() < focus_deadline:
+			await host.get_tree().process_frame
+		if not host.get_window().has_focus():
+			_check(evidence, false, "native test window has real input focus")
+			return _finish(evidence)
+		host.get_viewport().warp_mouse(Vector2(700, 400))
+		await host.get_tree().process_frame
 	await host._command("new_world", "发布包表现检查", 1, "")
 	var industrial_world: bool = host.state != null and host.world != null and is_instance_valid(host.world.flight) and str(host.world.flight.visual.get_meta("visual_asset_version", "")) == "ship-v3-industrial"
 	if industrial_world:
@@ -114,6 +129,15 @@ static func run(host: Node, output_dir: String) -> bool:
 	_check(evidence, nav.contacts.filter(func(row: Dictionary): return row.kind == "planet" and row.bearing).size() == 1, "packed sector includes known celestial bearing")
 	_check(evidence, host.ui.overview.entry_rows.any(func(row: Dictionary): return row.kind == "station") and host.ui.overview.filter_buttons.size() == 3 and host.ui.overview.sort_buttons.size() == 3, "packed overview provides known station selection, classification and sorting")
 	_check(evidence, not host.ui.equipment_bar.module_records.is_empty() and host.ui.equipment_bar.module_records.size() == host.gameplay.call("equipped", host.state.ship()).size(), "packed equipment bar reads actual installed module instances")
+	_check(evidence, host.get_tree().physics_interpolation and not host.camera.is_physics_interpolated() and not host.camera.camera.is_physics_interpolated(), "packed world interpolates motion once while camera renders from the same pose")
+	host._sync_mouse_mode()
+	var view_before_right: Vector2 = host.camera.orbit
+	var right := InputEventMouseButton.new()
+	right.button_index = MOUSE_BUTTON_RIGHT
+	right.pressed = true
+	host.get_viewport().push_input(right, true)
+	await host.get_tree().process_frame
+	_check(evidence, Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and not InputMap.has_action("pointer") and not InputMap.has_action("observe") and not host.observing and host.camera.orbit == view_before_right, "packed cursor is always visible and right button does not operate the ship or camera")
 	await _capture(host, output_dir, "flight")
 	var station_id: String = "station_anchor_port"
 	var station: Node3D = host.world.targets[station_id].node
@@ -122,6 +146,10 @@ static func run(host: Node, output_dir: String) -> bool:
 	host.world.flight.global_position = station.global_position + host.world.flight.global_basis.z * (float(host.store.catalog.rule("dock_radius_m")) * 0.8)
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
+	host.world.flight.get_global_transform_interpolated()
+	host.world.flight.reset_physics_interpolation()
+	await host.get_tree().physics_frame
+	await host.get_tree().process_frame
 	host.ui.target_id = station_id
 	host.camera.snapped = false
 	host.camera.step(1.0)
@@ -144,11 +172,47 @@ static func run(host: Node, output_dir: String) -> bool:
 	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, station.global_position + Vector3(0, 600, 4000))
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
+	host.world.flight.get_global_transform_interpolated()
+	host.world.flight.reset_physics_interpolation()
 	var origin: Vector3 = host.world.flight.global_position
 	var snapshots_before: int = host.store._records("SELECT count(*) AS n FROM save_snapshot")[0].n
 	var begun: bool = host._navigation_command("warp", station_id)
 	var snapshots_after: int = host.store._records("SELECT count(*) AS n FROM save_snapshot")[0].n
 	_check(evidence, begun and host.local_navigation.phase == "warmup" and origin.is_equal_approx(host.world.flight.global_position) and snapshots_after == snapshots_before + 1, "packed warp durably saves its origin before charge or movement")
+	var ordinary := InputEventMouseMotion.new()
+	ordinary.position = Vector2(700, 400)
+	ordinary.relative = Vector2(40, 20)
+	var heading_before: Basis = host.world.flight.global_basis
+	host.get_viewport().push_input(ordinary, true)
+	await host.get_tree().process_frame
+	_check(evidence, host.local_navigation.phase == "warmup" and host.local_navigation.target_id == station_id and host.world.flight.global_basis.is_equal_approx(heading_before), "packed ordinary pointer motion preserves accepted warp and physical heading")
+	var left := InputEventMouseButton.new()
+	left.button_index = MOUSE_BUTTON_LEFT
+	left.pressed = true
+	left.position = Vector2(700, 400)
+	if DisplayServer.get_name() != "headless":
+		host.get_window().grab_focus()
+		var gesture_focus_deadline: int = Time.get_ticks_msec() + 60000
+		while not host.get_window().has_focus() and Time.get_ticks_msec() < gesture_focus_deadline:
+			await host.get_tree().process_frame
+		host.get_viewport().warp_mouse(left.position)
+		for frame: int in range(3): await host.get_tree().process_frame
+	host.get_viewport().push_input(left, true)
+	await host.get_tree().process_frame
+	print("PRESENTATION_NATIVE_INPUT focus=", host.get_window().has_focus(), " hover_blocked=", host.ui.ui_input_blocked(), " armed=", host.pointer_drag_pressed)
+	var drag := InputEventMouseMotion.new()
+	drag.position = Vector2(730, 420)
+	drag.relative = Vector2(30, 20)
+	host.get_viewport().push_input(drag, true)
+	await host.get_tree().process_frame
+	var dragged_orbit: Vector2 = host.camera.orbit
+	_check(evidence, host.observing and host.pointer_dragged and not dragged_orbit.is_zero_approx() and host.local_navigation.phase == "warmup" and host.world.flight.global_basis.is_equal_approx(heading_before), "packed held left drag changes only observation without interrupting warp")
+	left.pressed = false
+	left.position = drag.position
+	host.get_viewport().push_input(left, true)
+	await host.get_tree().process_frame
+	_check(evidence, not host.observing and not host.pointer_pick_pending and host.camera.orbit == dragged_orbit and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and host.local_navigation.phase == "warmup", "packed left release retains observation and cannot become a click or navigation cancel")
+	host.camera.reset_observation()
 	var steps: int = 0
 	while host.local_navigation.phase == "warmup" and steps < 1800:
 		await host.get_tree().physics_frame
@@ -202,6 +266,7 @@ static func run(host: Node, output_dir: String) -> bool:
 	presentation.add_child(exit_voice)
 	presentation.voices.append(exit_voice)
 	exit_voice.free()
+	if DisplayServer.get_name() != "headless": host.get_viewport().warp_mouse(original_pointer)
 	return _finish(evidence)
 
 static func _capture(host: Node, directory: String, name: String) -> void:

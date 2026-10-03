@@ -107,9 +107,17 @@ func rebuild_player() -> bool:
 	source.free()
 	replacement.bind(row, catalog)
 	XJSurfaceStyle.apply_ship(replacement.visual)
-	add_child(replacement)
 	if is_instance_valid(flight):
+		# A deferred deletion must not leave the previous hull in the rendered
+		# scene alongside its replacement, even for the remainder of this frame.
+		flight.hide()
+		remove_child(flight)
 		flight.queue_free()
+	add_child(replacement)
+	# Prime the render-pose pump before resetting its initial spawn history.
+	# Physics and saved DTOs continue to use the authoritative current pose.
+	replacement.get_global_transform_interpolated()
+	replacement.reset_physics_interpolation()
 	flight = replacement
 	return true
 
@@ -124,7 +132,10 @@ func sync_entities() -> bool:
 			continue
 		if not row.alive:
 			if npcs.has(row.npc_instance_id):
-				npcs[row.npc_instance_id].queue_free()
+				var retired: CharacterBody3D = npcs[row.npc_instance_id]
+				retired.hide()
+				remove_child(retired)
+				retired.queue_free()
 				npcs.erase(row.npc_instance_id)
 				targets.erase(row.npc_instance_id)
 			continue
@@ -271,6 +282,10 @@ func in_safe_zone(point: Vector3) -> bool:
 	return false
 
 func _target(id: String, title: String, kind: String, node: Node3D, anchor_id: String) -> void:
+	# All target nodes have reached their final spawn transform here. Initializing
+	# the interpolation pump now prevents a first-frame trail from the origin.
+	node.get_global_transform_interpolated()
+	node.reset_physics_interpolation()
 	targets[id] = {"id": id, "title": title, "kind": kind, "node": node, "anchor_id": anchor_id}
 
 func _visual(kind: String, parameter: String = "") -> Node3D:

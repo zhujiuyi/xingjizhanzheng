@@ -1,9 +1,28 @@
 class_name XJFlightLook
 extends RefCounted
-## Relative mouse motion is an angular request, never a permanent screen offset.
+## Keyboard attitude requests are independent of the camera and screen pointer.
 ## The fixed-step ship turn limit remains authoritative in the catalog.
 var pending_angles: Vector2 = Vector2.ZERO
 
+func keyboard_turn() -> Vector3:
+	# X=pitch, Y=yaw, Z=roll, matching FlightInputDto request fields. A combined
+	# attitude command consumes the same catalog turn budget as a single axis.
+	return Vector3(_axis("pitch_down", "pitch_up"), _axis("yaw_right", "yaw_left"), _axis("roll_left", "roll_right")).limit_length(1.0)
+
+func manual_override_requested() -> bool:
+	# Pointer movement, selection, camera observation and weapon activation are
+	# intentionally absent: only explicit motion commands take navigation over.
+	for action: String in ["forward", "back", "left", "right", "up", "down", "pitch_up", "pitch_down", "yaw_left", "yaw_right", "roll_left", "roll_right", "brake"]:
+		if InputMap.has_action(action) and Input.is_action_pressed(action): return true
+	return false
+
+func _axis(negative: String, positive: String) -> float:
+	var negative_strength: float = Input.get_action_strength(negative) if InputMap.has_action(negative) else 0.0
+	var positive_strength: float = Input.get_action_strength(positive) if InputMap.has_action(positive) else 0.0
+	return positive_strength - negative_strength
+
+# Historical v2 probes exercise these finite motion helpers. The live input
+# path uses keyboard_turn(); ordinary mouse movement never calls add_motion().
 func add_motion(screen_motion: Vector2, sensitivity: float) -> void:
 	var angles := screen_motion * sensitivity
 	if is_finite(angles.x) and is_finite(angles.y):

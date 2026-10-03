@@ -32,12 +32,17 @@ var save_wait_elapsed: float = 0.0
 var previous_page: String = "title"
 var weapon_errors: Dictionary = {}
 var flight_look := XJFlightLook.new()
-var pointer_mode: bool = false
+var pointer_mode: bool = true
 var hangar: XJStationHangar
 var presentation_stage: String = ""
 var warp_visual: XJWarpVisual
 var pointer_pick_pending: bool = false
 var pointer_pick_position: Vector2 = Vector2.ZERO
+var pointer_drag_pressed: bool = false
+var pointer_dragged: bool = false
+var pointer_drag_origin: Vector2 = Vector2.ZERO
+# This is a screen-space click tolerance, not a ship or combat balance value.
+const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
@@ -68,7 +73,7 @@ func _ready() -> void:
 	warp_visual = XJWarpVisual.new()
 	warp_canvas.add_child(warp_visual)
 	get_tree().auto_accept_quit = false
-	get_window().focus_exited.connect(_release_observation)
+	get_window().focus_exited.connect(_release_controls)
 	ui = XJUI.new()
 	add_child(ui)
 	ui.requested.connect(_command)
@@ -135,14 +140,15 @@ func _process(delta: float) -> void:
 			presentation.set_paused(stopped)
 			if not stopped:
 				presentation.consume(delta)
+	# Camera and projected annotations must use the same rendered ship pose.
+	if camera != null:
+		if state == null or state.ship().status != Types.ShipStatus.DOCKED:
+			camera.step(delta)
 	if ui != null:
 		ui.tick(delta)
 	if is_instance_valid(warp_visual):
 		var warp_phase: String = local_navigation.phase if local_navigation != null and local_navigation.warp_active() else "idle"
 		warp_visual.update_navigation(warp_phase, delta, float(preferences.get("vfx_intensity", 1.0)), _paused() or busy)
-	if camera != null:
-		if state == null or state.ship().status != Types.ShipStatus.DOCKED:
-			camera.step(delta)
 
 func _physics_process(delta: float) -> void:
 	if state == null or world == null or busy or _paused():
@@ -154,7 +160,7 @@ func _physics_process(delta: float) -> void:
 	var ship := state.ship()
 	if pointer_pick_pending:
 		pointer_pick_pending = false
-		if pointer_mode and ship.status == Types.ShipStatus.FLYING and not ui.input_blocked():
+		if ship.status == Types.ShipStatus.FLYING and not ui.ui_input_blocked():
 			var picked: String = _world_target_at(pointer_pick_position)
 			if not picked.is_empty(): ui._select_target(picked)
 	if ship.ship_instance_id != world.flight.record.ship_instance_id:
@@ -167,16 +173,19 @@ func _physics_process(delta: float) -> void:
 	world.flight.metrics = gameplay.call("metrics", ship)
 	if local_navigation != null and local_navigation.active():
 		if _manual_navigation_override():
-			local_navigation.cancel()
-			_center_steering()
+			if Input.is_action_pressed("brake"):
+				local_navigation.stop()
+			else:
+				local_navigation.release_to_manual()
 		else:
 			flight_look.clear()
-			fire_held = false
-	else:
+	if local_navigation == null or not local_navigation.active():
 		_read_flight_input(delta)
+	elif Input.is_action_pressed("boost") and _keyboard_control_allowed():
+		_request_engine_cycle()
 	gameplay.call("activate_repairs")
 	var warping: bool = local_navigation != null and local_navigation.warp_active()
-	if not warping and fire_held and Input.is_action_pressed("fire") and not ui.input_blocked() and ship.status == Types.ShipStatus.FLYING:
+	if not warping and fire_held and Input.is_action_pressed("fire") and _keyboard_control_allowed():
 		_fire_weapons()
 	elif not warping and not auto_fire_target.is_empty():
 		_tick_auto_fire()
@@ -221,14 +230,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		var next_page := "pause" if ui.page.is_empty() or ui.page == "station" else _home_page()
 		if ui.page == "settings": next_page = "pause"
 		ui.show_page(next_page)
-		_release_observation()
-		world.flight.clear_intent()
+		_release_controls()
 		get_viewport().set_input_as_handled()
 		return
+	var focus: Control = get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit: return
 	if event.is_action_pressed("map"):
 		ui.show_page(_home_page() if ui.page == "map" else "map")
+		_release_controls()
 	elif event.is_action_pressed("missions"):
 		ui.show_page(_home_page() if ui.page == "missions" else "missions")
+		_release_controls()
 	elif event.is_action_pressed("quick_save"):
 		_request_save("quick", 0)
 	elif event.is_action_pressed("quick_load"):
@@ -236,65 +248,78 @@ func _unhandled_input(event: InputEvent) -> void:
 			if slot.world_id == state.world_id and slot.slot_kind == "quick":
 				_command("load", slot.slot_id, slot.generation, slot.current_snapshot_id)
 				break
-	if event.is_action_pressed("pointer") and not event.is_echo() and ui.page.is_empty():
-		pointer_mode = not pointer_mode
-		flight_look.clear()
-		fire_held = false
-		_sync_mouse_mode()
-		get_viewport().set_input_as_handled()
-		return
+	if not _keyboard_control_allowed(): return
 	if event.is_action_pressed("interact"):
-		if not ui.keyboard_blocked(): _command("interact", "", 1, "")
+		_command("interact", "", 1, "")
 		return
 	if event.is_action_pressed("camera") and not event.is_echo():
-		# HUD hover blocks steering, but must not trap the player in cockpit view.
-		if not ui.keyboard_blocked():
-			camera.cycle_mode()
-			state.player().camera_mode = camera.mode
-			ui.update_camera_status()
-			get_viewport().set_input_as_handled()
+		_release_observation()
+		camera.cycle_mode()
+		state.player().camera_mode = camera.mode
+		ui.update_camera_status()
+		get_viewport().set_input_as_handled()
 		return
-	if ui.input_blocked():
+	if event.is_action_pressed("brake") and not event.is_echo():
+		_command("nav_stop", "", 1, "")
+		get_viewport().set_input_as_handled()
 		return
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and pointer_mode:
-		# Run the world-space query at the next physical boundary, after GUI
-		# controls have had the chance to consume their own click.
-		pointer_pick_position = event.position
-		pointer_pick_pending = true
-		fire_held = false
+	if event.is_action_pressed("combat_toggle") and not event.is_echo():
+		# The global shortcut always stops the current fire order first, even
+		# when the player is inspecting a different station or scenic bearing.
+		var target: String = auto_fire_target if not auto_fire_target.is_empty() else ui.target_id
+		_command("combat_toggle", target, 1, "")
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("target"):
 		ui.select_next()
 	elif event.is_action_pressed("fire"):
-		fire_held = not pointer_mode and not observing
-	elif event.is_action_released("fire"):
-		fire_held = false
-	elif event.is_action_pressed("observe"):
-		observing = true
-		flight_look.clear()
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	elif event.is_action_released("observe"):
-		_release_observation()
-	elif event is InputEventMouseMotion and observing:
-		camera.observe(event.screen_relative, float(preferences.get("mouse_sensitivity", 0.0)))
-	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not pointer_mode:
-		if local_navigation != null and local_navigation.active() and not event.screen_relative.is_zero_approx():
-			local_navigation.cancel()
-		flight_look.add_motion(event.screen_relative, float(preferences.get("mouse_sensitivity", 0.0)))
-	elif event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+		fire_held = true
+	if event is InputEventMouseButton and event.pressed and not ui.ui_input_blocked():
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			# A click chooses; holding and moving rotates the camera. Neither
+			# action owns the ship's motion or replaces an accepted order.
+			pointer_drag_pressed = true
+			pointer_dragged = false
+			pointer_drag_origin = event.position
+			get_viewport().set_input_as_handled()
+		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			camera.scroll_zoom(-1)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			camera.scroll_zoom(1)
 
 func _input(event: InputEvent) -> void:
-	# Releases must be observed even when a Control consumes the mouse event.
+	# Mouse/key release must end a gesture even after entering a HUD control.
 	if event.is_action_released("fire"):
 		fire_held = false
 		weapon_errors.clear()
-	if event.is_action_released("observe") and observing:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+		if state != null and ui != null and ui.page.is_empty():
+			get_viewport().set_input_as_handled()
+		return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed and pointer_drag_pressed:
+		if not pointer_dragged and _keyboard_control_allowed() and not ui.ui_input_blocked():
+			pointer_pick_position = event.position
+			pointer_pick_pending = true
+		pointer_drag_pressed = false
+		pointer_dragged = false
 		_release_observation()
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseMotion and pointer_drag_pressed:
+		if not _keyboard_control_allowed():
+			_release_controls()
+			return
+		var motion: Vector2 = event.relative
+		if not pointer_dragged:
+			motion = event.position - pointer_drag_origin
+			if motion.length() < POINTER_DRAG_TOLERANCE_PX: return
+			pointer_dragged = true
+			observing = true
+			camera.begin_observation()
+		camera.observe(motion, float(preferences.get("mouse_sensitivity", 0.0)))
+		get_viewport().set_input_as_handled()
+
+func _keyboard_control_allowed() -> bool:
+	return state != null and world != null and ui != null and not busy and not _exit_save_pending() and state.ship().status == Types.ShipStatus.FLYING and not ui.keyboard_blocked() and (DisplayServer.get_name() == "headless" or get_window().has_focus())
 
 func _world_target_at(screen_position: Vector2) -> String:
 	if world == null or camera == null or state == null or state.ship().status != Types.ShipStatus.FLYING: return ""
@@ -318,33 +343,44 @@ func _world_target_at(screen_position: Vector2) -> String:
 
 func _read_flight_input(delta: float = 0.0) -> void:
 	world.flight.clear_intent()
-	if ui.input_blocked() or state.ship().status != Types.ShipStatus.FLYING or travel.active():
+	if not _keyboard_control_allowed() or travel.active():
 		fire_held = false
 		flight_look.clear()
 		return
 	var intent := world.flight.intent
-	intent.thrust_x = Input.get_axis("left", "right")
 	intent.thrust_y = Input.get_axis("down", "up")
 	intent.thrust_z = Input.get_axis("back", "forward")
-	intent.roll_request = Input.get_axis("roll_left", "roll_right")
+	var turn: Vector3 = flight_look.keyboard_turn()
+	intent.pitch_request = turn.x
+	intent.yaw_request = turn.y
+	intent.roll_request = turn.z
 	intent.brake_requested = Input.is_action_pressed("brake")
 	intent.engine_cycle_requested = Input.is_action_pressed("boost")
-	if not observing and not pointer_mode and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		var tick_delta := delta if delta > 0.0 else 1.0 / float(Engine.physics_ticks_per_second)
-		var turn_request := flight_look.consume(float(world.flight.metrics.turn_radps), tick_delta)
-		intent.yaw_request = turn_request.x
-		intent.pitch_request = turn_request.y
+	var tick_delta := delta if delta > 0.0 else 1.0 / float(Engine.physics_ticks_per_second)
+	var turn_budget: float = float(world.flight.metrics.turn_radps) * tick_delta
+	if not is_zero_approx(turn.y): camera.steer_yaw(turn.y * turn_budget)
+	if not is_zero_approx(intent.thrust_z):
+		var heading: Vector3 = camera.control_forward()
+		intent.view_thrust_direction = heading
+		var local_heading: Vector3 = world.flight.global_basis.inverse() * heading
+		if turn_budget > 0.0:
+			intent.yaw_request = clampf(atan2(-local_heading.x, -local_heading.z) / turn_budget, -1.0, 1.0)
+			intent.pitch_request = clampf(atan2(local_heading.y, Vector2(local_heading.x, local_heading.z).length()) / turn_budget, -1.0, 1.0)
 	if intent.engine_cycle_requested:
-		for equipment: Dtos.EquipmentStateDto in state.rows("equipment_state"):
-			var slot := state.find("container_state", "container_id", equipment.slot_container_id) as Dtos.ContainerStateDto
-			var definition: Dictionary = store.catalog.one("module_defs", "module_id", equipment.module_def_id)
-			var item := state.find("item_instance_state", "item_instance_id", equipment.item_instance_id) as Dtos.ItemInstanceStateDto
-			if slot != null and slot.ship_instance_id == state.ship().ship_instance_id and equipment.module_def_id.begins_with("module_engine_") and equipment.enabled and item != null and item.durability > 0.0 and equipment.cooldown_remaining_s <= 0.0 and not state.ship().overheated and state.ship().energy >= float(definition.energy_eu) and state.ship().heat + float(definition.heat_hu) <= float(world.flight.metrics.heat_max):
-				gameplay.call("act", "request_engine_cycle", "", 1, "")
-				break
+		_request_engine_cycle()
+
+func _request_engine_cycle() -> void:
+	if _exit_save_pending(): return
+	for equipment: Dtos.EquipmentStateDto in state.rows("equipment_state"):
+		var slot := state.find("container_state", "container_id", equipment.slot_container_id) as Dtos.ContainerStateDto
+		var definition: Dictionary = store.catalog.one("module_defs", "module_id", equipment.module_def_id)
+		var item := state.find("item_instance_state", "item_instance_id", equipment.item_instance_id) as Dtos.ItemInstanceStateDto
+		if slot != null and slot.ship_instance_id == state.ship().ship_instance_id and equipment.module_def_id.begins_with("module_engine_") and equipment.enabled and item != null and item.durability > 0.0 and equipment.cooldown_remaining_s <= 0.0 and not state.ship().overheated and state.ship().energy >= float(definition.energy_eu) and state.ship().heat + float(definition.heat_hu) <= float(world.flight.metrics.heat_max):
+			gameplay.call("act", "request_engine_cycle", "", 1, "")
+			break
 
 func _fire_weapons(automatic: bool = false, target_override: String = "") -> void:
-	if travel.active():
+	if travel.active() or _exit_save_pending():
 		return
 	var target_node: Node3D
 	var selected_target: String = target_override if not target_override.is_empty() else ui.target_id
@@ -440,13 +476,21 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 	if busy:
 		ui.notify("存档操作正在完成，请稍候。")
 		return
+	if _exit_save_pending() and action not in ["cancel_save", "quit_without_save", "quit", "return_title", "preference", "show_ship", "hangar_focus"]:
+		ui.notify("正在等待稳定保存后离开；取消保存请求后可继续操作。")
+		return
 	match action:
 		"nav_warp", "nav_approach", "nav_orbit", "nav_dock":
 			_navigation_command(action.trim_prefix("nav_"), target)
 		"nav_stop":
-			auto_fire_target = ""
 			if local_navigation != null: local_navigation.stop()
 			_center_steering()
+		"combat_engage":
+			if not _combat_target_valid(target):
+				ui.notify("需选择探测范围内的存活敌舰，并安装可用武器。", true)
+			elif _navigation_command("approach", target):
+				auto_fire_target = target
+				ui.notify("交战指令已接受：接近并在武器条件满足时开火。")
 		"combat_toggle":
 			if auto_fire_target == target:
 				auto_fire_target = ""
@@ -652,7 +696,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	brake_hold.clear()
 	pending_damage.clear()
 	autosave_elapsed = 0.0
-	_release_observation()
+	_release_controls()
 	_center_steering()
 	_sync_presentation_stage()
 
@@ -691,20 +735,29 @@ func navigation_context(target_id: String) -> Dictionary:
 	result["combat_ready"] = _combat_target_valid(target_id)
 	result["combat_active"] = not target_id.is_empty() and auto_fire_target == target_id
 	result["combat_target_id"] = auto_fire_target
+	result["combat_target_title"] = str(world.targets[auto_fire_target].title) if world != null and world.targets.has(auto_fire_target) else ""
+	result["combat_target_status"] = _auto_fire_status(auto_fire_target) if not auto_fire_target.is_empty() else ""
 	result["combat_status"] = _auto_fire_status(target_id) if result.combat_active else ""
 	result["combat_reason"] = "仅向探测范围内敌舰开火；需满足武器射程、射界、视线、电容及热量条件。"
-	if busy or (travel != null and travel.active()) or (local_navigation != null and local_navigation.warp_active()):
-		for key: String in ["warp_ready", "approach_ready", "orbit_ready", "dock_ready", "combat_ready"]: result[key] = false
-		result["reason"] = "正在保存或读取进度，请稍候" if busy else "正在通过虫洞，请稍候" if travel != null and travel.active() else "正在本星系跃迁，X或停船可取消"
-		for action: String in ["warp", "approach", "orbit", "dock", "combat"]: result[action + "_reason"] = result.reason
+	result["combat_engage_ready"] = bool(result.combat_ready) and bool(result.get("approach_ready", false))
+	result["combat_engage_reason"] = str(result.get("approach_reason", "")) if not bool(result.get("approach_ready", false)) else ("需选择探测范围内的存活敌舰，并安装可用武器。" if not bool(result.combat_ready) else "")
+	if busy or _exit_save_pending() or (travel != null and travel.active()) or (local_navigation != null and local_navigation.warp_active()):
+		for key: String in ["warp_ready", "approach_ready", "orbit_ready", "dock_ready", "combat_ready", "combat_engage_ready"]: result[key] = false
+		result["reason"] = "正在等待稳定保存后离开；取消保存请求后可继续操作" if _exit_save_pending() else "正在保存或读取进度，请稍候" if busy else "正在通过虫洞，请稍候" if travel != null and travel.active() else "正在本星系跃迁，X或停船可取消"
+		for action: String in ["warp", "approach", "orbit", "dock", "combat", "combat_engage"]: result[action + "_reason"] = result.reason
 	return result
 
 func _navigation_command(mode: String, target_id: String) -> bool:
-	if state == null or local_navigation == null or busy or ui.keyboard_blocked(): return false
+	if state == null or local_navigation == null or busy or _exit_save_pending() or ui.keyboard_blocked(): return false
 	if travel != null and travel.active():
 		ui.notify("请等待虫洞传送结束。", true)
 		return false
-	if local_navigation.active() and not local_navigation.warp_active() and mode != "warp": local_navigation.cancel()
+	if local_navigation.warp_active():
+		ui.notify("本星系跃迁中，请先用X或停船取消。", true)
+		return false
+	if _manual_navigation_override():
+		ui.notify("请先释放手动操舰键，再执行自动导航。", true)
+		return false
 	var context := local_navigation.inspect(target_id)
 	if not bool(context.get(mode + "_ready", false)):
 		ui.notify(str(context.get(mode + "_reason", context.get("reason", "当前无法执行导航"))), true)
@@ -720,9 +773,12 @@ func _navigation_command(mode: String, target_id: String) -> bool:
 			return false
 		ui.slots = store.list_slots()
 		auto_slot = (auto_slot + 1) % 3
+	# An invalid replacement has already returned; only accepted commands hand
+	# motion over, keeping ordinary navigation transitions physically continuous.
+	if local_navigation.active(): local_navigation.release_to_manual(false)
 	if mode == "warp": auto_fire_target = ""
-	_release_observation()
-	_center_steering()
+	world.flight.clear_intent()
+	flight_look.clear()
 	ui.target_id = target_id
 	navigation_generation += 1
 	return local_navigation.begin(mode, target_id)
@@ -756,10 +812,7 @@ func _finalize_local_arrival(target_id: String, mode: String, generation: int) -
 		_queue_autosave()
 
 func _manual_navigation_override() -> bool:
-	if ui.keyboard_blocked(): return false
-	for action: String in ["brake", "forward", "back", "left", "right", "up", "down", "roll_left", "roll_right"]:
-		if Input.is_action_pressed(action): return true
-	return false
+	return _keyboard_control_allowed() and flight_look.manual_override_requested()
 
 func _combat_target_valid(target_id: String) -> bool:
 	if state == null or world == null or gameplay == null or state.ship().status != Types.ShipStatus.FLYING: return false
@@ -848,13 +901,17 @@ func _save_block_reason() -> String:
 	if gameplay != null and not bool(gameplay.call("save_eligible")): return "交战或设备周期"
 	return ""
 
+func _exit_save_pending() -> bool:
+	return not str(deferred_save.get("after", "")).is_empty()
+
 func _request_save(kind: String, index: int, after: String = "") -> void:
 	if state == null:
 		return
-	if not after.is_empty() and local_navigation != null and local_navigation.active():
-		# An explicit exit stops motion before saving, including from the pause menu.
-		local_navigation.cancel()
+	if not after.is_empty():
 		auto_fire_target = ""
+		_release_controls()
+		# An explicit exit stops new firing cycles and navigation before saving.
+		if local_navigation != null and local_navigation.active(): local_navigation.cancel()
 	# Automatic snapshots can merge; they never replace a chosen manual slot or exit.
 	if not deferred_save.is_empty() and kind == "auto" and after.is_empty() and (deferred_save.kind != "auto" or not str(deferred_save.get("after", "")).is_empty()):
 		return
@@ -922,21 +979,25 @@ func _apply_preferences() -> void:
 
 func _release_observation() -> void:
 	observing = false
+	if camera != null: camera.end_observation()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func _release_controls() -> void:
+	_release_observation()
+	pointer_drag_pressed = false
+	pointer_dragged = false
+	pointer_pick_pending = false
 	fire_held = false
 	flight_look.clear()
-	if camera != null: camera.reset_observation()
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if world != null: world.flight.clear_intent()
 
 func _home_page() -> String:
 	return "station" if state != null and state.ship().status == Types.ShipStatus.DOCKED else ""
 
 func _sync_mouse_mode() -> void:
-	var flight_active := state != null and world != null and ui != null and ui.page.is_empty() and state.ship().status == Types.ShipStatus.FLYING and not busy and get_window().has_focus()
-	var desired := Input.MOUSE_MODE_CAPTURED if flight_active and (observing or not pointer_mode) else Input.MOUSE_MODE_VISIBLE
-	if Input.mouse_mode != desired:
-		flight_look.clear()
-		Input.mouse_mode = desired
+	# Cursor availability is a product rule, independent of navigation or view.
+	pointer_mode = true
+	if Input.mouse_mode != Input.MOUSE_MODE_VISIBLE: Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _sync_presentation_stage() -> void:
 	if state == null or world == null:
@@ -970,19 +1031,16 @@ func _center_steering() -> void:
 		weapon_errors.clear()
 		world.flight.clear_intent()
 		flight_look.clear()
-		pointer_mode = false
-		if camera != null: camera.reset_observation()
+		pointer_mode = true
 		_sync_mouse_mode()
 
 func _install_input() -> void:
-	var keys := {"forward": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "up": KEY_SPACE, "down": KEY_C, "roll_left": KEY_Q, "roll_right": KEY_E, "brake": KEY_X, "boost": KEY_SHIFT, "interact": KEY_F, "target": KEY_TAB, "camera": KEY_V, "map": KEY_M, "missions": KEY_J, "menu": KEY_ESCAPE, "quick_save": KEY_F5, "quick_load": KEY_F9, "pointer": KEY_ALT}
+	for obsolete: String in ["pointer", "observe"]:
+		if InputMap.has_action(obsolete): InputMap.erase_action(obsolete)
+	var keys := {"forward": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "yaw_left": KEY_A, "yaw_right": KEY_D, "pitch_up": KEY_UP, "pitch_down": KEY_DOWN, "up": KEY_SPACE, "down": KEY_C, "roll_left": KEY_Q, "roll_right": KEY_E, "brake": KEY_X, "boost": KEY_SHIFT, "interact": KEY_F, "target": KEY_TAB, "camera": KEY_V, "map": KEY_M, "missions": KEY_J, "menu": KEY_ESCAPE, "quick_save": KEY_F5, "quick_load": KEY_F9, "fire": KEY_CTRL, "combat_toggle": KEY_Z}
 	for action in keys:
 		if not InputMap.has_action(action): InputMap.add_action(action)
+		InputMap.action_erase_events(action)
 		var event := InputEventKey.new()
 		event.physical_keycode = keys[action]
-		InputMap.action_add_event(action, event)
-	for action in ["fire", "observe"]:
-		if not InputMap.has_action(action): InputMap.add_action(action)
-		var event := InputEventMouseButton.new()
-		event.button_index = MOUSE_BUTTON_LEFT if action == "fire" else MOUSE_BUTTON_RIGHT
 		InputMap.action_add_event(action, event)

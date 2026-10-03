@@ -23,4 +23,6 @@ static func build(sector: Node3D, sector_id: String) -> void:
 		body.material_override = material
 		body.position = Vector3(row.x_m, row.y_m, row.z_m)
 		sector.add_child(body)
+		body.get_global_transform_interpolated()
+		body.reset_physics_interpolation()
 		sector.targets[row.celestial_id] = {"id": row.celestial_id, "title": row.display_name, "kind": "planet", "node": body, "anchor_id": "", "navigation_only": true, "description": row.description}

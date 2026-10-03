@@ -164,6 +164,21 @@ func tick(delta: float) -> void:
 func cancel() -> void:
 	stop()
 
+func release_to_manual(announce: bool = true) -> void:
+	# Explicit manual keys take ownership without an artificial velocity reset.
+	# Warp is the exception: it must stop at a collision-checked safe point.
+	if warp_active():
+		stop()
+		return
+	var previous_mode: String = mode
+	phase = "cancelled"
+	remaining_s = 0.0
+	target_id = ""
+	if is_instance_valid(world) and is_instance_valid(world.flight):
+		world.flight.clear_intent()
+		world.flight.write_back()
+	if announce: changed.emit(previous_mode, phase, "已切换手动操舰")
+
 func stop() -> void:
 	var previous_mode: String = mode
 	_zero_motion()
@@ -283,6 +298,9 @@ func _zero_motion() -> void:
 		world.flight.clear_intent()
 		world.flight.velocity = Vector3.ZERO
 		world.flight.write_back()
+		if mode == "warp":
+			world.flight.get_global_transform_interpolated()
+			world.flight.reset_physics_interpolation()
 
 func _recover_warp_position() -> void:
 	# Transit may pass through geometry, but a stopped ship must use a live-tested

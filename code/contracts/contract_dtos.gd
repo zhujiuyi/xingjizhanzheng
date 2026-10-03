@@ -73,6 +73,8 @@ class FlightInputDto extends RefCounted:
 	var thrust_x: float = 0.0
 	var thrust_y: float = 0.0
 	var thrust_z: float = 0.0
+	# Transient manual intent; ZERO retains ordinary ship-local navigation.
+	var view_thrust_direction: Vector3 = Vector3.ZERO
 	var yaw_request: float = 0.0
 	var pitch_request: float = 0.0
 	var roll_request: float = 0.0
