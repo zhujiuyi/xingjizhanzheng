@@ -149,6 +149,7 @@ func fit(item_id: String, _quantity_index: int, target_slot: String) -> bool:
 	if not g.allowed_service("fitting"): return false
 	var item: D.ItemInstanceStateDto = g.state.find("item_instance_state", "item_instance_id", item_id)
 	if item == null or not accessible(item.container_id) or g.state.find("equipment_state","item_instance_id",item_id) != null: return g.fail("模块不可安装")
+	if item.policy_id == "normal_owned" and g.state.ship().policy_id != "normal_owned": return g.fail("保障或借船仅使用保护设备；普通自有设备请安装到自有舰船")
 	var mod: Dictionary = g.definition("module_full_defs", "module_id", item.item_def_id)
 	var tech: Dictionary = g.definition("module_tech_defs","module_id",item.item_def_id)
 	if not tech.is_empty() and not g.unlocked(tech.required_unlock_id): return g.fail("设备科技尚未解锁")

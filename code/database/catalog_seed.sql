@@ -3053,3 +3053,15 @@ INSERT INTO npc_salvage_defs VALUES
 ('npc_rift_sentinel','package_guardian_salvage'),
 ('npc_silent_sentinel','package_guardian_salvage');
 UPDATE catalog_meta SET content_version='v0.5-encounters',ruleset_version='singleplayer_v0_5',schema_version=4,source_document=source_document||';doc/38-任务导航主线与战斗打捞.md';
+
+-- Additive industrial use for the existing regional ore. The old sensor recipe
+-- stays unchanged; this alternative has a higher minimum acquisition cost and
+-- uses only station services that are actually present.
+INSERT INTO recipe_defs VALUES ('recipe_sensor_core_echo','component_sensor_core',1,20,0);
+INSERT INTO recipe_inputs VALUES
+('recipe_sensor_core_echo','ore_echo_silica',3),
+('recipe_sensor_core_echo','material_structural_stock',1);
+INSERT INTO recipe_access_defs
+SELECT 'recipe_sensor_core_echo',station_id,required_unlock_id
+FROM station_service_defs WHERE service_id='manufacture';
+UPDATE catalog_meta SET content_version='v0.5-integrity',source_document=source_document||';doc/39-功能完整性审核与测试.md';

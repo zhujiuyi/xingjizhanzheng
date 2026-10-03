@@ -832,6 +832,12 @@ func _market() -> void:
 	_update_quotes()
 
 func _industry() -> void:
+	var has_manufacture: bool = false
+	for service in _defs("station_service_defs"):
+		if service.station_id == state.player().docked_station_id and service.service_id == "manufacture": has_manufacture = true
+	if not has_manufacture:
+		_text("本站不提供制造服务。请前往设有工业服务的空间站加工物资与建造舰体。")
+		return
 	_quantity()
 	_text("数量表示生产批数；材料仅取当前站点仓库的普通自有物资。费用包含设施优惠。", 14)
 	var list: VBoxContainer = _business_list("生产与回收清单", "单位服务费", "数量 / 批数")
@@ -1444,6 +1450,7 @@ func _ship_sale_reason(ship: Dtos.ShipStateDto) -> String:
 func _fitting_reason(item: Dtos.ItemInstanceStateDto, metrics: Dictionary) -> String:
 	var service: String = _service_reason("fitting")
 	if not service.is_empty(): return service
+	if state.ship().policy_id != "normal_owned": return "借用或保障舰仅使用随船设备；自有设备需安装在自有舰上"
 	var tech: Dictionary = _one("module_tech_defs", "module_id", item.item_def_id)
 	if not tech.is_empty() and not _unlocked(str(tech.required_unlock_id)): return "需解锁 " + _unlock_name(str(tech.required_unlock_id))
 	var module: Dictionary = _one("module_full_defs", "module_id", item.item_def_id)
@@ -2054,6 +2061,7 @@ func _current_mission_target(mission: Dtos.MissionStateDto) -> String:
 	return str(_mission_guidance(mission).get("waypoint_id", ""))
 
 func _mission_reason(definition: Dictionary, current: Dtos.MissionStateDto) -> String:
+	if gameplay != null and gameplay.missions.has_pending_loans(): return "借船待返航归还；请先停靠空间站清理上次借约"
 	if current != null and current.status in ["active", "ready"]: return "任务正在进行"
 	if not bool(definition.get("repeatable", false)) and _mission_completed(str(definition.mission_id)): return "已完成"
 	if not _unlocked(str(definition.get("required_unlock_id", ""))): return "需解锁 " + _unlock_name(str(definition.get("required_unlock_id", "")))
@@ -2338,7 +2346,10 @@ func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 	energy_label.text = "电容 %.0f%%" % (ship.energy / maxf(float(metrics.energy_max), 1.0) * 100) if compact else energy_label.tooltip_text
 	energy_bar.max_value = maxf(float(metrics.energy_max), 1.0)
 	energy_bar.value = ship.energy
-	heat_label.text = "热量  %.0f%%" % (ship.heat / maxf(float(metrics.heat_max), 1.0) * 100)
+	var heat_ratio: float = ship.heat / maxf(float(metrics.heat_max), 1.0)
+	var heat_warning: bool = heat_ratio >= float(catalog.rule("overheat_warning_ratio"))
+	heat_label.text = ("过热锁定 " if ship.overheated else "热量预警 " if heat_warning else "热量 ") + "%.0f%%" % (heat_ratio * 100)
+	heat_label.add_theme_color_override("font_color", UISkin.AMBER if ship.overheated or heat_warning else UISkin.TEXT)
 	heat_bar.max_value = maxf(float(metrics.heat_max), 1.0)
 	heat_bar.value = ship.heat
 	cargo_label.tooltip_text = "货 %.0f/%.0f L · 矿 %.0f/%.0f L" % [float(metrics.cargo_used_l), float(metrics.cargo_capacity_l), float(metrics.mineral_used_l), float(metrics.mineral_capacity_l)]

@@ -733,7 +733,7 @@ func _upgrade_loaded(candidate: XJRuntimeState) -> XJRuntimeState:
 		if previous_gameplay != null: previous_gameplay.call("dispose")
 		return upgraded
 	# Failure preserves the validated original world and all its save pointers.
-	ui.notify("新版战斗内容未能安全升级；继续使用原档案。" + store.last_error, true)
+	ui.notify("新版内容未能安全升级；继续使用原档案。" + store.last_error, true)
 	_discard_staged()
 	staged_world = previous_world; staged_gameplay = previous_gameplay
 	return candidate

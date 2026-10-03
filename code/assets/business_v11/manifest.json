@@ -926,6 +926,11 @@
     },
     {
       "kind": "blueprint",
+      "id": "recipe_sensor_core_echo",
+      "resource_path": "res://assets/business_v11/items/component_sensor_core.svg"
+    },
+    {
+      "kind": "blueprint",
       "id": "recipe_shield_lattice_i",
       "resource_path": "res://assets/business_v11/items/module_shield_lattice_i.svg"
     },

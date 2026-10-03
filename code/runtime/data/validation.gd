@@ -6,7 +6,7 @@ const Codec = preload("res://runtime/data/codec.gd")
 const Rng = preload("res://runtime/rng.gd")
 var last_error: String = ""
 
-func validate(state: State, catalog: XJCatalog) -> bool:
+func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = false) -> bool:
 	if state.rows("player_state").size() != 1 or state.ship() == null:
 		return _fail("Exactly one player and owned controlled ship required")
 	if state.rows("rng_state").size() != 1 or not Rng.new(state.rows("rng_state")[0]).valid():
@@ -48,8 +48,13 @@ func validate(state: State, catalog: XJCatalog) -> bool:
 		for group in groups:
 			if groups[group] > catalog.one("module_exclusion_groups", "group_id", group).max_installed: return _fail("Module exclusion exceeded")
 		var extra: Dictionary = {}
-		for modifier in catalog.rows("module_stat_modifiers"):
-			if modifier.operation == "add": extra[modifier.stat_id] = float(extra.get(modifier.stat_id, 0.0)) + modifier.amount * counts.get(modifier.module_id, 0)
+		for equipment in state.rows("equipment_state"):
+			var container: RefCounted = state.find("container_state", "container_id", equipment.slot_container_id)
+			if container.ship_instance_id != ship.ship_instance_id: continue
+			var item: RefCounted = state.find("item_instance_state", "item_instance_id", equipment.item_instance_id)
+			if not allow_legacy_capacity and (not equipment.enabled or item.durability <= 0): continue
+			for modifier in catalog.rows("module_stat_modifiers"):
+				if modifier.module_id == equipment.module_def_id and modifier.operation == "add": extra[modifier.stat_id] = float(extra.get(modifier.stat_id, 0.0)) + modifier.amount * (1.0 if allow_legacy_capacity else item.quality_multiplier)
 		for layer in ["shield", "armor", "hull", "energy", "heat"]:
 			if ship.get(layer) > definition[layer + "_max"] + extra.get(layer + "_max", 0.0) + 0.0000001: return _fail("Ship field over fitted maximum: " + layer)
 		var payload: float = 0.0

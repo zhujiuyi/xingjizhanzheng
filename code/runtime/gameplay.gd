@@ -46,6 +46,12 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog) -> void:
 	missions = Missions.new(self)
 	work = Work.new(self)
 	encounters = Encounters.new(self)
+	# Older snapshots could retain capacity from a disabled passive module.
+	# Normalize only the live candidate; sealed historical snapshots stay intact.
+	for ship: D.ShipStateDto in state.rows("ship_state"):
+		var limits: Dictionary = metrics(ship)
+		for layer: String in ["armor", "shield", "hull", "energy"]:
+			ship.set(layer, minf(ship.get(layer), float(limits[layer + "_max"])))
 	missions.refresh()
 	work.ensure_tutorial_supplies()
 	_sync_spawns()
@@ -196,6 +202,7 @@ func _dock(station_id: String) -> bool:
 	var m: Dictionary = metrics(ship)
 	ship.shield = m.shield_max; ship.energy = m.energy_max; ship.heat = 0; ship.overheated = false
 	record_event("dock", station_id, 1)
+	missions.cleanup_pending_loans()
 	return true
 
 func _undock() -> bool:
@@ -248,7 +255,7 @@ func metrics(ship: D.ShipStateDto) -> Dictionary:
 		var mod: Dictionary = definition("module_full_defs", "module_id", e.module_def_id)
 		m.power_used += mod.power_pu; m.cpu_used += mod.cpu_cu; m.installed_mass_kg += mod.mass_kg
 		var item: D.ItemInstanceStateDto = state.find("item_instance_state", "item_instance_id", e.item_instance_id)
-		if item == null or item.durability <= 0: continue
+		if item == null or item.durability <= 0 or not e.enabled: continue
 		for change in rows("module_stat_modifiers"):
 			if change.module_id != e.module_def_id: continue
 			if change.stat_id in ["max_speed_mps","acceleration_mps2","turn_rad_s"] and e.active_remaining_s <= 0: continue
@@ -285,6 +292,11 @@ func _set_enabled(item_id: String, enabled: bool) -> bool:
 		for repair in _pending_repairs.duplicate():
 			if repair.item_id==item_id:_pending_repairs.erase(repair)
 		equipment.active_remaining_s=0;equipment.cycle_paid=false
+		# Removing permission also removes capacity; enabling never heals damage.
+		var limits: Dictionary = metrics(state.ship())
+		state.ship().armor = minf(state.ship().armor, limits.armor_max)
+		state.ship().shield = minf(state.ship().shield, limits.shield_max)
+		state.ship().energy = minf(state.ship().energy, limits.energy_max)
 	return true
 
 func pay_cycle(equipment: D.EquipmentStateDto) -> bool:

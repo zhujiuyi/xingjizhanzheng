@@ -38,7 +38,22 @@ func window(mission_id: String) -> D.MissionWindowStateDto:
 		row.remaining_s=def.repeat_window_s-fmod(elapsed,def.repeat_window_s)
 	return row
 
+func has_pending_loans() -> bool:
+	for loan:D.LoanStateDto in g.state.rows("loan_state"):
+		if loan.status not in [T.LoanStatus.ACTIVE,T.LoanStatus.LOST]:continue
+		var mission:D.MissionStateDto=g.state.find("mission_state","mission_instance_id",loan.mission_instance_id)
+		if mission!=null and mission.status in ["completed","failed","abandoned"]:return true
+	return false
+
+func cleanup_pending_loans() -> void:
+	if g.station().is_empty():return
+	for loan:D.LoanStateDto in g.state.rows("loan_state"):
+		if loan.status not in [T.LoanStatus.ACTIVE,T.LoanStatus.LOST]:continue
+		var mission:D.MissionStateDto=g.state.find("mission_state","mission_instance_id",loan.mission_instance_id)
+		if mission!=null and mission.status in ["completed","failed","abandoned"]:_cleanup_loan(loan)
+
 func eligible(def: Dictionary) -> bool:
+	if has_pending_loans():return false
 	if not g.unlocked(def.required_unlock_id):return false
 	for row in g.rows("mission_prerequisites"):
 		if row.mission_id==def.mission_id and not completed(row.prerequisite_mission_id):return false
@@ -65,6 +80,7 @@ func refresh() -> void:
 	mission.status="ready" if all_done else "active"
 
 func accept(mission_id: String) -> bool:
+	if has_pending_loans():return g.fail("先返航归还待清理借船")
 	if not g.allowed_service("mission_board"):return false
 	var def:Dictionary=g.definition("mission_defs","mission_id",mission_id)
 	if def.is_empty() or def.accept_station_id!=g.station() or not eligible(def):return g.fail("任务地点、前置或窗口额度不满足")
@@ -357,7 +373,9 @@ func claim(mission_id: String) -> bool:
 func abandon(mission_id: String) -> bool:
 	var mission:D.MissionStateDto=resolve(mission_id)
 	if mission==null:return g.fail("没有可放弃的任务")
-	# Lost or remote loan is invalidated; ordinary cargo first unloads at current station if docked.
+	# Ending an attempt never teleports its hull. In space the same bounded
+	# loan remains usable for return; docking unloads cargo before retirement.
+	g.stop_interactions()
 	for loan in g.state.rows("loan_state"):
 		if loan.mission_instance_id==mission.mission_instance_id and loan.status in [T.LoanStatus.ACTIVE,T.LoanStatus.LOST]:_cleanup_loan(loan)
 	mission.status="abandoned";mission.has_deadline_remaining_s=false
@@ -366,6 +384,7 @@ func abandon(mission_id: String) -> bool:
 	refresh();return true
 
 func loan(service_id: String) -> bool:
+	if has_pending_loans():return g.fail("先返航归还待清理借船")
 	if not g.allowed_service("loan"):return false
 	var def:Dictionary=g.definition("loan_service_defs","loan_service_id",service_id)
 	var mission:D.MissionStateDto=active()
@@ -405,9 +424,13 @@ func _cleanup_assets(loan:D.LoanStateDto) -> void:
 	for stack in g.state.rows("inventory_stack_state").duplicate():
 		if stack.loan_id==loan.loan_id or (stack.policy_id=="mission_bound" and stack.bound_mission_instance_id==loan.mission_instance_id):g.state.remove("inventory_stack_state",stack)
 func _cleanup_loan(loan:D.LoanStateDto) -> void:
+	if g.station().is_empty():return
 	var ship:D.ShipStateDto=g.state.find("ship_state","ship_instance_id",loan.current_ship_id)
 	if ship!=null:
-		if not g.station().is_empty():g.inventory.unload(ship,g.station())
+		# A parked loan can be remote from the currently controlled ship.
+		# Its ordinary cargo stays at that actual station, never follows the owner.
+		var cargo_station:String=ship.station_id if ship.status==T.ShipStatus.DOCKED and ship.has_station_id else g.station()
+		g.inventory.unload(ship,cargo_station)
 		if g.state.player().controlled_ship_id==ship.ship_instance_id:
 			var restore:D.ShipStateDto=null
 			for other in g.state.rows("ship_state"):
@@ -455,6 +478,7 @@ func rescue() -> bool:
 			ship=candidate;break
 	if ship==null:ship=g.inventory.create_ship("shuttle_swift",station_id,"tutorial_protected","loadout_shuttle_swift")
 	g.state.player().controlled_ship_id=ship.ship_instance_id;g.state.player().has_docked_station_id=true;g.state.player().docked_station_id=station_id;g.combat_remaining_s=0
+	cleanup_pending_loans()
 	return true
 
 func tick(delta:float) -> void:
@@ -464,6 +488,7 @@ func tick(delta:float) -> void:
 		if row.status in ["active","ready"] and row.has_deadline_remaining_s:
 			row.deadline_remaining_s=maxf(0,row.deadline_remaining_s-delta)
 			if row.deadline_remaining_s==0:
+				g.stop_interactions()
 				for loan in g.state.rows("loan_state"):
 					if loan.mission_instance_id==row.mission_instance_id and loan.status in [T.LoanStatus.ACTIVE,T.LoanStatus.LOST]:_cleanup_loan(loan)
 				row.status="failed";row.has_deadline_remaining_s=false;row.cooldown_remaining_s=g.rule("contract_failure_retry_cooldown_s")

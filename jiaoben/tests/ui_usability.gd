@@ -20,6 +20,28 @@ func button_text(ui: Node, prefix: String) -> Button:
 	for node: Node in descendants(ui):
 		if node is Button and node.text.begins_with(prefix): return node
 	return null
+func business_rows(ui: Node) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for node: Node in descendants(ui.body):
+		if bool(node.get_meta("business_list", false)):
+			for row: Dictionary in node.get("rows"): result.append(row)
+	return result
+func meta_button(parent: Node, key: String, value: String) -> Button:
+	for node: Node in descendants(parent):
+		if node is Button and str(node.get_meta(key, "")) == value: return node
+	return null
+func mission_rows(ui: Node) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for row: Dictionary in business_rows(ui):
+		if bool(row.row.get_meta("mission_row", false)): result.append(row)
+	return result
+func overview_ids_match(ui: Node, expected: Array[String]) -> bool:
+	var actual: Array[String] = []
+	for id: String in ui.overview.filtered_ids: actual.append(id)
+	actual.sort()
+	var wanted: Array[String] = expected.duplicate()
+	wanted.sort()
+	return actual == wanted
 func _run() -> void:
 	var path: String = ProjectSettings.globalize_path("res://../jiaoben/tmp/ui-usability.db")
 	DirAccess.remove_absolute(path)
@@ -52,10 +74,25 @@ func _run() -> void:
 	ui.quantity_input.value = 5
 	for quote: Dictionary in ui.quotes:
 		var price: int = host.gameplay.economy.quote(quote.id, 5, false)
-		check(quote.label.text.contains(str(price) + " 信用点"), "item quote includes actual tax/reputation quantity " + quote.id)
-	ui.market_filter = "ships"; ui.show_page("market")
+		var unit_price: int = host.gameplay.economy.quote(quote.id, 1, false)
+		check(quote.total_label.text == str(price) and int(quote.total_label.get_meta("quote_amount", -1)) == price and quote.quantity_label.text == "5", "item total and quantity columns show actual taxed/reputation quote " + quote.id)
+		check(quote.unit_label.text == str(unit_price) and int(quote.unit_label.get_meta("quote_amount", -1)) == unit_price, "item unit-price column preserves independent integer tax rounding " + quote.id)
+		check(quote.total_label.tooltip_text.contains("%d 信用点；成交数量 5" % price) and quote.unit_label.tooltip_text.contains("%d 信用点" % unit_price), "item quote tooltips explain numeric-column units and actual quantity " + quote.id)
+		check(quote.status_label.text.begins_with("站点库存 %d" % int(quote.maximum)) and quote.status_label.tooltip_text == quote.status_label.text, "item status column retains actual stock and complete eligibility reason " + quote.id)
+	var echo_quote: Dictionary = {}
+	var iron_quote: Dictionary = {}
 	for quote: Dictionary in ui.quotes:
-		check(quote.label.text.contains("数量 1") and quote.label.text.contains(str(host.gameplay.economy.quote_ship(quote.id)) + " 信用点"), "ship purchase always quotes one hull " + quote.id)
+		if quote.id == "ore_echo_silica": echo_quote = quote
+		if quote.id == "ore_ferrosilicate": iron_quote = quote
+	check(not echo_quote.is_empty() and echo_quote.button.disabled and echo_quote.status_label.text.contains("需解锁"), "locked unique ore has a real disabled action and visible unlock reason")
+	check(not iron_quote.is_empty() and not iron_quote.button.disabled and iron_quote.status_label.text.ends_with("可成交"), "affordable unlocked ore has an enabled action and correct status")
+	var ship_filter: Button = button_text(ui.body, "购买船体")
+	check(ship_filter != null, "ship-market filter is available through its real control")
+	if ship_filter != null: ship_filter.pressed.emit()
+	for quote: Dictionary in ui.quotes:
+		var price: int = host.gameplay.economy.quote_ship(quote.id)
+		check(quote.kind == "ship" and quote.quantity_label.text == "1" and quote.total_label.text == str(price) and quote.unit_label.text == str(price), "ship columns quote exactly one real hull regardless of quantity selector " + quote.id)
+		check(quote.total_label.tooltip_text.contains("%d 信用点；成交数量 1" % price) and not bool(quote.button.get_meta("uses_quantity", true)), "ship tooltip and command keep fixed quantity one " + quote.id)
 	ui.show_page("fitting")
 	var enabled: Button = button_text(ui, "关闭设备")
 	check(enabled != null, "enabled equipment offers off action")
@@ -68,18 +105,54 @@ func _run() -> void:
 		if node is Label or node is Button: technical = technical or node.text.contains("normal_owned") or node.text.contains("loan_") or node.text.contains("shuttle_")
 	check(not technical, "ship and loan names have no raw IDs or policies")
 	ui.mission_filter = "local"; ui.show_page("missions")
-	var first_card: VBoxContainer
-	for node: Node in descendants(ui.body):
-		if str(node.name).begins_with("MissionCard"):
-			first_card = node
-			break
-	check(first_card != null and first_card.get_child(0).text == "出航准备", "new player first card is available T0 tutorial")
+	var first_rows: Array[Dictionary] = mission_rows(ui)
+	check(not first_rows.is_empty() and first_rows[0].id == "tutorial_flight" and first_rows[0].name.text == "新手教学 1 · 出航准备" and first_rows[0].status.text == "可接取", "new player first real mission row is available T0 tutorial")
+	if not first_rows.is_empty():
+		var accept: Button = meta_button(first_rows[0].actions, "action", "accept_mission")
+		check(accept != null and not accept.disabled and str(accept.get_meta("target", "")) == "tutorial_flight", "first tutorial row has an enabled action for the actual T0 definition")
 	ui.mission_filter = "all"; ui.show_page("missions")
-	var cards: int = 0
-	for node: Node in descendants(ui.body):
-		if str(node.name).begins_with("MissionCard"): cards += 1
-	check(cards <= 6 and cards > 0, "all missions are paginated into at most six cards")
+	var cards: Array[Dictionary] = mission_rows(ui)
+	check(cards.size() == 6, "all missions use the current business-list rows with six entries per full page")
 	check(button_text(ui, "下一页") != null and not button_text(ui, "下一页").disabled, "full forty mission list has pagination")
+	var expected_missions: Dictionary = {}
+	for definition: Dictionary in host.store.catalog.rows("mission_defs"): expected_missions[str(definition.mission_id)] = definition
+	var seen_missions: Dictionary = {}
+	var page_count: int = ceili(float(expected_missions.size()) / 6.0)
+	for index: int in range(page_count):
+		var current_rows: Array[Dictionary] = mission_rows(ui)
+		check(current_rows.size() == mini(6, expected_missions.size() - index * 6), "mission page has its exact expected row count " + str(index + 1))
+		for row: Dictionary in current_rows:
+			var id: String = str(row.id)
+			check(expected_missions.has(id) and not seen_missions.has(id) and str(row.row.get_meta("mission_kind", "")) == str(expected_missions[id].mission_kind), "pagination retains one real categorized mission " + id)
+			seen_missions[id] = true
+		var next: Button = button_text(ui.body, "下一页")
+		var previous: Button = button_text(ui.body, "上一页")
+		check(next != null and previous != null and next.disabled == (index == page_count - 1) and previous.disabled == (index == 0), "mission pagination boundaries match the current page " + str(index + 1))
+		if index < page_count - 1 and next != null:
+			next.pressed.emit()
+			check(ui.mission_page == index + 1, "real next-page control advances exactly once")
+	check(seen_missions.size() == expected_missions.size(), "every actual mission appears exactly once across all pages")
+	for kind: String in ["tutorial", "story", "contract"]:
+		var filter: Button = meta_button(ui.body, "mission_filter", kind)
+		check(filter != null, "mission category has a real filter control " + kind)
+		if filter == null: continue
+		filter.pressed.emit()
+		var filtered: Array[Dictionary] = mission_rows(ui)
+		var total: int = 0
+		for definition: Dictionary in expected_missions.values():
+			if str(definition.mission_kind) == kind: total += 1
+		var matching: bool = filtered.size() == mini(6, total) and ui.mission_page == 0
+		for row: Dictionary in filtered: matching = matching and str(row.row.get_meta("mission_kind", "")) == kind
+		check(matching, "category filter resets pagination and shows only actual matching rows " + kind)
+	var available_filter: Button = meta_button(ui.body, "mission_filter", "available")
+	if available_filter != null: available_filter.pressed.emit()
+	var available_rows: Array[Dictionary] = mission_rows(ui)
+	check(available_filter != null and available_rows.size() == 1 and available_rows[0].id == "tutorial_flight" and available_rows[0].status.text == "可接取", "available filter excludes all locked initial missions")
+	var active_filter: Button = meta_button(ui.body, "mission_filter", "active")
+	if active_filter != null: active_filter.pressed.emit()
+	check(active_filter != null and mission_rows(ui).is_empty(), "active filter does not invent an attempt before mission acceptance")
+	var local_filter: Button = meta_button(ui.body, "mission_filter", "local")
+	if local_filter != null: local_filter.pressed.emit()
 	var kinds: Dictionary = {}
 	for definition: Dictionary in host.store.catalog.rows("mission_objective_defs"):
 		kinds[definition.objective_kind] = true
@@ -101,6 +174,27 @@ func _run() -> void:
 	var reused: bool = true
 	for id: String in stable: reused = reused and ui.target_buttons.get(id) == stable[id]
 	check(reused and not stable.is_empty(), "target refresh reuses existing controls")
+	var all_contacts: Array[String] = []
+	var contact_names: Dictionary = {}
+	var navigation_contacts: Array[String] = []
+	for entry: Dictionary in ui.overview.entry_rows:
+		all_contacts.append(str(entry.id)); contact_names[str(entry.id)] = str(entry.title)
+		if str(entry.kind) not in ["npc", "wreck", "encounter"]: navigation_contacts.append(str(entry.id))
+	ui.overview.sort_buttons.name.pressed.emit()
+	var ascending: bool = ui.overview.sort_key == "name" and ui.overview.sort_ascending
+	var last_name: String = ""
+	for id: String in ui.overview.filtered_ids:
+		ascending = ascending and last_name <= str(contact_names[id]); last_name = str(contact_names[id])
+	check(ascending and overview_ids_match(ui, all_contacts), "real overview name-sort control preserves all contacts in ascending order")
+	ui.overview.sort_buttons.name.pressed.emit()
+	var descending: bool = not ui.overview.sort_ascending
+	var first_name: bool = true
+	for id: String in ui.overview.filtered_ids:
+		descending = descending and (first_name or last_name >= str(contact_names[id])); last_name = str(contact_names[id]); first_name = false
+	check(descending and overview_ids_match(ui, all_contacts), "repeated name-sort control reverses order without losing contacts")
+	ui.overview.filter_buttons.navigation.pressed.emit()
+	check(not navigation_contacts.is_empty() and overview_ids_match(ui, navigation_contacts), "real navigation filter retains exactly the current non-combat contacts")
+	ui.overview.filter_buttons.all.pressed.emit()
 	ui.set_operation_status("save", "等待扫描结束后保存", true)
 	await process_frame
 	check(ui.operation_bar.visible and ui.operation_cancel.visible, "save waiting exposes independent cancellation")
@@ -137,15 +231,25 @@ func _run() -> void:
 	ui.show_page("")
 	var npc: D.NpcStateDto = D.NpcStateDto.new()
 	npc.npc_instance_id = "ui_health_fixture"
-	npc.spawn_id = host.store.catalog.rows("npc_spawn_defs")[0].spawn_id
 	npc.alive = true
-	var spawn: Dictionary = host.store.catalog.one("npc_spawn_defs", "spawn_id", npc.spawn_id)
+	var spawn: Dictionary = {}
+	for definition: Dictionary in host.store.catalog.rows("npc_spawn_defs"):
+		if str(definition.sector_id) == host.state.current_sector(): spawn = definition; break
+	check(not spawn.is_empty(), "NPC bar fixture uses a real spawn definition in the current sector")
+	if spawn.is_empty(): host.queue_free(); await process_frame; quit(1); return
+	npc.spawn_id = str(spawn.spawn_id)
+	npc.sector_id = host.state.current_sector()
+	var npc_point: Vector3 = host.world.flight.global_position + Vector3(0, 0, -100)
+	npc.pos_x = npc_point.x; npc.pos_y = npc_point.y; npc.pos_z = npc_point.z
 	var npc_definition: Dictionary = host.store.catalog.one("npc_full_defs", "npc_id", spawn.npc_id)
 	npc.shield = float(npc_definition.shield_max) * 0.5
 	npc.armor = float(npc_definition.armor_max)
 	npc.hull = float(npc_definition.hull_max)
-	host.state.add("npc_state", npc)
-	ui.target_id = npc.npc_instance_id
+	check(host.state.add("npc_state", npc) and host.world.sync_entities(), "production entity sync creates the fixture's actual visible NPC target")
+	ui._refresh_targets()
+	var npc_button: Button = ui.target_buttons.get(npc.npc_instance_id)
+	check(npc_button != null, "the real nearby NPC has a selectable overview control")
+	if npc_button != null: npc_button.pressed.emit()
 	host.gameplay.work.scan_target = "signal_anchor_gate_calibration"
 	host.gameplay.work.scan_progress = 30.0
 	host.gameplay.work.scan_remaining = 1.5
@@ -155,7 +259,18 @@ func _run() -> void:
 	ui.tick(1.0)
 	await process_frame
 	await process_frame
-	check(ui.npc_detail.visible and is_equal_approx(ui.npc_bars[0].bar.max_value, float(npc_definition.shield_max)) and is_equal_approx(ui.npc_bars[0].bar.value, npc.shield), "selected NPC bars use actual three layer maxima")
+	check(ui.target_id == npc.npc_instance_id and ui.npc_detail.is_visible_in_tree(), "selected NPC remains a real detected target with visible defense readout")
+	for index: int in range(3):
+		var key: String = ["shield", "armor", "hull"][index]
+		var maximum: float = float(npc_definition[key + "_max"])
+		var current: float = float(npc.get(key))
+		check(is_equal_approx(ui.npc_bars[index].bar.max_value, maximum) and is_equal_approx(ui.npc_bars[index].bar.value, current) and ui.npc_bars[index].label.tooltip_text.ends_with("%.0f/%.0f" % [current, maximum]), "selected NPC bar and complete tooltip use actual " + key + " values")
+	var combat_contacts: Array[String] = []
+	for entry: Dictionary in ui.overview.entry_rows:
+		if str(entry.kind) in ["npc", "wreck", "encounter"]: combat_contacts.append(str(entry.id))
+	ui.overview.filter_buttons.combat.pressed.emit()
+	check(combat_contacts.has(npc.npc_instance_id) and overview_ids_match(ui, combat_contacts), "real combat filter includes the detected NPC and excludes all navigation contacts")
+	ui.overview.filter_buttons.all.pressed.emit()
 	check(ui.work_box.visible and ui.work_progress.value > 0 and ui.work_label.text.contains("1.5"), "scan displays actual completion and cycle remainder")
 	check(Rect2(Vector2.ZERO, ui.root.size).encloses(ui.work_stop.get_global_rect()) and not ui.work_stop.get_global_rect().intersects(ui.toast.get_global_rect()), "200 percent active work stop is visible and clear of notification")
 	if DisplayServer.get_name() != "headless":

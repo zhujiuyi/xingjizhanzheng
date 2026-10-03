@@ -63,12 +63,58 @@ func _focus(id: String, mode: T.CameraMode = T.CameraMode.FOLLOW) -> void:
 	host.world.flight.global_basis = Basis.IDENTITY
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
+	# This fixture teleports a stationary hull. Prime/reset its presentation
+	# history so render frames do not interpolate from the previous target.
+	host.world.flight.get_global_transform_interpolated()
+	host.world.flight.reset_physics_interpolation()
+	# Allow the engine to publish this fixture's interpolation boundary before
+	# binding. A process_frame waiter resumes before Main's render callback;
+	# binding immediately there would capture the preceding fixture's pose.
+	await _frames(3)
 	host.camera.bind(host.world.flight, host.store.catalog, mode)
 	host.state.player().camera_mode = mode
-	host.camera.step(1.0)
+	host.camera.step(0.0)
 	host.ui.target_id = id
 	host.ui.tick(1.0)
 	nav.update_annotations()
+
+func _move_target(node: Node3D, point: Vector3) -> void:
+	# Deliberate geometric placement, not an autonomous NPC physics tick.
+	node.get_global_transform_interpolated()
+	node.global_position = point
+	node.reset_physics_interpolation()
+
+func _sync_annotations() -> void:
+	# Sample camera, selected geometry and caption within one render fraction.
+	host.camera.step(0.0)
+	host.ui.tick(1.0)
+	nav.update_annotations()
+
+func _render_projection(node: Node3D) -> Vector2:
+	# The overlay follows the rendered target, while range uses the physical pose.
+	return host.camera.camera.unproject_position(node.get_global_transform_interpolated().origin)
+
+func _annotation_diagnostic(label: String, id: String, geometry: Dictionary, baseline: Dictionary = {}) -> void:
+	# Only failure paths emit detailed timing/projection data.
+	var node: Node3D = host.world.targets[id].node
+	var expected: Vector2 = _render_projection(node)
+	var distance: float = geometry.get("end", expected).distance_to(expected)
+	print("TARGET_ANNOTATION_DIAGNOSTIC ", {
+		"label": label, "process_frame": Engine.get_process_frames(), "camera_sample_frame": host.camera._render_frame,
+		"physics_frame": Engine.get_physics_frames(), "physics_context": Engine.is_in_physics_frame(),
+		"interpolation_fraction": Engine.get_physics_interpolation_fraction(), "geometry": geometry,
+		"expected_projection": expected, "projection_delta_px": distance,
+		"caption_text": nav.target_caption.text, "caption_position": nav.target_caption.position,
+		"caption_visible": nav.target_caption.visible, "baseline": baseline,
+		"camera_physical": host.camera.camera.global_transform,
+		"camera_render": host.camera.camera.get_global_transform_interpolated(),
+		"ship_physical": host.world.flight.global_transform, "ship_render": host.camera.render_ship_transform(),
+		"target_physical": node.global_transform, "target_render": node.get_global_transform_interpolated(),
+		"target_local_physical": host.camera.camera.global_transform.affine_inverse() * node.global_position,
+		"target_local_render": host.camera.camera.global_transform.affine_inverse() * node.get_global_transform_interpolated().origin,
+		"projection_safe_bounds": Rect2(Vector2(40, 40), nav.size - Vector2(80, 80)),
+		"viewport": root.get_visible_rect(), "navigation_size": nav.size, "caption_obstacles": nav.caption_obstacles
+	})
 
 func _caption_clear_of_hud() -> bool:
 	if not nav.target_caption.is_visible_in_tree(): return true
@@ -121,21 +167,24 @@ func _run() -> void:
 		original_meshes[kind] = _meshes(node)
 	var target_count: int = host.world.targets.size()
 	for kind: String in ["station", "gate", "npc", "planet"]:
-		_focus(str(ids[kind]))
+		await _focus(str(ids[kind]))
 		await _frames(3)
 		var title: String = str(host.world.targets[ids[kind]].title)
 		check(nav.selected_id == ids[kind] and nav.target_caption.text.contains(title), "selected " + kind + " updates sole caption")
 		check(not nav.marker_geometry().any(func(row: Dictionary): return row.id == ids[kind]), "selected " + kind + " excluded from unselected marker pass")
 		var stable_text: String = nav.target_caption.text
 		var stable_position: Vector2 = nav.target_caption.position
+		var stable_camera: Transform3D = host.camera.camera.global_transform
 		await _frames(8)
-		check(nav.target_caption.text == stable_text and nav.target_caption.position.is_equal_approx(stable_position), "stationary " + kind + " annotation has no second stale position")
+		var stable_ok: bool = nav.target_caption.text == stable_text and nav.target_caption.position.is_equal_approx(stable_position)
+		check(stable_ok, "stationary " + kind + " annotation has no second stale position")
+		if not stable_ok: _annotation_diagnostic("stationary " + kind, str(ids[kind]), nav.target_geometry(), {"text": stable_text, "position": stable_position, "camera": stable_camera, "caption_delta_px": nav.target_caption.position - stable_position})
 		check(nav.target_caption.position.is_equal_approx(nav.target_caption.position.round()), "selected " + kind + " caption snaps to integer logical pixels")
 		var node: Node3D = host.world.targets[ids[kind]].node
 		check(node.get_instance_id() == original_nodes[kind] and _meshes(node) == original_meshes[kind] and host.world.targets.size() == target_count, "selection leaves " + kind + " model instances unchanged")
 		if kind != "planet": await capture(kind)
 	# Change only the UI selection between renders, below the business HUD interval.
-	_focus(str(ids.station))
+	await _focus(str(ids.station))
 	await _frames(2)
 	host.ui.hud_refresh = 0.0
 	host.ui.target_id = str(ids.gate)
@@ -144,30 +193,45 @@ func _run() -> void:
 	check(_caption_count(nav) == 1, "switching selection keeps one caption instance")
 	var moving: Node3D = host.world.targets[ids.npc].node
 	for mode: T.CameraMode in [T.CameraMode.FOLLOW, T.CameraMode.FRONT, T.CameraMode.TACTICAL]:
-		_focus(str(ids.npc), mode)
-		moving.global_position = host.camera.camera.global_position - host.camera.camera.global_basis.z * 500 + host.camera.camera.global_basis.x * 70
+		await _focus(str(ids.npc), mode)
+		_move_target(moving, host.camera.camera.global_position - host.camera.camera.global_basis.z * 500 + host.camera.camera.global_basis.x * 70)
 		await _frames(2)
+		_sync_annotations()
 		var geometry: Dictionary = nav.target_geometry()
-		check(not geometry.is_empty() and geometry.on_screen and geometry.end.distance_to(host.camera.camera.unproject_position(moving.global_position)) < 0.01, "single selected bracket tracks real projection in view " + str(mode))
+		var projection_ok: bool = not geometry.is_empty() and geometry.on_screen and geometry.end.distance_to(_render_projection(moving)) < 0.01
+		check(projection_ok, "single selected bracket tracks same-frame interpolated projection in view " + str(mode))
+		if not projection_ok: _annotation_diagnostic("projection view " + str(mode), str(ids.npc), geometry)
+		check(not geometry.is_empty() and is_equal_approx(float(geometry.distance_m), host.world.flight.global_position.distance_to(moving.global_position)), "selected range remains physical while projection interpolates in view " + str(mode))
 		check(nav.target_caption.text.contains(str(host.world.targets[ids.npc].title)) and _caption_clear_of_hud(), "native caption remains current and avoids HUD in view " + str(mode))
 	# A moving target advances its displayed range and caption in the same render.
-	_focus(str(ids.npc))
-	moving.global_position = host.camera.camera.global_position - host.camera.camera.global_basis.z * 550 + host.camera.camera.global_basis.x * 70
+	await _focus(str(ids.npc))
+	_move_target(moving, host.camera.camera.global_position - host.camera.camera.global_basis.z * 550 + host.camera.camera.global_basis.x * 70)
 	await _frames(2)
+	_sync_annotations()
 	var old_text: String = nav.target_caption.text
 	var old_position: Vector2 = nav.target_caption.position
-	moving.global_position += host.camera.camera.global_basis.x * 95 - host.camera.camera.global_basis.z * 60
+	_move_target(moving, moving.global_position + host.camera.camera.global_basis.x * 95 - host.camera.camera.global_basis.z * 60)
 	await _frames(2)
+	_sync_annotations()
 	var changed: Dictionary = nav.target_geometry()
-	check(nav.target_caption.text != old_text and not nav.target_caption.position.is_equal_approx(old_position) and changed.end.distance_to(host.camera.camera.unproject_position(moving.global_position)) < 0.01, "moving target range and annotation update together without stale copy")
+	var moving_ok: bool = nav.target_caption.text != old_text and not nav.target_caption.position.is_equal_approx(old_position) and changed.end.distance_to(_render_projection(moving)) < 0.01
+	check(moving_ok, "moving target range and rendered annotation update together without stale copy")
+	if not moving_ok: _annotation_diagnostic("moving target", str(ids.npc), changed, {"text": old_text, "position": old_position, "caption_delta_px": nav.target_caption.position - old_position})
+	var physical_range: float = host.world.flight.global_position.distance_to(moving.global_position)
+	check(is_equal_approx(float(changed.distance_m), physical_range) and nav.target_caption.text.ends_with(" · %.0f m" % physical_range) and _caption_count(nav) == 1, "moving rendered bracket retains current physical range and a single caption")
 	await capture("moving-target")
 	for point: Vector3 in [Vector3(1200, 0, -500), Vector3(0, 0, 120)]:
-		moving.global_position = host.camera.camera.global_transform * point
-		nav.update_annotations()
+		_move_target(moving, host.camera.camera.global_transform * point)
+		# As with the in-view placements, publish the new interpolation boundary
+		# before measuring it. The old test queried immediately after its teleport.
+		await _frames(2)
+		_sync_annotations()
 		var geometry: Dictionary = nav.target_geometry()
-		check(not geometry.is_empty() and not geometry.on_screen and geometry.end.is_finite(), "offscreen or behind target uses finite single edge marker " + str(point))
+		var edge_ok: bool = not geometry.is_empty() and not geometry.on_screen and geometry.end.is_finite()
+		check(edge_ok, "offscreen or behind target uses finite single edge marker " + str(point))
+		if not edge_ok: _annotation_diagnostic("edge point " + str(point), str(ids.npc), geometry, {"expected_camera_local_point": point, "expected_behind": point.z > 0.0})
 		check(not nav.marker_geometry().any(func(row: Dictionary): return row.id == ids.npc), "edge target never creates second on-screen marker " + str(point))
-	_focus(str(ids.station))
+	await _focus(str(ids.station))
 	for window_size: Vector2i in [Vector2i(1440, 900), Vector2i(1280, 720)]:
 		for scale: float in [1.0, 2.0]:
 			root.size = window_size

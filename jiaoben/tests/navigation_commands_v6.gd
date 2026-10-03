@@ -247,8 +247,16 @@ func physical_target_point(id: String, distance_m: float = 1600.0) -> Vector2:
 	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, node.global_position + Vector3(0, 0, distance_m))
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
+	host.world.flight.get_global_transform_interpolated()
+	host.world.flight.reset_physics_interpolation()
 	host.camera.bind(host.world.flight, host.store.catalog, T.CameraMode.FOLLOW)
-	host.camera.step(1.0)
+	# The v0.8 rig samples an interpolated render pose. Settle the real physics
+	# and render pump after teleporting this explicit picking fixture, then
+	# project with the same current camera used by Main's physical ray.
+	await physics_frame
+	await frames(4)
+	host.camera.snapped = false
+	host.camera.step(0.0)
 	# A wormhole's middle is an intentional hole. Aim at an actual frame shape,
 	# never at a fake ray result or an invisible proxy target.
 	var colliders: Array[Node] = node.find_children("*", "CollisionShape3D", true, false)
@@ -274,19 +282,24 @@ func physical_pick_checks() -> void:
 		await remove_readonly_npc(npc)
 	station_point = await physical_target_point(station_id)
 	host.ui.target_id = ""
-	host.pointer_mode = false
-	press_action("pointer")
+	host._sync_mouse_mode()
 	if DisplayServer.get_name() != "headless":
-		Input.warp_mouse(station_point)
-		await frames()
-	check(host.pointer_mode and not host.ui.input_blocked(), "actual Alt action enters pointer mode with a free scene cursor")
+		root.grab_focus()
+		var focus_deadline: int = Time.get_ticks_msec() + 1500
+		while not root.has_focus() and Time.get_ticks_msec() < focus_deadline: await process_frame
+		host.get_viewport().warp_mouse(station_point)
+		await frames(4)
+		await RenderingServer.frame_post_draw
+	check(host.pointer_mode and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and not InputMap.has_action("pointer") and host._keyboard_control_allowed() and not host.ui.ui_input_blocked(), "scene selection uses the permanently visible pointer and actual world-input guards without an Alt mode")
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT
 	click.position = station_point
 	click.pressed = true
-	host.fire_held = true
+	host.fire_held = false
 	host._unhandled_input(click)
-	check(host.pointer_pick_pending and host.ui.target_id.is_empty() and not host.fire_held, "scene left-click queues physical selection and cannot become a weapon hold")
+	click.pressed = false
+	host._input(click)
+	check(host.pointer_pick_pending and not host.pointer_drag_pressed and not host.pointer_dragged and not host.observing and host.ui.target_id.is_empty() and not host.fire_held, "scene left-button short press and release queue only physical selection without a weapon hold")
 	await step()
 	check(not host.pointer_pick_pending and host.ui.target_id == station_id and not host.fire_held and host.world.projectiles.active.is_empty(), "actual next Main physics boundary selects the station without firing")
 	# Move the real HUD over its current cursor; headless cannot warp an OS
@@ -296,11 +309,14 @@ func physical_pick_checks() -> void:
 	hud.position = host.ui.root.get_global_mouse_position() - Vector2(4, 4)
 	host.ui.target_id = ""
 	host.pointer_pick_pending = false
+	click.pressed = true
 	host._unhandled_input(click)
-	check(host.ui.input_blocked() and not host.pointer_pick_pending and host.ui.target_id.is_empty() and not host.fire_held, "actual HUD hit-test consumes selection eligibility instead of passing a world click")
+	click.pressed = false
+	host._input(click)
+	check(host.ui.ui_input_blocked() and not host.pointer_drag_pressed and not host.pointer_pick_pending and host.ui.target_id.is_empty() and not host.fire_held, "actual HUD hit-test blocks both gesture start and short-click world selection without firing")
 	hud.position = old_position
 	host.pointer_pick_pending = false
-	host.pointer_mode = false
+	host._sync_mouse_mode()
 	host.flight_look.clear()
 	host.ui.target_id = station_id
 	host.ui.tick(1.0)
@@ -369,23 +385,50 @@ func charge_and_cancel_checks() -> void:
 	place_far()
 	await host._command("nav_warp", station_id, 1, "")
 	await wait_writer()
-	host.pointer_mode = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	press_action("observe")
-	var motion := InputEventMouseMotion.new()
-	motion.screen_relative = Vector2(28, -12)
-	host._unhandled_input(motion)
-	check(host.observing and navigation().call("warp_active"), "right-button free observation rotates only the camera and retains autonomous navigation")
-	host._release_observation()
+	host._sync_mouse_mode()
+	var pointer_origin: Vector2 = Vector2(root.size) * 0.5
 	if DisplayServer.get_name() != "headless":
-		# Main's suppressed render callback normally recaptures on the next frame.
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "native DisplayServer actually captures mouse steering fixture")
-		host._unhandled_input(motion)
-		check(not navigation().call("active") and not host.flight_look.pending_angles.is_zero_approx(), "ordinary captured mouse steering cancels navigation and returns real yaw/pitch input")
+		root.grab_focus()
+		host.get_viewport().warp_mouse(pointer_origin)
+		await frames(4)
+		await RenderingServer.frame_post_draw
+	var orbit_before: Vector2 = host.camera.orbit
+	var velocity_before: Vector3 = host.world.flight.velocity
+	var camera_before: Basis = host.camera.camera.global_basis
+	var right := InputEventMouseButton.new()
+	right.button_index = MOUSE_BUTTON_RIGHT
+	right.position = pointer_origin
+	right.pressed = true
+	host._input(right)
+	var motion := InputEventMouseMotion.new()
+	motion.position = pointer_origin + Vector2(28, -12)
+	motion.relative = Vector2(28, -12)
+	motion.screen_relative = motion.relative
+	host._input(motion)
+	right.pressed = false
+	host._input(right)
+	var right_inactive: bool = not host.observing and host.camera.orbit.is_equal_approx(orbit_before)
+	var left := InputEventMouseButton.new()
+	left.button_index = MOUSE_BUTTON_LEFT
+	left.position = pointer_origin
+	left.pressed = true
+	host._unhandled_input(left)
+	host._input(motion)
+	host.camera.step(1.0)
+	var actual_drag: bool = host.observing and host.camera.observing and not host.camera.orbit.is_equal_approx(orbit_before) and not host.camera.camera.global_basis.is_equal_approx(camera_before)
+	var held_angle: Vector2 = host.camera.orbit
+	left.position = motion.position
+	left.pressed = false
+	host._input(left)
+	check(right_inactive and actual_drag and not host.observing and not host.camera.observing and host.camera.orbit.is_equal_approx(held_angle) and navigation().call("warp_active") and pose().is_equal_approx(original) and host.world.flight.velocity.is_equal_approx(velocity_before) and not host.pointer_pick_pending and not host.fire_held and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "right button stays disabled while actual left drag rotates only the camera, retains its angle on release and preserves warp without firing")
+	if DisplayServer.get_name() != "headless":
+		check(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and root.has_focus() and not host.ui.ui_input_blocked(), "native DisplayServer retains actual window focus and visible unobstructed pointer during observation")
+		host._input(motion)
+		host._read_flight_input(0.0)
+		check(navigation().call("warp_active") and host.camera.orbit.is_equal_approx(held_angle) and host.flight_look.pending_angles.is_zero_approx() and pose().is_equal_approx(original) and not host.fire_held, "ordinary visible-pointer movement after drag cannot steer, fire or cancel autonomous navigation")
 	else:
-		print("SKIP captured mouse steering: headless DisplayServer ignores MOUSE_MODE_CAPTURED")
-		await stop_navigation()
+		print("SKIP actual native window focus and OS pointer state under headless DisplayServer")
+	await stop_navigation()
 	host.flight_look.clear()
 	await wait_writer()
 

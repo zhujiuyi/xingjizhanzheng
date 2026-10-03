@@ -117,27 +117,34 @@ class Catalog:
         """
         stock = Counter()
 
-        def acquire(item_id, wanted):
-            used = min(stock[item_id], wanted)
-            stock[item_id] -= used
+        def acquire(item_id, wanted, inventory, active=frozenset()):
+            used = min(inventory[item_id], wanted)
+            inventory[item_id] -= used
             wanted -= used
             if not wanted:
                 return 0
+            if item_id in active:
+                raise ValueError(f"Recipe dependency cycle at {item_id}")
             routes = self.by_output[item_id]
             if not routes:
                 return self.buy(item_id, wanted)
-            # Baseline has one recipe per output. Reject ambiguity in this witness.
-            if len(routes) != 1:
-                raise ValueError("Integer witness needs an explicit alternate-recipe policy")
-            recipe = routes[0]
-            batches = math.ceil(wanted / recipe["output_quantity"])
-            total = math.ceil(D(recipe["service_fee_credit"]) * batches / max((D(row["effect_multiplier"]) for row in self.rows("base_module_defs") if row["service_kind"]=="industry"), default=D(1)))
-            for child, units in sorted(self.inputs[recipe["recipe_id"]].items()):
-                total += acquire(child, units * batches)
-            stock[item_id] += batches * recipe["output_quantity"] - wanted
+            candidates = []
+            for recipe in sorted(routes, key=lambda route: route["recipe_id"]):
+                trial = inventory.copy()
+                batches = math.ceil(wanted / recipe["output_quantity"])
+                total = math.ceil(D(recipe["service_fee_credit"]) * batches / max((D(row["effect_multiplier"]) for row in self.rows("base_module_defs") if row["service_kind"] == "industry"), default=D(1)))
+                for child, units in sorted(self.inputs[recipe["recipe_id"]].items()):
+                    total += acquire(child, units * batches, trial, active | {item_id})
+                trial[item_id] += batches * recipe["output_quantity"] - wanted
+                candidates.append((total, recipe["recipe_id"], trial))
+            # Compare complete integer routes with separate surplus ledgers.
+            # Stable IDs resolve equal prices; declaration order has no effect.
+            total, _, selected_stock = min(candidates, key=lambda route: route[:2])
+            inventory.clear()
+            inventory.update(selected_stock)
             return total
 
-        expense = acquire(item, quantity)
+        expense = acquire(item, quantity, stock)
         return expense, stock
 
 

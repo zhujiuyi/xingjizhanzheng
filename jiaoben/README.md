@@ -1,5 +1,13 @@
 # 测试与辅助文件
 
+## 全量功能审核
+
+从工作区根目录执行 `/usr/local/bin/python3.14 jiaoben/tests/feature_audit_run.py`。统一runner串行执行现有客户端、战斗、存档、界面、导航及新增完整进度、经济、模块开关、借船清理和历史容量/内容增量专项；每组独立输出与引擎日志，严格检查端点、退出与诊断。`--native`执行默认原生整合组；`--native --only navigation-commands targets visibility --merge`补充操控/标注/可见性并合入同一汇总。`--only`选择检查，`--merge`保留其它已执行结果；不得同时运行两个runner，锁文件仅在tmp。
+
+旧catalog夹具由runner从已存在Git提交 `c2ac4ae5eb43dc9ab052f09ea5d2a72c542edf4c` 的正式数值库提取到 `tmp/audit-catalog-v090.db`，验证固定SHA，不覆盖身份不同的既有文件。独立运行历史probe前先用runner准备该夹具。借船清理probe依赖先执行`gameplay_probe.gd`得到已关闭基线。原始v0.8.4发行测试库是本机历史额外证据，不是默认runner依赖；额外`--legacy`输入只允许已关闭tmp测试库。
+
+本轮功能矩阵、确认修复、实际检查数、夹具与原生边界见 [39](../doc/39-功能完整性审核与测试.md)。测试源码和正式代码按各自目录纳入Git，所有运行数据库、截图、日志仍留在tmp/logs，不能带入正式用户存档。
+
 | 路径 | 用途 | Git 管理 |
 | --- | --- | --- |
 | `check-env.sh` | 检查工作区目录和本机工具；不安装软件 | 跟踪 |

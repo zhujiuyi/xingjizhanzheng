@@ -197,7 +197,7 @@ func load(slot_id: String, expected_snapshot: String = "", expected_generation: 
 				_rollback("DTO mapping failed: " + _codec.last_error)
 				return null
 	var validator: Validation = Validation.new()
-	if not validator.validate(state, frozen) or not _q("COMMIT"):
+	if not validator.validate(state, frozen, str(metadata.content_version) != "v0.5-integrity") or not _q("COMMIT"):
 		frozen.close()
 		_rollback(validator.last_error)
 		return null
@@ -231,7 +231,10 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 	if not _active_context(state):
 		_fail("STALE_EPOCH while upgrading content")
 		return null
-	if catalog.table_names.has("encounter_defs"): return state
+	var has_encounters: bool = catalog.table_names.has("encounter_defs")
+	var has_echo_recipe: bool = not catalog.one("recipe_defs", "recipe_id", "recipe_sensor_core_echo").is_empty()
+	var source_has_echo_recipe: bool = not _source.one("recipe_defs", "recipe_id", "recipe_sensor_core_echo").is_empty()
+	if has_encounters and (has_echo_recipe or not source_has_echo_recipe): return state
 	if not _source.table_names.has("encounter_defs") or not _additive_content(catalog, _source): return null
 	var existing_upgrade: Array[Dictionary] = _records("SELECT r.upgraded_snapshot_id FROM content_upgrade_record r JOIN content_snapshot c ON c.content_snapshot_id=r.new_content_id WHERE r.world_id=? AND r.source_snapshot_id=? AND c.content_hash=?", [state.world_id, state.snapshot.meta.snapshot_id, _source.content_hash])
 	if not existing_upgrade.is_empty(): return self.load("snapshot:" + str(existing_upgrade[0].upgraded_snapshot_id), "", -1, prepare)
@@ -286,8 +289,8 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 func _additive_content(previous: Catalog, next: Catalog) -> bool:
 	var before_meta: Dictionary = previous.rows("catalog_meta")[0]
 	var after_meta: Dictionary = next.rows("catalog_meta")[0]
-	if before_meta.pack_id != after_meta.pack_id or after_meta.content_version != "v0.5-encounters": return _fail("Unreviewed additive content upgrade")
-	var extensible: Array[String] = ["npc_defs", "anchor_defs", "npc_spawn_defs", "npc_patrol_points"]
+	if before_meta.pack_id != after_meta.pack_id or after_meta.content_version not in ["v0.5-encounters", "v0.5-integrity"]: return _fail("Unreviewed additive content upgrade")
+	var extensible: Array[String] = ["npc_defs", "anchor_defs", "npc_spawn_defs", "npc_patrol_points", "recipe_defs", "recipe_inputs", "recipe_access_defs"]
 	for table in previous.table_names:
 		if table == "catalog_meta": continue
 		if not next.table_names.has(table) or Catalog.schema_signature(previous.column_info[table], table) != Catalog.schema_signature(next.column_info[table], table): return _fail("Content upgrade changes existing schema: " + table)
@@ -300,6 +303,11 @@ func _additive_content(previous: Catalog, next: Catalog) -> bool:
 		for entry in previous.rows(table):
 			var key: String = _content_key(entry, keys)
 			if not index.has(key) or index[key] != entry: return _fail("Content upgrade changes existing definition: " + table + ":" + key)
+		if table in ["recipe_defs", "recipe_inputs", "recipe_access_defs"]:
+			var prior_keys: Dictionary = {}
+			for entry in previous.rows(table): prior_keys[_content_key(entry, keys)] = true
+			for entry in next.rows(table):
+				if not prior_keys.has(_content_key(entry, keys)) and str(entry.recipe_id) != "recipe_sensor_core_echo": return _fail("Content upgrade appends unreviewed recipe: " + table)
 	for name in previous.view_sql:
 		if not next.view_sql.has(name) or next.view_sql[name] != previous.view_sql[name]: return _fail("Content upgrade changes existing derived view: " + str(name))
 	return true

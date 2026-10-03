@@ -76,6 +76,9 @@ func _run() -> void:
 	await wait_writer()
 	host.ui.show_page("")
 	host._sync_presentation_stage()
+	await process_frame
+	await process_frame
+	check(not host.ui.keyboard_blocked(), "closed title/station text controls release focus before real flight shortcuts")
 	check(host.state.ship().status == T.ShipStatus.FLYING and host.world.visible and not host.hangar.visible and root.get_camera_3d() == host.camera.camera, "departure selects real visible flight stage and camera")
 	saved_pose = Transform3D(Basis.from_euler(Vector3(0.23, -0.41, 0.11)), Vector3(5000, 3000, 5000))
 	saved_velocity = Vector3(7, -4, -16)
@@ -107,12 +110,13 @@ func _run() -> void:
 	host.camera.zoom = 2.0
 	host.camera.orbit = Vector2(0.71, -0.24)
 	host.observing = true
-	host.pointer_mode = true
+	host.pointer_mode = false
 	host.flight_look.add_motion(Vector2(32, -18), 0.002)
 	host.world.flight.intent.thrust_x = 1.0
 	host.ui.show_ship_button.pressed.emit()
 	check(host.camera.mode == T.CameraMode.FOLLOW and host.state.player().camera_mode == T.CameraMode.FOLLOW and host.camera.zoom == 1.0 and host.camera.orbit == Vector2.ZERO, "actual button restores FOLLOW and resets camera distance/free look")
-	check(not host.observing and not host.pointer_mode and host.flight_look.pending_angles.is_zero_approx() and host.world.flight.intent.thrust_x == 0.0, "recovery clears observation and pending steering intent")
+	check(not host.observing and host.flight_look.pending_angles.is_zero_approx() and host.world.flight.intent.thrust_x == 0.0, "recovery clears observation and pending steering intent")
+	check(host.pointer_mode and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "recovery restores the persistent usable pointer required by command flight")
 	check(same_motion(), "show-ship resets camera and intent without changing current ship motion")
 	check(host.world.flight.visual.is_visible_in_tree() and host.ui.instrument_title.text.contains("跟随视角"), "ship visibility and explanatory HUD change synchronously on button press")
 	var body_point: Vector2 = host.camera.camera.unproject_position(host.world.flight.global_position)

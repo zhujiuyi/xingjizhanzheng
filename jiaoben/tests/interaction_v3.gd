@@ -61,6 +61,9 @@ func _run() -> void:
 	if not await wait_writer(): return
 	if not check(host.state.ship().status == T.ShipStatus.FLYING, "actual undock permits interaction"): return
 	host.ui.show_page("")
+	await process_frame
+	await process_frame
+	if not check(not host.ui.keyboard_blocked(), "closed station/title controls release native keyboard focus before the next input event"): return
 	place(station.global_position + Vector3.RIGHT * (dock_radius + 1))
 	if not check(not context(station_id).ready and not context(station_id).in_range, "station outside authoritative range is rejected"): return
 	place(station.global_position + Vector3.RIGHT * dock_radius, dock_speed)
@@ -202,9 +205,17 @@ func _run() -> void:
 	if not check(context(wreck.container_id).ready, "wreck pickup boundary is inclusive"): return
 	place(gate.global_position)
 	if not check(Context.choose(host.world, host.state, host.store.catalog, host.gameplay, wreck.container_id).target_id == wreck.container_id, "eligible selected wreck wins over overlapping eligible gate"): return
+	var cargo_id: String = host.gameplay.inventory.hold(host.state.ship(), T.ContainerKind.CARGO)
+	var prior_cargo: int = host.gameplay.inventory.count(cargo_id, "ore_ferrosilicate")
+	var mineral_id: String = host.gameplay.inventory.hold(host.state.ship(), T.ContainerKind.MINERAL)
+	var prior_mineral: int = host.gameplay.inventory.count(mineral_id, "ore_ferrosilicate")
 	host.ui.requested.emit("interact_target", wreck.container_id, 1, "")
-	if not check(not context(wreck.container_id).ready and context(wreck.container_id).reason.contains("为空"), "actual mouse pickup empties wreck and prevents repeated empty action"): return
+	var collected: int = host.gameplay.inventory.count(cargo_id, "ore_ferrosilicate") + host.gameplay.inventory.count(mineral_id, "ore_ferrosilicate")
+	if not check(collected == prior_cargo + prior_mineral + 1 and host.state.find("container_state", "container_id", wreck.container_id) == null and not context(wreck.container_id).ready, "actual mouse pickup transfers cargo once and removes the empty wreck"): return
 	if not await wait_writer(): return
+	if not check(host.world.sync_entities(), "production world synchronization removes the emptied wreck while fixture simulation is disabled"): return
+	var repeat: D.ActionResultDto = host.gameplay.act("pickup_wreck", wreck.container_id)
+	if not check(repeat.phase == T.ActionPhase.REJECTED and collected == host.gameplay.inventory.count(cargo_id, "ore_ferrosilicate") + host.gameplay.inventory.count(mineral_id, "ore_ferrosilicate") and not host.world.targets.has(wreck.container_id), "removed wreck cannot yield cargo twice or remain a world target"): return
 	var remote := Node3D.new()
 	host.world.add_child(remote)
 	remote.global_position = host.world.flight.global_position

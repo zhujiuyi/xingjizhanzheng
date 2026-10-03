@@ -91,9 +91,14 @@ func _run() -> void:
 	release.action = "fire"; release.pressed = false
 	host._input(release)
 	if not check(not host.fire_held, "UI-consumed mouse release still clears held firing"): return
-	release.action = "observe"
-	host._input(release)
-	if not check(not host.observing and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "observation release clears capture while UI blocks input"): return
+	host.pointer_drag_pressed = true
+	host.pointer_dragged = true
+	host.camera.begin_observation()
+	var observe_release := InputEventMouseButton.new()
+	observe_release.button_index = MOUSE_BUTTON_LEFT
+	observe_release.pressed = false
+	host._input(observe_release)
+	if not check(not host.observing and not host.pointer_drag_pressed and not host.pointer_dragged and not host.pointer_pick_pending and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "actual left-drag release clears observation and gesture without selecting through blocking UI"): return
 	host._command("preference", "mouse_sensitivity", 1, "1.0")
 	host.ui.show_page("settings")
 	await process_frame
