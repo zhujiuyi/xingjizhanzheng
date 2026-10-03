@@ -18,6 +18,10 @@ var range_label: Label
 var selection_frame: PanelContainer
 var selection_label: Label
 var target_caption: Label
+var selection_readout_enabled: bool = true:
+	set(value):
+		selection_readout_enabled = value
+		if not value and is_instance_valid(selection_frame): selection_frame.hide()
 var selection_obstructed: bool = false
 var caption_obstacles: Array[Rect2] = []
 
@@ -172,7 +176,7 @@ func responsive(viewport_size: Vector2) -> void:
 	selection_frame.offset_right = -selection_frame.offset_left
 	selection_frame.offset_top = 12 if compact else 18
 	selection_frame.offset_bottom = 64 if compact else 86
-	selection_frame.visible = selection_frame.visible and not compact
+	selection_frame.visible = selection_readout_enabled and selection_frame.visible and not compact
 
 func radar_point(contact: Dictionary, canvas_size: Vector2) -> Vector2:
 	var center := canvas_size * Vector2(0.5, 0.47)
@@ -219,7 +223,7 @@ func target_geometry() -> Dictionary:
 func _update_selection() -> void:
 	if not is_instance_valid(selection_frame): return
 	var geometry := target_geometry()
-	selection_frame.visible = not geometry.is_empty() and size.x >= 950 and not selection_obstructed
+	selection_frame.visible = selection_readout_enabled and not geometry.is_empty() and size.x >= 950 and not selection_obstructed
 	if geometry.is_empty(): return
 	selection_label.text = "已选定 · " + str(geometry.title) + "\n" + ("远景天体 · 航向参考" if geometry.bearing else "距离 %.1f km" % (float(geometry.distance_m) / 1000.0))
 	selection_label.add_theme_color_override("font_color", contact_color(str(geometry.kind)))

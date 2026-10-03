@@ -154,12 +154,20 @@ static func run(host: Node, output_dir: String) -> bool:
 		await host.get_tree().physics_frame
 		host._physics_process(1.0 / float(Engine.physics_ticks_per_second))
 		steps += 1
+	# Sample motion after the first actual travel tick, rather than the zero
+	# velocity boundary where charging has just changed its phase to travel.
+	await host.get_tree().physics_frame
+	host._physics_process(1.0 / float(Engine.physics_ticks_per_second))
+	steps += 1
 	host.camera.snapped = false
 	host.camera.step(1.0)
 	host.ui.tick(1.0)
 	host.warp_visual.update_navigation(host.local_navigation.phase, 0.6, float(host.preferences.get("vfx_intensity", 1.0)), false)
 	_check(evidence, host.local_navigation.phase == "travel" and host.warp_visual.is_visible_in_tree(), "packed warp shows an actual running effect behind the HUD")
+	var recorded_speed: float = Vector3(host.state.ship().vel_x, host.state.ship().vel_y, host.state.ship().vel_z).length()
+	_check(evidence, recorded_speed > 0.0 and is_equal_approx(host.ui.dial.speed, recorded_speed) and is_equal_approx(recorded_speed, host.world.flight.velocity.length()), "packed warp instrument displays actual moving ship velocity")
 	await _capture(host, output_dir, "warp")
+	_check(evidence, not host.ui.navigation_hud.selection_frame.is_visible_in_tree() and not host.ui.operation_bar.is_visible_in_tree(), "packed local navigation keeps one selected card and no redundant global banner across render frames")
 	while host.local_navigation.active() and steps < 2400:
 		await host.get_tree().physics_frame
 		host._physics_process(1.0 / float(Engine.physics_ticks_per_second))

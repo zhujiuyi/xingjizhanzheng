@@ -48,6 +48,8 @@ func _run() -> void:
 	root.content_scale_size = root.size
 	await process_frame
 	var nav: XJNavigationHUD = host.ui.navigation_hud
+	# Main stays frozen while the production HUD continues render callbacks.
+	nav.process_mode = Node.PROCESS_MODE_ALWAYS
 	check(Navigation.rows("celestial_visual_defs").size() == 10 and Navigation.rows("radar_range_defs").size() == 3, "ten sectors and three radar ranges read from independent SQLite")
 	check(Navigation.last_error.is_empty(), "navigation SQLite load has no failure")
 	check(nav.scales == [500.0, 2000.0, 6000.0], "range selector uses SQLite definitions")
@@ -127,6 +129,21 @@ func _run() -> void:
 	host.camera.step(1.0)
 	near.global_position = body.global_position + Vector3(30, 20, -450)
 	nav.scale_index = 1
+	var standalone := XJNavigationHUD.new()
+	root.add_child(standalone)
+	standalone.configure(host.world, host.camera, host.store.catalog)
+	standalone.selected_id = "nav_near"
+	standalone.responsive(Vector2(1440, 900))
+	for frame: int in range(12): await process_frame
+	check(standalone.selection_readout_enabled and standalone.selection_frame.visible, "standalone HUD retains enabled legacy readout compatibility across render frames")
+	standalone.selection_readout_enabled = false
+	var standalone_hidden: bool = true
+	for frame: int in range(12):
+		await process_frame
+		standalone_hidden = standalone_hidden and not standalone.selection_frame.visible
+	check(standalone_hidden, "explicit HUD readout disable survives repeated production annotation callbacks")
+	standalone.queue_free()
+	await process_frame
 	for window_size: Vector2i in [Vector2i(1440, 900), Vector2i(1280, 720)]:
 		for scale: float in [1.0, 2.0]:
 			root.size = window_size
@@ -135,6 +152,11 @@ func _run() -> void:
 			host.ui.tick(1.0)
 			for frame: int in range(3): await process_frame
 			var viewport := Rect2(Vector2.ZERO, host.ui.root.size)
+			var legacy_hidden: bool = true
+			for frame: int in range(24):
+				await process_frame
+				legacy_hidden = legacy_hidden and not nav.selection_frame.visible
+			check(not nav.selection_readout_enabled and legacy_hidden and host.ui.overview.is_visible_in_tree() and not nav.target_geometry().is_empty(), "main target card stays unique through 24 render frames %s scale %.0f" % [window_size, scale])
 			check(viewport.encloses(nav.radar_frame.get_global_rect()), "radar fits window %s scale %.0f" % [window_size, scale])
 			check(not nav.radar_frame.get_global_rect().intersects(host.ui.instrument.get_global_rect()), "radar clears flight instrument %s scale %.0f" % [window_size, scale])
 			check(not nav.radar_frame.get_global_rect().intersects(host.ui.hud_left.get_parent().get_global_rect()), "radar clears mission readout %s scale %.0f" % [window_size, scale])

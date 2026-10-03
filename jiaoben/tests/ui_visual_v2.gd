@@ -186,6 +186,17 @@ func _run() -> void:
 			check(ui.instrument.visible and Rect2(Vector2.ZERO, ui.root.size).encloses(ui.instrument.get_global_rect()), "bottom instrument within viewport %s x%.0f" % [str(size), scale])
 			check(not ui.instrument.get_global_rect().has_point(ui.root.size * 0.5), "fixed center reticle clear of instrument %s x%.0f" % [str(size), scale])
 			check_instrument_content(ui, "%s x%.0f" % [str(size), scale])
+			ui.set_operation_status("local_navigation", "本地导航状态夹具")
+			var local_bar_hidden: bool = true
+			for frame: int in range(12):
+				await process_frame
+				local_bar_hidden = local_bar_hidden and not ui.operation_bar.visible
+			check(local_bar_hidden and ui.operation_kind == "local_navigation" and ui.navigation_frame.is_visible_in_tree() and ui.overview.is_visible_in_tree(), "local navigation keeps side status cards without a global bar %s x%.0f" % [str(size), scale])
+			ui.set_operation_status("save_wait", "保存等待状态夹具", true)
+			check(ui.operation_bar.is_visible_in_tree() and ui.operation_cancel.visible, "save transaction retains its global status and cancel action %s x%.0f" % [str(size), scale])
+			ui.set_operation_status("travel", "跨星系充能状态夹具", true)
+			check(ui.operation_bar.is_visible_in_tree() and not ui.operation_cancel.visible and ui.operation_kind == "travel", "cross-sector transaction retains its distinct global status %s x%.0f" % [str(size), scale])
+			ui.set_operation_status("idle", "")
 	check(ui.condition_bars.size() == 3 and is_equal_approx(ui.condition_bars[0].bar.value, host.state.ship().shield), "instrument bars reflect actual shield/armor/hull")
 	var original_velocity: Vector3 = host.world.flight.velocity
 	var original_mode: T.CameraMode = host.camera.mode

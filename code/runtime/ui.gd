@@ -105,7 +105,7 @@ func set_operation_status(kind: String, message: String, waiting: bool = false) 
 	operation_message = _friendly(message)
 	operation_waiting = waiting
 	if is_instance_valid(operation_bar):
-		operation_bar.visible = kind != "idle" and not message.is_empty()
+		operation_bar.visible = kind not in ["idle", "local_navigation"] and not message.is_empty()
 		operation_label.text = operation_message
 		operation_label.tooltip_text = operation_message
 		operation_cancel.visible = waiting and "save" in kind
@@ -139,6 +139,7 @@ func _ready() -> void:
 	navigation_hud = NavigationHUD.new()
 	navigation_hud.name = "NavigationHUD"
 	root.add_child(navigation_hud)
+	navigation_hud.selection_readout_enabled = false
 	navigation_hud.selected.connect(_select_target)
 	navigation_frame = _frame(root, "NavigationStatus")
 	navigation_frame.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
@@ -1230,8 +1231,8 @@ func _update_navigation() -> void:
 	navigation_hud.caption_obstacles.clear()
 	for control: Control in [target_panel, hud_left.get_parent(), navigation_frame, instrument, equipment_bar, navigation, navigation_hud.radar_frame, operation_bar]:
 		if control.is_visible_in_tree(): navigation_hud.caption_obstacles.append(control.get_global_rect())
-	# The selected-target card owns this readout; retain only the world caption.
-	navigation_hud.selection_frame.hide()
+	# The selected-target card owns this readout; the HUD's flag keeps it
+	# disabled through every render update, independently of UI telemetry.
 	if operation_kind == "travel":
 		interaction_candidate = {}
 		interaction_button.visible = true
