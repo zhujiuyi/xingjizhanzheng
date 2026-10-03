@@ -9,6 +9,8 @@ const OverviewPanel = preload("res://runtime/ui/overview_panel.gd")
 const EquipmentBar = preload("res://runtime/ui/equipment_bar.gd")
 const Context = preload("res://runtime/interaction_context.gd")
 const ResourceStatus = preload("res://runtime/resource_status.gd")
+const BusinessList = preload("res://runtime/ui/business_list.gd")
+const ItemPortraits = preload("res://runtime/ui/item_portraits.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
 var gameplay: RefCounted
@@ -343,6 +345,7 @@ func show_page(next_page: String) -> void:
 		"map": _map()
 		"pause": _pause()
 	_animate_panel()
+	_responsive.call_deferred()
 	_focus_page.call_deferred()
 
 func notify(message: String, is_error: bool = false) -> void:
@@ -440,6 +443,7 @@ func _build_panel(title: String, description: String) -> void:
 	panel.add_child(shell)
 	sidebar = VBoxContainer.new()
 	sidebar.name = "ServiceSidebar"
+	sidebar.visible = root.size.x >= 950 and state != null and page not in ["title", "settings"]
 	sidebar.custom_minimum_size.x = 178
 	sidebar.add_theme_constant_override("separation", 8)
 	shell.add_child(sidebar)
@@ -583,44 +587,56 @@ func _station() -> void:
 	_focus_page.call_deferred()
 
 func _ships() -> void:
+	var list: VBoxContainer = _business_list("舰体与借船", "单价 / 服务费", "数量")
+	list.call("add_section", "自有舰队")
 	for row: Dtos.ShipStateDto in state.rows("ship_state"):
 		if row.status in [Types.ShipStatus.RETURNED, Types.ShipStatus.DESTROYED]: continue
-		var card: VBoxContainer = _card("%s · %s" % [_ship_name(row.ship_def_id), _policy_name(row.policy_id)])
-		_text_to(card, "结构 %.0f / 装甲 %.0f · %s%s" % [row.hull, row.armor, _station_name(row.station_id) if row.status == Types.ShipStatus.DOCKED else _sector_name(row.sector_id), " · 当前驾驶" if row.ship_instance_id == state.ship().ship_instance_id else ""])
 		var local: bool = row.status == Types.ShipStatus.DOCKED and row.station_id == state.player().docked_station_id
-		var switch: Button = _command(card, "切换驾驶", "switch_ship", row.ship_instance_id)
-		switch.disabled = not local or row.ship_instance_id == state.ship().ship_instance_id
+		var current: bool = row.ship_instance_id == state.ship().ship_instance_id
 		var may_sell: bool = bool(_one("asset_policy_defs", "policy_id", row.policy_id).get("may_sell", false))
+		var sale_reason: String = _ship_sale_reason(row) if may_sell else "保障 / 借用舰体不可出售"
+		var has_quote: bool = may_sell and state.rows("shop_ship_stock_state").any(func(stock: Dtos.ShopShipStockStateDto): return stock.station_id == state.player().docked_station_id and stock.ship_def_id == row.ship_def_id)
+		var price: int = int(gameplay.get("economy").call("quote_ship", row.ship_instance_id, true)) if has_quote else 0
+		var entry: Dictionary = _asset_row(list, row.ship_instance_id, "ship", row.ship_def_id, _ship_name(row.ship_def_id), _ship_description(row.ship_def_id) + "\n结构 %.0f · 装甲 %.0f · %s" % [row.hull, row.armor, _policy_name(row.policy_id)], "艘", "1", str(price) if has_quote else "—", str(price) if has_quote else "—", ("当前驾驶" if current else "停靠 " + _station_name(row.station_id) if row.status == Types.ShipStatus.DOCKED else "位于 " + _sector_name(row.sector_id)) + ("\n" + sale_reason if not sale_reason.is_empty() else "\n可出售裸舰；设备与货物移入仓库"))
+		var switch: Button = _command(entry.actions, "切换驾驶", "switch_ship", row.ship_instance_id)
+		switch.disabled = not local or current or row.owner_player_id != state.player().player_id
 		if may_sell:
-			var price: int = int(gameplay.get("economy").call("quote_ship", row.ship_instance_id, true))
-			var sell: Button = _command(card, "出售船体 · 实收 %d 信用点" % price, "sell_ship", row.ship_instance_id)
-			sell.disabled = not local
-			_text_to(card, "出售前会安全换舰、卸下普通设备与货物；需有可替代舰。", 14)
+			var sell: Button = _command(entry.actions, "出售舰体", "sell_ship", row.ship_instance_id)
+			sell.disabled = not sale_reason.is_empty()
+			sell.tooltip_text = sale_reason if not sale_reason.is_empty() else "实收 %d 信用点；普通设备与货物移入本站仓库。" % price
+	list.call("add_section", "任务舰领取与换发")
 	for definition: Dictionary in _defs("loan_service_defs"):
 		if definition.station_id != state.player().docked_station_id: continue
 		var loadout: Dictionary = _one("ship_loadout_defs", "loadout_id", str(definition.loadout_id))
-		var card: VBoxContainer = _card("任务借船 · " + _ship_name(str(loadout.get("ship_id", ""))))
 		var mission: Dtos.MissionStateDto = _latest_mission(str(definition.required_mission_id))
-		var reason: String = ""
+		var reason: String = _service_reason("loan")
 		if not _unlocked(str(definition.required_unlock_id)): reason = "需解锁 " + _unlock_name(str(definition.required_unlock_id))
 		elif mission == null or mission.status not in ["active", "ready"]: reason = "需先接取 " + _mission_name(str(definition.required_mission_id))
-		var loan: Dtos.LoanStateDto = state.find("loan_state", "loan_service_id", str(definition.loan_service_id))
+		var loan: Dtos.LoanStateDto
+		for candidate: Dtos.LoanStateDto in state.rows("loan_state"):
+			if candidate.loan_service_id == definition.loan_service_id and mission != null and candidate.mission_instance_id == mission.mission_instance_id: loan = candidate
 		if loan != null and loan.status == Types.LoanStatus.ACTIVE: reason = "已有借船在使用"
 		elif loan != null and loan.replacement_remaining_s > 0: reason = "补领等待 %.0f 秒" % loan.replacement_remaining_s
-		_text_to(card, "费用 %d 信用点 · 归还 %s。借船及绑定设备不能出售，换发保留任务与采额。" % [int(definition.fee_credit), _station_name(str(definition.return_station_id))], 14)
-		if not reason.is_empty(): _text_to(card, reason, 14)
-		var claim: Button = _command(card, "领取 / 换领任务舰", "claim_loan", str(definition.loan_service_id))
+		elif loan != null and loan.status == Types.LoanStatus.LOST and not bool(definition.get("replace_destroyed", false)): reason = "此合同不提供损毁换发"
+		if state.player().credit < int(definition.fee_credit): reason = "信用点不足"
+		for other: Dtos.LoanStateDto in state.rows("loan_state"):
+			if other.status in [Types.LoanStatus.ACTIVE, Types.LoanStatus.LOST] and (mission == null or other.mission_instance_id != mission.mission_instance_id or other.loan_service_id != definition.loan_service_id): reason = "已有另一份有效借船"
+		var ship_id: String = str(loadout.get("ship_id", ""))
+		var entry: Dictionary = _asset_row(list, str(definition.loan_service_id), "ship", ship_id, "任务借船 · " + _ship_name(ship_id), _ship_description(ship_id) + "\n归还 " + _station_name(str(definition.return_station_id)) + "；绑定设备不可交易，换发保留任务与采额。", "艘", "1", str(int(definition.fee_credit)), str(int(definition.fee_credit)), reason if not reason.is_empty() else "可领取 / 换领")
+		var claim: Button = _command(entry.actions, "领取 / 换领", "claim_loan", str(definition.loan_service_id))
 		claim.disabled = not reason.is_empty()
+	list.call("add_section", "借船归还")
 	for loan: Dtos.LoanStateDto in state.rows("loan_state"):
 		if loan.status not in [Types.LoanStatus.ACTIVE, Types.LoanStatus.LOST]: continue
 		var definition: Dictionary = _one("loan_service_defs", "loan_service_id", loan.loan_service_id)
 		var loadout: Dictionary = _one("ship_loadout_defs", "loadout_id", str(definition.get("loadout_id", "")))
-		var card: VBoxContainer = _card("借船管理 · " + _ship_name(str(loadout.get("ship_id", ""))))
+		var description: String = "返航 " + _station_name(str(definition.get("return_station_id", ""))) + " 后归还；普通战利品转入当地仓库。"
 		if loan.has_quota_remaining_units:
 			var quota_note := "教学样本丢失可补采缺额，已有有效样本不会重复补领" if definition.get("gathered_policy_id", "") == "mission_bound" else "普通合同累计额度；补领不会恢复额度"
-			_text_to(card, "剩余可采额度 %d · %s" % [loan.quota_remaining_units, quota_note])
-		_text_to(card, "返航 %s 后归还；普通战利品转入当地仓库。" % _station_name(str(definition.get("return_station_id", ""))), 14)
-		var handoff: Button = _command(card, "归还借船并切换替代舰", "handoff_loan", loan.loan_id)
+			description += "\n剩余可采额度 %d · %s" % [loan.quota_remaining_units, quota_note]
+		var ship_id: String = str(loadout.get("ship_id", ""))
+		var entry: Dictionary = _asset_row(list, loan.loan_id, "ship", ship_id, "借船管理 · " + _ship_name(ship_id), description, "艘", "1", "—", "—", "借船使用中" if loan.status == Types.LoanStatus.ACTIVE else "舰体已损失")
+		var handoff: Button = _command(entry.actions, "归还并换舰", "handoff_loan", loan.loan_id)
 		handoff.disabled = definition.get("return_station_id") != state.player().docked_station_id
 
 func _warehouse() -> void:
@@ -630,83 +646,99 @@ func _warehouse() -> void:
 	var cargo: String = _ship_container(Types.ContainerKind.CARGO)
 	var mineral: String = _ship_container(Types.ContainerKind.MINERAL)
 	var count: int = 0
+	var list: VBoxContainer = _business_list("本地货物与设备")
+	list.call("add_section", "堆叠物资")
 	for stack: Dtos.InventoryStackStateDto in state.rows("inventory_stack_state"):
 		if not _local_container(stack.container_id): continue
 		var container: Dtos.ContainerStateDto = state.find("container_state", "container_id", stack.container_id)
-		var card: VBoxContainer = _card("%s × %d" % [_item_name(stack.item_def_id), stack.quantity])
 		count += 1
-		_text_to(card, "%s · %s" % [_container_name(container), _policy_name(stack.policy_id)], 14)
+		var entry: Dictionary = _asset_row(list, stack.stack_id, "item", stack.item_def_id, _item_name(stack.item_def_id), _item_description(stack.item_def_id), _item_unit(stack.item_def_id), str(stack.quantity), "—", "—", _container_name(container) + "\n" + _policy_name(stack.policy_id))
 		if stack.policy_id != "normal_owned":
-			_text_to(card, "此批物资仅供指定教学或合同使用。", 14)
+			entry.status.text += "\n仅供指定教学或合同使用"
 			continue
 		for destination: Dictionary in [{"id": warehouse, "title": "转入站点仓库"}, {"id": cargo, "title": "装入当前舰货舱"}, {"id": mineral, "title": "装入当前舰矿舱"}]:
 			if not str(destination.id).is_empty() and stack.container_id != destination.id:
-				_command(card, str(destination.title), "move_stack", stack.stack_id, str(destination.id))
+				_command(entry.actions, str(destination.title), "move_stack", stack.stack_id, str(destination.id))
+	list.call("add_section", "独立设备")
 	for item: Dtos.ItemInstanceStateDto in state.rows("item_instance_state"):
 		if not _local_container(item.container_id): continue
 		var container: Dtos.ContainerStateDto = state.find("container_state", "container_id", item.container_id)
-		var card: VBoxContainer = _card(_item_name(item.item_def_id))
 		count += 1
-		_text_to(card, "%s · 耐久 %.0f · 品质 %.2f · %s" % [_container_name(container), item.durability, item.quality_multiplier, _policy_name(item.policy_id)], 14)
+		var entry: Dictionary = _asset_row(list, item.item_instance_id, "item", item.item_def_id, _item_name(item.item_def_id), _item_description(item.item_def_id) + "\n耐久 %.0f · 品质 %.2f" % [item.durability, item.quality_multiplier], _item_unit(item.item_def_id), "1", "—", "—", _container_name(container) + "\n" + _policy_name(item.policy_id))
 		if item.policy_id != "normal_owned": continue
-		if item.container_id != warehouse and not warehouse.is_empty(): _command(card, "移至站点仓库", "move_item", item.item_instance_id, warehouse)
-		if item.container_id != cargo and not cargo.is_empty(): _command(card, "装入当前舰货舱", "move_item", item.item_instance_id, cargo)
+		if item.container_id != warehouse and not warehouse.is_empty(): _command(entry.actions, "移至站点仓库", "move_item", item.item_instance_id, warehouse)
+		if item.container_id != cargo and not cargo.is_empty(): _command(entry.actions, "装入当前舰货舱", "move_item", item.item_instance_id, cargo)
 	if count == 0: _text("本地没有可整理的货物。")
 
 func _fitting() -> void:
 	var metrics: Dictionary = gameplay.call("metrics", state.ship())
-	_text("供能 %.0f/%.0f · 算力 %.0f/%.0f · 总质量 %.0f kg" % [metrics.power_used, metrics.power_capacity, metrics.cpu_used, metrics.cpu_capacity, metrics.total_mass_kg])
+	_text("供能 %.0f/%.0f · 算力 %.0f/%.0f · 总质量 %.2f kg" % [metrics.power_used, metrics.power_capacity, metrics.cpu_used, metrics.cpu_capacity, metrics.total_mass_kg])
+	var list: VBoxContainer = _business_list("舰船挂点与适配设备")
+	list.call("add_section", "当前驾驶舰挂点")
+	var empty_slots: Array[Dictionary] = []
 	for container: Dtos.ContainerStateDto in state.rows("container_state"):
 		if container.ship_instance_id != state.ship().ship_instance_id or container.kind != Types.ContainerKind.SLOT: continue
 		var slot_type: String = ["weapon", "work", "utility", "structure"][int(container.slot_type)]
-		var card: VBoxContainer = _card("%s槽 %d" % [["武器", "作业", "通用", "结构"][int(container.slot_type)], container.slot_index + 1])
+		var slot_name: String = "%s槽 %d" % [["武器", "作业", "通用", "结构"][int(container.slot_type)], container.slot_index + 1]
 		var equipped: Dtos.EquipmentStateDto = state.find("equipment_state", "slot_container_id", container.container_id)
 		if equipped != null:
 			var item: Dtos.ItemInstanceStateDto = state.find("item_instance_state", "item_instance_id", equipped.item_instance_id)
-			_text_to(card, _item_name(equipped.module_def_id) + " · " + ("已启用" if equipped.enabled else "已关闭"))
-			if item != null: _text_to(card, "%s · 耐久 %.0f · 品质 %.2f" % [_policy_name(item.policy_id), item.durability, item.quality_multiplier], 14)
-			var unfit: Button = _command(card, "卸下模块至仓库", "unfit_module", equipped.item_instance_id)
-			unfit.disabled = item == null or item.policy_id != "normal_owned"
-			_command(card, "关闭设备" if equipped.enabled else "启用设备", "set_module_enabled", equipped.item_instance_id, "off" if equipped.enabled else "on")
+			var description: String = _item_description(equipped.module_def_id)
+			if item != null: description += "\n耐久 %.0f · 品质 %.2f · %s" % [item.durability, item.quality_multiplier, _policy_name(item.policy_id)]
+			var entry: Dictionary = _asset_row(list, equipped.item_instance_id, "item", equipped.module_def_id, _item_name(equipped.module_def_id), description, "件", "1", "—", "—", slot_name + "\n" + ("已启用" if equipped.enabled else "已关闭"))
+			var unfit: Button = _command(entry.actions, "卸至仓库", "unfit_module", equipped.item_instance_id)
+			unfit.disabled = item == null or item.policy_id != "normal_owned" or not _service_reason("fitting").is_empty()
+			_command(entry.actions, "关闭设备" if equipped.enabled else "启用设备", "set_module_enabled", equipped.item_instance_id, "off" if equipped.enabled else "on")
 		else:
-			var available: int = 0
-			for item: Dtos.ItemInstanceStateDto in state.rows("item_instance_state"):
-				if not _local_container(item.container_id) or item.policy_id != "normal_owned": continue
-				var module: Dictionary = _one("module_defs", "module_id", item.item_def_id)
-				if not module.is_empty() and module.slot_type == slot_type:
-					available += 1
-					_command(card, "安装 " + _item_name(item.item_def_id), "fit_module", item.item_instance_id, "%s:%d" % [slot_type, container.slot_index])
-			if available == 0: _text_to(card, "本地没有适配此槽的设备；可在市场购买或工业制造。", 14)
+			empty_slots.append({"type": slot_type, "index": container.slot_index, "title": slot_name})
+			_asset_row(list, container.container_id, "generic", slot_type, slot_name, "空挂点；在下方设备列表选择适配模块安装。", "槽", "1", "—", "—", "未安装")
+	list.call("add_section", "本地可安装设备")
+	var available: int = 0
+	for item: Dtos.ItemInstanceStateDto in state.rows("item_instance_state"):
+		if not _local_container(item.container_id) or item.policy_id != "normal_owned": continue
+		var module: Dictionary = _one("module_defs", "module_id", item.item_def_id)
+		if module.is_empty(): continue
+		var compatible: Array[Dictionary] = []
+		for empty: Dictionary in empty_slots:
+			if str(module.slot_type) == str(empty.type): compatible.append(empty)
+		available += 1
+		var reason: String = _fitting_reason(item, metrics)
+		if compatible.is_empty(): reason = "没有同类空挂点"
+		var container: Dtos.ContainerStateDto = state.find("container_state", "container_id", item.container_id)
+		var entry: Dictionary = _asset_row(list, item.item_instance_id, "item", item.item_def_id, _item_name(item.item_def_id), _item_description(item.item_def_id) + "\n耐久 %.0f · 品质 %.2f" % [item.durability, item.quality_multiplier], "件", "1", "—", "—", reason if not reason.is_empty() else _container_name(container) + "\n可安装")
+		for empty: Dictionary in compatible:
+			var install: Button = _command(entry.actions, "安装至 " + str(empty.title), "fit_module", item.item_instance_id, "%s:%d" % [str(empty.type), int(empty.index)])
+			install.disabled = not reason.is_empty()
+	if available == 0: _text("本地没有可安装设备；可在市场购买或工业制造。", 14)
 
 func _market() -> void:
 	_quantity()
 	var filters: HFlowContainer = HFlowContainer.new()
 	body.add_child(filters)
 	for filter: String in ["buy", "ships", "sell"]:
-		_button(filters, str({"buy": "购买物资", "ships": "购买船体", "sell": "出售本地资产"}[filter]) + (" · 当前" if filter == market_filter else ""), func(): market_filter = filter; show_page("market"))
+		var button: Button = _button(filters, str({"buy": "购买物资", "ships": "购买船体", "sell": "出售本地资产"}[filter]) + (" · 当前" if filter == market_filter else ""), func(): market_filter = filter; show_page("market"))
+		button.autowrap_mode = TextServer.AUTOWRAP_OFF
+		button.custom_minimum_size = Vector2(132, 36)
 	_text("以下为选定数量的含税成交报价，包含当前声望优惠。成交时重新校验库存、额度和资金。", 14)
 	var count: int = 0
+	var list: VBoxContainer = _business_list("站点交易清单", "实收单价" if market_filter == "sell" else "含税单价", "成交数量")
 	if market_filter == "buy":
 		for stock: Dtos.ShopStockStateDto in state.rows("shop_stock_state"):
 			if stock.station_id != state.player().docked_station_id: continue
 			var definition: Dictionary = _stock_definition(stock.item_def_id)
 			if not bool(definition.get("allow_buy", false)): continue
 			count += 1
-			var card: VBoxContainer = _card(_item_name(stock.item_def_id))
-			_text_to(card, "站点库存 %d" % stock.quantity, 14)
-			var label: Label = _text_to(card, "")
-			var button: Button = _command(card, "购买选定数量", "buy_item", stock.item_def_id)
-			quotes.append({"kind": "item", "id": stock.item_def_id, "selling": false, "label": label, "button": button, "maximum": stock.quantity, "unlock": str(definition.get("required_unlock_id", ""))})
+			var entry: Dictionary = _asset_row(list, stock.item_def_id, "item", stock.item_def_id, _item_name(stock.item_def_id), _item_description(stock.item_def_id), _item_unit(stock.item_def_id), str(quantity_value), "—", "—", "库存 %d" % stock.quantity)
+			var button: Button = _command(entry.actions, "购买", "buy_item", stock.item_def_id)
+			quotes.append(_quote_row(entry, {"kind": "item", "id": stock.item_def_id, "selling": false, "button": button, "maximum": stock.quantity, "unlock": str(definition.get("required_unlock_id", "")), "service": "trade", "status_prefix": "站点库存 %d" % stock.quantity}))
 	elif market_filter == "ships":
 		for stock: Dtos.ShopShipStockStateDto in state.rows("shop_ship_stock_state"):
 			if stock.station_id != state.player().docked_station_id: continue
 			count += 1
-			var card: VBoxContainer = _card(_ship_name(stock.ship_def_id) + " · 裸舰")
-			_text_to(card, "库存 %d · 船体数量固定为 1；设备与弹药另购。" % stock.quantity, 14)
-			var label: Label = _text_to(card, "")
-			var button: Button = _command(card, "购买船体", "buy_ship", stock.ship_def_id)
+			var entry: Dictionary = _asset_row(list, stock.ship_def_id, "ship", stock.ship_def_id, _ship_name(stock.ship_def_id) + " · 裸舰", _ship_description(stock.ship_def_id) + "\n不含设备与弹药；舰体成交数量固定为一艘。", "艘", "1", "—", "—", "库存 %d" % stock.quantity)
+			var button: Button = _command(entry.actions, "购买舰体", "buy_ship", stock.ship_def_id)
 			var role: Dictionary = _one("ship_role_defs", "ship_id", stock.ship_def_id)
-			quotes.append({"kind": "ship", "id": stock.ship_def_id, "selling": false, "label": label, "button": button, "maximum": stock.quantity, "unlock": str(role.get("required_unlock_id", ""))})
+			quotes.append(_quote_row(entry, {"kind": "ship", "id": stock.ship_def_id, "selling": false, "button": button, "maximum": stock.quantity, "unlock": str(role.get("required_unlock_id", "")), "service": "ship_purchase", "status_prefix": "站点库存 %d" % stock.quantity}))
 	else:
 		var budget: Dtos.StationEconomyStateDto = state.find("station_economy_state", "station_id", state.player().docked_station_id)
 		if budget != null: _text("本站本轮回购预算 %d 信用点" % budget.buyback_remaining_credit, 14)
@@ -715,48 +747,55 @@ func _market() -> void:
 			var definition: Dictionary = _stock_definition(stack.item_def_id)
 			if not bool(definition.get("allow_sell", false)): continue
 			count += 1
-			var card: VBoxContainer = _card("%s × %d · %s" % [_item_name(stack.item_def_id), stack.quantity, _policy_name(stack.policy_id)])
-			var label: Label = _text_to(card, "")
-			var button: Button = _command(card, "出售选定数量", "sell_item", stack.stack_id)
-			_text_to(card, "保护物资不可交易；普通物資受本站回购额度限制。", 14)
-			quotes.append({"kind": "item", "id": stack.item_def_id, "selling": true, "label": label, "button": button, "maximum": stack.quantity, "policy": stack.policy_id})
+			var container: Dtos.ContainerStateDto = state.find("container_state", "container_id", stack.container_id)
+			var entry: Dictionary = _asset_row(list, stack.stack_id, "item", stack.item_def_id, _item_name(stack.item_def_id), _item_description(stack.item_def_id) + "\n" + _container_name(container), _item_unit(stack.item_def_id), str(quantity_value), "—", "—", "持有 %d · %s" % [stack.quantity, _policy_name(stack.policy_id)])
+			var button: Button = _command(entry.actions, "出售", "sell_item", stack.stack_id)
+			quotes.append(_quote_row(entry, {"kind": "item", "id": stack.item_def_id, "selling": true, "button": button, "maximum": stack.quantity, "policy": stack.policy_id, "service": "trade", "status_prefix": "持有 %d · %s" % [stack.quantity, _policy_name(stack.policy_id)]}))
 		for item: Dtos.ItemInstanceStateDto in state.rows("item_instance_state"):
 			if not _local_container(item.container_id): continue
 			var definition: Dictionary = _stock_definition(item.item_def_id)
 			if not bool(definition.get("allow_sell", false)): continue
 			count += 1
-			var card: VBoxContainer = _card(_item_name(item.item_def_id) + " · " + _policy_name(item.policy_id))
-			var label: Label = _text_to(card, "")
-			var button: Button = _button(card, "出售此设备", func(): requested.emit("sell_item", item.item_instance_id, 1, ""))
-			quotes.append({"kind": "item", "id": item.item_def_id, "selling": true, "label": label, "button": button, "maximum": 1, "fixed": 1, "policy": item.policy_id})
+			var container: Dtos.ContainerStateDto = state.find("container_state", "container_id", item.container_id)
+			var entry: Dictionary = _asset_row(list, item.item_instance_id, "item", item.item_def_id, _item_name(item.item_def_id), _item_description(item.item_def_id) + "\n耐久 %.0f · 品质 %.2f · %s" % [item.durability, item.quality_multiplier, _container_name(container)], "件", "1", "—", "—", _policy_name(item.policy_id))
+			var button: Button = _button(entry.actions, "出售设备", func(): requested.emit("sell_item", item.item_instance_id, 1, ""))
+			button.set_meta("action", "sell_item")
+			button.set_meta("target", item.item_instance_id)
+			button.set_meta("extra", "")
+			button.set_meta("uses_quantity", false)
+			quotes.append(_quote_row(entry, {"kind": "item", "id": item.item_def_id, "selling": true, "button": button, "maximum": 1, "fixed": 1, "policy": item.policy_id, "service": "trade", "status_prefix": _policy_name(item.policy_id)}))
 	if count == 0: _text("此页没有当前站点可交易的资产。")
 	_update_quotes()
 
 func _industry() -> void:
 	_quantity()
 	_text("数量表示生产批数；材料仅取当前站点仓库的普通自有物资。费用包含设施优惠。", 14)
+	var list: VBoxContainer = _business_list("生产与回收清单", "单位服务费", "数量 / 批数")
+	list.call("add_section", "制造与提炼")
 	for access: Dictionary in _defs("recipe_access_defs"):
 		if access.station_id != state.player().docked_station_id: continue
 		var recipe: Dictionary = _one("recipe_defs", "recipe_id", str(access.recipe_id))
-		var card: VBoxContainer = _card("制造 / 提炼 · " + _item_name(str(recipe.get("output_item_id", ""))))
-		_text_to(card, _inputs_text("recipe_inputs", "recipe_id", str(access.recipe_id)) + "
-每批产出 %d" % int(recipe.get("output_quantity", 1)), 14)
-		var label: Label = _text_to(card, "")
-		var button: Button = _command(card, "生产选定批数", "manufacture", str(access.recipe_id))
-		quotes.append({"kind": "recipe", "id": str(access.recipe_id), "label": label, "button": button, "unlock": str(access.required_unlock_id)})
+		var item_id: String = str(recipe.get("output_item_id", ""))
+		var entry: Dictionary = _asset_row(list, str(access.recipe_id), "item", item_id, "制造 / 提炼 · " + _item_name(item_id), _item_description(item_id) + "\n" + _inputs_text("recipe_inputs", "recipe_id", str(access.recipe_id)) + "\n每批产出 %d %s" % [int(recipe.get("output_quantity", 1)), _item_unit(item_id)], "批", str(quantity_value), "—", "—", "材料来自本站仓库")
+		var button: Button = _command(entry.actions, "生产", "manufacture", str(access.recipe_id))
+		quotes.append(_quote_row(entry, {"kind": "recipe", "id": str(access.recipe_id), "button": button, "unlock": str(access.required_unlock_id), "service": "manufacture", "inputs_table": "recipe_inputs", "inputs_key": "recipe_id", "status_prefix": "材料来自本站仓库"}))
+	list.call("add_section", "船坞制造")
 	for recipe: Dictionary in _defs("hull_recipe_defs"):
 		var local_yard: bool = false
 		for stock: Dtos.ShopShipStockStateDto in state.rows("shop_ship_stock_state"):
 			if stock.station_id == state.player().docked_station_id and stock.ship_def_id == recipe.ship_id: local_yard = true
 		if not local_yard: continue
-		var card: VBoxContainer = _card("船坞 · " + _ship_name(str(recipe.ship_id)))
-		_text_to(card, _inputs_text("hull_recipe_inputs", "hull_recipe_id", str(recipe.hull_recipe_id)), 14)
-		var label: Label = _text_to(card, "")
-		var button: Button = _command(card, "制造选定批数裸舰", "manufacture", str(recipe.hull_recipe_id))
-		quotes.append({"kind": "recipe", "id": str(recipe.hull_recipe_id), "label": label, "button": button, "unlock": str(recipe.required_unlock_id)})
-	_text("设备拆解 · 普通本地资产", 20)
+		var entry: Dictionary = _asset_row(list, str(recipe.hull_recipe_id), "ship", str(recipe.ship_id), "船坞 · " + _ship_name(str(recipe.ship_id)), _ship_description(str(recipe.ship_id)) + "\n" + _inputs_text("hull_recipe_inputs", "hull_recipe_id", str(recipe.hull_recipe_id)) + "\n每批制造一艘裸舰，不含设备与弹药。", "批", str(quantity_value), "—", "—", "本站船坞")
+		var button: Button = _command(entry.actions, "制造舰体", "manufacture", str(recipe.hull_recipe_id))
+		quotes.append(_quote_row(entry, {"kind": "recipe", "id": str(recipe.hull_recipe_id), "button": button, "unlock": str(recipe.required_unlock_id), "service": "manufacture", "inputs_table": "hull_recipe_inputs", "inputs_key": "hull_recipe_id", "status_prefix": "本站船坞"}))
+	list.call("add_section", "设备拆解 · 普通本地资产")
 	for item: Dtos.ItemInstanceStateDto in state.rows("item_instance_state"):
-		if item.container_id == _warehouse_id() and item.policy_id == "normal_owned": _command(body, "拆解 " + _item_name(item.item_def_id), "recycle", item.item_instance_id)
+		if item.container_id != _warehouse_id() or item.policy_id != "normal_owned": continue
+		var fee: int = int(catalog.rule("recycle_service_fee_credit"))
+		var reason: String = _recycle_reason(item)
+		var entry: Dictionary = _asset_row(list, item.item_instance_id, "item", item.item_def_id, "拆解 · " + _item_name(item.item_def_id), _item_description(item.item_def_id) + "\n按冻结材料来源回收；拆解后设备消失。", "件", "1", str(fee), str(fee), reason if not reason.is_empty() else "可拆解")
+		var button: Button = _command(entry.actions, "拆解设备", "recycle", item.item_instance_id)
+		button.disabled = not reason.is_empty()
 	_update_quotes()
 
 func _missions() -> void:
@@ -788,62 +827,61 @@ func _missions() -> void:
 	var next: Button = _button(navigation, "下一页", func(): mission_page += 1; show_page("missions"))
 	next.disabled = mission_page >= pages - 1
 	if filtered.is_empty(): _text("此筛选没有任务。可切换“全部任务”查看前置条件。")
+	var list: VBoxContainer = _business_list("任务与合同清单", "接取费用", "合同数")
 	for definition: Dictionary in filtered.slice(mission_page * 6, mini((mission_page + 1) * 6, filtered.size())):
 		var current: Dtos.MissionStateDto = _latest_mission(str(definition.mission_id))
-		var card: VBoxContainer = _card(_mission_name(str(definition.mission_id)))
-		card.name = "MissionCard"
-		_text_to(card, "奖励 %d 信用点 · 接取 %s · 交付 %s" % [int(definition.get("reward_credit", 0)), _station_name(str(definition.accept_station_id)), _station_name(str(definition.turnin_station_id))], 14)
 		var active: bool = current != null and current.status in ["active", "ready"]
+		var reason: String = _mission_reason(definition, current)
+		var entry: Dictionary = _asset_row(list, str(definition.mission_id), "mission", str(definition.mission_id), _mission_name(str(definition.mission_id)), _mission_list_description(definition, current), "份", "1", "—", "奖励 %d" % int(definition.get("reward_credit", 0)), _mission_status(current.status) if active else reason if not reason.is_empty() else "可接取")
+		entry.row.set_meta("mission_row", true)
 		if active:
-			var status: Label = _text_to(card, _mission_status(current.status), 16)
-			var progress_rows: Array[Dictionary] = []
-			for objective_def: Dictionary in _defs("mission_objective_defs"):
-				if objective_def.mission_id != current.mission_def_id: continue
-				var progress: Dtos.MissionObjectiveStateDto = _mission_progress(current.mission_instance_id, int(objective_def.objective_index))
-				if progress == null: continue
-				var label: Label = _text_to(card, _objective_description(objective_def) + " · %d/%d" % [progress.progress_units, int(objective_def.required_count)], 14)
-				progress_rows.append({"label": label, "state": progress, "definition": objective_def})
-			live_missions.append({"label": status, "mission": current, "progress": progress_rows})
+			live_missions.append({"label": entry.status, "mission": current, "description": entry.description, "definition": definition, "progress": []})
 			var target: String = _current_mission_target(current)
-			if not target.is_empty() and sector != null and sector.targets.has(target): _button(card, "定位当前目标并继续航行", func(): target_id = target; _back())
-			var deliver: Button = _command(card, "交付任务与实物", "deliver_mission", current.mission_instance_id)
+			if not target.is_empty() and sector != null and sector.targets.has(target):
+				var locate: Button = _button(entry.actions, "定位目标", func(): target_id = target; _back())
+				locate.set_meta("action", "locate_mission")
+				locate.set_meta("target", target)
+			var deliver: Button = _command(entry.actions, "交付任务", "deliver_mission", current.mission_instance_id)
 			deliver.disabled = current.status != "ready" or state.player().docked_station_id != definition.turnin_station_id
-			if current.status == "ready": _text_to(card, "返回 %s；将所需实物带入当前舰或该站仓库。" % _station_name(str(definition.turnin_station_id)), 14)
-			_command(card, "放弃此次任务", "abandon_mission", current.mission_instance_id)
+			_command(entry.actions, "放弃任务", "abandon_mission", current.mission_instance_id)
 		else:
-			var reason: String = _mission_reason(definition, current)
-			_text_to(card, reason if not reason.is_empty() else "可接取", 15)
-			var accept: Button = _command(card, "接取任务" if current == null else "重新接取", "accept_mission", str(definition.mission_id))
+			var accept: Button = _command(entry.actions, "接取任务" if current == null else "重新接取", "accept_mission", str(definition.mission_id))
 			accept.disabled = not reason.is_empty()
 	_update_live_missions()
 
 func _research() -> void:
 	var station_faction: String = str(_one("station_defs", "station_id", state.player().docked_station_id).get("faction_id", ""))
+	var list: VBoxContainer = _business_list("科技与个人设施", "服务费", "数量")
+	list.call("add_section", "势力研究")
 	for definition: Dictionary in _defs("research_defs"):
 		if definition.station_faction_id != station_faction: continue
-		var card: VBoxContainer = _card(str(definition.display_name))
 		var done: bool = _unlocked(str(definition.reward_unlock_id))
-		var reason: String = "已完成研究" if done else ""
+		var reason: String = "已完成研究" if done else _service_reason("manufacture")
 		for prerequisite: Dictionary in _defs("research_prerequisites"):
 			if prerequisite.research_id == definition.research_id and not _unlocked(str(prerequisite.unlock_id)): reason = "需先解锁 " + _unlock_name(str(prerequisite.unlock_id))
 		var reputation: int = int(gameplay.get("economy").call("reputation", station_faction))
 		if not done and reputation < int(definition.required_reputation): reason = "声望 %d/%d" % [reputation, int(definition.required_reputation)]
 		if not done and definition.get("verification_mission_id") != null and not _mission_completed(str(definition.verification_mission_id)): reason = "需先完成 " + _mission_name(str(definition.verification_mission_id))
-		_text_to(card, "费用 %d 信用点 · 需声望 %d
-%s" % [int(definition.required_credit), int(definition.required_reputation), _inputs_text("research_inputs", "research_id", str(definition.research_id))], 14)
-		if not reason.is_empty(): _text_to(card, reason, 14)
-		var button: Button = _command(card, "完成研究", "research", str(definition.research_id))
-		button.disabled = not reason.is_empty() or state.player().credit < int(definition.required_credit)
+		if not done and reason.is_empty(): reason = _materials_reason("research_inputs", "research_id", str(definition.research_id), 1)
+		if not done and state.player().credit < int(definition.required_credit): reason = "信用点不足"
+		var description: String = "解锁 " + _unlock_name(str(definition.reward_unlock_id)) + " · 需声望 %d\n" % int(definition.required_reputation) + _inputs_text("research_inputs", "research_id", str(definition.research_id))
+		var entry: Dictionary = _asset_row(list, str(definition.research_id), "research", str(definition.research_id), str(definition.display_name), description, "项", "1", str(int(definition.required_credit)), str(int(definition.required_credit)), reason if not reason.is_empty() else "可研究")
+		var button: Button = _command(entry.actions, "完成研究", "research", str(definition.research_id))
+		button.disabled = not reason.is_empty()
+	list.call("add_section", "本站个人设施")
 	for definition: Dictionary in _defs("base_module_defs"):
-		var card: VBoxContainer = _card(str(definition.display_name))
 		var built: bool = false
 		for facility: RefCounted in state.rows("base_module_state"):
 			if facility.station_id == state.player().docked_station_id and facility.base_module_id == definition.base_module_id: built = true
-		_text_to(card, "费用 %d 信用点
-%s" % [int(definition.service_fee_credit), _inputs_text("base_module_inputs", "base_module_id", str(definition.base_module_id))], 14)
-		var button: Button = _command(card, "设施已建成" if built else "建造个人设施", "build_base", str(definition.base_module_id))
-		button.disabled = built or not _unlocked(str(definition.required_unlock_id))
-		if not _unlocked(str(definition.required_unlock_id)): _text_to(card, "需解锁 " + _unlock_name(str(definition.required_unlock_id)), 14)
+		var reason: String = "已建成" if built else _service_reason("manufacture")
+		if not _unlocked(str(definition.required_unlock_id)): reason = "需解锁 " + _unlock_name(str(definition.required_unlock_id))
+		if not built and reason.is_empty(): reason = _materials_reason("base_module_inputs", "base_module_id", str(definition.base_module_id), 1)
+		if not built and state.player().credit < int(definition.service_fee_credit): reason = "信用点不足"
+		var service: String = str({"industry": "工业", "repair": "维修", "navigation": "导航", "warehouse": "仓储"}.get(str(definition.service_kind), "站点"))
+		var description: String = "%s设施 · 效率系数 %.2f\n%s" % [service, float(definition.effect_multiplier), _inputs_text("base_module_inputs", "base_module_id", str(definition.base_module_id))]
+		var entry: Dictionary = _asset_row(list, str(definition.base_module_id), "facility", str(definition.base_module_id), str(definition.display_name), description, "座", "1", str(int(definition.service_fee_credit)), str(int(definition.service_fee_credit)), reason if not reason.is_empty() else "可建造")
+		var button: Button = _command(entry.actions, "设施已建成" if built else "建造设施", "build_base", str(definition.base_module_id))
+		button.disabled = not reason.is_empty()
 	_text("已解锁科技与资格", 20)
 	for row: Dtos.UnlockStateDto in state.rows("unlock_state"): _text(_unlock_name(row.unlock_id), 14)
 	for reputation: Dtos.ReputationStateDto in state.rows("reputation_state"):
@@ -1097,20 +1135,166 @@ func _objective_target(definition: Dictionary) -> String:
 	return ""
 
 func _quantity() -> void:
-	_text("操作数量 · 堆叠单位 / 制造批数", 14)
+	var toolbar: HBoxContainer = HBoxContainer.new()
+	toolbar.name = "BusinessQuantityToolbar"
+	toolbar.add_theme_constant_override("separation", 12)
+	body.add_child(toolbar)
+	var heading: Label = _text_to(toolbar, "操作数量", 14)
+	heading.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	heading.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	heading.autowrap_mode = TextServer.AUTOWRAP_OFF
 	quantity_input = SpinBox.new()
 	quantity_input.name = "OperationQuantity"
 	quantity_input.min_value = 1
 	quantity_input.max_value = float(catalog.rule("business_quantity_limit"))
 	quantity_input.step = 1
 	quantity_input.value = clampi(quantity_value, 1, int(quantity_input.max_value))
-	quantity_input.custom_minimum_size.y = 36
-	body.add_child(quantity_input)
+	quantity_input.custom_minimum_size = Vector2(126, 34)
+	quantity_input.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	quantity_input.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	toolbar.add_child(quantity_input)
+	_text_to(toolbar, "物资购买和堆叠按数量；制造按批；舰体交易、单件设备出售固定为 1。", 12).add_theme_color_override("font_color", UISkin.MUTED)
 	quantity_input.value_changed.connect(func(value: float): quantity_value = int(value); _update_quotes())
 
 func _command(parent: Node, title: String, action: String, target: String = "", extra: String = "") -> Button:
 	var uses_quantity: bool = action in ["buy_item", "sell_item", "move_stack", "manufacture", "recover_resource"]
-	return _button(parent, title, func(): requested.emit(action, target, quantity_value if uses_quantity else 1, extra))
+	var button: Button = _button(parent, title, func(): requested.emit(action, target, quantity_value if uses_quantity else 1, extra))
+	button.set_meta("action", action)
+	button.set_meta("target", target)
+	button.set_meta("extra", extra)
+	button.set_meta("uses_quantity", uses_quantity)
+	return button
+
+func _business_list(title: String, price_heading: String = "单价 / 信用点", quantity_heading: String = "数量") -> VBoxContainer:
+	var list: VBoxContainer = BusinessList.new()
+	body.add_child(list)
+	list.call("configure", title, price_heading, quantity_heading)
+	return list
+
+func _asset_row(list: Node, id: String, kind: String, asset_id: String, title: String, description: String, unit: String, quantity: String, unit_price: String, total: String, status: String) -> Dictionary:
+	var entry: Dictionary = list.call("append_row", id, ItemPortraits.texture(kind, asset_id), title, description, unit, quantity, unit_price, total, status)
+	entry.row.set_meta("asset_kind", kind)
+	entry.row.set_meta("asset_id", asset_id)
+	return entry
+
+func _quote_row(entry: Dictionary, fields: Dictionary) -> Dictionary:
+	var row: Dictionary = fields.duplicate()
+	row["label"] = entry.total
+	row["unit_label"] = entry.unit_price
+	row["total_label"] = entry.total
+	row["status_label"] = entry.status
+	row["quantity_label"] = entry.quantity
+	row["row"] = entry.row
+	return row
+
+func _item_unit(id: String) -> String:
+	return str({"module": "件", "ammo": "发", "component": "件", "consumable": "件"}.get(str(_one("item_defs", "item_id", id).get("item_type", "")), "单位"))
+
+func _item_description(id: String) -> String:
+	var definition: Dictionary = _one("item_defs", "item_id", id)
+	if definition.is_empty(): return "物资定义未提供"
+	var category: String = str({"ore": "原矿", "material": "精炼材料", "component": "组件", "ammo": "弹药", "consumable": "消耗品", "module": "舰载模块"}.get(str(definition.item_type), "物资"))
+	var description: String = "%s · 质量 %.2f kg · 容积 %d L" % [category, float(definition.unit_mass_kg), int(definition.unit_volume_l)]
+	var module: Dictionary = _one("module_defs", "module_id", id)
+	if not module.is_empty():
+		description += "\n供能 %.0f · 算力 %.0f" % [float(module.power_pu), float(module.cpu_cu)]
+		if float(module.range_m) > 0: description += " · 作用距离 %.0f m" % float(module.range_m)
+		if float(module.cycle_s) > 0: description += " · 周期 %.1f s" % float(module.cycle_s)
+	return description
+
+func _ship_description(id: String) -> String:
+	var definition: Dictionary = _one("ship_defs", "ship_id", id)
+	if definition.is_empty(): return "舰体定义未提供"
+	var role: Dictionary = _one("ship_role_defs", "ship_id", id)
+	var faction: String = str(_one("faction_defs", "faction_id", str(role.get("faction_id", ""))).get("display_name", ""))
+	return (faction + " · " if not faction.is_empty() else "") + "舰体基准：速度 %.0f m/s · 货舱 %d L · 矿舱 %d L\n护盾 %.0f · 装甲 %.0f · 结构 %.0f" % [float(definition.max_speed_mps), int(definition.cargo_l), int(definition.mineral_cargo_l), float(definition.shield_max), float(definition.armor_max), float(definition.hull_max)]
+
+func _service_reason(service: String) -> String:
+	for definition: Dictionary in _defs("station_service_defs"):
+		if definition.station_id == state.player().docked_station_id and definition.service_id == service:
+			return "" if _unlocked(str(definition.required_unlock_id)) else "站点服务需解锁 " + _unlock_name(str(definition.required_unlock_id))
+	return "本站不提供此项服务"
+
+func _materials_reason(table: String, key: String, id: String, batches: int) -> String:
+	var inventory: RefCounted = gameplay.get("inventory")
+	for ingredient: Dictionary in _defs(table):
+		if str(ingredient.get(key, "")) != id: continue
+		var required: int = int(ingredient.quantity) * batches
+		var available: int = int(inventory.call("count", _warehouse_id(), str(ingredient.item_id), true))
+		if available < required: return "缺少 %s · %d/%d" % [_item_name(str(ingredient.item_id)), available, required]
+	return ""
+
+func _ship_sale_reason(ship: Dtos.ShipStateDto) -> String:
+	var service: String = _service_reason("ship_purchase")
+	if not service.is_empty(): return service
+	if ship.status != Types.ShipStatus.DOCKED or ship.station_id != state.player().docked_station_id or ship.owner_player_id != state.player().player_id: return "仅可出售同站点自有舰体"
+	if ship.ship_instance_id == state.ship().ship_instance_id: return "先切换到另一艘舰船"
+	var stock: Dtos.ShopShipStockStateDto
+	for candidate: Dtos.ShopShipStockStateDto in state.rows("shop_ship_stock_state"):
+		if candidate.station_id == state.player().docked_station_id and candidate.ship_def_id == ship.ship_def_id: stock = candidate
+	var definition: Dictionary = {}
+	for candidate: Dictionary in _defs("station_ship_stock_defs"):
+		if candidate.station_id == state.player().docked_station_id and candidate.ship_id == ship.ship_def_id: definition = candidate
+	if stock == null or definition.is_empty() or stock.quantity >= int(definition.get("hard_cap_units", 0)): return "本站不收购此舰体或库存已满"
+	var price: int = int(gameplay.get("economy").call("quote_ship", ship.ship_instance_id, true))
+	var budget: Dtos.StationEconomyStateDto = state.find("station_economy_state", "station_id", state.player().docked_station_id)
+	if budget == null or budget.buyback_remaining_credit < price: return "本站回购预算不足"
+	for equipped: Dtos.EquipmentStateDto in gameplay.call("equipped", ship):
+		var item: Dtos.ItemInstanceStateDto = state.find("item_instance_state", "item_instance_id", equipped.item_instance_id)
+		if item != null and item.policy_id != "normal_owned": return "先处理舰上绑定设备"
+	return ""
+
+func _fitting_reason(item: Dtos.ItemInstanceStateDto, metrics: Dictionary) -> String:
+	var service: String = _service_reason("fitting")
+	if not service.is_empty(): return service
+	var tech: Dictionary = _one("module_tech_defs", "module_id", item.item_def_id)
+	if not tech.is_empty() and not _unlocked(str(tech.required_unlock_id)): return "需解锁 " + _unlock_name(str(tech.required_unlock_id))
+	var module: Dictionary = _one("module_full_defs", "module_id", item.item_def_id)
+	if module.is_empty(): return "缺少模块定义"
+	if float(metrics.power_used) + float(module.power_pu) > float(metrics.power_capacity) or float(metrics.cpu_used) + float(module.cpu_cu) > float(metrics.cpu_capacity) or float(metrics.installed_mass_kg) + float(module.mass_kg) > float(metrics.max_installed_mass_kg): return "供能、算力或安装质量超限"
+	var equipped: Array = gameplay.call("equipped", state.ship())
+	var same: int = 0
+	for other: Dtos.EquipmentStateDto in equipped:
+		if other.module_def_id == item.item_def_id: same += 1
+	if module.get("max_per_ship") != null and same >= int(module.max_per_ship): return "同类设备数量超限"
+	for member: Dictionary in _defs("module_group_members"):
+		if str(member.module_id) != item.item_def_id: continue
+		var group: Dictionary = _one("module_exclusion_groups", "group_id", str(member.group_id))
+		var installed: int = 0
+		for other: Dtos.EquipmentStateDto in equipped:
+			for other_member: Dictionary in _defs("module_group_members"):
+				if other_member.module_id == other.module_def_id and other_member.group_id == member.group_id: installed += 1
+		if installed >= int(group.get("max_installed", 0)): return "互斥设备组数量超限"
+	return ""
+
+func _recycle_reason(item: Dtos.ItemInstanceStateDto) -> String:
+	var service: String = _service_reason("recycle")
+	if not service.is_empty(): return service
+	if not bool(_one("asset_policy_defs", "policy_id", item.policy_id).get("may_recycle", false)): return "受保护设备不可拆解"
+	if state.find("equipment_state", "item_instance_id", item.item_instance_id) != null: return "先卸下设备"
+	if state.player().credit < int(catalog.rule("recycle_service_fee_credit")): return "信用点不足"
+	if item.origin_kind == Types.ItemOrigin.MANUFACTURE:
+		for ledger: RefCounted in state.rows("manufacture_input_state"):
+			if ledger.item_instance_id == item.item_instance_id: return ""
+		return "缺少合法材料追溯账本"
+	if item.salvage_recipe_id.is_empty(): return "设备没有冻结拆解来源"
+	for ingredient: Dictionary in _defs("recipe_inputs"):
+		if str(ingredient.recipe_id) == item.salvage_recipe_id: return ""
+	return "缺少合法材料追溯账本"
+
+func _mission_list_description(definition: Dictionary, current: Dtos.MissionStateDto) -> String:
+	var description: String = "接取 " + _station_name(str(definition.accept_station_id)) + " · 交付 " + _station_name(str(definition.turnin_station_id))
+	if current == null or current.status not in ["active", "ready"]:
+		for objective_def: Dictionary in _defs("mission_objective_defs"):
+			if str(objective_def.mission_id) == str(definition.mission_id): description += "\n" + _objective_description(objective_def)
+		return description
+	for objective_def: Dictionary in _defs("mission_objective_defs"):
+		if objective_def.mission_id != current.mission_def_id: continue
+		var progress: Dtos.MissionObjectiveStateDto = _mission_progress(current.mission_instance_id, int(objective_def.objective_index))
+		if progress == null: continue
+		description += "\n" + _objective_description(objective_def) + " · %d/%d" % [progress.progress_units, int(objective_def.required_count)]
+	if current.status == "ready": description += "\n将所需实物带入当前舰或交付站仓库。"
+	return description
 
 func _button(parent: Node, title: String, callback: Callable) -> Button:
 	var button: Button = Button.new()
@@ -1320,6 +1504,9 @@ func _update_hud_visibility() -> void:
 func _responsive() -> void:
 	if not is_instance_valid(root): return
 	var compact: bool = root.size.x < 950
+	# Hide tall navigation before resizing; its previous minimum otherwise
+	# clamps the panel and leaves stale offsets after a page/scale change.
+	if is_instance_valid(sidebar): sidebar.visible = state != null and page not in ["title", "settings"] and not compact
 	var safe: float = 14.0 if compact else 22.0
 	var sidebar_width: float = 206.0 if compact else 300.0
 	var left_width: float = 180.0 if compact else 316.0
@@ -1479,7 +1666,6 @@ func _responsive() -> void:
 		panel.offset_top = maxf(safe, operation_bar.position.y + operation_bar.size.y + 8) if is_instance_valid(operation_bar) and operation_bar.visible else safe
 		panel.offset_bottom = -52
 		if page == "title": _responsive_title()
-	if is_instance_valid(sidebar): sidebar.visible = state != null and page not in ["title", "settings"] and not compact
 	if is_instance_valid(panel):
 		var selector: OptionButton = panel.find_child("PageSelector", true, false)
 		if selector != null: selector.visible = compact
@@ -1585,6 +1771,10 @@ func _update_live_missions() -> void:
 		if not is_instance_valid(row.label): continue
 		var mission: Dtos.MissionStateDto = row.mission
 		row.label.text = _mission_status(mission.status) + (" · 剩余 %.0f 秒" % mission.deadline_remaining_s if mission.has_deadline_remaining_s else "")
+		row.label.tooltip_text = row.label.text
+		if row.has("description") and is_instance_valid(row.description):
+			row.description.text = _mission_list_description(row.definition, mission)
+			row.description.tooltip_text = row.description.text
 		for entry: Dictionary in row.progress:
 			if is_instance_valid(entry.label): entry.label.text = _objective_description(entry.definition) + " · %d/%d" % [entry.state.progress_units, int(entry.definition.get("required_count", 1))]
 
@@ -1682,14 +1872,22 @@ func _update_quotes() -> void:
 		if not is_instance_valid(row.label) or not is_instance_valid(row.button): continue
 		var quantity: int = int(row.get("fixed", 1 if row.kind == "ship" else quantity_value))
 		var price: int = 0
-		if row.kind == "ship": price = int(economy.call("quote_ship", str(row.id), bool(row.selling)))
-		elif row.kind == "recipe": price = int(economy.call("quote_manufacture", str(row.id), quantity))
-		else: price = int(economy.call("quote", str(row.id), quantity, bool(row.selling)))
+		var unit_price: int = 0
 		var selling: bool = bool(row.get("selling", false))
-		var reason: String = ""
+		if row.kind == "ship":
+			price = int(economy.call("quote_ship", str(row.id), selling))
+			unit_price = price
+		elif row.kind == "recipe":
+			price = int(economy.call("quote_manufacture", str(row.id), quantity))
+			unit_price = int(economy.call("quote_manufacture", str(row.id), 1))
+		else:
+			price = int(economy.call("quote", str(row.id), quantity, selling))
+			unit_price = int(economy.call("quote", str(row.id), 1, selling))
+		var reason: String = _service_reason(str(row.service)) if row.has("service") else ""
 		if not _unlocked(str(row.get("unlock", ""))): reason = "需解锁 " + _unlock_name(str(row.get("unlock", "")))
 		if row.has("policy") and not bool(_one("asset_policy_defs", "policy_id", str(row.policy)).get("may_sell", false)): reason = "保护 / 绑定资产不可出售"
 		if row.has("maximum") and quantity > int(row.maximum): reason = "数量超过现有库存"
+		if row.has("inputs_table") and reason.is_empty(): reason = _materials_reason(str(row.inputs_table), str(row.inputs_key), str(row.id), quantity)
 		if selling:
 			var stock: Dtos.ShopStockStateDto
 			for current_stock: Dtos.ShopStockStateDto in state.rows("shop_stock_state"):
@@ -1699,7 +1897,17 @@ func _update_quotes() -> void:
 			if stock == null or quantity > stock.buyback_remaining_units or stock.quantity + quantity > int(definition.get("hard_cap_units", 0)): reason = "本站本轮回购数量额度不足"
 			elif budget != null and budget.buyback_remaining_credit < price: reason = "本站本轮回购预算不足"
 		if not selling and state.player().credit < price: reason = "信用点不足"
-		row.label.text = ("实收" if selling else "含税总价" if row.kind != "recipe" else "生产服务费") + " %d 信用点 · 数量 %d" % [price, quantity] + ("\n" + reason if not reason.is_empty() else "")
+		row.label.text = str(price)
+		row.label.set_meta("quote_amount", price)
+		row.label.tooltip_text = ("实收" if selling else "含税总价" if row.kind != "recipe" else "生产服务费") + " %d 信用点；成交数量 %d。" % [price, quantity]
+		if is_instance_valid(row.get("unit_label")):
+			row.unit_label.text = str(unit_price)
+			row.unit_label.set_meta("quote_amount", unit_price)
+			row.unit_label.tooltip_text = ("每单位实收" if selling else "每批服务费" if row.kind == "recipe" else "每单位含税价格") + " %d 信用点；总价按实际成交量独立计算，包含整数税费舍入。" % unit_price
+		if is_instance_valid(row.get("quantity_label")): row.quantity_label.text = str(quantity)
+		if is_instance_valid(row.get("status_label")):
+			row.status_label.text = str(row.get("status_prefix", "")) + ("\n" if not str(row.get("status_prefix", "")).is_empty() else "") + (reason if not reason.is_empty() else "可成交" if row.kind != "recipe" else "可生产")
+			row.status_label.tooltip_text = row.status_label.text
 		row.button.disabled = not reason.is_empty()
 
 func _mission_rank(definition: Dictionary) -> int:
@@ -2054,6 +2262,13 @@ func _focus_controls(node: Node) -> Array[Control]:
 		result.append_array(_focus_controls(child))
 	return result
 
+func _reveal_page_control(control: Control) -> void:
+	if not is_instance_valid(control): return
+	var ancestor: Node = control.get_parent()
+	while ancestor != null:
+		if ancestor is ScrollContainer: ancestor.ensure_control_visible(control)
+		ancestor = ancestor.get_parent()
+
 func _focus_page() -> void:
 	if not is_instance_valid(body) or page.is_empty():
 		root.get_viewport().gui_release_focus()
@@ -2062,6 +2277,11 @@ func _focus_page() -> void:
 	if is_instance_valid(operation_bar) and operation_bar.visible:
 		entries.append_array(_focus_controls(operation_bar))
 	for index: int in range(entries.size()):
+		# Business row actions already reveal both nested axes. Bind the other
+		# page controls once, avoiding two scroll owners applying the same delta.
+		if not bool(entries[index].get_meta("business_focus_bound", false)):
+			entries[index].focus_entered.connect(_reveal_page_control.bind(entries[index]))
+			entries[index].set_meta("business_focus_bound", true)
 		entries[index].focus_next = entries[(index + 1) % entries.size()].get_path()
 		entries[index].focus_previous = entries[(index - 1 + entries.size()) % entries.size()].get_path()
 		entries[index].focus_neighbor_bottom = entries[index].focus_next

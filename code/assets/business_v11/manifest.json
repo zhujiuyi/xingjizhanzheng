@@ -1,0 +1,1552 @@
+{
+  "format_version": 1,
+  "asset_version": "business-v11-industrial-lists",
+  "scope": "Baked business portraits and ID-to-art mapping only. Definitions, prices, quantities, power and persistence remain exclusively in SQLite.",
+  "authoring": {
+    "origin": "Project-authored SVG geometry; ship portraits are native Godot captures of the project's formal original ship_v3 GLBs with the existing PBR surface style.",
+    "license": "Original project artwork. Existing model/material dependency provenance remains in assets/ship_v3/manifest.json and assets/interface_v2/manifest.json.",
+    "svg_source": "jiaoben/art/build_business_v11.py",
+    "ship_renderer": "jiaoben/art/render_business_v11.gd",
+    "ship_image_size": [
+      256,
+      256
+    ],
+    "svg_viewbox": [
+      256,
+      256
+    ],
+    "runtime_policy": "Prebaked PNG/SVG imported by Godot; shared Texture2D cache; no frame-time portrait rendering.",
+    "unknown_id_policy": "Category-specific generic art. Unknown ships use an unidentified crate/question mark, never an invented specific hull."
+  },
+  "source_assets": [
+    {
+      "resource_path": "res://assets/ship_v3/battleship_bastion.glb",
+      "sha256": "9083a717cfaea0cfb1c0e9630302544835c67d9ff32a649e5a2b9f7b6b857440"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/cruiser_horizon.glb",
+      "sha256": "0cfe63ce700382aaf65967dd62110844cdedc32dac04b8ae99f5e5930507c29d"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/destroyer_raptor.glb",
+      "sha256": "dc7559bd2afaa8c491c3f45764cd5eafb0e73de9e7495978f6689fd2ba3a6628"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/frigate_kestrel.glb",
+      "sha256": "3fcd8dc99386dddc76365604925a925dc7500ad05fa09e5ad56d38634381f111"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/frigate_lantern.glb",
+      "sha256": "750638ec135e7d10248ea8c67d3b5ab10dac85575029ff0414b1106e2c546533"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/miner_anvil.glb",
+      "sha256": "15078f6a5d7c8ed0e4877ccf91b906fbdae291710539a3958f93839c5d36d264"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/shuttle_swift.glb",
+      "sha256": "6fadacfdaa52898c9d9a8fa2728b33fdf1e06c8c4fe0743ebb707f8aae7d1bb7"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/support_weaver.glb",
+      "sha256": "b1ca3e8318c74e86d9a8cecab4b4f97ef41d80d9659a2421d05c28224df18850"
+    },
+    {
+      "resource_path": "res://assets/ship_v3/transport_caravan.glb",
+      "sha256": "9e132d34cd7bf34bd3f75925d0339511f18dbc7b7ee95f9dd26796a8efb872fd"
+    }
+  ],
+  "resources": [
+    {
+      "resource_path": "res://assets/business_v11/facility/base_industry.svg",
+      "sha256": "45b263b937d0272743c5f70aa1644f54ff131d19858fd3c8375d67d89a9909aa",
+      "size_bytes": 1844
+    },
+    {
+      "resource_path": "res://assets/business_v11/facility/base_navigation.svg",
+      "sha256": "5f87a643334e6e201afa6909e615c3b2a590d75c7e78cdc8db7c767479f46eaa",
+      "size_bytes": 1934
+    },
+    {
+      "resource_path": "res://assets/business_v11/facility/base_repair.svg",
+      "sha256": "f100a636bd65f2b158c8b9d16148ee25293e6b3ba5edff7c5735dbf581f601ec",
+      "size_bytes": 1853
+    },
+    {
+      "resource_path": "res://assets/business_v11/facility/base_warehouse.svg",
+      "sha256": "7ff7018322b1a2d8140f69176f33c45b63c9fd54167c49a45b66f819e146b2c4",
+      "size_bytes": 1899
+    },
+    {
+      "resource_path": "res://assets/business_v11/generic/blueprint.svg",
+      "sha256": "83e49fdde02e7fead6280909ab5b34a432d4c6dcd562e01936d7baf2f09356b3",
+      "size_bytes": 1727
+    },
+    {
+      "resource_path": "res://assets/business_v11/generic/facility.svg",
+      "sha256": "c39e1d8ba576f7e483648a77b6ca6de955671ac6f5e66b112f19e24e6608b76c",
+      "size_bytes": 1786
+    },
+    {
+      "resource_path": "res://assets/business_v11/generic/item.svg",
+      "sha256": "2c7568b0d47c5a6b9382b39fb9ba7f72cc73a583e5efcbdd3b97d87da0cb3b6e",
+      "size_bytes": 1830
+    },
+    {
+      "resource_path": "res://assets/business_v11/generic/mission.svg",
+      "sha256": "ffb3fd7ff80a956449c6ec6dab97ceb45cd7710c7b7809121d1b35fbbb557a1a",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/generic/research.svg",
+      "sha256": "4fb6baa0c0139e1032707883faccdd38a907ac89d7eaf780ed89be9ba6ebd0b8",
+      "size_bytes": 1793
+    },
+    {
+      "resource_path": "res://assets/business_v11/generic/ship.svg",
+      "sha256": "f2327c765d1897227608348d88b42292276bfc9d40a8ee289e8faa374e658b21",
+      "size_bytes": 1830
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/ammo_kinetic_slug_i.svg",
+      "sha256": "d3ce8c72b375f37e67cd8ca98fdbd76160728b80b02c43056b34948cfcd334ab",
+      "size_bytes": 1774
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_anchor_ceramic.svg",
+      "sha256": "31633812776dac3e7c4d1a1c6940506e9a0a5b742ec5cd41686a7de48b82877b",
+      "size_bytes": 1797
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_fire_control.svg",
+      "sha256": "c9dee4f6e747dad06485bbe54599f3296b42eed8a8a42552a026b607371efe3d",
+      "size_bytes": 1959
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_industry_control.svg",
+      "sha256": "770104d454145ee3b6b02d5513db274de2d02a6e55c22e64dfa5c8f79ceb49d1",
+      "size_bytes": 1898
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_mist_fiber.svg",
+      "sha256": "a2381a2542ea83efbbc53210c24a9dc0e2be6040bd9843cc719e085d67677263",
+      "size_bytes": 1894
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_power_cell.svg",
+      "sha256": "d871a569cf77699c32d55112e73841a79ca208f339e18c74cf4f75188fbf1440",
+      "size_bytes": 1813
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_projection_control.svg",
+      "sha256": "2eab2cca9c1111fca0f9a382ab914d48d5254063ed9bc5d3ca83653d73141301",
+      "size_bytes": 1931
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_pulse_ring.svg",
+      "sha256": "99131c067f966c27d27d42c8379aac9a56200197c1663b6f37ded62bb92dc660",
+      "size_bytes": 1912
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_relic.svg",
+      "sha256": "794b1bf5931d4f4cccb22b17017128026a46ef6df9a249bc34c6571d95ea03a2",
+      "size_bytes": 1824
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_relic_logic.svg",
+      "sha256": "981fffbf162be53cd52f4b1f9b796803c59bf4350e0f5c1fff7ed1259af759a0",
+      "size_bytes": 2005
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_repair_mesh.svg",
+      "sha256": "7d56b6de6168a41bde2840d2d9fd72875c96836ec7f86cccee86cca8f899023f",
+      "size_bytes": 1805
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_scan_frame.svg",
+      "sha256": "7787c53972404c06b0c4f776cc5e3cbd2acec8900be70e2640a9903cda273860",
+      "size_bytes": 1849
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_sensor_core.svg",
+      "sha256": "773b78c5be4a82d082482386eb59396bb354cab39665fa37a27d9dbbdd98f069",
+      "size_bytes": 1898
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_thermal_focus.svg",
+      "sha256": "6462cf7251581305ed7ff46877ba16e7a9f259756ec54176097d02ce112c6994",
+      "size_bytes": 1986
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_thruster_cluster.svg",
+      "sha256": "0a39a0e31f3bce0d27258f703de6297bca5e264247fc24db9e68a98aaf219a8c",
+      "size_bytes": 1948
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/component_weapon_frame.svg",
+      "sha256": "dd6d90caa7487942063e232b3715d9cfe6a67585745331dee7cacba13590b181",
+      "size_bytes": 1846
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/material_conductive_medium.svg",
+      "sha256": "0de3440648134affe0302534600a552fb7fd70e2bb8c76888af6209d68b71564",
+      "size_bytes": 1799
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/material_dense_alloy.svg",
+      "sha256": "32a6606654605734f8717d314e24d0bebf3686eead55f77a89d585a563860865",
+      "size_bytes": 1836
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/material_feather_alloy.svg",
+      "sha256": "d0ae41d4a5e54db1b90d089a9c14e123e3a48a43c535022006c8d676c5b77b29",
+      "size_bytes": 1908
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/material_pressure_stock.svg",
+      "sha256": "55fc2f1aff8d0f083118da061d9a1591753f4264a50845fbf9b79da453e62eff",
+      "size_bytes": 1920
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/material_structural_stock.svg",
+      "sha256": "89f60adbd63484bd09c0ebf7857be88a14d95fa44f5f8dc9289d5432c9bc3356",
+      "size_bytes": 1787
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_armor_feather_i.svg",
+      "sha256": "2e8cf99c9af590cd0bb1943e88abb1ce25bb7af65007de4c311aabe528708037",
+      "size_bytes": 1956
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_armor_feather_ii.svg",
+      "sha256": "18d0a5b3d95c64dc0aaefca73f75ce6956cc1dd442d8db2669db3a148680e19a",
+      "size_bytes": 2013
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_armor_feather_iii.svg",
+      "sha256": "9baddd6093bf474c6d38e3d7011d9f2de1f97eb4dd2d7ad8e93d3e70807f2366",
+      "size_bytes": 2070
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_armor_pressure_i.svg",
+      "sha256": "e4531e6175263dea518709c2fc41d153fe0f93df1e767dde72545d3bffec00b0",
+      "size_bytes": 1989
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_armor_pressure_ii.svg",
+      "sha256": "ad7abe98ca016b6515e54f1bdbd1fc55d9f86ed13904c79f9f26ab8b90d4d0a7",
+      "size_bytes": 2046
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_armor_pressure_iii.svg",
+      "sha256": "e8d2c65cb300de5ffc3390d6f465bfdda3214f9e6ad7308c13efaae8cb1f12af",
+      "size_bytes": 2103
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_engine_vector_i.svg",
+      "sha256": "ad3982017e44e85bcb3f5eb2c384af3d1393e4a065820c5028ed7c5e03c319ee",
+      "size_bytes": 2179
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_engine_vector_ii.svg",
+      "sha256": "9ec6b06aa5e3fe88ab6ff1d7bb5f9158f61fbd4ee36ffb3eaa2bd85706df8222",
+      "size_bytes": 2236
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_engine_vector_iii.svg",
+      "sha256": "528673fcf53805e43f06d27670d1ac8de34dfef74141bee69a530d66cfc53b8c",
+      "size_bytes": 2293
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_industry_sift_i.svg",
+      "sha256": "96f4f88b78e2a4ea71f18e2d7e0c7c4ff8a11fad339db5dc4bdc8eadc8a1437f",
+      "size_bytes": 2050
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_industry_sift_ii.svg",
+      "sha256": "0e123dc1f3900a876b078ddd5143fadb4fa2803ccf85cf52d0de8a03f4d5ffd4",
+      "size_bytes": 2107
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_industry_sift_iii.svg",
+      "sha256": "e2cbb7b6aeac82e39e8263227d3abe003542326c0eac6ae12bea1e208d4f6e01",
+      "size_bytes": 2164
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_kinetic_needle_i.svg",
+      "sha256": "d7e3f541d8cf1bc1cee97282969b312d983ebe971226a87d03078a5f76403ed0",
+      "size_bytes": 2080
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_kinetic_needle_ii.svg",
+      "sha256": "4b716ace159bb864cea7494375b6228f9c86ae7c4d66cb7c9e7f9e669bee46f4",
+      "size_bytes": 2137
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_kinetic_needle_iii.svg",
+      "sha256": "292d995d723646c68f591fe5fbe2efe1d6593d8f917a0e9e560f7544be22b381",
+      "size_bytes": 2194
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_pulse_breakwater_i.svg",
+      "sha256": "88efd9c1dbb40c4b62c0734ff40b1746f23294e82b4968fdb7b3787421d6151a",
+      "size_bytes": 2112
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_pulse_breakwater_ii.svg",
+      "sha256": "9ca8d0b86cf8180f6ed84257246e47d58ff7f839bc5322121a027b63131da402",
+      "size_bytes": 2169
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_pulse_breakwater_iii.svg",
+      "sha256": "7bc426f73ccf231499a6ce9d1796ee008b806c7da8a765b58b8413ee844c9946",
+      "size_bytes": 2226
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_scanner_beacon_i.svg",
+      "sha256": "c8cc4d70c85c509ada446fcdf91645e7053399fcf9b7094c19b87010e31066a8",
+      "size_bytes": 2047
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_scanner_beacon_ii.svg",
+      "sha256": "6175d6a7c2102ee13a1b62dcfa7fdb70fdccbe17eef1dcb621f9f791b4c6a141",
+      "size_bytes": 2104
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_scanner_beacon_iii.svg",
+      "sha256": "9c3772dc6c2ccd263d76d2690cbf6e13988f2f118af214a7f18b8de331739adf",
+      "size_bytes": 2161
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_shield_lattice_i.svg",
+      "sha256": "cadc7c6570e14b5f8199eec8bc333e92f49e94c6045bf5b9bf84a49d921ea099",
+      "size_bytes": 1992
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_shield_lattice_ii.svg",
+      "sha256": "32ca28996a6516de5927d62cee9d947d326372da401eb4d2f5c84f6db1f876cb",
+      "size_bytes": 2049
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_shield_lattice_iii.svg",
+      "sha256": "81f1f639e3342bac1589edba6404deb81b8f1a8ea234040668a76ea90e3a69c5",
+      "size_bytes": 2106
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_support_patch_i.svg",
+      "sha256": "af759cb89059519d4c94735ddfd58d0a942490697b26573d433c19c30be2d2ad",
+      "size_bytes": 2041
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_support_patch_ii.svg",
+      "sha256": "5b93c33c8926307b4ca83108999ebfdaac96050466173595843b6cb6ffe7f6f9",
+      "size_bytes": 2098
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_support_patch_iii.svg",
+      "sha256": "3c9ac8dc636ca9b2db7dc9bb69be2a3640a61e15970e1c645e3dfd8af48a6e6e",
+      "size_bytes": 2155
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_thermal_sunline_i.svg",
+      "sha256": "8737183cd9b88ca710191715f65ac2ab403883eae7785fcc1dd7b648c44b23a4",
+      "size_bytes": 2044
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_thermal_sunline_ii.svg",
+      "sha256": "8c9cf6a5e37eea4ab2196e50c095443c8fb1351360b8536e3d87708ad8d6182f",
+      "size_bytes": 2101
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_thermal_sunline_iii.svg",
+      "sha256": "c2442655e3e6473251cb3545db828775a091995006242a2e5fa101254b6ad2b5",
+      "size_bytes": 2158
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/ore_conductive_crystal.svg",
+      "sha256": "81c415d866401c015c3dc970d6148b93657ed1e3a0ff72abd2efedc04a91fce1",
+      "size_bytes": 2072
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/ore_corrosion_titanium.svg",
+      "sha256": "014dcd9bcca0054fe7e5dc0af23e61180e3bf17f4079749da28f6232d160081c",
+      "size_bytes": 1940
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/ore_echo_silica.svg",
+      "sha256": "49b9be75083e83baf60cd5c9b897355dd813cd9e1d030574f2d03c250e656b17",
+      "size_bytes": 2024
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/ore_ferrosilicate.svg",
+      "sha256": "35e946b1d934924642801db8714bd504d5320d6a4c56826e913a93b21bded9ed",
+      "size_bytes": 1939
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/ore_mirror_crystal.svg",
+      "sha256": "13a52f220fa1f0ef67c34471f70dce90f51e20561165039f9efc32dc49e042f6",
+      "size_bytes": 2072
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/ore_phase_stone.svg",
+      "sha256": "8d9b742bd3c00383c8dbe24e9614560a4eaf8f9217a367f2b0855f1981ce209a",
+      "size_bytes": 2023
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/ore_pressure_steel.svg",
+      "sha256": "537ce57b8df404fde8e8d7185a4ae51da9fc17a217eeb9f5cf2fba1efe25196e",
+      "size_bytes": 1939
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/ore_solar_core.svg",
+      "sha256": "2474a06e9b20849667ee758db20947f64f1da5820bad403adb50c629065da760",
+      "size_bytes": 2072
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/repair_kit_i.svg",
+      "sha256": "3327e68f9aa2fb5b98b75475b19440377a06b29ac7f7f1fc875c288abb615e9d",
+      "size_bytes": 1844
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_drift_combat.svg",
+      "sha256": "a8a0b87a4ee590f2b71547e3436d1b2b31c5eff8566a821da7a0f18cefe390be",
+      "size_bytes": 1783
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_drift_delivery.svg",
+      "sha256": "94d6b08b7a1c1a91b46c6e978bf4643b3a46af274a0cc60a1801b37c81e656bc",
+      "size_bytes": 1751
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_drift_survey.svg",
+      "sha256": "5400a24e2ad24c8591f9841d78e109d783e0f5e6c1b37cf447db75804750db98",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_forge_combat.svg",
+      "sha256": "7d5fd75fe960ec322ed85c74f41bcbe0dbca4b5205c2fea58fefbb2ff7619a3a",
+      "size_bytes": 1783
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_forge_delivery.svg",
+      "sha256": "fccd9c18a5229d260bc18722b6b45bbf8eba6cbac75508354e0c669d3acbe019",
+      "size_bytes": 1751
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_forge_survey.svg",
+      "sha256": "c54d1413a5946ae0667db37fbb3685dc88fc02460dbfe7abeb9832fe0783a552",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_helios_combat.svg",
+      "sha256": "c05388efcc0f6741a78befdd3ffc8422626b6236cfad9d3e9f8a3bf1c82af4e6",
+      "size_bytes": 1783
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_helios_delivery.svg",
+      "sha256": "c8463113a0176e20dc290ba44ce0979b63b80967f2f95a77b131bb94a6e4a8cc",
+      "size_bytes": 1751
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_helios_survey.svg",
+      "sha256": "b427f41613bc03d94810213d267c257f8b4ff97586399fcf497d7255933efb95",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_iron_combat.svg",
+      "sha256": "85e4f8ebf6a149e64db3eca94e6cfd8f77d1a7252e9dd0f05364b26c93717f3e",
+      "size_bytes": 1783
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_iron_delivery.svg",
+      "sha256": "df8435790b22f1fab4285f7990d92e8b3ba45dcaa736e05a63a92293c4702c53",
+      "size_bytes": 1751
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_iron_survey.svg",
+      "sha256": "bed90754b05075b6187c6fb1d92637f6a949154690071e2f26ee896a5c4664ac",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_mining_iron.svg",
+      "sha256": "c3405fc1c74ce5b066b8e2732effb301e54c8f4e570c042b32e6d9f8a6e5c5fb",
+      "size_bytes": 1751
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_mirror_combat.svg",
+      "sha256": "3d0f0eefc19d3b16d005d4779b02e62b3a3702877409fe044f0b44cd431554ef",
+      "size_bytes": 1783
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_mirror_delivery.svg",
+      "sha256": "68bbd3dac6aef8f34b3833168c7b8e4573218cf8e3e76c73c28af27ce2296419",
+      "size_bytes": 1751
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_mirror_survey.svg",
+      "sha256": "9c0119cc0cad4cacc29a757535422d5962714279f672b6dfdd0a64b4f9c16c2d",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_mist_combat.svg",
+      "sha256": "ae56ccefa5e71aec5df7f75f91453fe4dc1e13c7908de86fac979801b8f9ed73",
+      "size_bytes": 1783
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_mist_delivery.svg",
+      "sha256": "8c937400359ff7b933ba5870ec379b336c15a4405b4df1f1d8f07608ef11d063",
+      "size_bytes": 1751
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_mist_survey.svg",
+      "sha256": "38a595a8388cd86e2f29e41c82b8cee050c9f9c3704822c8877fc35b4b8d406c",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_patrol_echo.svg",
+      "sha256": "f938a086dc2b695fe348cb50fda275fa24c021cbec8d6e2278b0bb01e847c1c0",
+      "size_bytes": 1783
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_rift_combat.svg",
+      "sha256": "2f18527ca9ab4e506edd03366e51a23d290cdf7a2c2a65658e5d0e2ec21d0f9e",
+      "size_bytes": 1783
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_rift_delivery.svg",
+      "sha256": "46f10db3550cba46c690c630d2d25bd6ea7f9938b02b19561786601cad1216de",
+      "size_bytes": 1751
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_rift_survey.svg",
+      "sha256": "a4801089c248574e14e64d00393835a0225b9f3255e6a28fe4caf8736b041723",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_silent_combat.svg",
+      "sha256": "be62c19e49cce683a8ecad1e0c02c7c16c692820cf53c6de0f84b0e09e70d9f5",
+      "size_bytes": 1783
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_silent_delivery.svg",
+      "sha256": "1741ff1291357d407cfe596b04d00c7c9fe48032a6b9918ea8ad67fa9681f2d3",
+      "size_bytes": 1751
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_silent_survey.svg",
+      "sha256": "757322d631e154f414170b54084b7b7286e5de60cebb023838dec0d20701ebd4",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/contract_survey_echo.svg",
+      "sha256": "ea86d3b877f5d4ee4ee557552f8a21239d81bd543e53470a5c9d22c4b5a6b75c",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/story_drift.svg",
+      "sha256": "d1a4e777fff65318142fd174b3945d5a1f9137c746bae5590b27db58c183ee33",
+      "size_bytes": 1763
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/story_forge.svg",
+      "sha256": "209c8f8068b8b8a27819ec1c93d72fb8f7165e8b17bc280ae441b3f158388745",
+      "size_bytes": 1763
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/story_helios.svg",
+      "sha256": "0d0abb4c0b6baa719b9ec17ecc14ee90f09cf4f7d6d3ba4abd7d12bb84b26606",
+      "size_bytes": 1763
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/story_iron.svg",
+      "sha256": "48bfcb0f95094e8d716a70a2688fb9fc8fa7cba6709607b0bae8de94b278b272",
+      "size_bytes": 1763
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/story_mirror.svg",
+      "sha256": "d9132d01f5763836b851bdfdac7f894b3692f9ce265323c1c26fcda7b0fcaab9",
+      "size_bytes": 1763
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/story_mist.svg",
+      "sha256": "f7af791816e5be96b392126a66610832dff56bd6cf8f69ff689a4a2c1bebdca9",
+      "size_bytes": 1763
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/story_rift.svg",
+      "sha256": "cd385f7e8c048b60747c25b1966c5c3c144224a44e49fcca9c40a315e1ef29b5",
+      "size_bytes": 1763
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/story_silent.svg",
+      "sha256": "513c9dca637304222aeaf53ba3d0c539c87f19daa118770636e1f07555e8d6ce",
+      "size_bytes": 1763
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/tutorial_combat.svg",
+      "sha256": "4c1834e15f17e847a588d1eb6bd5548459996fa97bd97c43218bc7ec855ba88b",
+      "size_bytes": 1783
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/tutorial_exploration.svg",
+      "sha256": "56ab4901779d1e7e566948d5a0d86016e5f12b7ef30df49c9296fc8726d7eb8f",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/tutorial_flight.svg",
+      "sha256": "f396508212d32690fa7c0426bd50fe1ed237b991e52f2389637732a002f0dbbf",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/tutorial_mining_delivery.svg",
+      "sha256": "e891336d232366ed22627353fdc5d396c348fea595d29bfb48d5cb17196b5e56",
+      "size_bytes": 1751
+    },
+    {
+      "resource_path": "res://assets/business_v11/mission/tutorial_scan_gate.svg",
+      "sha256": "104d2ab3d7824773a1d3a517ce83e94ae550bda3804a234b079b814a25726b45",
+      "size_bytes": 1814
+    },
+    {
+      "resource_path": "res://assets/business_v11/research/research_base.svg",
+      "sha256": "102de59d93e4c6bcf7cd1a1568000ed3337a9b494c7407a3c9a261d56570b669",
+      "size_bytes": 1836
+    },
+    {
+      "resource_path": "res://assets/business_v11/research/research_hulls.svg",
+      "sha256": "30c184d3a332edbdfa3f87fae2245886b2eda0a330b99e920655aecade1c6335",
+      "size_bytes": 1845
+    },
+    {
+      "resource_path": "res://assets/business_v11/research/research_tech_ii.svg",
+      "sha256": "25b925b768efe23575b3f7c94abba8c40569d1969ad2fe7a89ad6b4ca274171e",
+      "size_bytes": 1793
+    },
+    {
+      "resource_path": "res://assets/business_v11/research/research_tech_iii.svg",
+      "sha256": "bd0628545c881b3fecc5b5fdf182689f0e9ee068ac307c70eb50a5a1a535d7b0",
+      "size_bytes": 1843
+    },
+    {
+      "resource_path": "res://assets/business_v11/ships/battleship_bastion.png",
+      "sha256": "5a529a18806afc974e5bc720dcf09fd0db64717ab315fd8817a0d40f5062979a",
+      "size_bytes": 30366
+    },
+    {
+      "resource_path": "res://assets/business_v11/ships/cruiser_horizon.png",
+      "sha256": "2bb07a4e264d7334e6530f6c6dc5933046f8fe4b653da9b58676f1d057874efd",
+      "size_bytes": 28221
+    },
+    {
+      "resource_path": "res://assets/business_v11/ships/destroyer_raptor.png",
+      "sha256": "c3976dfab8a86f2cf2df14379f4cc6fe8dea78ff8cc6682386ff037172431096",
+      "size_bytes": 26138
+    },
+    {
+      "resource_path": "res://assets/business_v11/ships/frigate_kestrel.png",
+      "sha256": "c324f5ebc17151f77b3f99f658b771602125c61bdb9d12b311a1a43f8e9eda57",
+      "size_bytes": 31180
+    },
+    {
+      "resource_path": "res://assets/business_v11/ships/frigate_lantern.png",
+      "sha256": "a1ac5acb8f39b63ee4c59b78378ffcd0ffb6e629c83c0f8938ad34db626968c0",
+      "size_bytes": 28518
+    },
+    {
+      "resource_path": "res://assets/business_v11/ships/miner_anvil.png",
+      "sha256": "37f5391d98c8b76218ffb4e767f6288ecc4d24e12661f47339ee5c68463fe7d4",
+      "size_bytes": 31078
+    },
+    {
+      "resource_path": "res://assets/business_v11/ships/shuttle_swift.png",
+      "sha256": "17e3f210d0011341ef91b4c9c7b016130893d09ab1e5da63a93975a2a7a3d53a",
+      "size_bytes": 27399
+    },
+    {
+      "resource_path": "res://assets/business_v11/ships/support_weaver.png",
+      "sha256": "9cfd75187db7cfdc6c0139dd02c43f67adc40e5174ee6e46a419028d467bdd7a",
+      "size_bytes": 24810
+    },
+    {
+      "resource_path": "res://assets/business_v11/ships/transport_caravan.png",
+      "sha256": "a203c823d2b37e7257066730510fd223cc702e0a9b1fc2a265ecb7dd12daf790",
+      "size_bytes": 33090
+    }
+  ],
+  "entries": [
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_battleship_bastion",
+      "resource_path": "res://assets/business_v11/ships/battleship_bastion.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_cruiser_horizon",
+      "resource_path": "res://assets/business_v11/ships/cruiser_horizon.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_destroyer_raptor",
+      "resource_path": "res://assets/business_v11/ships/destroyer_raptor.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_frigate_kestrel",
+      "resource_path": "res://assets/business_v11/ships/frigate_kestrel.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_frigate_lantern",
+      "resource_path": "res://assets/business_v11/ships/frigate_lantern.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_miner_anvil",
+      "resource_path": "res://assets/business_v11/ships/miner_anvil.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_shuttle_swift",
+      "resource_path": "res://assets/business_v11/ships/shuttle_swift.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_support_weaver",
+      "resource_path": "res://assets/business_v11/ships/support_weaver.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_transport_caravan",
+      "resource_path": "res://assets/business_v11/ships/transport_caravan.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_ammo",
+      "resource_path": "res://assets/business_v11/items/ammo_kinetic_slug_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_armor_feather_i",
+      "resource_path": "res://assets/business_v11/items/module_armor_feather_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_armor_pressure_i",
+      "resource_path": "res://assets/business_v11/items/module_armor_pressure_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_conductive",
+      "resource_path": "res://assets/business_v11/items/material_conductive_medium.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_dense",
+      "resource_path": "res://assets/business_v11/items/material_dense_alloy.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_engine_vector_i",
+      "resource_path": "res://assets/business_v11/items/module_engine_vector_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_feather_alloy_basic",
+      "resource_path": "res://assets/business_v11/items/material_feather_alloy.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_fire_control",
+      "resource_path": "res://assets/business_v11/items/component_fire_control.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_industry_control",
+      "resource_path": "res://assets/business_v11/items/component_industry_control.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_industry_sift_i",
+      "resource_path": "res://assets/business_v11/items/module_industry_sift_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_kinetic_needle_i",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_needle_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_armor_feather_ii",
+      "resource_path": "res://assets/business_v11/items/module_armor_feather_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_armor_feather_iii",
+      "resource_path": "res://assets/business_v11/items/module_armor_feather_iii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_armor_pressure_ii",
+      "resource_path": "res://assets/business_v11/items/module_armor_pressure_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_armor_pressure_iii",
+      "resource_path": "res://assets/business_v11/items/module_armor_pressure_iii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_engine_vector_ii",
+      "resource_path": "res://assets/business_v11/items/module_engine_vector_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_engine_vector_iii",
+      "resource_path": "res://assets/business_v11/items/module_engine_vector_iii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_industry_sift_ii",
+      "resource_path": "res://assets/business_v11/items/module_industry_sift_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_industry_sift_iii",
+      "resource_path": "res://assets/business_v11/items/module_industry_sift_iii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_kinetic_needle_ii",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_needle_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_kinetic_needle_iii",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_needle_iii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_pulse_breakwater_ii",
+      "resource_path": "res://assets/business_v11/items/module_pulse_breakwater_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_pulse_breakwater_iii",
+      "resource_path": "res://assets/business_v11/items/module_pulse_breakwater_iii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_scanner_beacon_ii",
+      "resource_path": "res://assets/business_v11/items/module_scanner_beacon_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_scanner_beacon_iii",
+      "resource_path": "res://assets/business_v11/items/module_scanner_beacon_iii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_shield_lattice_ii",
+      "resource_path": "res://assets/business_v11/items/module_shield_lattice_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_shield_lattice_iii",
+      "resource_path": "res://assets/business_v11/items/module_shield_lattice_iii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_support_patch_ii",
+      "resource_path": "res://assets/business_v11/items/module_support_patch_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_support_patch_iii",
+      "resource_path": "res://assets/business_v11/items/module_support_patch_iii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_thermal_sunline_ii",
+      "resource_path": "res://assets/business_v11/items/module_thermal_sunline_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_thermal_sunline_iii",
+      "resource_path": "res://assets/business_v11/items/module_thermal_sunline_iii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_power_cell",
+      "resource_path": "res://assets/business_v11/items/component_power_cell.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_pressure_stock_basic",
+      "resource_path": "res://assets/business_v11/items/material_pressure_stock.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_projection_control",
+      "resource_path": "res://assets/business_v11/items/component_projection_control.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_pulse_breakwater_i",
+      "resource_path": "res://assets/business_v11/items/module_pulse_breakwater_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_pulse_ring_basic",
+      "resource_path": "res://assets/business_v11/items/component_pulse_ring.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_repair_kit",
+      "resource_path": "res://assets/business_v11/items/repair_kit_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_repair_mesh_basic",
+      "resource_path": "res://assets/business_v11/items/component_repair_mesh.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_scan_frame",
+      "resource_path": "res://assets/business_v11/items/component_scan_frame.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_scanner_beacon_i",
+      "resource_path": "res://assets/business_v11/items/module_scanner_beacon_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_sensor_core_basic",
+      "resource_path": "res://assets/business_v11/items/component_sensor_core.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_shield_lattice_i",
+      "resource_path": "res://assets/business_v11/items/module_shield_lattice_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_structural",
+      "resource_path": "res://assets/business_v11/items/material_structural_stock.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_support_patch_i",
+      "resource_path": "res://assets/business_v11/items/module_support_patch_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_thermal_focus_basic",
+      "resource_path": "res://assets/business_v11/items/component_thermal_focus.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_thermal_sunline_i",
+      "resource_path": "res://assets/business_v11/items/module_thermal_sunline_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_thruster_basic",
+      "resource_path": "res://assets/business_v11/items/component_thruster_cluster.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_weapon_frame",
+      "resource_path": "res://assets/business_v11/items/component_weapon_frame.svg"
+    },
+    {
+      "kind": "facility",
+      "id": "base_industry",
+      "resource_path": "res://assets/business_v11/facility/base_industry.svg"
+    },
+    {
+      "kind": "facility",
+      "id": "base_navigation",
+      "resource_path": "res://assets/business_v11/facility/base_navigation.svg"
+    },
+    {
+      "kind": "facility",
+      "id": "base_repair",
+      "resource_path": "res://assets/business_v11/facility/base_repair.svg"
+    },
+    {
+      "kind": "facility",
+      "id": "base_warehouse",
+      "resource_path": "res://assets/business_v11/facility/base_warehouse.svg"
+    },
+    {
+      "kind": "item",
+      "id": "ammo_kinetic_slug_i",
+      "resource_path": "res://assets/business_v11/items/ammo_kinetic_slug_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_anchor_ceramic",
+      "resource_path": "res://assets/business_v11/items/component_anchor_ceramic.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_fire_control",
+      "resource_path": "res://assets/business_v11/items/component_fire_control.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_industry_control",
+      "resource_path": "res://assets/business_v11/items/component_industry_control.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_mist_fiber",
+      "resource_path": "res://assets/business_v11/items/component_mist_fiber.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_power_cell",
+      "resource_path": "res://assets/business_v11/items/component_power_cell.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_projection_control",
+      "resource_path": "res://assets/business_v11/items/component_projection_control.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_pulse_ring",
+      "resource_path": "res://assets/business_v11/items/component_pulse_ring.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_relic",
+      "resource_path": "res://assets/business_v11/items/component_relic.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_relic_logic",
+      "resource_path": "res://assets/business_v11/items/component_relic_logic.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_repair_mesh",
+      "resource_path": "res://assets/business_v11/items/component_repair_mesh.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_scan_frame",
+      "resource_path": "res://assets/business_v11/items/component_scan_frame.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_sensor_core",
+      "resource_path": "res://assets/business_v11/items/component_sensor_core.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_thermal_focus",
+      "resource_path": "res://assets/business_v11/items/component_thermal_focus.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_thruster_cluster",
+      "resource_path": "res://assets/business_v11/items/component_thruster_cluster.svg"
+    },
+    {
+      "kind": "item",
+      "id": "component_weapon_frame",
+      "resource_path": "res://assets/business_v11/items/component_weapon_frame.svg"
+    },
+    {
+      "kind": "item",
+      "id": "material_conductive_medium",
+      "resource_path": "res://assets/business_v11/items/material_conductive_medium.svg"
+    },
+    {
+      "kind": "item",
+      "id": "material_dense_alloy",
+      "resource_path": "res://assets/business_v11/items/material_dense_alloy.svg"
+    },
+    {
+      "kind": "item",
+      "id": "material_feather_alloy",
+      "resource_path": "res://assets/business_v11/items/material_feather_alloy.svg"
+    },
+    {
+      "kind": "item",
+      "id": "material_pressure_stock",
+      "resource_path": "res://assets/business_v11/items/material_pressure_stock.svg"
+    },
+    {
+      "kind": "item",
+      "id": "material_structural_stock",
+      "resource_path": "res://assets/business_v11/items/material_structural_stock.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_armor_feather_i",
+      "resource_path": "res://assets/business_v11/items/module_armor_feather_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_armor_feather_ii",
+      "resource_path": "res://assets/business_v11/items/module_armor_feather_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_armor_feather_iii",
+      "resource_path": "res://assets/business_v11/items/module_armor_feather_iii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_armor_pressure_i",
+      "resource_path": "res://assets/business_v11/items/module_armor_pressure_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_armor_pressure_ii",
+      "resource_path": "res://assets/business_v11/items/module_armor_pressure_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_armor_pressure_iii",
+      "resource_path": "res://assets/business_v11/items/module_armor_pressure_iii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_engine_vector_i",
+      "resource_path": "res://assets/business_v11/items/module_engine_vector_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_engine_vector_ii",
+      "resource_path": "res://assets/business_v11/items/module_engine_vector_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_engine_vector_iii",
+      "resource_path": "res://assets/business_v11/items/module_engine_vector_iii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_industry_sift_i",
+      "resource_path": "res://assets/business_v11/items/module_industry_sift_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_industry_sift_ii",
+      "resource_path": "res://assets/business_v11/items/module_industry_sift_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_industry_sift_iii",
+      "resource_path": "res://assets/business_v11/items/module_industry_sift_iii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_kinetic_needle_i",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_needle_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_kinetic_needle_ii",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_needle_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_kinetic_needle_iii",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_needle_iii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_pulse_breakwater_i",
+      "resource_path": "res://assets/business_v11/items/module_pulse_breakwater_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_pulse_breakwater_ii",
+      "resource_path": "res://assets/business_v11/items/module_pulse_breakwater_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_pulse_breakwater_iii",
+      "resource_path": "res://assets/business_v11/items/module_pulse_breakwater_iii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_scanner_beacon_i",
+      "resource_path": "res://assets/business_v11/items/module_scanner_beacon_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_scanner_beacon_ii",
+      "resource_path": "res://assets/business_v11/items/module_scanner_beacon_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_scanner_beacon_iii",
+      "resource_path": "res://assets/business_v11/items/module_scanner_beacon_iii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_shield_lattice_i",
+      "resource_path": "res://assets/business_v11/items/module_shield_lattice_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_shield_lattice_ii",
+      "resource_path": "res://assets/business_v11/items/module_shield_lattice_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_shield_lattice_iii",
+      "resource_path": "res://assets/business_v11/items/module_shield_lattice_iii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_support_patch_i",
+      "resource_path": "res://assets/business_v11/items/module_support_patch_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_support_patch_ii",
+      "resource_path": "res://assets/business_v11/items/module_support_patch_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_support_patch_iii",
+      "resource_path": "res://assets/business_v11/items/module_support_patch_iii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_thermal_sunline_i",
+      "resource_path": "res://assets/business_v11/items/module_thermal_sunline_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_thermal_sunline_ii",
+      "resource_path": "res://assets/business_v11/items/module_thermal_sunline_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_thermal_sunline_iii",
+      "resource_path": "res://assets/business_v11/items/module_thermal_sunline_iii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "ore_conductive_crystal",
+      "resource_path": "res://assets/business_v11/items/ore_conductive_crystal.svg"
+    },
+    {
+      "kind": "item",
+      "id": "ore_corrosion_titanium",
+      "resource_path": "res://assets/business_v11/items/ore_corrosion_titanium.svg"
+    },
+    {
+      "kind": "item",
+      "id": "ore_echo_silica",
+      "resource_path": "res://assets/business_v11/items/ore_echo_silica.svg"
+    },
+    {
+      "kind": "item",
+      "id": "ore_ferrosilicate",
+      "resource_path": "res://assets/business_v11/items/ore_ferrosilicate.svg"
+    },
+    {
+      "kind": "item",
+      "id": "ore_mirror_crystal",
+      "resource_path": "res://assets/business_v11/items/ore_mirror_crystal.svg"
+    },
+    {
+      "kind": "item",
+      "id": "ore_phase_stone",
+      "resource_path": "res://assets/business_v11/items/ore_phase_stone.svg"
+    },
+    {
+      "kind": "item",
+      "id": "ore_pressure_steel",
+      "resource_path": "res://assets/business_v11/items/ore_pressure_steel.svg"
+    },
+    {
+      "kind": "item",
+      "id": "ore_solar_core",
+      "resource_path": "res://assets/business_v11/items/ore_solar_core.svg"
+    },
+    {
+      "kind": "item",
+      "id": "repair_kit_i",
+      "resource_path": "res://assets/business_v11/items/repair_kit_i.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_drift_combat",
+      "resource_path": "res://assets/business_v11/mission/contract_drift_combat.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_drift_delivery",
+      "resource_path": "res://assets/business_v11/mission/contract_drift_delivery.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_drift_survey",
+      "resource_path": "res://assets/business_v11/mission/contract_drift_survey.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_forge_combat",
+      "resource_path": "res://assets/business_v11/mission/contract_forge_combat.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_forge_delivery",
+      "resource_path": "res://assets/business_v11/mission/contract_forge_delivery.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_forge_survey",
+      "resource_path": "res://assets/business_v11/mission/contract_forge_survey.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_helios_combat",
+      "resource_path": "res://assets/business_v11/mission/contract_helios_combat.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_helios_delivery",
+      "resource_path": "res://assets/business_v11/mission/contract_helios_delivery.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_helios_survey",
+      "resource_path": "res://assets/business_v11/mission/contract_helios_survey.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_iron_combat",
+      "resource_path": "res://assets/business_v11/mission/contract_iron_combat.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_iron_delivery",
+      "resource_path": "res://assets/business_v11/mission/contract_iron_delivery.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_iron_survey",
+      "resource_path": "res://assets/business_v11/mission/contract_iron_survey.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_mining_iron",
+      "resource_path": "res://assets/business_v11/mission/contract_mining_iron.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_mirror_combat",
+      "resource_path": "res://assets/business_v11/mission/contract_mirror_combat.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_mirror_delivery",
+      "resource_path": "res://assets/business_v11/mission/contract_mirror_delivery.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_mirror_survey",
+      "resource_path": "res://assets/business_v11/mission/contract_mirror_survey.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_mist_combat",
+      "resource_path": "res://assets/business_v11/mission/contract_mist_combat.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_mist_delivery",
+      "resource_path": "res://assets/business_v11/mission/contract_mist_delivery.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_mist_survey",
+      "resource_path": "res://assets/business_v11/mission/contract_mist_survey.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_patrol_echo",
+      "resource_path": "res://assets/business_v11/mission/contract_patrol_echo.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_rift_combat",
+      "resource_path": "res://assets/business_v11/mission/contract_rift_combat.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_rift_delivery",
+      "resource_path": "res://assets/business_v11/mission/contract_rift_delivery.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_rift_survey",
+      "resource_path": "res://assets/business_v11/mission/contract_rift_survey.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_silent_combat",
+      "resource_path": "res://assets/business_v11/mission/contract_silent_combat.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_silent_delivery",
+      "resource_path": "res://assets/business_v11/mission/contract_silent_delivery.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_silent_survey",
+      "resource_path": "res://assets/business_v11/mission/contract_silent_survey.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "contract_survey_echo",
+      "resource_path": "res://assets/business_v11/mission/contract_survey_echo.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "story_drift",
+      "resource_path": "res://assets/business_v11/mission/story_drift.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "story_forge",
+      "resource_path": "res://assets/business_v11/mission/story_forge.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "story_helios",
+      "resource_path": "res://assets/business_v11/mission/story_helios.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "story_iron",
+      "resource_path": "res://assets/business_v11/mission/story_iron.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "story_mirror",
+      "resource_path": "res://assets/business_v11/mission/story_mirror.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "story_mist",
+      "resource_path": "res://assets/business_v11/mission/story_mist.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "story_rift",
+      "resource_path": "res://assets/business_v11/mission/story_rift.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "story_silent",
+      "resource_path": "res://assets/business_v11/mission/story_silent.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "tutorial_combat",
+      "resource_path": "res://assets/business_v11/mission/tutorial_combat.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "tutorial_exploration",
+      "resource_path": "res://assets/business_v11/mission/tutorial_exploration.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "tutorial_flight",
+      "resource_path": "res://assets/business_v11/mission/tutorial_flight.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "tutorial_mining_delivery",
+      "resource_path": "res://assets/business_v11/mission/tutorial_mining_delivery.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "tutorial_scan_gate",
+      "resource_path": "res://assets/business_v11/mission/tutorial_scan_gate.svg"
+    },
+    {
+      "kind": "research",
+      "id": "research_base",
+      "resource_path": "res://assets/business_v11/research/research_base.svg"
+    },
+    {
+      "kind": "research",
+      "id": "research_hulls",
+      "resource_path": "res://assets/business_v11/research/research_hulls.svg"
+    },
+    {
+      "kind": "research",
+      "id": "research_tech_ii",
+      "resource_path": "res://assets/business_v11/research/research_tech_ii.svg"
+    },
+    {
+      "kind": "research",
+      "id": "research_tech_iii",
+      "resource_path": "res://assets/business_v11/research/research_tech_iii.svg"
+    },
+    {
+      "kind": "ship",
+      "id": "battleship_bastion",
+      "resource_path": "res://assets/business_v11/ships/battleship_bastion.png"
+    },
+    {
+      "kind": "ship",
+      "id": "cruiser_horizon",
+      "resource_path": "res://assets/business_v11/ships/cruiser_horizon.png"
+    },
+    {
+      "kind": "ship",
+      "id": "destroyer_raptor",
+      "resource_path": "res://assets/business_v11/ships/destroyer_raptor.png"
+    },
+    {
+      "kind": "ship",
+      "id": "frigate_kestrel",
+      "resource_path": "res://assets/business_v11/ships/frigate_kestrel.png"
+    },
+    {
+      "kind": "ship",
+      "id": "frigate_lantern",
+      "resource_path": "res://assets/business_v11/ships/frigate_lantern.png"
+    },
+    {
+      "kind": "ship",
+      "id": "miner_anvil",
+      "resource_path": "res://assets/business_v11/ships/miner_anvil.png"
+    },
+    {
+      "kind": "ship",
+      "id": "shuttle_swift",
+      "resource_path": "res://assets/business_v11/ships/shuttle_swift.png"
+    },
+    {
+      "kind": "ship",
+      "id": "support_weaver",
+      "resource_path": "res://assets/business_v11/ships/support_weaver.png"
+    },
+    {
+      "kind": "ship",
+      "id": "transport_caravan",
+      "resource_path": "res://assets/business_v11/ships/transport_caravan.png"
+    }
+  ],
+  "qa": {
+    "status": "All declared portraits exist and checksums refreshed; native UI inspection is owned by the integrator.",
+    "pending_resource_paths": []
+  }
+}

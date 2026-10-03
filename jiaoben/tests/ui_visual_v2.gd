@@ -130,27 +130,25 @@ func _run() -> void:
 	ui.show_page("missions")
 	var first_title: String = ""
 	for node: Node in descendants(ui.body):
-		if str(node.name).begins_with("MissionCard"):
-			first_title = str(node.get_child(0).text)
+		if bool(node.get_meta("mission_row", false)):
+			first_title = str(node.find_child("BusinessName", true, false).text)
 			break
-	check(first_title == "出航准备", "first tutorial remains first visible mission card")
+	check(first_title == "出航准备", "first tutorial remains first visible mission list row")
 	ui.market_filter = "buy"
 	ui.show_page("market")
 	ui.quantity_input.value = 5
 	var accurate: bool = true
 	for row: Dictionary in ui.quotes:
-		accurate = accurate and row.label.text.contains(str(host.gameplay.economy.quote(row.id, 5)) + " 信用点")
+		accurate = accurate and int(row.label.get_meta("quote_amount", -1)) == host.gameplay.economy.quote(row.id, 5)
 	check(accurate and not ui.quotes.is_empty(), "redesigned market uses actual quantity/tax quote")
-	# Resize the current workbench without rebuilding it: all section grids reflow.
+	# Resize the current workbench without rebuilding it: list scroll remains accessible.
 	root.size = Vector2i(1280, 720)
 	root.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 	root.content_scale_size = Vector2i(640, 360)
 	await process_frame
 	await process_frame
-	var reflowed: bool = true
-	for grid: Node in ui.panel.find_children("ModuleCards*", "GridContainer", true, false):
-		reflowed = reflowed and grid.columns == 1
-	check(reflowed, "live window resize reflows all existing card sections")
+	var list: Node = ui.body.find_child("BusinessList", true, false)
+	check(list != null and list.horizontal_scroll.get_h_scroll_bar().max_value > list.horizontal_scroll.get_h_scroll_bar().page and list.top_scrollbar.visible, "live window resize retains populated business list and accessible horizontal scroll")
 	for size: Vector2i in [Vector2i(1280, 720), Vector2i(1440, 900)]:
 		for scale: float in [1.0, 2.0]:
 			root.size = size

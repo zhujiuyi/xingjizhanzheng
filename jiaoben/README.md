@@ -119,3 +119,20 @@ v0.6.2实际新包 `0.6.2-8d86553e-20261003-141501` 已通过37项Metal/CoreAudi
 发布门槛现为**70项表现检查、12张截图**，新增真实Flight回正及其总转速预算、显式滚转、真实镜头回正、精确垂直姿态，并新增`release-attitude-level.png`。实际Mac包必须独立运行6项数据库与70项表现，不以源测试代替；最终包身份与结果见26。Windows原生运行仍待实机。规则及镜头穿越极点的±上轴连续边界见[36](../doc/36-舰船姿态回正与相机基准.md)。
 
 最终实际交付`0.8.3-903ebd87-20261003-225013`来自干净已推送源`903ebd87`，实际Mac6项数据库、70项Metal/CoreAudio表现及12图、125项资源与临时签名通过；8份独立构建日志严格诊断0，两ZIP及12图SHA已重算一致、CRC与说明/许可齐备。源码138/146的完整输入与持久化专项和实际包70固定场景分开记录；回正/航行/站外停止画面已查看。Windows导出组件通过，原生待实机。证据及包路径见26。
+
+## 业务列表与图片检查
+
+从工作区根目录运行 `/usr/local/bin/python3.14 jiaoben/tests/business_list_v11_run.py`，默认使用headless/CoreAudio；追加 `--native` 使用独占Metal/CoreAudio窗口、真实焦点与OS指针。检查真实Main的报价及禁用原因、正常舰体/物品购买、舰队切换、仓储转移、出售、配装/卸装、保护资产限制、各业务列表布局/滚动与SQLite保存关闭重开。资金、解锁与目标位置为独立测试库中的显式准备，不把夹具当作自然通关或个人档案试玩。图片检查和业务动作检查互相不能替代。
+
+完整输出及独立引擎日志为 `logs/business-list-v11-{headless,native}{,-engine}.log`，原生截图位于 `tmp/business-list-v11/native/`。runner要求实际成功端点、退出0以及脚本错误/错误/警告/资源泄漏严格为0；具体检查数和发布状态以本轮实际日志及 [交付记录](../doc/26-开发阶段与交付记录.md) 为准。
+
+业务图片的正式资源与来源清单在 `../code/assets/business_v11/`，静态SVG构建和模型截图辅助脚本在 `art/`。从根目录依次执行：
+
+```sh
+/usr/local/bin/python3.14 jiaoben/art/build_business_v11.py
+# 在整合者安排的独占窗口中运行；不可加 --headless，不与编辑器导入或其他原生检查并行。
+sh jiaoben/run_godot.sh --audio-driver CoreAudio --path code --script ../jiaoben/art/render_business_v11.gd --log-file /Users/a0000/workspace/xingjizhanjian/jiaoben/logs/business-v11-render-engine.log > jiaoben/logs/business-v11-render.log 2>&1
+/usr/local/bin/python3.14 jiaoben/art/build_business_v11.py --finalize
+```
+
+正式PNG产生后再执行工程导入，使Godot导入256×256透明舰体图片；测试或正式运行前确认导入已完成。渲染直接使用九类现有正式工业GLB及现有PBR材质，拒绝空图和贴边裁切；不会读取或改写玩家进度。114个原创SVG与9个实际GLB截图形成123项图片资源，174条ID映射包含配方复用，manifest不存价格、数量或另一套平衡数值。静态复核报告为 `logs/business-v11-assets-static-final.json`，PNG原生结果仍须配合实际业务界面和最终发布包验收。

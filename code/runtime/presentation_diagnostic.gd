@@ -67,6 +67,7 @@ static func run(host: Node, output_dir: String) -> bool:
 				button.mouse_entered.emit()
 				button.mouse_exited.emit()
 				break
+	await _business_list_checks(host, evidence, output_dir)
 	await _capture(host, output_dir, "station")
 	var crew: Node3D = host.hangar.get_service_anchor("operations")
 	_check(evidence, is_instance_valid(crew) and crew.is_visible_in_tree(), "packed 3D NPC service model is visible")
@@ -272,6 +273,96 @@ static func run(host: Node, output_dir: String) -> bool:
 	exit_voice.free()
 	if DisplayServer.get_name() != "headless": host.get_viewport().warp_mouse(original_pointer)
 	return _finish(evidence)
+
+static func _business_rows(host: Node) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for node: Node in host.ui.body.find_children("*", "VBoxContainer", true, false):
+		if not bool(node.get_meta("business_list", false)): continue
+		var values: Variant = node.get("rows")
+		if values is Array:
+			for entry: Dictionary in values: result.append(entry)
+	return result
+
+static func _business_show(host: Node, page: String, filter: String = "") -> void:
+	if not filter.is_empty(): host.ui.market_filter = filter
+	host.ui.show_page(page)
+	for frame: int in range(4): await host.get_tree().process_frame
+	host.ui.tick(1.0)
+	for frame: int in range(3): await host.get_tree().process_frame
+
+static func _business_list_checks(host: Node, evidence: Dictionary, output_dir: String) -> void:
+	# Read-only business presentation in the already fresh diagnostic world.
+	# Only the UI quantity changes; funds, stock, unlocks and assets are untouched.
+	var process_enabled: bool = host.is_processing()
+	var physics_enabled: bool = host.is_physics_processing()
+	host.set_process(false); host.set_physics_process(false)
+	var initial_credit: int = host.state.player().credit
+	var initial_ship: String = host.state.ship().ship_instance_id
+	var initial_pose: Transform3D = host.world.flight.global_transform
+	var initial_quantity: int = host.ui.quantity_value
+	var initial_filter: String = host.ui.market_filter
+	var economy: RefCounted = host.gameplay.get("economy")
+	await _business_show(host, "market", "buy")
+	var goods: Array[Dictionary] = _business_rows(host)
+	var goods_valid: bool = not goods.is_empty()
+	var columns_ordered: bool = not goods.is_empty()
+	var quotes_valid: bool = not goods.is_empty()
+	for entry: Dictionary in goods:
+		goods_valid = goods_valid and bool(entry.row.get_meta("business_row", false)) and entry.image.texture != null and entry.image.texture.get_width() > 0 and not entry.name.text.is_empty() and not entry.description.text.is_empty() and not entry.unit.text.is_empty()
+		var previous_x: float = -INF
+		for key: String in ["image", "name", "unit", "quantity", "unit_price", "total", "status", "actions"]:
+			var control: Control = entry[key]
+			columns_ordered = columns_ordered and control.global_position.x >= previous_x - 0.5
+			previous_x = control.global_position.x
+		for button: Node in entry.row.find_children("*", "Button", true, false): columns_ordered = columns_ordered and entry.actions.is_ancestor_of(button)
+		var id: String = str(entry.row.get_meta("row_id", ""))
+		var stock: RefCounted = economy.call("_stock", id)
+		quotes_valid = quotes_valid and stock != null and int(entry.unit_price.get_meta("quote_amount", -1)) == int(economy.call("quote", id, 1, false)) and int(entry.total.get_meta("quote_amount", -1)) == int(economy.call("quote", id, initial_quantity, false)) and (stock == null or entry.status.text.contains(str(stock.quantity)))
+	_check(evidence, goods_valid, "packed market goods use real item identities, nonempty images, descriptions and units")
+	_check(evidence, columns_ordered, "packed business columns place images, descriptions, units, quantities, quotes and status before the final operation column")
+	_check(evidence, quotes_valid, "packed goods preserve actual frozen stock and reputation/tax unit and total quotes")
+	await _capture(host, output_dir, "business-goods")
+	var first_row: Node = goods[0].row if not goods.is_empty() else null
+	var list_node: Node = first_row.get_parent() if first_row != null else null
+	var changed_valid: bool = first_row != null and is_instance_valid(host.ui.quantity_input)
+	if changed_valid:
+		host.ui.quantity_input.value = 2
+		for frame: int in range(3): await host.get_tree().process_frame
+		var changed_rows: Array[Dictionary] = _business_rows(host)
+		changed_valid = changed_rows.size() == goods.size() and changed_rows[0].row == first_row and first_row.get_parent() == list_node
+		for entry: Dictionary in changed_rows:
+			var id: String = str(entry.row.get_meta("row_id", ""))
+			changed_valid = changed_valid and entry.quantity.text == "2" and int(entry.total.get_meta("quote_amount", -1)) == int(economy.call("quote", id, 2, false)) and int(entry.unit_price.get_meta("quote_amount", -1)) == int(economy.call("quote", id, 1, false))
+		host.ui.quantity_input.value = initial_quantity
+		for frame: int in range(3): await host.get_tree().process_frame
+	_check(evidence, changed_valid, "packed SpinBox refreshes real rounded quotes on the same list rows and restores its original quantity")
+	await _business_show(host, "market", "ships")
+	var hulls: Array[Dictionary] = _business_rows(host)
+	var hulls_valid: bool = not hulls.is_empty()
+	var shortage_quote: bool = false
+	var hull_quotes: bool = not hulls.is_empty()
+	for entry: Dictionary in hulls:
+		var id: String = str(entry.row.get_meta("row_id", ""))
+		var price: int = int(economy.call("quote_ship", id, false))
+		hulls_valid = hulls_valid and entry.image.texture != null and entry.image.texture.get_width() > 0 and entry.unit.text == "艘" and entry.quantity.text == "1" and not entry.description.text.is_empty()
+		hull_quotes = hull_quotes and int(entry.unit_price.get_meta("quote_amount", -1)) == price and int(entry.total.get_meta("quote_amount", -1)) == price
+		if price > initial_credit:
+			var disabled: bool = false
+			for button: Node in entry.actions.find_children("*", "Button", true, false): disabled = disabled or button.disabled
+			shortage_quote = shortage_quote or disabled and entry.status.text.contains("信用点不足") and entry.total.text == str(price)
+	_check(evidence, hulls_valid, "packed hull list keeps vessel portraits, descriptions, unit and one-vessel transaction quantity")
+	_check(evidence, hull_quotes and shortage_quote, "packed hull prices use real taxed quotes and remain readable when funds disable purchasing")
+	await _capture(host, output_dir, "business-hulls")
+	var all_lists: bool = true
+	for variant: Dictionary in [{"page": "ships", "filter": ""}, {"page": "warehouse", "filter": ""}, {"page": "fitting", "filter": ""}, {"page": "industry", "filter": ""}, {"page": "research", "filter": ""}, {"page": "missions", "filter": ""}, {"page": "market", "filter": "buy"}, {"page": "market", "filter": "ships"}, {"page": "market", "filter": "sell"}]:
+		await _business_show(host, str(variant.page), str(variant.filter))
+		all_lists = all_lists and not _business_rows(host).is_empty()
+	_check(evidence, all_lists, "packed fleet, loans, warehouse, fitting, industry, research, missions and all market modes use populated shared lists")
+	host.ui.quantity_value = initial_quantity
+	host.ui.market_filter = initial_filter
+	await _business_show(host, "station")
+	_check(evidence, host.ui.page == "station" and host.ui.station_layer.is_visible_in_tree() and host.ui.quantity_value == initial_quantity and host.state.player().credit == initial_credit and host.state.ship().ship_instance_id == initial_ship and host.world.flight.global_transform.is_equal_approx(initial_pose), "packed business presentation restores the station and original quantity without changing funds, assets or the existing starting pose")
+	host.set_process(process_enabled); host.set_physics_process(physics_enabled)
 
 static func _mineral_checks(host: Node, evidence: Dictionary, output_dir: String) -> void:
 	# A separate fresh world and a legal inventory-created miner are explicit diagnostic

@@ -1,7 +1,7 @@
 class_name XJPresentationResources
 extends RefCounted
 ## Presentation packs can advance without changing frozen world/asset identity.
-const MANIFESTS: Array[String] = ["res://assets/interface_v2/manifest.json", "res://assets/hangar_v2/manifest.json", "res://assets/interface_v3/manifest.json", "res://assets/navigation_v3/manifest.json", "res://assets/ship_v3/manifest.json", "res://assets/station_v3/manifest.json", "res://data/local_navigation_v1_manifest.json"]
+const MANIFESTS: Array[String] = ["res://assets/interface_v2/manifest.json", "res://assets/hangar_v2/manifest.json", "res://assets/interface_v3/manifest.json", "res://assets/navigation_v3/manifest.json", "res://assets/ship_v3/manifest.json", "res://assets/station_v3/manifest.json", "res://data/local_navigation_v1_manifest.json", "res://assets/business_v11/manifest.json"]
 
 static func validate() -> String:
 	for manifest_path: String in MANIFESTS:
