@@ -37,6 +37,8 @@ var npc_title: Label
 var npc_bars: Array[Dictionary] = []
 var _compact: bool = false
 var _last_selection_id: String = ""
+var _available_height: float = -1.0
+var _layout_queued: bool = false
 
 func _ready() -> void:
 	name = "TargetModule"
@@ -90,6 +92,7 @@ func _ready() -> void:
 	selection_card.add_theme_stylebox_override("panel", UISkin.hud_panel(6))
 	content.add_child(selection_card)
 	var details: VBoxContainer = VBoxContainer.new()
+	details.name = "SelectedTargetDetails"
 	details.add_theme_constant_override("separation", 4)
 	selection_card.add_child(details)
 	_label(details, "选中目标", 10, UISkin.AMBER)
@@ -162,6 +165,7 @@ func _ready() -> void:
 	interaction_label.max_lines_visible = 2
 	interaction_button.hide()
 	interaction_label.hide()
+	selection_card.minimum_size_changed.connect(_queue_list_layout)
 	_refresh_rows()
 
 func set_entries(rows: Array[Dictionary], id: String) -> void:
@@ -223,17 +227,41 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 		if action == "combat_toggle": button.tooltip_text = "按钮明确切换对所选敌舰开火；保留接近或环绕。Z 有开火指令时停止当前开火，无指令时启动所选敌舰。武器仍检查射程、射界、视线、冷却、电容与热量。\n" + str(navigation.get("combat_reason", "由战斗控制器检查资格。"))
 		if action == "nav_dock": button.tooltip_text = "接近所选空间站，满足停靠条件后入站。F 仅进行当前范围内的即时交互。"
 
-func responsive(compact: bool) -> void:
+func responsive(compact: bool, available_height: float = -1.0) -> void:
 	_compact = compact
+	_available_height = available_height
 	if content == null: return
 	content.move_child(selection_card, 0 if compact else content.get_child_count() - 1)
-	target_scroll.custom_minimum_size.y = 66 if compact else 154
+	selection_card.add_theme_stylebox_override("panel", UISkin.hud_panel(4 if compact else 6))
+	selection_card.get_node("SelectedTargetDetails").add_theme_constant_override("separation", 2 if compact else 4)
 	selected_title.add_theme_font_size_override("font_size", 12 if compact else 14)
+	selected_distance.add_theme_font_size_override("font_size", 10 if compact else 11)
 	resource_label.add_theme_font_size_override("font_size", 10 if compact else 11)
 	status_label.max_lines_visible = 1 if compact else 2
-	for button: Variant in action_buttons.values(): button.add_theme_font_size_override("font_size", 10 if compact else 11)
+	for button: Variant in action_buttons.values():
+		button.add_theme_font_size_override("font_size", 10 if compact else 11)
+		button.custom_minimum_size.y = 22 if compact else 24
 	for entry: Dictionary in npc_bars: entry.label.custom_minimum_size.x = 58 if compact else 70
 	_refresh_rows()
+	_queue_list_layout()
+
+func _queue_list_layout() -> void:
+	if _layout_queued: return
+	_layout_queued = true
+	_reflow_list.call_deferred()
+
+func _reflow_list() -> void:
+	_layout_queued = false
+	if not is_instance_valid(target_scroll): return
+	if _available_height < 0:
+		target_scroll.custom_minimum_size.y = 66 if _compact else 154
+		return
+	# Reserve the current card's actual font/controls height, then devote the
+	# remaining pane to contacts. In a small viewport the body remains scrollable.
+	var chrome: float = get_theme_stylebox("panel").get_minimum_size().y + float(content.get_theme_constant("separation"))
+	chrome += overview_content.get_combined_minimum_size().y - target_scroll.get_combined_minimum_size().y
+	var desired: float = maxf(54.0 if _compact else 96.0, _available_height - selection_card.get_combined_minimum_size().y - chrome)
+	if absf(target_scroll.custom_minimum_size.y - desired) > 0.5: target_scroll.custom_minimum_size.y = desired
 
 func _refresh_rows() -> void:
 	if target_list == null: return

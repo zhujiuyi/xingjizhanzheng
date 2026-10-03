@@ -138,6 +138,7 @@ static func run(host: Node, output_dir: String) -> bool:
 	host.get_viewport().push_input(right, true)
 	await host.get_tree().process_frame
 	_check(evidence, Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and not InputMap.has_action("pointer") and not InputMap.has_action("observe") and not host.observing and host.camera.orbit == view_before_right, "packed cursor is always visible and right button does not operate the ship or camera")
+	await _hud_layout_checks(host, evidence)
 	await _capture(host, output_dir, "flight")
 	var station_id: String = "station_anchor_port"
 	var station: Node3D = host.world.targets[station_id].node
@@ -344,6 +345,21 @@ static func _mineral_checks(host: Node, evidence: Dictionary, output_dir: String
 	var mineral_hold: String = host.gameplay.get("inventory").call("hold", host.state.ship(), Types.ContainerKind.MINERAL)
 	var before_units: int = host.gameplay.get("inventory").call("count", mineral_hold, definition.item_id)
 	var started: bool = host.gameplay.get("work").call("start_mining", node_id)
+	# Pay a genuine production cycle before queuing a manual save. Cancellation
+	# releases only the pending save request, leaving the mining cycle intact.
+	host.gameplay.call("tick", 1.0 / float(host.store.catalog.rule("simulation_hz")))
+	host.ui.tick(1.0)
+	host._request_save("manual", 4)
+	for frame: int in range(3): await host.get_tree().process_frame
+	_check(evidence, started and not host.deferred_save.is_empty() and host.ui.operation_bar.is_visible_in_tree() and host.ui.operation_cancel.is_visible_in_tree() and not host.ui.toast.text.begins_with("保存等待："), "packed paid mineral cycle queues one visible save status without a duplicate yellow message")
+	var notice: Rect2 = host.ui.operation_bar.get_global_rect()
+	var label: Label = host.ui.operation_label
+	var notice_font_height: float = label.get_theme_font("font").get_height(label.get_theme_font_size("font_size"))
+	_check(evidence, Rect2(Vector2.ZERO, host.ui.root.size).encloses(notice) and notice.size.x < host.ui.root.size.x * 0.7 and not notice.intersects(host.ui.navigation_frame.get_global_rect()) and not notice.intersects(host.ui.target_panel.get_global_rect()) and not notice.intersects(host.ui.navigation.get_global_rect()) and label.size.y >= notice_font_height and notice.encloses(host.ui.operation_cancel.get_global_rect()), "packed compact save notice keeps readable cancellation clear of sidebars and top tools")
+	await _capture(host, output_dir, "save-wait")
+	host.ui.operation_cancel.pressed.emit()
+	for frame: int in range(3): await host.get_tree().process_frame
+	_check(evidence, host.deferred_save.is_empty() and not host.ui.operation_bar.is_visible_in_tree() and host.gameplay.get("work").mining_target == node_id and resource.remaining_units == 1, "packed cancel-save control clears the queued save without cancelling its real mining cycle")
 	host.gameplay.call("tick", cycle_s + 1.0 / float(host.store.catalog.rule("simulation_hz")))
 	host.ui.tick(1.0)
 	var after_units: int = host.gameplay.get("inventory").call("count", mineral_hold, definition.item_id)
@@ -358,6 +374,24 @@ static func _mineral_checks(host: Node, evidence: Dictionary, output_dir: String
 	_check(evidence, is_equal_approx(resource.respawn_remaining_s, left) and not host.gameplay.get("work").call("start_mining", node_id), "packed paused world preserves mineral clock and depleted pool rejects mining")
 	host.set_process(true)
 	host.set_physics_process(true)
+
+static func _hud_layout_checks(host: Node, evidence: Dictionary) -> void:
+	for frame: int in range(3): await host.get_tree().process_frame
+	var ui: Node = host.ui
+	var bounds: Rect2 = Rect2(Vector2.ZERO, ui.root.size)
+	var tools: Rect2 = ui.navigation.get_global_rect()
+	var conditions: Rect2 = ui.instrument.get_global_rect()
+	var equipment: Rect2 = ui.equipment_bar.get_global_rect()
+	_check(evidence, bounds.encloses(tools) and tools.position.y < ui.root.size.y * 0.2 and not tools.intersects(ui.target_panel.get_global_rect()) and not tools.intersects(ui.navigation_frame.get_global_rect()), "packed flight toolbar sits above the sidebars with separate usable bounds")
+	_check(evidence, bounds.encloses(conditions) and bounds.encloses(equipment) and conditions.end.x <= equipment.position.x and absf(conditions.get_center().y - equipment.get_center().y) < 2.0 and not conditions.has_point(ui.root.size * 0.5) and not equipment.has_point(ui.root.size * 0.5), "packed ship conditions and installed equipment share one separated bottom row")
+	var scroll: ScrollContainer = ui.overview.target_scroll
+	_check(evidence, scroll.size.y > 154.0 and ui.target_panel.get_global_rect().encloses(scroll.get_global_rect()) and not ui.target_panel.get_global_rect().intersects(equipment), "packed tall overview uses available height above the bottom equipment row")
+	var readable: bool = true
+	for button: Node in ui.navigation.find_children("*", "Button", true, false):
+		var padding: Vector2 = button.get_theme_stylebox("normal").get_minimum_size()
+		var text_size: Vector2 = button.get_theme_font("font").get_string_size(button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, button.get_theme_font_size("font_size"))
+		readable = readable and tools.encloses(button.get_global_rect()) and text_size.x <= button.size.x - padding.x + 1.0
+	_check(evidence, readable and ui.show_ship_button.is_visible_in_tree(), "packed top tools keep real menu labels and ship-recovery control readable")
 
 static func _capture(host: Node, directory: String, name: String) -> void:
 	if DisplayServer.get_name() == "headless": return

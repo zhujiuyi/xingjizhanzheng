@@ -920,7 +920,6 @@ func _request_save(kind: String, index: int, after: String = "") -> void:
 		deferred_save = {"kind": kind, "index": index, "after": after}
 		save_wait_elapsed = 0.0
 		ui.set_operation_status("save", "等待%s结束后保存；暂停时请先继续航行" % reason, true)
-		ui.notify("保存等待：%s。继续航行到稳定边界后保存；原存档保留。" % reason)
 		return
 	_save_now(kind, index, after)
 
@@ -933,7 +932,6 @@ func _save_now(kind: String, index: int, after: String = "") -> void:
 		return
 	busy = true
 	ui.set_operation_status("save", "正在保存航行进度")
-	ui.notify("正在保存航行进度")
 	await get_tree().process_frame
 	if store.save(state, kind, index):
 		if presentation != null and after.is_empty(): presentation.ui_result(true)

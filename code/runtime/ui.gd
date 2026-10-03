@@ -102,6 +102,11 @@ var navigation_status: Label
 var navigation_stop_button: Button
 var map_resource_readouts: Array[Dictionary] = []
 var resource_chart: Control
+var flight_dock: HBoxContainer
+var top_toolbar_frame: PanelContainer
+var toolbar_buttons: Dictionary = {}
+var flight_content_top: float = 0.0
+var flight_content_bottom: float = 0.0
 
 func set_operation_status(kind: String, message: String, waiting: bool = false) -> void:
 	operation_kind = kind
@@ -191,28 +196,35 @@ func _ready() -> void:
 	work_stop.focus_mode = Control.FOCUS_NONE
 	work_stop.add_theme_stylebox_override("normal", UISkin.hud_button(false))
 	work_box.hide()
+	flight_dock = HBoxContainer.new()
+	flight_dock.name = "FlightDock"
+	flight_dock.mouse_filter = Control.MOUSE_FILTER_STOP
+	flight_dock.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	root.add_child(flight_dock)
 	_build_instrument()
 	_build_equipment_bar()
 	_build_navigation()
 	controls = _label(root, "左拖视角 · 双击总览接近 · 滚轮缩放", 11)
 	controls.mouse_filter = Control.MOUSE_FILTER_PASS
 	controls.tooltip_text = "光标常驻；左键短击模型、总览或雷达只选择目标，长按拖动观察，松开保留角度；双击总览目标自动转向并接近。W/S 沿当前观察航向加速/反向加速，A/D 左右转弯；Space/C 升降、Q/E 滚转；Ctrl 发射、Z 自动开火、X 停船、Shift 增推、F 交互、V 视角。右键禁用。"
+	show_ship_button.tooltip_text += "\n\n" + controls.tooltip_text
 	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	controls.offset_left = 22
 	controls.offset_top = -37
 	controls.offset_right = 302
 	controls.add_theme_color_override("font_color", UISkin.MUTED)
 	toast = _label(root, "", 14)
-	toast.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	toast.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	toast.offset_left = 370
 	toast.offset_right = -320
 	toast.offset_top = 22
 	toast.offset_bottom = 68
 	toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	toast.mouse_filter = Control.MOUSE_FILTER_PASS
 	toast.max_lines_visible = 2
 	_build_target_module()
 	operation_bar = _frame(root, "OperationStatus")
-	operation_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	operation_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	operation_bar.offset_left = 22
 	operation_bar.offset_right = -22
 	operation_bar.offset_top = 12
@@ -223,6 +235,7 @@ func _ready() -> void:
 	operation_label = _text_to(operation_row, "", 14)
 	operation_label.custom_minimum_size.x = 0
 	operation_label.max_lines_visible = 3
+	operation_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	operation_cancel = _button(operation_row, "取消等待", func(): requested.emit("cancel_save", "", 1, ""))
 	operation_cancel.custom_minimum_size.x = 122
 	operation_cancel.size_flags_horizontal = Control.SIZE_SHRINK_END
@@ -242,7 +255,6 @@ func _ready() -> void:
 	root.add_child(station_layer)
 	station_layer.hide()
 	root.resized.connect(_responsive)
-	operation_bar.resized.connect(_responsive)
 	show_title([])
 	_responsive()
 
@@ -302,6 +314,7 @@ func show_page(next_page: String) -> void:
 	_update_hud_visibility()
 	if next_page.is_empty():
 		root.get_viewport().gui_release_focus()
+		_responsive()
 		return
 	if next_page == "title": show_title(slots); return
 	if next_page == "settings":
@@ -341,8 +354,9 @@ func notify(message: String, is_error: bool = false) -> void:
 
 func tick(delta: float) -> void:
 	message_age += delta
-	if message_age > 12.0:
+	if message_age > 12.0 and not toast.text.is_empty():
 		toast.text = ""
+		_responsive()
 	marker_layer.queue_redraw()
 	# Selection projection follows the current frame, independently of telemetry.
 	if is_instance_valid(navigation_hud):
@@ -370,6 +384,7 @@ func tick(delta: float) -> void:
 	_update_module_bar(ship, metrics)
 	if page == "station": _update_station_info()
 	_update_work()
+	_reflow_flight_left()
 	_update_live_missions()
 	_update_map_resources()
 	_refresh_targets()
@@ -381,7 +396,7 @@ func input_blocked() -> bool:
 	return ui_input_blocked()
 
 func ui_input_blocked() -> bool:
-	return keyboard_blocked() or _pointer_over(target_panel) or _pointer_over(work_box) or _pointer_over(operation_bar) or _pointer_over(navigation) or _pointer_over(instrument) or _pointer_over(equipment_bar) or _pointer_over(navigation_frame) or _pointer_over(controls) or (is_instance_valid(navigation_hud) and _pointer_over(navigation_hud.radar_frame))
+	return keyboard_blocked() or _pointer_over(target_panel) or _pointer_over(work_box) or _pointer_over(operation_bar) or _pointer_over(navigation) or _pointer_over(flight_dock) or _pointer_over(instrument) or _pointer_over(equipment_bar) or _pointer_over(navigation_frame) or _pointer_over(controls) or _pointer_over(toast) or (is_instance_valid(navigation_hud) and _pointer_over(navigation_hud.radar_frame))
 
 func keyboard_blocked() -> bool:
 	var focus: Control = root.get_viewport().gui_get_focus_owner()
@@ -1291,6 +1306,7 @@ func _update_hud_visibility() -> void:
 	if is_instance_valid(hud_left): hud_left.get_parent().visible = show_hud
 	if is_instance_valid(navigation_frame): navigation_frame.visible = show_hud
 	if is_instance_valid(instrument): instrument.visible = show_hud
+	if is_instance_valid(flight_dock): flight_dock.visible = show_hud
 	if is_instance_valid(equipment_bar): equipment_bar.visible = show_hud
 	if is_instance_valid(navigation): navigation.visible = show_hud
 	if is_instance_valid(target_panel): target_panel.visible = show_hud
@@ -1306,27 +1322,51 @@ func _responsive() -> void:
 	var compact: bool = root.size.x < 950
 	var safe: float = 14.0 if compact else 22.0
 	var sidebar_width: float = 206.0 if compact else 300.0
-	var middle_left: float = 174.0 if compact else 196.0
-	var middle_right: float = root.size.x - safe - sidebar_width - 10.0
-	var middle_width: float = maxf(190.0, middle_right - middle_left)
+	var left_width: float = 180.0 if compact else 316.0
+	var toolbar_height: float = 32.0 if compact else 36.0
+	var dock_height: float = 70.0 if compact else 128.0
+	flight_content_top = safe + toolbar_height + 8.0
+	flight_content_bottom = root.size.y - safe - dock_height - 8.0
+	# A single horizontal owner keeps instruments and every equipment slot in
+	# the same row, even when logical resolution is reduced by UI scaling.
+	if is_instance_valid(flight_dock):
+		flight_dock.offset_left = safe
+		flight_dock.offset_right = -safe
+		flight_dock.offset_top = -safe - dock_height
+		flight_dock.offset_bottom = -safe
+		flight_dock.add_theme_constant_override("separation", 8 if compact else 10)
+	if is_instance_valid(navigation):
+		var toolbar_width: float = minf(376.0 if compact else 480.0, root.size.x - safe * 2.0)
+		navigation.add_theme_stylebox_override("panel", UISkin.hud_panel(2 if compact else 4))
+		navigation.offset_left = -safe - toolbar_width
+		navigation.offset_right = -safe
+		navigation.offset_top = safe
+		navigation.offset_bottom = safe + toolbar_height
+		var toolbar_row: HBoxContainer = navigation.get_node("ToolbarActions")
+		toolbar_row.add_theme_constant_override("separation", 4 if compact else 8)
+		for button: Variant in toolbar_buttons.values():
+			button.add_theme_font_size_override("font_size", 10 if compact else 12)
+			button.custom_minimum_size.y = 24
 	if is_instance_valid(navigation_frame):
 		navigation_frame.offset_left = safe
-		navigation_frame.offset_right = safe + (180 if compact else 316)
-		navigation_frame.offset_top = safe
-		navigation_frame.offset_bottom = safe + (52 if compact else 76)
+		navigation_frame.offset_right = safe + left_width
+		navigation_frame.offset_top = flight_content_top
+		navigation_frame.offset_bottom = flight_content_top + (48 if compact else 76)
+		navigation_frame.add_theme_stylebox_override("panel", UISkin.hud_panel(4 if compact else 8))
 		navigation_status.max_lines_visible = 1 if compact else 2
 		navigation_status.add_theme_font_size_override("font_size", 10 if compact else 11)
+		navigation_stop_button.custom_minimum_size.y = 20
 	if is_instance_valid(hud_left):
 		var frame: PanelContainer = hud_left.get_parent()
 		frame.offset_left = safe
-		frame.offset_top = safe + (60 if compact else 86)
-		frame.offset_bottom = frame.offset_top + (64 if compact else 116)
-		frame.offset_right = safe + (180 if compact else 316)
+		frame.offset_top = navigation_frame.offset_bottom + 8.0
+		frame.offset_bottom = frame.offset_top + ((70 if work_box.visible else 52) if compact else 138)
+		frame.offset_right = safe + left_width
 		frame.add_theme_stylebox_override("panel", UISkin.hud_panel(6 if compact else 8))
 		hud_left.add_theme_constant_override("separation", 3 if compact else 7)
-		top.add_theme_font_size_override("font_size", 12 if compact else 14)
-		objective.add_theme_font_size_override("font_size", 11 if compact else 13)
-		objective.max_lines_visible = (1 if work_box.visible else 2) if compact else 4
+		top.add_theme_font_size_override("font_size", 10 if compact else 14)
+		objective.add_theme_font_size_override("font_size", 10 if compact else 13)
+		objective.max_lines_visible = 1 if compact else 4
 		var heading: Control = hud_left.find_child("MissionHeading", false, false)
 		if heading != null: heading.visible = not compact or not work_box.visible
 		work_progress.show_percentage = not compact
@@ -1335,73 +1375,99 @@ func _responsive() -> void:
 		work_label.clip_text = compact
 		work_label.max_lines_visible = 1 if compact else 3
 	if is_instance_valid(instrument):
-		var width: float = middle_width if compact else minf(620, root.size.x - 2 * sidebar_width - safe * 2)
-		instrument.offset_left = middle_left - root.size.x * 0.5 if compact else -width * 0.5
-		instrument.offset_right = middle_right - root.size.x * 0.5 if compact else width * 0.5
-		instrument.offset_top = -94 if compact else -324
-		instrument.offset_bottom = -44 if compact else -158
-		var inset: StyleBox = UISkin.hud_panel(2 if compact else 8)
-		instrument.add_theme_stylebox_override("panel", inset)
+		instrument.custom_minimum_size.x = 204.0 if compact else minf(420.0, maxf(360.0, root.size.x * 0.3))
+		instrument.add_theme_stylebox_override("panel", UISkin.hud_panel(2 if compact else 6))
 		instrument_title.visible = not compact
-		instrument_title.add_theme_font_size_override("font_size", 12)
+		instrument_title.add_theme_font_size_override("font_size", 11)
 		instrument_title.clip_text = true
 		instrument_title.autowrap_mode = TextServer.AUTOWRAP_OFF
 		dial.visible = not compact
-		dial.custom_minimum_size = Vector2(140, 100)
+		dial.custom_minimum_size = Vector2(80, 76)
 		compact_speed_label.visible = compact
 		compact_speed_label.add_theme_font_size_override("font_size", 10)
 		var instrument_row: HBoxContainer = instrument.find_child("InstrumentReadouts", true, false)
-		if instrument_row != null: instrument_row.add_theme_constant_override("separation", 8 if compact else 14)
+		if instrument_row != null: instrument_row.add_theme_constant_override("separation", 8 if compact else 10)
 		for entry: Dictionary in condition_bars:
-			entry.label.add_theme_font_size_override("font_size", 10 if compact else 12)
+			entry.label.add_theme_font_size_override("font_size", 10 if compact else 11)
 			entry.label.autowrap_mode = TextServer.AUTOWRAP_OFF if compact else TextServer.AUTOWRAP_WORD_SMART
+			entry.label.clip_text = compact
 			entry.bar.visible = not compact
+			entry.bar.custom_minimum_size.y = 4
 		energy_bar.visible = not compact
 		heat_bar.visible = not compact
-		energy_label.add_theme_font_size_override("font_size", 10 if compact else 12)
-		heat_label.add_theme_font_size_override("font_size", 10 if compact else 12)
+		energy_bar.custom_minimum_size.y = 4
+		heat_bar.custom_minimum_size.y = 4
+		energy_label.add_theme_font_size_override("font_size", 10 if compact else 11)
+		heat_label.add_theme_font_size_override("font_size", 10 if compact else 11)
 		energy_label.autowrap_mode = TextServer.AUTOWRAP_OFF if compact else TextServer.AUTOWRAP_WORD_SMART
 		heat_label.autowrap_mode = TextServer.AUTOWRAP_OFF if compact else TextServer.AUTOWRAP_WORD_SMART
+		energy_label.clip_text = compact
+		heat_label.clip_text = compact
 		cargo_label.visible = not compact
-		cargo_label.add_theme_font_size_override("font_size", 11)
+		cargo_label.add_theme_font_size_override("font_size", 10)
 		for name_value: String in ["DefenseReadout", "ResourceReadout"]:
 			var readout: VBoxContainer = instrument.find_child(name_value, true, false)
 			if readout != null:
-				readout.custom_minimum_size.x = 80 if compact else 145
-				readout.add_theme_constant_override("separation", 0 if compact else 6)
-	if is_instance_valid(equipment_bar):
-		var width: float = middle_width if compact else minf(620, root.size.x - 2 * sidebar_width - safe * 2)
-		equipment_bar.offset_left = middle_left - root.size.x * 0.5 if compact else -width * 0.5
-		equipment_bar.offset_right = middle_right - root.size.x * 0.5 if compact else width * 0.5
-		equipment_bar.offset_top = -148 if compact else -150
-		equipment_bar.offset_bottom = -100 if compact else -62
-		equipment_bar.call("responsive", compact)
+				readout.custom_minimum_size.x = (80 if name_value == "DefenseReadout" else 100) if compact else (92 if name_value == "DefenseReadout" else 110)
+				readout.add_theme_constant_override("separation", 0 if compact else 3)
+	if is_instance_valid(equipment_bar): equipment_bar.call("responsive", compact)
 	if is_instance_valid(navigation_hud):
 		navigation_hud.responsive(root.size)
+		var radar_height: float = minf(140.0 if compact else 246.0, maxf(66.0, flight_content_bottom - hud_left.get_parent().offset_bottom - 8.0))
 		navigation_hud.radar_frame.add_theme_stylebox_override("panel", UISkin.hud_panel(5 if compact else 8))
-		if compact:
-			navigation_hud.radar_frame.offset_left = safe
-			navigation_hud.radar_frame.offset_right = safe + 150
-			navigation_hud.radar_frame.offset_top = -148
-			navigation_hud.radar_frame.offset_bottom = -8
-			navigation_hud.radar.custom_minimum_size = Vector2(140, 104)
-	if is_instance_valid(navigation):
-		var gutter: float = 174 if compact else 0
-		var width: float = minf(560, root.size.x - safe * 2 - gutter)
-		navigation.add_theme_stylebox_override("panel", UISkin.hud_panel(2 if compact else 4))
-		navigation.offset_left = -width * 0.5 + gutter * 0.5
-		navigation.offset_right = width * 0.5 + gutter * 0.5
-		navigation.offset_top = -40 if compact else -54
-		navigation.offset_bottom = -8
-		for button: Node in navigation.find_children("*", "Button", true, false):
-			button.add_theme_font_size_override("font_size", 11 if compact else 12)
-	if is_instance_valid(controls): controls.visible = root.size.x >= 1100 and navigation_hud.visible
+		navigation_hud.radar_frame.offset_left = safe
+		navigation_hud.radar_frame.offset_right = safe + (150 if compact else 236)
+		navigation_hud.radar_frame.offset_top = flight_content_bottom - radar_height - root.size.y
+		navigation_hud.radar_frame.offset_bottom = flight_content_bottom - root.size.y
+		navigation_hud.radar.custom_minimum_size = Vector2(140 if compact else 200, maxf(30.0, radar_height - (36.0 if compact else 44.0)))
+		navigation_hud.range_label.add_theme_font_size_override("font_size", 10 if compact else 12)
+	if is_instance_valid(controls):
+		controls.visible = root.size.x >= 1100 and navigation_hud.visible
+		controls.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		controls.offset_left = safe
+		controls.offset_right = safe + 300
+		controls.offset_top = safe + 8.0
+		controls.offset_bottom = safe + 26.0
 	if is_instance_valid(target_panel):
 		target_panel.offset_left = -safe - sidebar_width
 		target_panel.offset_right = -safe
-		target_panel.offset_top = safe
-		target_panel.offset_bottom = root.size.y - (86 if compact else 62)
-		if is_instance_valid(overview): overview.call("responsive", compact)
+		target_panel.offset_top = flight_content_top
+		target_panel.offset_bottom = flight_content_bottom
+		if is_instance_valid(overview): overview.call("responsive", compact, flight_content_bottom - flight_content_top)
+	# Limit notification width to the free center lane. Different feedback owns
+	# a second small line; only an exact duplicate of the active operation hides.
+	var center_left: float = safe + left_width + 10.0
+	var center_right: float = root.size.x - safe - sidebar_width - 10.0
+	var center_width: float = maxf(100.0, center_right - center_left)
+	var notification_top: float = flight_content_top
+	if panel != null and (panel.visible or station_layer.visible):
+		center_left = safe
+		center_width = root.size.x - safe * 2.0
+		notification_top = safe
+	var notice_width: float = minf(520.0, center_width)
+	var notice_left: float = center_left + (center_width - notice_width) * 0.5
+	var operation_height: float = 64.0 if compact else 56.0
+	if is_instance_valid(operation_bar):
+		operation_bar.offset_left = notice_left
+		operation_bar.offset_right = notice_left + notice_width
+		operation_bar.offset_top = notification_top
+		operation_bar.offset_bottom = notification_top + operation_height
+		operation_bar.add_theme_stylebox_override("panel", UISkin.hud_panel(4 if compact else 6))
+		operation_label.add_theme_font_size_override("font_size", 10 if compact else 12)
+		operation_label.max_lines_visible = 3 if compact else 2
+		operation_cancel.custom_minimum_size = Vector2(64 if compact else 96, 24 if compact else 28)
+		operation_cancel.add_theme_font_size_override("font_size", 10 if compact else 11)
+		operation_bar.get_child(1).add_theme_constant_override("separation", 6 if compact else 10)
+	if is_instance_valid(toast):
+		toast.visible = not toast.text.is_empty() and not (operation_bar.visible and toast.text == operation_message)
+		toast.offset_left = notice_left
+		toast.offset_right = notice_left + notice_width
+		toast.offset_top = notification_top + operation_height + 4.0 if operation_bar.visible else notification_top
+		toast.offset_bottom = toast.offset_top + (33 if compact else 39)
+		toast.add_theme_font_size_override("font_size", 10 if compact else 12)
+		if panel != null and (panel.visible or station_layer.visible):
+			toast.offset_top = root.size.y - 45.0
+			toast.offset_bottom = root.size.y - 8.0
 	if is_instance_valid(npc_title): npc_title.add_theme_font_size_override("font_size", 10 if compact else 11)
 	if is_instance_valid(npc_detail): npc_detail.add_theme_constant_override("separation", 2 if compact else 4)
 	for entry: Dictionary in npc_bars:
@@ -1424,23 +1490,33 @@ func _responsive() -> void:
 		station_services.offset_left = safe
 		station_services.offset_right = safe + (200 if compact else 260)
 		station_services.offset_top = 44 if compact else 96
-		station_services.offset_bottom = -94 if compact else -120
+		station_services.offset_bottom = (-94 if compact else -120) - (40 if station_layer.visible and toast.visible else 0)
 		for heading: Label in station_services.find_children("NpcServiceTitle", "Label", true, false):
 			heading.add_theme_font_size_override("font_size", 13 if compact else 15)
 	if is_instance_valid(station_details):
 		station_details.visible = not compact
 	if is_instance_valid(station_departure):
+		var station_notice_gap: float = 40.0 if station_layer.visible and toast.visible else 0.0
 		station_departure.offset_left = safe
 		station_departure.offset_right = -safe
-		station_departure.offset_top = -82 if compact else -96
-		station_departure.offset_bottom = -safe
-	if is_instance_valid(toast):
-		toast.offset_left = safe if panel.visible or station_layer.visible else middle_left if compact else 370
-		toast.offset_right = -safe if panel.visible or station_layer.visible else middle_right - root.size.x if compact else -340
-		toast.offset_top = -41 if panel.visible else 52 if station_layer.visible else 22 if compact else 94
-		toast.anchor_top = 1.0 if panel.visible else 0.0
-		toast.anchor_bottom = toast.anchor_top
-		toast.offset_bottom = -10 if panel.visible else toast.offset_top + 40
+		station_departure.offset_top = (-82 if compact else -96) - station_notice_gap
+		station_departure.offset_bottom = -safe - station_notice_gap
+	_reflow_flight_left()
+
+func _reflow_flight_left() -> void:
+	if not is_instance_valid(root) or not is_instance_valid(hud_left) or not is_instance_valid(navigation_hud): return
+	var compact: bool = root.size.x < 950
+	var frame: PanelContainer = hud_left.get_parent()
+	var base_height: float = (70.0 if work_box.visible else 52.0) if compact else 138.0
+	# Work and objective text can grow after telemetry changes. Reserve their
+	# real container minimum before placing the radar, without rebuilding nodes.
+	var frame_bottom: float = frame.offset_top + maxf(base_height, frame.get_combined_minimum_size().y)
+	if absf(frame.offset_bottom - frame_bottom) > 0.5: frame.offset_bottom = frame_bottom
+	var radar_height: float = minf(140.0 if compact else 246.0, maxf(66.0, flight_content_bottom - frame_bottom - 8.0))
+	var radar_frame: PanelContainer = navigation_hud.radar_frame
+	radar_frame.offset_top = flight_content_bottom - radar_height - root.size.y
+	radar_frame.offset_bottom = flight_content_bottom - root.size.y
+	navigation_hud.radar.custom_minimum_size = Vector2(140 if compact else 200, maxf(30.0, radar_height - (36.0 if compact else 44.0)))
 
 func _setting_text(title: String, value: float, field: String) -> String:
 	return "%s %.4f" % [title, value] if field == "mouse_sensitivity" else "%s %d%%" % [title, roundi(value * 100)]
@@ -1665,12 +1741,8 @@ func _module_heading(parent: Node, title: String, subtitle: String = "") -> void
 		caption.add_theme_color_override("font_color", UISkin.MUTED)
 
 func _build_instrument() -> void:
-	instrument = _frame(root, "ShipInstrument")
-	instrument.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	instrument.offset_left = -325
-	instrument.offset_right = 325
-	instrument.offset_top = -190
-	instrument.offset_bottom = -48
+	instrument = _frame(flight_dock, "ShipInstrument")
+	instrument.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var layout: VBoxContainer = VBoxContainer.new()
 	layout.add_theme_constant_override("separation", 4)
 	instrument.add_child(layout)
@@ -1726,12 +1798,14 @@ func _build_instrument() -> void:
 func _build_navigation() -> void:
 	navigation = _frame(root, "FlightNavigation")
 	navigation.add_theme_stylebox_override("panel", UISkin.hud_panel(4))
-	navigation.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	navigation.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	top_toolbar_frame = navigation
 	navigation.offset_left = -280
 	navigation.offset_right = 280
 	navigation.offset_top = -58
 	navigation.offset_bottom = -8
 	var row: HBoxContainer = HBoxContainer.new()
+	row.name = "ToolbarActions"
 	row.add_theme_constant_override("separation", 10)
 	navigation.add_child(row)
 	for key: String in ["show_ship", "missions", "map", "pause"]:
@@ -1739,6 +1813,7 @@ func _build_navigation() -> void:
 		var callback: Callable = func(): requested.emit("show_ship", "", 1, "")
 		if key != "show_ship": callback = show_page.bind(key)
 		var button: Button = _button(row, title, callback)
+		toolbar_buttons[key] = button
 		button.focus_mode = Control.FOCUS_NONE
 		button.custom_minimum_size = Vector2(0, 25)
 		button.focus_mode = Control.FOCUS_NONE
@@ -1779,20 +1854,25 @@ func _build_target_module() -> void:
 
 func _build_equipment_bar() -> void:
 	equipment_bar = EquipmentBar.new()
-	root.add_child(equipment_bar)
-	equipment_bar.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	equipment_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	equipment_bar.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	flight_dock.add_child(equipment_bar)
 	equipment_bar.connect("toggle_requested", func(id: String, enabled: bool): requested.emit("set_module_enabled", id, 1, "on" if enabled else "off"))
 	equipment_bar.connect("engine_requested", func(): requested.emit("request_engine_cycle", "", 1, ""))
 
 func _update_module_bar(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 	if not is_instance_valid(equipment_bar): return
 	var records: Array[Dictionary] = []
+	var empty_slots: Array[Dictionary] = []
 	var engine_ready: bool = false
 	var engine_reason: String = "没有安装增推设备。"
 	for container: Dtos.ContainerStateDto in state.rows("container_state"):
 		if container.kind != Types.ContainerKind.SLOT or container.ship_instance_id != ship.ship_instance_id: continue
 		var equipment: Dtos.EquipmentStateDto = state.find("equipment_state", "slot_container_id", container.container_id)
-		if equipment == null: continue
+		if equipment == null:
+			var empty_type: int = int(container.slot_type)
+			empty_slots.append({"slot_id": container.container_id, "slot_type": empty_type, "slot_index": container.slot_index, "slot_title": ["武器", "作业", "通用", "结构"][empty_type], "slot_short": ["武", "作", "通", "构"][empty_type]})
+			continue
 		var item: Dtos.ItemInstanceStateDto = state.find("item_instance_state", "item_instance_id", equipment.item_instance_id)
 		var module: Dictionary = _one("module_defs", "module_id", equipment.module_def_id)
 		var energy_cost: float = float(module.get("energy_eu", 0.0))
@@ -1808,13 +1888,13 @@ func _update_module_bar(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 		elif ship.heat + heat_cost > float(metrics.heat_max): status = "热量受限"
 		else: ready = ship.status == Types.ShipStatus.FLYING; status = "循环就绪" if float(module.get("cycle_s", 0.0)) > 0.0 else "持续启用"
 		var slot_type: int = int(container.slot_type)
-		records.append({"id": equipment.item_instance_id, "module_id": equipment.module_def_id, "title": _item_name(equipment.module_def_id), "slot_type": slot_type, "slot_title": ["武器", "作业", "通用", "结构"][slot_type], "slot_short": ["武", "作", "通", "构"][slot_type], "slot_index": container.slot_index, "enabled": equipment.enabled, "cooldown_remaining_s": equipment.cooldown_remaining_s, "active_remaining_s": equipment.active_remaining_s, "cycle_s": float(module.get("cycle_s", 0.0)), "energy_eu": energy_cost, "heat_hu": heat_cost, "durability": item.durability if item != null else 0.0, "state_label": status, "ready": ready})
+		records.append({"id": equipment.item_instance_id, "slot_id": container.container_id, "module_id": equipment.module_def_id, "title": _item_name(equipment.module_def_id), "slot_type": slot_type, "slot_title": ["武器", "作业", "通用", "结构"][slot_type], "slot_short": ["武", "作", "通", "构"][slot_type], "slot_index": container.slot_index, "enabled": equipment.enabled, "cooldown_remaining_s": equipment.cooldown_remaining_s, "active_remaining_s": equipment.active_remaining_s, "cycle_s": float(module.get("cycle_s", 0.0)), "energy_eu": energy_cost, "heat_hu": heat_cost, "durability": item.durability if item != null else 0.0, "state_label": status, "ready": ready})
 		if equipment.module_def_id.begins_with("module_engine_"):
 			if ready and not engine_ready: engine_reason = "启动已启用增推设备的真实循环；电容 %.0f、热量 %.0f、周期 %.1f s。" % [energy_cost, heat_cost, float(module.get("cycle_s", 0.0))]
 			elif not engine_ready: engine_reason = status
 			engine_ready = engine_ready or ready
 	records.sort_custom(func(a: Dictionary, b: Dictionary): return int(a.slot_type) < int(b.slot_type) if a.slot_type != b.slot_type else int(a.slot_index) < int(b.slot_index))
-	equipment_bar.call("refresh", records, {"energy": ship.energy, "energy_max": metrics.energy_max, "heat_ratio": ship.heat / maxf(float(metrics.heat_max), 1.0), "engine_ready": engine_ready, "engine_reason": engine_reason}, operation_waiting or operation_kind == "travel")
+	equipment_bar.call("refresh", records, {"energy": ship.energy, "energy_max": metrics.energy_max, "heat_ratio": ship.heat / maxf(float(metrics.heat_max), 1.0), "engine_ready": engine_ready, "engine_reason": engine_reason, "empty_slots": empty_slots}, operation_waiting or operation_kind == "travel")
 
 func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 	update_camera_status()
@@ -1850,7 +1930,7 @@ func update_camera_status() -> void:
 	var view: String = ["跟随视角", "舰首视角（舰体隐藏）", "战术视角"][int(camera.mode)]
 	instrument_title.text = _ship_name(ship.ship_def_id) + "  /  " + view + " · V" + (" · 过热警报" if ship.overheated else "")
 	instrument_title.modulate = UISkin.AMBER if ship.overheated else Color.WHITE
-	instrument_title.tooltip_text = "V 循环切换跟随、舰首、战术视角。舰首视角从船头观察，不显示外部舰体；点击下方‘显示舰船’回到跟随视角。"
+	instrument_title.tooltip_text = "V 循环切换跟随、舰首、战术视角。舰首视角从船头观察，不显示外部舰体；点击上方‘显示舰船’回到跟随视角。"
 	compact_speed_label.text = "%.0f m/s · %s" % [Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length(), ["跟随", "舰首隐藏", "战术"][int(camera.mode)]]
 	compact_speed_label.tooltip_text = instrument_title.text + "\n" + instrument_title.tooltip_text + "\n" + cargo_label.tooltip_text
 	instrument.tooltip_text = compact_speed_label.tooltip_text

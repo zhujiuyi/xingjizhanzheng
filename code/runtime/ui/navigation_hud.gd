@@ -57,8 +57,11 @@ class Radar extends Control:
 				var direction: float = -1.0 if contact.height_m > 0 else 1.0
 				draw_line(point + Vector2(0, direction * 5), point + Vector2(0, direction * 10), color, 1, true)
 		var face: Font = UISkin.font()
-		draw_string(face, Vector2(0, 12), "舰首 ↑", HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, UISkin.MUTED)
-		draw_string(face, Vector2(0, size.y - 9), "敌舰 / 设施 / 天体航向", HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, UISkin.MUTED)
+		# At high UI scale the plot can be only a few text lines tall. Its real
+		# range remains in the header; keep the plot clear of optional captions.
+		if size.y >= face.get_height(10) * 6.0:
+			draw_string(face, Vector2(0, 12), "舰首 ↑", HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, UISkin.MUTED)
+			draw_string(face, Vector2(0, size.y - 9), "敌舰 / 设施 / 天体航向", HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, UISkin.MUTED)
 	func _gui_input(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			var closest: String = ""
@@ -102,7 +105,7 @@ func _ready() -> void:
 		row.add_child(button)
 	radar = Radar.new()
 	radar.host = self
-	radar.tooltip_text = "左键拖动观察 · 双击总览接近 · 滚轮缩放"
+	radar.tooltip_text = "左键拖动观察 · 双击总览接近 · 滚轮缩放\n雷达以舰首向上：敌舰、设施、天体航向；上下箭头表示相对高度。量程由上方控件设置。"
 	radar.custom_minimum_size = Vector2(200, 186)
 	layout.add_child(radar)
 	selection_frame = PanelContainer.new()
