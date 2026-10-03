@@ -108,6 +108,12 @@ var navigation_frame: PanelContainer
 var navigation_status: Label
 var navigation_stop_button: Button
 var map_resource_readouts: Array[Dictionary] = []
+var map_details: VBoxContainer
+var map_view_state: Dictionary = {}
+var map_view_identity: String = ""
+var map_origin_sector: String = ""
+var map_route_button: Button
+var map_route_destination: String = ""
 var resource_chart: Control
 var flight_dock: HBoxContainer
 var top_toolbar_frame: PanelContainer
@@ -284,6 +290,9 @@ func _ready() -> void:
 	_responsive()
 
 func bind(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted, world: XJSector, rig: XJCameraRig) -> void:
+	if map_view_identity != runtime.world_id + ":" + db.content_hash or map_origin_sector != runtime.current_sector():
+		map_view_state.clear()
+		map_view_identity = ""
 	state = runtime
 	catalog = db
 	gameplay = business
@@ -331,6 +340,7 @@ func show_title(save_slots: Array[Dictionary]) -> void:
 	_focus_page.call_deferred()
 
 func show_page(next_page: String) -> void:
+	if page == "map": _retain_map_view()
 	if page == "settings" and next_page != "settings": return_page = ""
 	elif next_page == "settings" and page != "settings": return_page = page
 	page = next_page
@@ -415,7 +425,7 @@ func tick(delta: float) -> void:
 	_update_mission_guidance()
 	_reflow_flight_left()
 	_update_live_missions()
-	_update_map_resources()
+	_update_map_resources(float(metrics.total_mass_kg))
 	_refresh_targets()
 	_update_npc_target()
 	_update_navigation()
@@ -458,6 +468,9 @@ func _build_panel(title: String, description: String) -> void:
 	quotes.clear()
 	live_missions.clear()
 	map_resource_readouts.clear()
+	map_details = null
+	map_route_button = null
+	map_route_destination = ""
 	resource_chart = null
 	quantity_input = null
 	card_grid = null
@@ -520,6 +533,7 @@ func _build_panel(title: String, description: String) -> void:
 	var line: HSeparator = HSeparator.new()
 	layout.add_child(line)
 	page_scroll = ScrollContainer.new()
+	page_scroll.resized.connect(_resize_map_canvas)
 	page_scroll.name = "PageScroll"
 	page_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	page_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -1055,35 +1069,124 @@ func _research() -> void:
 		_text("%s · 声望 %d" % [str(_one("faction_defs", "faction_id", reputation.faction_id).get("display_name", "未知势力")), reputation.reputation], 14)
 
 func _map() -> void:
-	_text("虫洞门连接星系。星图只展示航路，定位只选择目标；同星系可跃迁或接近门口，减速后按 F 穿过虫洞。准入与冷却在交互时校验。", 14)
-	if ResourceLoader.exists("res://runtime/ui/star_chart.gd"):
-		var chart_script: Script = load("res://runtime/ui/star_chart.gd")
-		var chart: Control = chart_script.new()
-		body.add_child(chart)
-		chart.call("configure", catalog, state)
-		resource_chart = chart
-	for system: Dictionary in _defs("system_defs"):
-		var card: VBoxContainer = _card(str(system.display_name))
-		_text_to(card, str(system.get("description", "")), 14)
-		for sector_def: Dictionary in _defs("sector_defs"):
-			if sector_def.system_id != system.system_id: continue
-			_text_to(card, _risk_name(str(sector_def.risk_zone_id)) + (" · 所在星系" if sector_def.sector_id == state.current_sector() else ""), 14)
-			for station: Dictionary in _defs("station_defs"):
-				if station.sector_id == sector_def.sector_id:
-					_text_to(card, "站点 · " + _station_name(str(station.station_id)), 14)
-					if station.sector_id == state.current_sector(): _button(card, "定位 " + _station_name(str(station.station_id)), func(): target_id = str(station.station_id); _back())
-			for resource: Dictionary in _defs("resource_node_defs"):
-				if resource.sector_id != sector_def.sector_id: continue
-				var readout: Label = _text_to(card, _resource_map_readout(str(resource.node_id), str(resource.sector_id)), 13)
-				readout.name = "ResourceIntel_" + str(resource.node_id).validate_node_name()
-				readout.tooltip_text = readout.text + "\n矿量来自当前世界的SQLite状态；再生按世界时间推进，暂停与退出不推进。"
-				map_resource_readouts.append({"node_id": str(resource.node_id), "sector_id": str(resource.sector_id), "label": readout})
-				if resource.sector_id == state.current_sector():
-					_button(card, "定位 " + _item_name(str(resource.item_id)) + "矿点", func(): _select_target(str(resource.node_id)); _back())
-			for endpoint: Dictionary in _defs("gate_endpoint_defs"):
-				if endpoint.origin_sector_id != sector_def.sector_id: continue
-				_text_to(card, "航路 → " + _sector_name(str(endpoint.target_sector_id)), 14)
-				if endpoint.origin_sector_id == state.current_sector(): _button(card, "定位通往 " + _sector_name(str(endpoint.target_sector_id)) + " 的虫洞门", func(): target_id = str(endpoint.endpoint_id); _back())
+	_text("选择星系查看情报；拖动视图、滚轮缩放。定位后，前往虫洞并减速按 F 穿越。", 14)
+	var identity: String = state.world_id + ":" + catalog.content_hash
+	if map_view_identity != identity: map_view_state.clear()
+	map_view_identity = identity
+	map_origin_sector = state.current_sector()
+	var chart_script: Script = load("res://runtime/ui/star_chart.gd")
+	var chart: Control = chart_script.new()
+	body.add_child(chart)
+	resource_chart = chart
+	chart.call("configure", catalog, state, gameplay)
+	map_details = VBoxContainer.new()
+	map_details.name = "SelectedSectorDetails"
+	map_details.add_theme_constant_override("separation", 8)
+	body.add_child(map_details)
+	chart.connect("sector_selected", _map_sector_selected)
+	chart.connect("navigation_changed", _update_map_route_action)
+	if not map_view_state.is_empty(): chart.call("restore_view", map_view_state)
+	_map_sector_selected(str(chart.get("selected_sector")))
+	_resize_map_canvas()
+
+func _retain_map_view() -> void:
+	if not is_instance_valid(resource_chart) or state == null or catalog == null: return
+	var chart_state: XJRuntimeState = resource_chart.get("state")
+	var chart_catalog: XJCatalog = resource_chart.get("catalog")
+	if chart_state == null or chart_catalog == null or chart_state.world_id != state.world_id or chart_state.current_sector() != state.current_sector() or chart_catalog.content_hash != catalog.content_hash: return
+	map_view_identity = state.world_id + ":" + catalog.content_hash
+	map_view_state = resource_chart.call("export_view")
+
+func _map_sector_selected(id: String) -> void:
+	if page != "map" or not is_instance_valid(map_details): return
+	var selected: Dictionary = _one("sector_defs", "sector_id", id)
+	if selected.is_empty(): return
+	var focused: Control = root.get_viewport().gui_get_focus_owner()
+	for child: Node in map_details.get_children():
+		map_details.remove_child(child)
+		child.queue_free()
+	map_resource_readouts.clear()
+	map_route_button = null
+	map_route_destination = ""
+	map_details.set_meta("selected_sector", id)
+	var frame: PanelContainer = _frame(map_details, "SelectedSectorLocations")
+	var locations: VBoxContainer = VBoxContainer.new()
+	locations.add_theme_constant_override("separation", 8)
+	frame.add_child(locations)
+	_module_heading(locations, "星系地点 · " + _sector_name(id), "本星系地点可定位；外星系先规划虫洞航路。")
+	var local: bool = id == state.current_sector()
+	for station: Dictionary in _defs("station_defs"):
+		if str(station.sector_id) != id: continue
+		_text_to(locations, "空间站 · " + _station_name(str(station.station_id)), 14)
+		if local: _map_location_button(locations, "定位 " + _station_name(str(station.station_id)), str(station.station_id), id)
+	for resource: Dictionary in _defs("resource_node_defs"):
+		if str(resource.sector_id) != id: continue
+		var readout: Label = _text_to(locations, _resource_map_readout(str(resource.node_id), id), 13)
+		readout.name = "ResourceIntel_" + str(resource.node_id).validate_node_name()
+		readout.tooltip_text = readout.text + "\n矿量来自当前世界的SQLite状态；再生按世界时间推进，暂停与退出不推进。"
+		map_resource_readouts.append({"node_id": str(resource.node_id), "sector_id": id, "label": readout})
+		if local: _map_location_button(locations, "定位 " + _item_name(str(resource.item_id)) + "矿点", str(resource.node_id), id)
+	for endpoint: Dictionary in _defs("gate_endpoint_defs"):
+		if str(endpoint.origin_sector_id) != id: continue
+		_text_to(locations, "虫洞航路 → " + _sector_name(str(endpoint.target_sector_id)), 14)
+		if local: _map_location_button(locations, "定位通往 " + _sector_name(str(endpoint.target_sector_id)) + " 的虫洞门", str(endpoint.endpoint_id), id)
+	if not local and gameplay != null:
+		map_route_destination = id
+		map_route_button = _button(locations, "定位航路起点", _map_locate_route.bind(id))
+		map_route_button.set_meta("map_route_destination", id)
+		_update_map_route_action()
+	# Relink current controls without stealing the graph/search focus on selection.
+	_focus_page()
+	if is_instance_valid(focused) and focused.is_inside_tree(): focused.grab_focus()
+
+func _map_location_button(parent: Node, title: String, id: String, origin: String) -> Button:
+	var button: Button = _button(parent, title, _map_locate_target.bind(id))
+	button.set_meta("map_target_id", id)
+	button.set_meta("map_sector_id", origin)
+	button.disabled = not _map_target_available(id)
+	button.tooltip_text = "选择实际航行目标并返回航行界面；距离、速度、权限和费用由实际操作校验。" if not button.disabled else "当前位置尚没有此地点的实际目标。"
+	return button
+
+func _map_target_available(id: String) -> bool:
+	if not is_instance_valid(sector) or not sector.targets.has(id): return false
+	var node: Variant = sector.targets[id].get("node")
+	return is_instance_valid(node) and node is Node3D and node.is_inside_tree()
+
+func _map_locate_target(id: String) -> void:
+	if page != "map" or state == null: return
+	if not _map_target_available(id):
+		notify("地点已失效，请重新选择星系。", true)
+		return
+	_select_target(id)
+	_back()
+
+func _update_map_route_action() -> void:
+	if not is_instance_valid(map_route_button) or not is_instance_valid(resource_chart): return
+	var status: Dictionary = resource_chart.call("route_status", map_route_destination)
+	map_route_button.disabled = not bool(status.get("open", false))
+	var reasons: Array[String] = []
+	for reason: Variant in status.get("blocked", []): reasons.append(str(reason))
+	map_route_button.tooltip_text = "按当前合法航路选择第一座虫洞；通行条件在门口再次检查。" if not map_route_button.disabled else "\n".join(reasons) if not reasons.is_empty() else "当前位置没有可规划的虫洞航路。"
+
+func _map_locate_route(destination: String) -> void:
+	if page != "map" or state == null or gameplay == null or destination != map_route_destination: return
+	var route: Array = gameplay.missions._route(state.current_sector(), destination, true)
+	if route.is_empty():
+		_update_map_route_action()
+		notify("航路条件已变化，请查看当前星系情报。", true)
+		return
+	_map_locate_target(str(route[0].endpoint_id))
+
+func _resize_map_canvas() -> void:
+	if page != "map" or not is_instance_valid(resource_chart): return
+	var canvas: Control = resource_chart.get("diagram")
+	if not is_instance_valid(canvas): return
+	var height: float = clampf(root.size.y * 0.48, 120.0, 460.0)
+	if is_instance_valid(page_scroll) and page_scroll.size.y > 100.0:
+		# The page's fixed heading is outside its scroll viewport. Fit the whole
+		# graph inside that viewport, including at 200% text scaling.
+		height = minf(height, maxf(96.0, page_scroll.size.y - 4.0))
+	canvas.custom_minimum_size.y = height
 
 func _pause() -> void:
 	_text("世界时间已暂停。保存成功后才会更新存档；等待中的保存可取消。", 14)
@@ -1725,6 +1828,7 @@ func _update_hud_visibility() -> void:
 
 func _responsive() -> void:
 	if not is_instance_valid(root): return
+	_resize_map_canvas()
 	var compact: bool = root.size.x < 950
 	# Hide tall navigation before resizing; its previous minimum otherwise
 	# clamps the panel and leaves stale offsets after a page/scale change.
@@ -1981,7 +2085,7 @@ func _resource_map_readout(node_id: String, sector_id: String) -> String:
 		summary += " · %.0f%%" % (float(info.remaining_units) / float(info.capacity_units) * 100.0)
 	return heading + "\n" + summary
 
-func _update_map_resources() -> void:
+func _update_map_resources(total_mass_kg: float = -1.0) -> void:
 	if page != "map": return
 	# Reuse the existing telemetry cadence and nodes; preserve scroll/focus.
 	for readout: Dictionary in map_resource_readouts:
@@ -1990,7 +2094,7 @@ func _update_map_resources() -> void:
 		if readout.label.text != text:
 			readout.label.text = text
 			readout.label.tooltip_text = text + "\n矿量来自当前世界的SQLite状态；再生按世界时间推进，暂停与退出不推进。"
-	if is_instance_valid(resource_chart): resource_chart.call("refresh_resource_status")
+	if is_instance_valid(resource_chart): resource_chart.call("refresh_resource_status", total_mass_kg)
 
 func _update_live_missions() -> void:
 	for row: Dictionary in live_missions:
@@ -2517,6 +2621,11 @@ func _focus_page() -> void:
 				_focus_mission_action(entry)
 				return
 	var default: Array[Control] = _focus_controls(body)
+	if page == "map" and is_instance_valid(resource_chart):
+		var canvas: Control = resource_chart.get("diagram")
+		if is_instance_valid(canvas):
+			canvas.grab_focus()
+			return
 	for entry: Control in default:
 		if entry is Button and not entry.disabled:
 			entry.grab_focus()

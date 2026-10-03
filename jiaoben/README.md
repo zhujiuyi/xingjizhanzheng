@@ -1,5 +1,11 @@
 # 测试与辅助文件
 
+## 星图重塑
+
+从根目录执行 `/usr/local/bin/python3.14 jiaoben/tests/star_chart_v13_run.py`，追加`--native`独占Metal/CoreAudio窗口。fresh tmp SQLite验证真实Main的单选情报、方向/门资格/载重变化、输入隔离、关闭重开/换世界/实际旅行绑定、四布局及120/300个纯UI节点；日志和结构化结果在logs，截图和DB在tmp。共用`feature-audit.lock`，不得与其它Godot检查/编辑器导入并行。原生Viewport事件与额外系统输入复查分别记录，最终结果见40。
+
+当前发行包内置表现门槛为90项/14图（增加12项星图检查，保留原78项），`build_client.py`必须用实际bundle/PCK独立运行；未通过不得发布。历史小节的旧检查数属于对应版本。
+
 ## 全量功能审核
 
 从工作区根目录执行 `/usr/local/bin/python3.14 jiaoben/tests/feature_audit_run.py`。统一runner串行执行现有客户端、战斗、存档、界面、导航及新增完整进度、经济、模块开关、借船清理和历史容量/内容增量专项；每组独立输出与引擎日志，严格检查端点、退出与诊断。`--native`执行默认原生整合组；`--native --only navigation-commands targets visibility --merge`补充操控/标注/可见性并合入同一汇总。`--only`选择检查，`--merge`保留其它已执行结果；不得同时运行两个runner，锁文件仅在tmp。

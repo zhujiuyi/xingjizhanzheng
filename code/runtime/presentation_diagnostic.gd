@@ -55,6 +55,7 @@ static func run(host: Node, output_dir: String) -> bool:
 		if page == "map":
 			var chart: Node = host.ui.body.find_child("StarChart", true, false)
 			_check(evidence, chart != null and chart.sectors.size() == host.store.catalog.rows("sector_defs").size() and not chart.links.is_empty() and chart.selected_sector == host.state.current_sector() and chart.information.text.contains("势力：") and chart.information.text.contains("资源："), "packed graphical star chart reads actual sectors, links and intelligence")
+			await _star_chart_checks(host, evidence)
 			await _capture(host, output_dir, "map")
 		if page == "pause":
 			var manual_count: int = 0
@@ -273,6 +274,162 @@ static func run(host: Node, output_dir: String) -> bool:
 	exit_voice.free()
 	if DisplayServer.get_name() != "headless": host.get_viewport().warp_mouse(original_pointer)
 	return _finish(evidence)
+
+static func _star_chart_durable_state(host: Node) -> Dictionary:
+	# Read complete rows only from the fresh release-test database. Journal file
+	# changes cannot substitute for comparing actual snapshots and their slots.
+	return {
+		"snapshots": host.store._records("SELECT * FROM save_snapshot ORDER BY snapshot_id"),
+		"slots": host.store._records("SELECT * FROM save_slot ORDER BY slot_id"),
+		"sessions": host.store._records("SELECT * FROM runtime_session ORDER BY world_id"),
+		"players": host.store._records("SELECT * FROM player_state ORDER BY snapshot_id,player_id"),
+		"ships": host.store._records("SELECT * FROM ship_state ORDER BY snapshot_id,ship_instance_id")}
+
+static func _star_chart_checks(host: Node, evidence: Dictionary) -> void:
+	# Freeze Main's simulation callbacks, retaining real GUI/render callbacks and
+	# the physics space. Record state after freezing so normal ticks are excluded.
+	var process_enabled: bool = host.is_processing()
+	var physics_enabled: bool = host.is_physics_processing()
+	host.set_process(false)
+	host.set_physics_process(false)
+	var chart: Control = host.ui.resource_chart
+	var controls_valid: bool = is_instance_valid(chart)
+	if controls_valid:
+		controls_valid = is_instance_valid(chart.get("search_box")) and is_instance_valid(chart.get("risk_filter")) and is_instance_valid(chart.get("navigator")) and is_instance_valid(chart.get("diagram"))
+	for identity: String in ["ChartFitAll", "ChartFocusCurrent", "ChartFocusSelected", "ChartZoomOut", "ChartZoomIn"]:
+		controls_valid = controls_valid and is_instance_valid(chart) and chart.find_child(identity, true, false) is Button
+	if controls_valid:
+		var drawing: Control = chart.get("diagram")
+		controls_valid = drawing.clip_contents and drawing.mouse_filter == Control.MOUSE_FILTER_STOP and not drawing.mouse_force_pass_scroll_events
+	_check(evidence, controls_valid, "packed star chart has search, risk selection, node navigation, view tools and a clipped canvas that consumes scroll input")
+	if not controls_valid:
+		host.set_process(process_enabled)
+		host.set_physics_process(physics_enabled)
+		return
+	var canvas: Control = chart.get("diagram")
+	var original_view: Dictionary = chart.call("export_view")
+	var initial_player: Dictionary = host.store._codec.encode_row("player_state", host.state.player())
+	var initial_ship: Dictionary = host.store._codec.encode_row("ship_state", host.state.ship())
+	var initial_meta: Dictionary = host.store._codec.encode_row("save_snapshot", host.state.snapshot.meta)
+	var initial_pose: Transform3D = host.world.flight.global_transform
+	var origin: String = host.state.current_sector()
+	var initial_target: String = host.ui.target_id
+	var initial_durable: Dictionary = _star_chart_durable_state(host)
+	var world_points: Dictionary = canvas.get("world_points")
+	var ids: Array[String] = []
+	var risk_bounds: Dictionary = {}
+	var spatial_valid: bool = world_points.size() == host.store.catalog.rows("sector_defs").size()
+	for definition: Dictionary in host.store.catalog.rows("sector_defs"):
+		var id: String = str(definition.sector_id)
+		ids.append(id)
+		if not world_points.has(id):
+			spatial_valid = false
+			continue
+		var point: Vector2 = world_points[id]
+		spatial_valid = spatial_valid and is_finite(point.x) and is_finite(point.y)
+		var risk: String = str(definition.risk_zone_id)
+		if not risk_bounds.has(risk): risk_bounds[risk] = {"minimum_x": point.x, "maximum_x": point.x, "count": 0}
+		risk_bounds[risk].minimum_x = minf(float(risk_bounds[risk].minimum_x), point.x)
+		risk_bounds[risk].maximum_x = maxf(float(risk_bounds[risk].maximum_x), point.x)
+		risk_bounds[risk].count += 1
+	for risk: String in risk_bounds:
+		if int(risk_bounds[risk].count) > 1:
+			spatial_valid = spatial_valid and float(risk_bounds[risk].maximum_x) - float(risk_bounds[risk].minimum_x) > 24.0
+	_check(evidence, spatial_valid and not ids.is_empty(), "packed star chart positions every actual frozen sector in space instead of one column per risk level")
+	var endpoint_groups: Dictionary = {}
+	for endpoint: Dictionary in host.store.catalog.rows("gate_endpoint_defs"):
+		var connection_id: String = str(endpoint.connection_id)
+		if not endpoint_groups.has(connection_id): endpoint_groups[connection_id] = []
+		endpoint_groups[connection_id].append(endpoint)
+	var links_valid: bool = chart.get("links").size() == endpoint_groups.size()
+	var seen_connections: Dictionary = {}
+	for link: Dictionary in chart.get("links"):
+		var identity: String = str(link.connection_id)
+		links_valid = links_valid and not seen_connections.has(identity) and endpoint_groups.has(identity)
+		seen_connections[identity] = true
+		var expected: Array = endpoint_groups.get(identity, [])
+		var actual: Array = link.get("endpoints", [])
+		var expected_ids: Array[String] = []
+		var actual_ids: Array[String] = []
+		var forward: bool = false
+		var reverse: bool = false
+		for endpoint: Dictionary in expected:
+			expected_ids.append(str(endpoint.endpoint_id))
+			forward = forward or (str(endpoint.origin_sector_id) == str(link.origin) and str(endpoint.target_sector_id) == str(link.destination))
+			reverse = reverse or (str(endpoint.origin_sector_id) == str(link.destination) and str(endpoint.target_sector_id) == str(link.origin))
+		for endpoint: Dictionary in actual:
+			actual_ids.append(str(endpoint.endpoint_id))
+			links_valid = links_valid and expected.has(endpoint)
+		expected_ids.sort()
+		actual_ids.sort()
+		links_valid = links_valid and forward and expected_ids == actual_ids and bool(link.get("bidirectional", false)) == reverse
+	_check(evidence, links_valid, "packed star chart preserves every actual connection and the direction of its frozen door endpoints")
+	host.ui.page_scroll.ensure_control_visible(canvas)
+	for frame: int in range(3): await host.get_tree().process_frame
+	_check(evidence, canvas.is_visible_in_tree() and host.ui.page_scroll.get_global_rect().grow(0.5).encloses(canvas.get_global_rect()) and Rect2(Vector2.ZERO, host.ui.root.size).encloses(canvas.get_global_rect()), "packed star chart canvas fits completely inside the page scroll viewport")
+	ids.sort()
+	var foreign: String = ""
+	for id: String in ids:
+		if id != origin:
+			foreign = id
+			break
+	chart.call("select_sector", foreign)
+	for frame: int in range(3): await host.get_tree().process_frame
+	var details: Control = host.ui.map_details
+	var selection_valid: bool = not foreign.is_empty() and str(chart.get("selected_sector")) == foreign and is_instance_valid(details)
+	if selection_valid:
+		selection_valid = str(details.get_meta("selected_sector", "")) == foreign and details.get_child_count() == 1 and host.ui.body.find_children("SelectedSectorDetails", "VBoxContainer", true, false).size() == 1
+	_check(evidence, selection_valid, "packed star chart selection rebuilds exactly one detail panel for the selected external sector")
+	var expected_resources: Array[String] = []
+	var shown_resources: Array[String] = []
+	for definition: Dictionary in host.store.catalog.rows("resource_node_defs"):
+		if str(definition.sector_id) == foreign: expected_resources.append(str(definition.node_id))
+	var readouts_valid: bool = selection_valid
+	for readout: Dictionary in host.ui.map_resource_readouts:
+		shown_resources.append(str(readout.node_id))
+		readouts_valid = readouts_valid and str(readout.sector_id) == foreign and is_instance_valid(readout.label) and details.is_ancestor_of(readout.label)
+	expected_resources.sort()
+	shown_resources.sort()
+	_check(evidence, readouts_valid and shown_resources == expected_resources, "packed selected-sector resource readouts contain exactly that sector's real mineral nodes")
+	var search: LineEdit = chart.get("search_box")
+	var risk_filter: OptionButton = chart.get("risk_filter")
+	var navigator: OptionButton = chart.get("navigator")
+	search.text = foreign
+	search.text_changed.emit(foreign)
+	for frame: int in range(3): await host.get_tree().process_frame
+	_check(evidence, navigator.item_count == 1 and str(navigator.get_item_metadata(0)) == foreign and str(chart.get("selected_sector")) == foreign, "packed search control finds the exact sector ID without changing its selected intelligence")
+	search.text = ""
+	search.text_changed.emit("")
+	risk_filter.select(3)
+	risk_filter.item_selected.emit(3)
+	for frame: int in range(3): await host.get_tree().process_frame
+	var low_risk_count: int = 0
+	for definition: Dictionary in host.store.catalog.rows("sector_defs"):
+		if str(definition.risk_zone_id) == "risk_low": low_risk_count += 1
+	_check(evidence, low_risk_count > 0 and navigator.item_count == low_risk_count and str(chart.get("selected_sector")) == foreign and str(details.get_meta("selected_sector", "")) == foreign, "packed risk filter limits navigator matches while keeping the selected sector and its single detail panel")
+	risk_filter.select(0)
+	risk_filter.item_selected.emit(0)
+	var anchor: Vector2 = canvas.size * Vector2(0.37, 0.42)
+	var before_anchor: Vector2 = canvas.call("screen_to_world", anchor)
+	var before_zoom: float = float(canvas.get("zoom"))
+	canvas.call("zoom_at", 1.2, anchor)
+	_check(evidence, float(canvas.get("zoom")) > before_zoom and Vector2(canvas.call("screen_to_world", anchor)).distance_to(before_anchor) < 0.001, "packed star chart zoom keeps the world point beneath its chosen screen anchor")
+	canvas.call("center_on", foreign)
+	var centered: bool = (Vector2(world_points.get(foreign, Vector2(1e20, 1e20))) * float(canvas.get("zoom")) + Vector2(canvas.get("pan"))).distance_to(canvas.size * 0.5) < 0.01
+	canvas.call("fit_all")
+	var fitted: bool = not world_points.is_empty()
+	for id: String in world_points:
+		fitted = fitted and Rect2(Vector2.ZERO, canvas.size).has_point(Vector2(world_points[id]) * float(canvas.get("zoom")) + Vector2(canvas.get("pan")))
+	_check(evidence, centered and fitted, "packed selected-sector centering and full-map restore keep every actual node inside the canvas")
+	chart.call("restore_view", original_view)
+	chart.call("focus_current")
+	chart.call("fit_all")
+	host.ui.page_scroll.ensure_control_visible(canvas)
+	for frame: int in range(3): await host.get_tree().process_frame
+	_check(evidence, host.state.current_sector() == origin and host.ui.target_id == initial_target and host.store._codec.encode_row("player_state", host.state.player()) == initial_player and host.store._codec.encode_row("ship_state", host.state.ship()) == initial_ship and host.store._codec.encode_row("save_snapshot", host.state.snapshot.meta) == initial_meta and host.world.flight.global_transform.is_equal_approx(initial_pose), "packed star chart view operations preserve the player's actual sector, target, ship, funds, pose and simulation snapshot")
+	_check(evidence, _star_chart_durable_state(host) == initial_durable, "packed star chart view operations leave all SQLite snapshots, slots, sessions and persisted player and ship rows unchanged")
+	host.set_process(process_enabled)
+	host.set_physics_process(physics_enabled)
 
 static func _business_rows(host: Node) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
