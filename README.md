@@ -4,7 +4,7 @@
 
 macOS 客户端已在 Apple Silicon Mac 实际启动并验证存读档；Windows x64 包已成功导出，原生 Windows 运行尚未验证。交付路径、构建身份与验证边界见 [交付记录](doc/26-开发阶段与交付记录.md)，启动方式和操作见 [客户端说明](doc/28-客户端使用与交付说明.md)。构建包不入 Git；可用 `jiaoben/build_client.py --platform all --publish` 重建。
 
-上一交付（v0.8.0，v0.8.1正在验收构建）：[Mac客户端](code/dist/0.8.0-46586463-20261003-175154/mac/星际战舰.app) · [Mac压缩包](code/dist/0.8.0-46586463-20261003-175154/星际战舰-macOS.zip) · [Windows压缩包](code/dist/0.8.0-46586463-20261003-175154/星际战舰-Windows-x64.zip)。实际Mac包已通过6项数据库与53项表现检查、9张截图及125项资源校验；Windows原生运行未验收。
+当前交付（v0.8.1）：[Mac客户端](code/dist/0.8.1-21368d9d-20261003-192837/mac/星际战舰.app) · [Mac压缩包](code/dist/0.8.1-21368d9d-20261003-192837/星际战舰-macOS.zip) · [Windows压缩包](code/dist/0.8.1-21368d9d-20261003-192837/星际战舰-Windows-x64.zip)。实际Mac包已通过6项数据库与59项表现检查、10张截图及125项资源校验；Windows原生运行未验收。
 
 源码仓库：[xingjizhanzheng](https://github.com/zhujiuyi/xingjizhanzheng)（私人仓库）。开发阶段通过对应检查后提交推送，状态与证据见 [开发阶段与交付记录](doc/26-开发阶段与交付记录.md)。
 
