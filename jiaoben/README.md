@@ -57,3 +57,10 @@ v0.6.1专项已完成：`flight_visibility_v4.gd` headless/CoreAudio44项、Meta
 v0.6.2目标标注专项：`tests/target_annotations_v5.gd` 使用独立fresh Main/SQLite，冻结玩法物理并保留真实render回调。headless/CoreAudio54项、Metal/CoreAudio58项/4图通过；验证单一名称Label、无阴影/描边、选中目标排除重复通道、模型实例不变、动态/静止切换、三视角、四组布局与失效/暂停清理。NPC通过未改SQLite原型创建测试runtime DTO，再走生产sync_entities，不能冒充自然任务解锁。原生与headless日志前缀`target-annotations-v5`，所有检查严格诊断0。实际发布端点现要求37项/6图，新增清晰名称和唯一标注/Model检查；源码与实际包证据见26，不使用旧35项代替。
 
 v0.6.2实际新包 `0.6.2-8d86553e-20261003-141501` 已通过37项Metal/CoreAudio表现检查/6图、六项数据库、124项原始资源摘要与ad-hoc签名。构建时源提交 `8d86553e0251234a6700d38c8268bf7889ebdbd3`、`source_dirty=false`；构建日志为 `logs/client-v062-build.log`，实际包日志前缀为构建ID，八份导出/签名/数据库/表现及引擎日志严格诊断0。截图目录 `tmp/release-presentation/24f66996-dade-48ba-a6de-fa65b3e7f1be/`，其中靠站截图已经查看，显示单层名称和选中框。Windows Release及PE/PCK/DLL检查通过，原生运行尚未验证；交付物和摘要见 [26](../doc/26-开发阶段与交付记录.md)。
+
+
+## v0.7.0曦航对标与自动导航
+
+`build_local_navigation.py` 从正式 SQL 构建独立只读 v1 导航数据库，清单只存身份/摘要。`tests/local_navigation_geometry_v6.gd` 检查实际十站九舰的三维安全落点及规则/取消边界。`tests/navigation_commands_v6_run.py` 默认 headless/CoreAudio，`--native` 要求独占原生窗口，使用 fresh tmp 库检查真实 Main 导航、SQLite 到达保存和重开、实体射线选择、火力辅助并行、总览设备和布局；原生与 headless 证据分别记录。截图不能替代实际物理与持久状态检查。
+
+发布固定端点已扩展为46项检查、9张实际包截图，新增图形星图、真实设备、独立导航SQLite、先存起点再跃迁、站外停船、实际射线选站及业务进站；构建器逐张检查PNG与摘要。此次测试结果和实际包身份见 [32](../doc/32-曦航对标与导航交互改进.md) 与 [26](../doc/26-开发阶段与交付记录.md)，旧版本结果保留为历史。

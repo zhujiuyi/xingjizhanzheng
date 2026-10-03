@@ -37,6 +37,10 @@ static func run(host: Node, output_dir: String) -> bool:
 		host.ui.show_page(page)
 		await host.get_tree().process_frame
 		_check(evidence, host.ui.page == page and host.ui.body.get_child_count() > 0, "packed service page " + page)
+		if page == "map":
+			var chart: Node = host.ui.body.find_child("StarChart", true, false)
+			_check(evidence, chart != null and chart.sectors.size() == host.store.catalog.rows("sector_defs").size() and not chart.links.is_empty() and chart.selected_sector == host.state.current_sector() and chart.information.text.contains("势力：") and chart.information.text.contains("资源："), "packed graphical star chart reads actual sectors, links and intelligence")
+			await _capture(host, output_dir, "map")
 		if page == "pause":
 			var manual_count: int = 0
 			for control: Node in host.ui.body.find_children("*", "Button", true, false):
@@ -90,8 +94,8 @@ static func run(host: Node, output_dir: String) -> bool:
 	host._business_action("undock", "", 1, "")
 	while host.busy: await host.get_tree().process_frame
 	_check(evidence, host.state.ship().status == Types.ShipStatus.FLYING, "packed authoritative departure")
-	var flight_process_mode: int = host.process_mode
-	host.process_mode = Node.PROCESS_MODE_DISABLED
+	host.set_process(false)
+	host.set_physics_process(false)
 	host.camera.bind(host.world.flight, host.store.catalog, Types.CameraMode.FRONT)
 	host.state.player().camera_mode = Types.CameraMode.FRONT
 	host.camera.step(0.0)
@@ -101,17 +105,20 @@ static func run(host: Node, output_dir: String) -> bool:
 	var flight_velocity: Vector3 = host.world.flight.velocity
 	host.ui.show_ship_button.pressed.emit()
 	_check(evidence, host.camera.mode == Types.CameraMode.FOLLOW and host.state.player().camera_mode == Types.CameraMode.FOLLOW and host.world.flight.visual.is_visible_in_tree() and host.world.flight.global_transform.is_equal_approx(flight_pose) and host.world.flight.velocity.is_equal_approx(flight_velocity) and host.ui.instrument_title.text.contains("跟随视角"), "packed recovery shows centered ship without changing flight motion")
-	host.process_mode = flight_process_mode as Node.ProcessMode
+	host.set_process(true)
+	host.set_physics_process(true)
 	var nav: XJNavigationHUD = host.ui.navigation_hud
 	host.ui.tick(1.0)
 	_check(evidence, nav.visible and nav.scales.size() == 3, "packed local radar reads three SQLite ranges")
 	_check(evidence, nav.sensor_limit == float(host.store.catalog.rule("target_marker_detection_range_m")), "packed radar respects frozen sensor limit")
 	_check(evidence, nav.contacts.filter(func(row: Dictionary): return row.kind == "planet" and row.bearing).size() == 1, "packed sector includes known celestial bearing")
+	_check(evidence, host.ui.overview.entry_rows.any(func(row: Dictionary): return row.kind == "station") and host.ui.overview.filter_buttons.size() == 3 and host.ui.overview.sort_buttons.size() == 3, "packed overview provides known station selection, classification and sorting")
+	_check(evidence, not host.ui.equipment_bar.module_records.is_empty() and host.ui.equipment_bar.module_records.size() == host.gameplay.call("equipped", host.state.ship()).size(), "packed equipment bar reads actual installed module instances")
 	await _capture(host, output_dir, "flight")
 	var station_id: String = "station_anchor_port"
 	var station: Node3D = host.world.targets[station_id].node
-	var prior_mode: int = host.process_mode
-	host.process_mode = Node.PROCESS_MODE_DISABLED
+	host.set_process(false)
+	host.set_physics_process(false)
 	host.world.flight.global_position = station.global_position + host.world.flight.global_basis.z * (float(host.store.catalog.rule("dock_radius_m")) * 0.8)
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
@@ -130,7 +137,56 @@ static func run(host: Node, output_dir: String) -> bool:
 	_check(evidence, host.ui.interaction_button.disabled and host.ui.interaction_label.text.contains("制动"), "packed over-speed approach gives braking reason")
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
-	host.process_mode = prior_mode as Node.ProcessMode
+	_check(evidence, host.local_navigation.rules.loaded and host.local_navigation.rules.VERSION == "local-navigation-v1", "packed local-navigation rules load the versioned SQLite extension")
+	# Retain every child collider in the real World3D while explicitly driving
+	# Main at physical boundaries; disabling its inherited process mode removes
+	# bodies from the physics space and would invalidate the safety evidence.
+	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, station.global_position + Vector3(0, 600, 4000))
+	host.world.flight.velocity = Vector3.ZERO
+	host.world.flight.write_back()
+	var origin: Vector3 = host.world.flight.global_position
+	var snapshots_before: int = host.store._records("SELECT count(*) AS n FROM save_snapshot")[0].n
+	var begun: bool = host._navigation_command("warp", station_id)
+	var snapshots_after: int = host.store._records("SELECT count(*) AS n FROM save_snapshot")[0].n
+	_check(evidence, begun and host.local_navigation.phase == "warmup" and origin.is_equal_approx(host.world.flight.global_position) and snapshots_after == snapshots_before + 1, "packed warp durably saves its origin before charge or movement")
+	var steps: int = 0
+	while host.local_navigation.phase == "warmup" and steps < 1800:
+		await host.get_tree().physics_frame
+		host._physics_process(1.0 / float(Engine.physics_ticks_per_second))
+		steps += 1
+	host.camera.snapped = false
+	host.camera.step(1.0)
+	host.ui.tick(1.0)
+	host.warp_visual.update_navigation(host.local_navigation.phase, 0.6, float(host.preferences.get("vfx_intensity", 1.0)), false)
+	_check(evidence, host.local_navigation.phase == "travel" and host.warp_visual.is_visible_in_tree(), "packed warp shows an actual running effect behind the HUD")
+	await _capture(host, output_dir, "warp")
+	while host.local_navigation.active() and steps < 2400:
+		await host.get_tree().physics_frame
+		host._physics_process(1.0 / float(Engine.physics_ticks_per_second))
+		steps += 1
+	for frame: int in range(3): await host.get_tree().process_frame
+	while host.busy: await host.get_tree().process_frame
+	host.warp_visual.update_navigation("idle", 0.0, 1.0, false)
+	host.camera.snapped = false
+	host.camera.step(1.0)
+	host.ui.tick(1.0)
+	_check(evidence, steps < 2400 and host.local_navigation.phase == "arrived" and host.state.ship().status == Types.ShipStatus.FLYING and absf(host.world.flight.global_position.distance_to(station.global_position) - 500.0) <= 0.01 and host.world.flight.velocity.is_zero_approx(), "packed local warp reaches the safe station exterior and stops without docking")
+	await host.get_tree().physics_frame
+	var station_screen: Vector2 = host.camera.camera.unproject_position(station.global_position)
+	_check(evidence, not host.camera.camera.is_position_behind(station.global_position) and host._world_target_at(station_screen) == station_id, "packed station model can be selected by its real physical ray hit")
+	await _capture(host, output_dir, "arrival")
+	var docking: bool = host._navigation_command("dock", station_id)
+	var dock_steps: int = 0
+	while host.local_navigation.active() and dock_steps < 1800:
+		await host.get_tree().physics_frame
+		host._physics_process(1.0 / float(Engine.physics_ticks_per_second))
+		dock_steps += 1
+	for frame: int in range(3): await host.get_tree().process_frame
+	while host.busy: await host.get_tree().process_frame
+	host._sync_presentation_stage()
+	_check(evidence, docking and dock_steps < 1800 and host.state.ship().status == Types.ShipStatus.DOCKED and host.hangar.is_visible_in_tree() and host.ui.page == "station", "packed dock command completes the actual validated station entry")
+	host.set_process(true)
+	host.set_physics_process(true)
 	host.ui.show_page("pause")
 	_check(evidence, host.store.save(host.state, "manual", 0), "packed presentation world saves to isolated SQLite")
 	# Leave a freed reference immediately before quit to exercise cleanup too.

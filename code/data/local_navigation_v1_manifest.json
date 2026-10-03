@@ -1,0 +1,12 @@
+{
+  "asset_version": "local-navigation-v1",
+  "scope": "Independent gameplay navigation extension, fixed rule version v1; existing frozen core definitions and sealed ship state remain authoritative and unchanged.",
+  "resources": [
+    {
+      "path": "res://data/local_navigation_v1.db",
+      "sha256": "5fa71ce97c54b6b18b210623a2fa59acc13a9947cd54d38270bc02a249e44577",
+      "role": "readonly_local_gameplay_navigation_rules",
+      "source": "Project authored SQL; code/database/local_navigation_v1.sql"
+    }
+  ]
+}

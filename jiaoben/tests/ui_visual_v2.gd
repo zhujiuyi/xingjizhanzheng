@@ -28,6 +28,43 @@ func capture(name: String) -> void:
 	root.get_texture().get_image().save_png(path)
 	captures += 1
 	print("CAPTURE " + path)
+
+func check_instrument_content(ui: Node, label: String) -> void:
+	var compact: bool = ui.root.size.x < 950
+	var readouts: Array[Label] = []
+	for entry: Dictionary in ui.condition_bars: readouts.append(entry.label)
+	readouts.append(ui.energy_label); readouts.append(ui.heat_label)
+	if compact: readouts.append(ui.compact_speed_label)
+	else: readouts.append(ui.instrument_title); readouts.append(ui.cargo_label)
+	var inside: bool = true
+	var separate: bool = true
+	var readable: bool = true
+	for index: int in range(readouts.size()):
+		var readout: Label = readouts[index]
+		inside = inside and readout.is_visible_in_tree() and ui.instrument.get_global_rect().encloses(readout.get_global_rect())
+		for other: int in range(index + 1, readouts.size()):
+			separate = separate and not readout.get_global_rect().intersects(readouts[other].get_global_rect())
+		if not compact: separate = separate and not readout.get_global_rect().intersects(ui.dial.get_global_rect())
+		if compact:
+			var font_size: int = readout.get_theme_font_size("font_size")
+			var face: Font = readout.get_theme_font("font")
+			var text_size: Vector2 = face.get_string_size(readout.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+			readable = readable and font_size >= 10 and text_size.x <= readout.size.x + 0.5 and face.get_height(font_size) <= readout.size.y + 0.5
+	check(inside, "all real instrument labels fit their own panel " + label)
+	check(separate, "instrument labels and visible dial own separate bounds " + label)
+	if not compact: return
+	var ship: D.ShipStateDto = host.state.ship()
+	var speed_text: String = "%.0f m/s" % Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length()
+	check(readable and not ui.dial.is_visible_in_tree() and ui.compact_speed_label.text.begins_with(speed_text) and ui.compact_speed_label.tooltip_text.contains("显示舰船"), "compact two-column readout retains readable values, true speed and view recovery " + label)
+	var ship_area: Rect2 = Rect2(ui.root.size * 0.5 - Vector2(36, 28), Vector2(72, 56))
+	check(not ui.equipment_bar.get_global_rect().intersects(ship_area) and not ui.instrument.get_global_rect().intersects(ship_area) and not ui.instrument.get_global_rect().intersects(ui.navigation.get_global_rect()), "compact bottom controls preserve central hull area and separate navigation " + label)
+	var equipment_content: bool = true
+	for id: String in ui.equipment_bar.module_buttons:
+		var button: Button = ui.equipment_bar.module_buttons[id]
+		var module_labels: Dictionary = ui.equipment_bar.module_labels[id]
+		equipment_content = equipment_content and button.get_global_rect().encloses(module_labels.title.get_global_rect()) and button.get_global_rect().encloses(module_labels.status.get_global_rect()) and not module_labels.title.get_global_rect().intersects(module_labels.status.get_global_rect()) and module_labels.title.get_theme_font_size("font_size") >= 10 and module_labels.status.get_theme_font_size("font_size") >= 9
+	check(equipment_content, "compact device name and true cycle state fit each actual button " + label)
+	check(ui.navigation_hud.radar_frame.size.x <= 150.5 and ui.navigation_hud.radar_frame.size.y <= 140.5, "compact radar preserves its 150 by 140 footprint " + label)
 func _run() -> void:
 	var path: String = ProjectSettings.globalize_path("res://../jiaoben/tmp/ui-v2-client.db")
 	DirAccess.remove_absolute(path)
@@ -148,7 +185,21 @@ func _run() -> void:
 			await capture("flight-%dx%d-%dpercent" % [size.x, size.y, int(scale * 100)])
 			check(ui.instrument.visible and Rect2(Vector2.ZERO, ui.root.size).encloses(ui.instrument.get_global_rect()), "bottom instrument within viewport %s x%.0f" % [str(size), scale])
 			check(not ui.instrument.get_global_rect().has_point(ui.root.size * 0.5), "fixed center reticle clear of instrument %s x%.0f" % [str(size), scale])
+			check_instrument_content(ui, "%s x%.0f" % [str(size), scale])
 	check(ui.condition_bars.size() == 3 and is_equal_approx(ui.condition_bars[0].bar.value, host.state.ship().shield), "instrument bars reflect actual shield/armor/hull")
+	var original_velocity: Vector3 = host.world.flight.velocity
+	var original_mode: T.CameraMode = host.camera.mode
+	host.world.flight.velocity = Vector3(3, 4, 12)
+	host.world.flight.write_back()
+	ui.tick(1.0)
+	check(ui.compact_speed_label.is_visible_in_tree() and ui.compact_speed_label.text.begins_with("13 m/s"), "compact speed reads a real nonzero flight velocity after production write-back")
+	host.camera.bind(host.world.flight, host.store.catalog, T.CameraMode.FRONT)
+	ui.tick(1.0)
+	check(ui.compact_speed_label.text.contains("舰首隐藏") and ui.compact_speed_label.tooltip_text.contains("显示舰船"), "compact FRONT view explains the hidden exterior and actual recovery action")
+	host.world.flight.velocity = original_velocity
+	host.world.flight.write_back()
+	host.camera.bind(host.world.flight, host.store.catalog, original_mode)
+	ui.tick(1.0)
 	var npc: D.NpcStateDto = D.NpcStateDto.new()
 	npc.npc_instance_id = "ui_v2_npc_fixture"
 	var spawn: Dictionary = host.store.catalog.rows("npc_spawn_defs")[0]

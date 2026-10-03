@@ -16,6 +16,8 @@ var targets: Dictionary = {}
 var npcs: Dictionary = {}
 var last_error: String = ""
 var factory: Script
+var visual_environment: Environment
+var key_light: DirectionalLight3D
 
 func build(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted) -> bool:
 	state = runtime
@@ -298,21 +300,33 @@ func _beacon() -> MeshInstance3D:
 func _make_environment() -> void:
 	var space: Node3D = Factory.space_background({"visual_seed": float(state.current_sector().hash() % 1000), "nebula_color": Color(0.025, 0.048, 0.06), "nebula_accent": Color(0.061, 0.046, 0.032)})
 	var world_environment: WorldEnvironment = space.get_child(0)
+	visual_environment = world_environment.environment
 	world_environment.environment.ambient_light_color = Color(0.38, 0.4, 0.43)
+	world_environment.environment.ambient_light_energy = 0.25
+	world_environment.environment.ssao_enabled = true
+	world_environment.environment.ssao_radius = 3.0
+	world_environment.environment.ssao_intensity = 1.3
 	var panorama := PanoramaSkyMaterial.new()
 	panorama.panorama = preload("res://assets/navigation_v3/space_panorama.png")
-	panorama.energy_multiplier = 0.65
+	panorama.energy_multiplier = 0.34
 	world_environment.environment.sky.sky_material = panorama
 	world_environment.environment.sky_rotation = Vector3(0, float(absi(state.current_sector().hash()) % 1000) / 1000.0 * TAU, 0)
 	add_child(space)
 	Celestials.build(self, state.current_sector())
 	var sun := DirectionalLight3D.new()
+	key_light = sun
 	sun.light_color = Color(1.0, 0.96, 0.89)
-	sun.light_energy = 2.0
+	sun.light_energy = 1.6
+	sun.shadow_enabled = true
+	sun.directional_shadow_max_distance = 2000.0
 	sun.rotation_degrees = Vector3(-35, -30, 0)
 	add_child(sun)
 	var warm := DirectionalLight3D.new()
 	warm.light_color = Color(0.57, 0.65, 0.71)
-	warm.light_energy = 0.65
+	warm.light_energy = 0.25
 	warm.rotation_degrees = Vector3(30, 140, 0)
 	add_child(warm)
+
+func apply_visual_quality(quality: String) -> void:
+	if visual_environment != null: visual_environment.ssao_enabled = quality == "high"
+	if is_instance_valid(key_light): key_light.shadow_enabled = quality != "low"

@@ -1,11 +1,11 @@
 class_name XJUITheme
 extends RefCounted
 ## Presentation only: dimensions/colors below never drive gameplay.
-const ICE: Color = Color("9ddcea")
-const AMBER: Color = Color("dcad67")
-const TEXT: Color = Color("dfebf0")
-const MUTED: Color = Color("93a9b5")
-const COAL: Color = Color("07121a")
+const ICE: Color = Color("b8c6ce")
+const AMBER: Color = Color("c6a76d")
+const TEXT: Color = Color("dce0e3")
+const MUTED: Color = Color("91999f")
+const COAL: Color = Color("101318")
 const MATERIAL: Shader = preload("res://assets/interface_v3/ui_glass.gdshader")
 static var FONT: FontFile = preload("res://assets/interface_v3/NotoSansCJKsc-Regular.otf")
 
@@ -19,6 +19,7 @@ static func plate() -> StyleBox:
 	if texture != null:
 		var result: StyleBoxTexture = StyleBoxTexture.new()
 		result.texture = texture
+		result.modulate_color = Color(0.75, 0.78, 0.81, 0.86)
 		for side: Side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]: result.set_texture_margin(side, 16)
 		result.content_margin_left = 14
 		result.content_margin_right = 14
@@ -34,6 +35,18 @@ static func flat(fill: Color, border: Color, inset: int = 10) -> StyleBoxFlat:
 	result.set_border_width_all(1)
 	result.set_content_margin_all(inset)
 	return result
+
+static func hud_panel(inset: int = 6) -> StyleBoxFlat:
+	return flat(Color(0.035, 0.041, 0.049, 0.82), Color(0.24, 0.255, 0.27, 0.78), inset)
+
+static func hud_button(active: bool = false) -> StyleBoxFlat:
+	var result: StyleBoxFlat = flat(Color(0.17, 0.145, 0.095, 0.6) if active else Color(0.035, 0.042, 0.051, 0.42), Color(0.52, 0.45, 0.3, 0.72) if active else Color(0.21, 0.235, 0.25, 0.48), 3)
+	result.content_margin_top = 2
+	result.content_margin_bottom = 2
+	return result
+
+static func navigation_phase(phase: String) -> String:
+	return str({"idle": "手动航行", "align": "正在对准", "warmup": "跃迁充能", "charging": "跃迁充能", "travel": "正在跃迁", "approach": "自动接近", "orbit": "自动环绕", "dock": "接近停靠", "arrived": "已到达", "stopped": "已停止", "cancelled": "导航中断", "failed": "导航中断"}.get(phase, "自动航行"))
 
 static func button_style(tint: Color) -> StyleBox:
 	var result: StyleBoxTexture = StyleBoxTexture.new()
@@ -62,8 +75,8 @@ static func create() -> Theme:
 	result.set_color("font_hover_color", "Button", Color.WHITE)
 	result.set_color("font_disabled_color", "Button", Color("687e89"))
 	result.set_stylebox("normal", "Button", button_style(Color.WHITE))
-	result.set_stylebox("hover", "Button", button_style(Color("a6d7e7")))
-	result.set_stylebox("pressed", "Button", button_style(Color("7ab0c4")))
+	result.set_stylebox("hover", "Button", button_style(Color("c6b68d")))
+	result.set_stylebox("pressed", "Button", button_style(Color("a59673")))
 	result.set_stylebox("disabled", "Button", button_style(Color("686e76")))
 	result.set_stylebox("focus", "Button", focus_style())
 	result.set_stylebox("panel", "PanelContainer", plate())
@@ -100,7 +113,7 @@ static func decorate(panel: Control, alpha: float = 0.9) -> void:
 	detail.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var material: ShaderMaterial = ShaderMaterial.new()
 	material.shader = MATERIAL
-	material.set_shader_parameter("tint", Color(0.025, 0.052, 0.073, alpha * 0.35))
+	material.set_shader_parameter("tint", Color(0.035, 0.041, 0.049, alpha * 0.27))
 	detail.material = material
 	detail.resized.connect(func(): material.set_shader_parameter("panel_size", detail.size))
 	panel.add_child(detail)
@@ -123,5 +136,6 @@ class Dial extends Control:
 			var direction: Vector2 = Vector2(cos(angle), sin(angle))
 			draw_line(center + direction * (radius + 5), center + direction * (radius + (10 if index % 2 == 0 else 7)), Color("536470"), 1.0, true)
 		var face: Font = get_theme_default_font()
-		draw_string(face, Vector2(0, center.y + 5), "%.0f" % speed, HORIZONTAL_ALIGNMENT_CENTER, size.x, 28, XJUITheme.TEXT)
-		draw_string(face, Vector2(0, center.y + 27), "m / s", HORIZONTAL_ALIGNMENT_CENTER, size.x, 11, XJUITheme.MUTED)
+		var small: bool = size.x < 90
+		draw_string(face, Vector2(0, center.y + 4), "%.0f" % speed, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17 if small else 28, XJUITheme.TEXT)
+		draw_string(face, Vector2(0, center.y + (15 if small else 27)), "m / s", HORIZONTAL_ALIGNMENT_CENTER, size.x, 8 if small else 11, XJUITheme.MUTED)

@@ -158,8 +158,10 @@ func _run() -> void:
 	for key: String in host.world.targets:
 		if host.world.targets[key].kind == "planet":
 			host.ui.target_id = key; nav.selected_id = key; break
-	nav.refresh()
-	check(nav.selection_label.text.contains("航向参考") and not nav.selection_label.text.contains("距离"), "selected scenic planet never presents compressed render distance as physical")
+	host.ui._update_navigation()
+	var selected_card: XJOverviewPanel = host.ui.overview
+	check(selected_card.is_visible_in_tree() and selected_card.selected_id == host.ui.target_id and selected_card.selected_distance.text.contains("航向参考") and not selected_card.selected_distance.text.contains("距离"), "visible selected card labels scenic planet as bearing rather than compressed physical distance")
+	check(not nav.selection_frame.visible and not selected_card.action_buttons["nav_warp"].visible and not selected_card.action_buttons["nav_approach"].visible and not selected_card.action_buttons["nav_orbit"].visible, "bearing selection owns one readout and offers no unsupported movement commands")
 	var dead := Node3D.new()
 	host.world.add_child(dead)
 	host.world.targets["nav_dead"] = {"id": "nav_dead", "title": "已释放目标", "kind": "npc", "node": dead}

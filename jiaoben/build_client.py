@@ -48,7 +48,8 @@ def main() -> None:
     for manifest_path in (CODE / 'assets/manifest.json', CODE / 'assets/placeholders/manifest.json',
                           CODE / 'assets/interface_v2/manifest.json', CODE / 'assets/hangar_v2/manifest.json',
                           CODE / 'assets/interface_v3/manifest.json', CODE / 'assets/navigation_v3/manifest.json',
-                          CODE / 'assets/ship_v3/manifest.json', CODE / 'assets/station_v3/manifest.json'):
+                          CODE / 'assets/ship_v3/manifest.json', CODE / 'assets/station_v3/manifest.json',
+                          CODE / 'data/local_navigation_v1_manifest.json'):
         pack = json.loads(manifest_path.read_text())
         for resource in pack['resources']:
             resource_path = resource.get('resource_path', resource.get('path', ''))
@@ -112,13 +113,20 @@ def main() -> None:
             text = run([str(output / 'Contents/MacOS/星际战舰'), '--audio-driver', 'CoreAudio',
                         '--log-file', str(logs / f'{build_id}-mac-presentation-engine.log'),
                         '--', '--xj-verify-presentation'], logs / f'{build_id}-mac-presentation.log', env)
-            if not re.search(r'PRESENTATION_CLIENT_RESULT PASS checks=37 failures=0', text):
+            if not re.search(r'PRESENTATION_CLIENT_RESULT PASS checks=46 failures=0', text):
                 raise RuntimeError('Actual exported presentation lifecycle did not pass')
             if re.search(r'^(WARNING:|.*Leaked instance:|.*Resource still in use)', text, re.M):
                 raise RuntimeError('Actual exported presentation exited with diagnostics')
+            capture_names = ('title', 'map', 'archive', 'station', 'npc', 'flight', 'approach', 'warp', 'arrival')
+            captures = []
+            for name in capture_names:
+                capture = visual_folder / f'release-{name}.png'
+                if not capture.is_file() or capture.read_bytes()[:8] != b'\x89PNG\r\n\x1a\n':
+                    raise RuntimeError(f'Actual release capture is absent or invalid: {name}')
+                captures.append({'name': name, 'sha256': sha(capture)})
             evidence['verification']['mac_presentation'] = {
-                'result': 'actual release Metal/CoreAudio Chinese font, archive cards, radar, celestial bearing, selected line, station F qualification, hangar/NPC, lifecycle, departure, cockpit visibility recovery without flight mutation and SQLite save PASS',
-                'capture_folder': str(visual_folder), 'checks': 37}
+                'result': 'actual release Metal/CoreAudio Chinese font, archive cards, radar, celestial bearing, selected line, station F qualification, hangar/NPC, lifecycle, departure, cockpit visibility recovery without flight mutation and SQLite save, graphical star chart, actual equipment, local warp source commit/exterior arrival/physical selection/validated docking PASS',
+                'capture_folder': str(visual_folder), 'checks': 46, 'captures': captures}
             evidence['verification']['mac'] = 'actual exported app: resource hashes/new/save/reopen/resume PASS; ad-hoc signature PASS'
             archive = staging / '星际战舰-macOS.zip'
             run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(folder), str(archive)],

@@ -12,6 +12,9 @@ var staged_gameplay: RefCounted
 var camera: XJCameraRig
 var ui: XJUI
 var travel: XJTravel
+var local_navigation: XJLocalNavigation
+var auto_fire_target: String = ""
+var navigation_generation: int = 0
 var busy: bool = false
 var services_ready: bool = false
 var observing: bool = false
@@ -32,6 +35,9 @@ var flight_look := XJFlightLook.new()
 var pointer_mode: bool = false
 var hangar: XJStationHangar
 var presentation_stage: String = ""
+var warp_visual: XJWarpVisual
+var pointer_pick_pending: bool = false
+var pointer_pick_position: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
@@ -56,6 +62,11 @@ func _ready() -> void:
 		get_tree().quit(2)
 		return
 	_install_input()
+	var warp_canvas := CanvasLayer.new()
+	warp_canvas.layer = 0
+	add_child(warp_canvas)
+	warp_visual = XJWarpVisual.new()
+	warp_canvas.add_child(warp_visual)
 	get_tree().auto_accept_quit = false
 	get_window().focus_exited.connect(_release_observation)
 	ui = XJUI.new()
@@ -126,6 +137,9 @@ func _process(delta: float) -> void:
 				presentation.consume(delta)
 	if ui != null:
 		ui.tick(delta)
+	if is_instance_valid(warp_visual):
+		var warp_phase: String = local_navigation.phase if local_navigation != null and local_navigation.warp_active() else "idle"
+		warp_visual.update_navigation(warp_phase, delta, float(preferences.get("vfx_intensity", 1.0)), _paused() or busy)
 	if camera != null:
 		if state == null or state.ship().status != Types.ShipStatus.DOCKED:
 			camera.step(delta)
@@ -138,6 +152,11 @@ func _physics_process(delta: float) -> void:
 		ui.notify(world.last_error, true)
 		return
 	var ship := state.ship()
+	if pointer_pick_pending:
+		pointer_pick_pending = false
+		if pointer_mode and ship.status == Types.ShipStatus.FLYING and not ui.input_blocked():
+			var picked: String = _world_target_at(pointer_pick_position)
+			if not picked.is_empty(): ui._select_target(picked)
 	if ship.ship_instance_id != world.flight.record.ship_instance_id:
 		if not world.rebuild_player():
 			ui.show_page("pause")
@@ -146,12 +165,26 @@ func _physics_process(delta: float) -> void:
 		camera.bind(world.flight, store.catalog, state.player().camera_mode)
 	gameplay.call("begin_step", delta)
 	world.flight.metrics = gameplay.call("metrics", ship)
-	_read_flight_input(delta)
+	if local_navigation != null and local_navigation.active():
+		if _manual_navigation_override():
+			local_navigation.cancel()
+			_center_steering()
+		else:
+			flight_look.clear()
+			fire_held = false
+	else:
+		_read_flight_input(delta)
 	gameplay.call("activate_repairs")
-	if fire_held and Input.is_action_pressed("fire") and not ui.input_blocked() and ship.status == Types.ShipStatus.FLYING:
+	var warping: bool = local_navigation != null and local_navigation.warp_active()
+	if not warping and fire_held and Input.is_action_pressed("fire") and not ui.input_blocked() and ship.status == Types.ShipStatus.FLYING:
 		_fire_weapons()
+	elif not warping and not auto_fire_target.is_empty():
+		_tick_auto_fire()
 	world.flight.blocked = travel.active() if travel != null else false
-	world.flight.simulate(delta)
+	if local_navigation != null and local_navigation.active():
+		local_navigation.tick(delta)
+	else:
+		world.flight.simulate(delta)
 	world.simulate_npcs(delta)
 	world.projectiles.simulate(delta)
 	_flush_damage()
@@ -223,6 +256,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if ui.input_blocked():
 		return
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and pointer_mode:
+		# Run the world-space query at the next physical boundary, after GUI
+		# controls have had the chance to consume their own click.
+		pointer_pick_position = event.position
+		pointer_pick_pending = true
+		fire_held = false
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("target"):
 		ui.select_next()
 	elif event.is_action_pressed("fire"):
@@ -238,6 +279,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and observing:
 		camera.observe(event.screen_relative, float(preferences.get("mouse_sensitivity", 0.0)))
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not pointer_mode:
+		if local_navigation != null and local_navigation.active() and not event.screen_relative.is_zero_approx():
+			local_navigation.cancel()
 		flight_look.add_motion(event.screen_relative, float(preferences.get("mouse_sensitivity", 0.0)))
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -252,6 +295,26 @@ func _input(event: InputEvent) -> void:
 		weapon_errors.clear()
 	if event.is_action_released("observe") and observing:
 		_release_observation()
+
+func _world_target_at(screen_position: Vector2) -> String:
+	if world == null or camera == null or state == null or state.ship().status != Types.ShipStatus.FLYING: return ""
+	var view: Camera3D = camera.camera
+	var start: Vector3 = view.project_ray_origin(screen_position)
+	var end: Vector3 = start + view.project_ray_normal(screen_position) * view.far
+	var query := PhysicsRayQueryParameters3D.create(start, end, 67, [world.flight.get_rid()])
+	var hit: Dictionary = world.get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty(): return ""
+	var collider: Node = hit.collider as Node
+	for id: String in world.targets:
+		var entry: Dictionary = world.targets[id]
+		var node: Node3D = entry.node
+		if not is_instance_valid(node) or not is_instance_valid(collider): continue
+		if node != collider and not node.is_ancestor_of(collider): continue
+		if str(entry.kind) == "npc":
+			var npc: RefCounted = state.find("npc_state", "npc_instance_id", id)
+			if npc == null or not npc.alive or world.flight.global_position.distance_to(node.global_position) > float(store.catalog.rule("target_marker_detection_range_m")): return ""
+		return id
+	return ""
 
 func _read_flight_input(delta: float = 0.0) -> void:
 	world.flight.clear_intent()
@@ -280,12 +343,13 @@ func _read_flight_input(delta: float = 0.0) -> void:
 				gameplay.call("act", "request_engine_cycle", "", 1, "")
 				break
 
-func _fire_weapons() -> void:
+func _fire_weapons(automatic: bool = false, target_override: String = "") -> void:
 	if travel.active():
 		return
 	var target_node: Node3D
-	if world.targets.has(ui.target_id):
-		target_node = world.targets[ui.target_id].node
+	var selected_target: String = target_override if not target_override.is_empty() else ui.target_id
+	if world.targets.has(selected_target):
+		target_node = world.targets[selected_target].node
 	for equipment: Dtos.EquipmentStateDto in state.rows("equipment_state"):
 		var slot := state.find("container_state", "container_id", equipment.slot_container_id) as Dtos.ContainerStateDto
 		if slot == null or slot.ship_instance_id != state.ship().ship_instance_id or slot.slot_type != Types.SlotType.WEAPON:
@@ -296,6 +360,12 @@ func _fire_weapons() -> void:
 			continue
 		var origin := world.flight.muzzle(slot.slot_index)
 		var direction := -origin.basis.z
+		if automatic:
+			if not is_instance_valid(target_node): continue
+			var definition: Dictionary = store.catalog.one("module_defs", "module_id", equipment.module_def_id)
+			if origin.origin.distance_to(target_node.global_position) > float(definition.get("range_m", 0.0)): continue
+			if direction.angle_to(origin.origin.direction_to(target_node.global_position)) > float(store.catalog.rule("player_weapon_fire_cone_half_angle_rad")): continue
+			if not world.line_of_sight(origin.origin, target_node.global_position, world.flight.get_rid(), selected_target): continue
 		if is_instance_valid(target_node):
 			var target_direction := origin.origin.direction_to(target_node.global_position)
 			if direction.angle_to(target_direction) <= float(store.catalog.rule("player_weapon_fire_cone_half_angle_rad")):
@@ -339,6 +409,9 @@ func interaction_context(target_id: String = "") -> Dictionary:
 	return context.inspect(world, state, store.catalog, gameplay, target_id)
 
 func _interact(target_id: String = "") -> void:
+	if local_navigation != null and local_navigation.warp_active():
+		ui.notify("本星系跃迁中，请先停船取消。", true)
+		return
 	if state == null or world == null or travel == null:
 		ui.notify("当前没有可交互的舰船。", true)
 		return
@@ -368,6 +441,22 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		ui.notify("存档操作正在完成，请稍候。")
 		return
 	match action:
+		"nav_warp", "nav_approach", "nav_orbit", "nav_dock":
+			_navigation_command(action.trim_prefix("nav_"), target)
+		"nav_stop":
+			auto_fire_target = ""
+			if local_navigation != null: local_navigation.stop()
+			_center_steering()
+		"combat_toggle":
+			if auto_fire_target == target:
+				auto_fire_target = ""
+				ui.notify("已停止自动开火。")
+			elif _combat_target_valid(target):
+				auto_fire_target = target
+				ui.target_id = target
+				ui.notify("自动开火已开启：仅在射程、射界与视线满足时执行。")
+			else:
+				ui.notify("需选择探测范围内的存活敌舰，并安装可用武器。", true)
 		"interact", "interact_target": _interact(target)
 		"show_ship":
 			if state == null or world == null or camera == null or state.ship().status != Types.ShipStatus.FLYING or ui.keyboard_blocked(): return
@@ -450,6 +539,12 @@ func _business_action(action: String, target: String, quantity: int, extra: Stri
 	if state == null or travel.active():
 		ui.notify("当前无法执行此操作。", true)
 		return
+	if local_navigation != null and local_navigation.warp_active():
+		ui.notify("本星系跃迁中，请先停船取消。", true)
+		return
+	if action in ["dock", "request_rescue", "undock", "switch_ship"]:
+		auto_fire_target = ""
+		if local_navigation != null and local_navigation.active(): local_navigation.cancel()
 	var previous_ship := state.ship().ship_instance_id
 	var actor: RefCounted = gameplay
 	var rescue_candidate: XJRuntimeState
@@ -532,6 +627,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	staged_world = null
 	staged_gameplay = null
 	world.visible = true
+	world.apply_visual_quality(str(preferences.get("quality_mode", "high")))
 	last_destroyed_ship = ""
 	presentation = XJPresentation.new()
 	world.add_child(presentation)
@@ -541,6 +637,13 @@ func _activate(candidate: XJRuntimeState) -> void:
 	travel = XJTravel.new()
 	travel.setup(state, store, _prepare_travel, _record_arrival, _travel_stable)
 	travel.changed.connect(_travel_changed)
+	auto_fire_target = ""
+	local_navigation = XJLocalNavigation.new()
+	navigation_generation += 1
+	if not local_navigation.configure(world, state, store.catalog, gameplay, _travel_stable):
+		ui.notify(local_navigation.last_error, true)
+	local_navigation.changed.connect(_local_navigation_changed)
+	local_navigation.arrived.connect(_local_navigation_arrived)
 	camera.bind(world.flight, store.catalog, state.player().camera_mode)
 	ui.slots = store.list_slots()
 	ui.bind(state, store.catalog, gameplay, world, camera)
@@ -581,6 +684,137 @@ func _spatial_valid(from: Vector3, to: Vector3, target: String) -> bool:
 func _travel_stable() -> bool:
 	return world.projectiles.active.is_empty() and bool(gameplay.call("save_eligible"))
 
+func navigation_context(target_id: String) -> Dictionary:
+	var result: Dictionary = local_navigation.inspect(target_id) if local_navigation != null else {"reason": "导航设备未就绪"}
+	result["active"] = local_navigation != null and local_navigation.active()
+	result["navigation_target_id"] = local_navigation.target_id if local_navigation != null else ""
+	result["combat_ready"] = _combat_target_valid(target_id)
+	result["combat_active"] = not target_id.is_empty() and auto_fire_target == target_id
+	result["combat_target_id"] = auto_fire_target
+	result["combat_status"] = _auto_fire_status(target_id) if result.combat_active else ""
+	result["combat_reason"] = "仅向探测范围内敌舰开火；需满足武器射程、射界、视线、电容及热量条件。"
+	if busy or (travel != null and travel.active()) or (local_navigation != null and local_navigation.warp_active()):
+		for key: String in ["warp_ready", "approach_ready", "orbit_ready", "dock_ready", "combat_ready"]: result[key] = false
+		result["reason"] = "正在保存或读取进度，请稍候" if busy else "正在通过虫洞，请稍候" if travel != null and travel.active() else "正在本星系跃迁，X或停船可取消"
+		for action: String in ["warp", "approach", "orbit", "dock", "combat"]: result[action + "_reason"] = result.reason
+	return result
+
+func _navigation_command(mode: String, target_id: String) -> bool:
+	if state == null or local_navigation == null or busy or ui.keyboard_blocked(): return false
+	if travel != null and travel.active():
+		ui.notify("请等待虫洞传送结束。", true)
+		return false
+	if local_navigation.active() and not local_navigation.warp_active() and mode != "warp": local_navigation.cancel()
+	var context := local_navigation.inspect(target_id)
+	if not bool(context.get(mode + "_ready", false)):
+		ui.notify(str(context.get(mode + "_reason", context.get("reason", "当前无法执行导航"))), true)
+		return false
+	if mode == "warp":
+		# The stable origin is durable before any movement or charge state begins.
+		# Local navigation never borrows wormhole receipts or transfer barriers.
+		if not _save_block_reason().is_empty():
+			ui.notify("脱离交战、停止设备作业并等待航行结束后再跃迁。", true)
+			return false
+		if not store.save(state, "auto", auto_slot):
+			ui.notify("出发进度保存失败，舰船保留在起点。", true)
+			return false
+		ui.slots = store.list_slots()
+		auto_slot = (auto_slot + 1) % 3
+	if mode == "warp": auto_fire_target = ""
+	_release_observation()
+	_center_steering()
+	ui.target_id = target_id
+	navigation_generation += 1
+	return local_navigation.begin(mode, target_id)
+
+func _local_navigation_changed(_mode: String, phase: String, message: String) -> void:
+	if local_navigation == null: return
+	if local_navigation.warp_active():
+		if deferred_save.is_empty(): ui.set_operation_status("local_navigation", message)
+		if phase == "warmup" and presentation != null: presentation.jump(true)
+	elif operation_kind_is_navigation():
+		ui.set_operation_status("idle", "")
+	if not message.is_empty(): ui.notify(message, phase == "failed")
+
+func operation_kind_is_navigation() -> bool:
+	return ui != null and ui.operation_kind == "local_navigation"
+
+func _local_navigation_arrived(target_id: String) -> void:
+	if local_navigation == null: return
+	_finalize_local_arrival.call_deferred(target_id, local_navigation.mode, navigation_generation)
+
+func _finalize_local_arrival(target_id: String, mode: String, generation: int) -> void:
+	# Finish the physical tick before committing or docking; NPCs and device
+	# cycles can change eligibility in the latter half of the arrival tick.
+	while busy: await get_tree().process_frame
+	if local_navigation == null or generation != navigation_generation or local_navigation.phase != "arrived" or local_navigation.target_id != target_id: return
+	# Dock remains a separately revalidated business action at the safe boundary.
+	if mode == "dock":
+		_business_action("dock", target_id, 1, "")
+	else:
+		if presentation != null: presentation.jump(false)
+		_queue_autosave()
+
+func _manual_navigation_override() -> bool:
+	if ui.keyboard_blocked(): return false
+	for action: String in ["brake", "forward", "back", "left", "right", "up", "down", "roll_left", "roll_right"]:
+		if Input.is_action_pressed(action): return true
+	return false
+
+func _combat_target_valid(target_id: String) -> bool:
+	if state == null or world == null or gameplay == null or state.ship().status != Types.ShipStatus.FLYING: return false
+	if travel != null and travel.active(): return false
+	if local_navigation != null and local_navigation.warp_active(): return false
+	if not world.targets.has(target_id): return false
+	var target: Dictionary = world.targets[target_id]
+	var node: Variant = target.get("node")
+	if target.get("kind", "") != "npc" or not is_instance_valid(node): return false
+	var npc: RefCounted = state.find("npc_state", "npc_instance_id", target_id)
+	if npc == null or not npc.alive or npc.sector_id != state.current_sector(): return false
+	if world.flight.global_position.distance_to(node.global_position) > float(store.catalog.rule("target_marker_detection_range_m")): return false
+	for equipment: RefCounted in gameplay.call("equipped", state.ship()):
+		var definition: Dictionary = store.catalog.one("module_defs", "module_id", equipment.module_def_id)
+		var item: RefCounted = state.find("item_instance_state", "item_instance_id", equipment.item_instance_id)
+		if definition.get("slot_type", "") == "weapon" and equipment.enabled and item != null and item.durability > 0.0: return true
+	return false
+
+func _tick_auto_fire() -> void:
+	if not _combat_target_valid(auto_fire_target):
+		auto_fire_target = ""
+		return
+	var node: Node3D = world.targets[auto_fire_target].node
+	var offset: Vector3 = node.global_position - world.flight.global_position
+	if offset.length_squared() <= 0.0: return
+	if (-world.flight.global_basis.z).angle_to(offset.normalized()) > float(store.catalog.rule("player_weapon_fire_cone_half_angle_rad")): return
+	if not world.line_of_sight(world.flight.global_position, node.global_position, world.flight.get_rid(), auto_fire_target): return
+	_fire_weapons(true, auto_fire_target)
+
+func _auto_fire_status(target_id: String) -> String:
+	if not _combat_target_valid(target_id): return "自动开火待机：目标不可用"
+	var target: Node3D = world.targets[target_id].node
+	var offset: Vector3 = target.global_position - world.flight.global_position
+	if offset.is_zero_approx(): return "自动开火待机：目标重合"
+	if (-world.flight.global_basis.z).angle_to(offset.normalized()) > float(store.catalog.rule("player_weapon_fire_cone_half_angle_rad")): return "自动开火待机：请转向目标"
+	if not world.line_of_sight(world.flight.global_position, target.global_position, world.flight.get_rid(), target_id): return "自动开火待机：视线受阻"
+	var ship: RefCounted = state.ship()
+	if ship.overheated: return "自动开火待机：等待散热"
+	var reason: String = "武器未就绪"
+	for equipment: RefCounted in gameplay.call("equipped", ship):
+		var definition: Dictionary = store.catalog.one("module_defs", "module_id", equipment.module_def_id)
+		if definition.get("slot_type", "") != "weapon" or not equipment.enabled: continue
+		var item: RefCounted = state.find("item_instance_state", "item_instance_id", equipment.item_instance_id)
+		if item == null or item.durability <= 0.0: continue
+		var slot: RefCounted = state.find("container_state", "container_id", equipment.slot_container_id)
+		var muzzle: Transform3D = world.flight.muzzle(slot.slot_index)
+		if muzzle.origin.distance_to(target.global_position) > float(definition.range_m): reason = "超出武器射程"; continue
+		if (-muzzle.basis.z).angle_to(muzzle.origin.direction_to(target.global_position)) > float(store.catalog.rule("player_weapon_fire_cone_half_angle_rad")): reason = "目标不在射界"; continue
+		if not world.line_of_sight(muzzle.origin, target.global_position, world.flight.get_rid(), target_id): reason = "挂点视线受阻"; continue
+		if equipment.cooldown_remaining_s > 0.0: reason = "武器循环中"; continue
+		if ship.energy < float(definition.energy_eu): reason = "电容不足"; continue
+		if ship.heat + float(definition.heat_hu) > float(world.flight.metrics.heat_max): reason = "等待散热"; continue
+		return "自动开火中"
+	return "自动开火待机：" + reason
+
 func _check_objectives(delta: float) -> void:
 	var ship := state.ship()
 	if ship.status != Types.ShipStatus.FLYING:
@@ -609,6 +843,7 @@ func _check_objectives(delta: float) -> void:
 func _save_block_reason() -> String:
 	if state != null and state.ship().status == Types.ShipStatus.DESTROYED: return "舰船已毁，先申请救援"
 	if travel != null and travel.active(): return "虫洞传送"
+	if local_navigation != null and local_navigation.active(): return "自动导航"
 	if world != null and not world.projectiles.active.is_empty(): return "在途弹丸"
 	if gameplay != null and not bool(gameplay.call("save_eligible")): return "交战或设备周期"
 	return ""
@@ -616,6 +851,10 @@ func _save_block_reason() -> String:
 func _request_save(kind: String, index: int, after: String = "") -> void:
 	if state == null:
 		return
+	if not after.is_empty() and local_navigation != null and local_navigation.active():
+		# An explicit exit stops motion before saving, including from the pause menu.
+		local_navigation.cancel()
+		auto_fire_target = ""
 	# Automatic snapshots can merge; they never replace a chosen manual slot or exit.
 	if not deferred_save.is_empty() and kind == "auto" and after.is_empty() and (deferred_save.kind != "auto" or not str(deferred_save.get("after", "")).is_empty()):
 		return
@@ -646,6 +885,8 @@ func _save_now(kind: String, index: int, after: String = "") -> void:
 		if after == "quit":
 			get_tree().quit()
 		elif after == "return_title":
+			local_navigation = null
+			auto_fire_target = ""
 			remove_child(world)
 			world.queue_free()
 			world = null
@@ -674,6 +915,7 @@ func _apply_preferences() -> void:
 	if preferences.has("master_volume"):
 		AudioServer.set_bus_volume_db(0, linear_to_db(float(preferences.master_volume)))
 	var quality: String = str(preferences.get("quality_mode", "high"))
+	if world != null: world.apply_visual_quality(quality)
 	RenderingServer.viewport_set_msaa_3d(get_viewport().get_viewport_rid(), RenderingServer.VIEWPORT_MSAA_2X if quality == "high" else RenderingServer.VIEWPORT_MSAA_DISABLED)
 	if presentation != null:
 		presentation.intensity = float(preferences.get("vfx_intensity", 1.0))
