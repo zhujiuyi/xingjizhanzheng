@@ -31,8 +31,8 @@ def sha(path: Path) -> str:
     return hashlib.file_digest(path.open('rb'), 'sha256').hexdigest()
 
 def verify_exported_encounters(executable: Path, build_id: str, logs: Path) -> dict:
-    # The executable supplies res:// from its own exported PCK. This external
-    # acceptance script must never switch the process to the source project.
+    # The explicit release entry loads the external acceptance Node while
+    # res:// stays in the executable's exported PCK, never the source project.
     script = (ROOT / 'jiaoben/tests/encounter_mission_v12.gd').resolve()
     test_folder = (ROOT / 'jiaoben/tmp/release-encounters' / str(uuid.uuid4())).resolve()
     test_folder.mkdir(parents=True)
@@ -41,9 +41,10 @@ def verify_exported_encounters(executable: Path, build_id: str, logs: Path) -> d
     environment = os.environ.copy()
     environment.pop('XJ_TEST_DATABASE', None)
     environment.pop('XJ_ENCOUNTER_V12_LEGACY', None)
+    environment['XJ_ENCOUNTER_V12_SCRIPT'] = str(script)
     environment['XJ_ENCOUNTER_V12_OUTPUT'] = str(test_folder)
     command = [str(executable.resolve()), '--audio-driver', 'CoreAudio',
-               '--log-file', str(engine_log), '--script', str(script)]
+               '--log-file', str(engine_log), '--', '--xj-verify-encounters']
     text = run(command, stdout_log, environment, timeout=420)
     if not engine_log.is_file():
         raise RuntimeError(f'Actual exported encounter engine log is absent: {engine_log}')
@@ -77,8 +78,9 @@ def verify_exported_encounters(executable: Path, build_id: str, logs: Path) -> d
     if len(captures) != result['captures']:
         raise RuntimeError(f'Actual exported encounter capture count disagrees with final JSON: {test_folder}')
     return {'result': 'PASS', 'checks': result['checks'], 'failures': 0, 'failure_labels': [],
-            'scope': 'actual exported Mac PCK: task navigation, mainline entry, encounter groups, salvage and one-time SQLite rewards; isolated fresh world, no legacy archive requested',
+            'scope': 'explicit release entry loads an external acceptance Node against the actual exported Mac PCK: task navigation, mainline entry, encounter groups, salvage and one-time SQLite rewards; isolated fresh world, no legacy archive requested',
             'executable': str(executable.resolve()), 'acceptance_script': str(script),
+            'entry_point': '--xj-verify-encounters',
             'acceptance_script_sha256': sha(script), 'audio_driver': 'CoreAudio',
             'legacy_archive_requested': False,
             'stdout_log': str(stdout_log), 'stdout_log_sha256': sha(stdout_log),

@@ -1,4 +1,4 @@
-extends SceneTree
+extends Node
 ## Real Main, production services and independently saved SQLite. Relocations
 ## and earlier tutorial objective events are explicit isolated preconditions;
 ## they do not claim natural travel or a complete human campaign playthrough.
@@ -9,6 +9,12 @@ const Store = preload("res://runtime/data/store.gd")
 const Codec = preload("res://runtime/data/codec.gd")
 const Gameplay = preload("res://runtime/gameplay.gd")
 const Rng = preload("res://runtime/rng.gd")
+var root: Window:
+	get: return get_tree().root
+var process_frame: Signal:
+	get: return get_tree().process_frame
+var physics_frame: Signal:
+	get: return get_tree().physics_frame
 var host: Main
 var directory: String
 var database_path: String
@@ -27,6 +33,15 @@ class FaultStore extends Store:
 	var fault: String = ""
 	func _checkpoint(point: String) -> bool:
 		return point != fault
+
+func _ready() -> void:
+	_initialize()
+
+func create_timer(wait: float) -> SceneTreeTimer:
+	return get_tree().create_timer(wait)
+
+func quit(code: int = 0) -> void:
+	get_tree().quit(code)
 
 func _initialize() -> void:
 	create_timer(390.0).timeout.connect(func(): check(false, "watchdog"); finish())

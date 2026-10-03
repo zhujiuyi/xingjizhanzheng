@@ -143,4 +143,4 @@ sh jiaoben/run_godot.sh --audio-driver CoreAudio --path code --script ../jiaoben
 
 `--legacy <绝对路径>`只能指向本工作区tmp下已关闭的历史测试库，不得传入个人存档。旧档专项核验格式5→6、受审冻结内容升级、每源快照独立备份、旧手动槽恢复及事务失败保持原端点。当前源码headless480项、原生496项/15图通过；定位、资金、解锁和早期教学事件是明确夹具，不等于自然通关或长期平衡。
 
-`build_client.py`另用实际Mac bundle加载其导出PCK，绝不传`--path code`；通过绝对外部专项脚本和新的UUID tmp目录验证本轮功能。此层不请求legacy输入，与源码旧档测试分开记录，严格核对最终JSON、PASS标记、双日志诊断和每张PNG摘要。实际构建身份、检查数及Windows验证边界见26。
+`build_client.py`另用实际Mac bundle加载其导出PCK，绝不传`--path code`；通过显式`--xj-verify-encounters`入口加载绝对外部专项Node，使用新的UUID tmp目录。Release模板不支持编辑器的`--script`参数，源码runner则生成tmp SceneTree启动器。此层不请求legacy输入，与源码旧档测试分开记录，严格核对最终JSON、PASS标记、双日志诊断和每张PNG摘要。实际构建身份、检查数及Windows验证边界见26。

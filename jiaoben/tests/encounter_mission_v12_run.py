@@ -2,6 +2,7 @@
 """Run real mission, encounter and salvage services against isolated SQLite."""
 from pathlib import Path
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -17,6 +18,23 @@ def main() -> None:
     stem = "encounter-mission-v12-native" if options.native else "encounter-mission-v12-headless"
     engine_log = ROOT / f"jiaoben/logs/{stem}-engine.log"
     output_log = ROOT / f"jiaoben/logs/{stem}.log"
+    launcher = ROOT / "jiaoben/tmp/encounter-mission-v12/launcher.gd"
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    test_script = ROOT / "jiaoben/tests/encounter_mission_v12.gd"
+    launcher.write_text(
+        "extends SceneTree\n"
+        "func _initialize() -> void:\n"
+        "\tcall_deferred(\"_load_test\")\n"
+        "func _load_test() -> void:\n"
+        f"\tvar source := load({json.dumps(str(test_script))}) as Script\n"
+        "\tif source == null:\n"
+        "\t\tprinterr(\"ENCOUNTER_MISSION_V12_LAUNCHER FAIL test script unavailable\")\n"
+        "\t\tquit(1)\n"
+        "\t\treturn\n"
+        "\tvar test: Node = source.new()\n"
+        "\troot.add_child(test)\n",
+        encoding="utf-8",
+    )
     environment = os.environ.copy()
     if options.legacy:
         legacy = options.legacy.resolve()
@@ -28,7 +46,7 @@ def main() -> None:
     if not options.native:
         command.append("--headless")
     command += ["--audio-driver", "CoreAudio", "--log-file", str(engine_log),
-                "--path", "code", "--script", "../jiaoben/tests/encounter_mission_v12.gd"]
+                "--path", "code", "--script", str(launcher)]
     try:
         result = subprocess.run(command, cwd=ROOT, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True, timeout=420,

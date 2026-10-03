@@ -46,6 +46,9 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
+	if arguments.has("--xj-verify-encounters") and not get_tree().has_meta("xj_encounter_diagnostic"):
+		_start_encounter_diagnostic()
+		return
 	if arguments.has("--xj-verify-store"):
 		var diagnostic := preload("res://runtime/data/diagnostic.gd")
 		get_tree().quit(0 if diagnostic.run(OS.get_environment("XJ_TEST_DATABASE"), arguments.has("--xj-verify-upgrade")) else 1)
@@ -109,6 +112,33 @@ func _ready() -> void:
 		var diagnostic := preload("res://runtime/presentation_diagnostic.gd")
 		var verified: bool = await diagnostic.run(self, progress_database_path.get_base_dir())
 		get_tree().quit(0 if verified else 1)
+
+func _start_encounter_diagnostic() -> void:
+	# Release templates do not implement the editor's --script option. Explicit
+	# acceptance loads a test-owned Node while res:// stays the exported PCK.
+	var script_path: String = OS.get_environment("XJ_ENCOUNTER_V12_SCRIPT").replace("\\", "/")
+	var output_path: String = OS.get_environment("XJ_ENCOUNTER_V12_OUTPUT").replace("\\", "/")
+	var temporary: String = script_path.get_base_dir().get_base_dir().path_join("tmp/release-encounters")
+	if not script_path.is_absolute_path() or script_path.contains("..") or not script_path.ends_with("/jiaoben/tests/encounter_mission_v12.gd") or not FileAccess.file_exists(script_path) or not output_path.is_absolute_path() or output_path.contains("..") or not output_path.begins_with(temporary + "/") or FileAccess.file_exists(output_path.path_join("progress.db")):
+		push_error("Encounter diagnostic requires an external test script and fresh test-owned output")
+		get_tree().quit(2)
+		return
+	var diagnostic_script: Script = load(script_path)
+	if diagnostic_script == null or not diagnostic_script.can_instantiate():
+		push_error("Encounter diagnostic script cannot be loaded")
+		get_tree().quit(2)
+		return
+	var diagnostic: Node = diagnostic_script.new() as Node
+	if diagnostic == null:
+		push_error("Encounter diagnostic must be a test Node")
+		get_tree().quit(2)
+		return
+	# Test-created Main instances take their normal production startup path.
+	get_tree().set_meta("xj_encounter_diagnostic", true)
+	set_process(false)
+	set_physics_process(false)
+	get_tree().root.add_child.call_deferred(diagnostic)
+	queue_free()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and is_instance_valid(ui):
