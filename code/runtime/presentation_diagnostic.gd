@@ -809,6 +809,7 @@ static func _manual_turn_camera_checks(host: Node, evidence: Dictionary, output_
 	var step_s: float = 1.0 / float(host.store.catalog.rule("simulation_hz"))
 	var budget: float = float(body.metrics.turn_radps) * step_s
 	var old_bank := Transform3D(Basis.from_euler(Vector3(0.65, -0.4, 0.9)), original_pose.origin + Vector3(0, 2200, 8000))
+	await _control_focus_boundary(host, "manual-turn")
 	var first_response: bool = true
 	var combined_response: bool = true
 	for action: String in ["yaw_left", "yaw_right"]:
@@ -892,6 +893,7 @@ static func _near_camera_case(host: Node, evidence: Dictionary, output_dir: Stri
 	if DisplayServer.get_name() != "headless": host.get_viewport().warp_mouse(host.ui.root.size * 0.5)
 	await host.get_tree().process_frame
 	var pose: Transform3D = body.global_transform
+	await _control_focus_boundary(host, "near-" + str(item.name))
 	var initial_orbit: Vector2 = host.camera.orbit
 	var previous_position: Vector3 = host.camera.camera.global_position
 	var previous_forward: Vector3 = host.camera.control_forward()
@@ -938,6 +940,18 @@ static func _near_camera_case(host: Node, evidence: Dictionary, output_dir: Stri
 	_check(evidence, paths_safe, "packed near-" + str(item.name) + " every rendered camera move has a clear swept-sphere path")
 	_check(evidence, not held.is_equal_approx(initial_orbit) and host.camera.orbit.is_equal_approx(held) and turns > 0.002 and maximum_turn < 0.8 and not host.observing and not host.camera.observing and not host.pointer_drag_pressed and not host.pointer_pick_pending and body.global_transform.is_equal_approx(pose) and body.velocity == Vector3.ZERO and not host.local_navigation.active(), "packed near-" + str(item.name) + " actual left drag visibly rotates without reversal, ship movement or a release click")
 	if str(item.name) == "station": await _capture(host, output_dir, "camera-near-station")
+
+static func _control_focus_boundary(host: Node, label: String) -> void:
+	if DisplayServer.get_name() != "headless":
+		host.get_window().grab_focus()
+		var deadline: int = Time.get_ticks_msec() + 10000
+		while not host.get_window().has_focus() and Time.get_ticks_msec() < deadline:
+			await host.get_tree().process_frame
+		host.get_viewport().warp_mouse(host.ui.root.size * 0.5)
+		await host.get_tree().process_frame
+		await host.get_tree().process_frame
+	var focus: Control = host.get_viewport().gui_get_focus_owner()
+	print("PRESENTATION_INPUT_BOUNDARY ", JSON.stringify({"case": label, "window_focus": host.get_window().has_focus(), "allowed": host._keyboard_control_allowed(), "page": host.ui.page, "menu": host.ui.menu_open, "panel": host.ui.panel.visible, "ui_pointer_blocked": host.ui.ui_input_blocked(), "focus_owner": str(focus.get_path()) if is_instance_valid(focus) else "", "busy": host.busy, "ship_status": int(host.state.ship().status), "pointer_drag": host.pointer_drag_pressed, "mouse_buttons": Input.get_mouse_button_mask()}))
 
 static func _near_camera_query(host: Node, at: Vector3) -> PhysicsShapeQueryParameters3D:
 	# Independently rebuild the required clearance from the shipped profile and
