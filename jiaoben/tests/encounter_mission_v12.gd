@@ -555,6 +555,12 @@ func package_row(package_id: String) -> D.SalvagePackageStateDto:
 func warehouse_id(station_id: String) -> String:
 	return str(host.gameplay.get("inventory").call("warehouse", station_id))
 
+func warehouse_row_for(asset_id: String) -> Dictionary:
+	var panel: Control = host.ui.get("warehouse_panel") as Control
+	if not is_instance_valid(panel): return {}
+	var data: Dictionary = panel.get("refs")
+	return data.get("rows_by_id", {}).get(asset_id, {})
+
 func packages_from_sources(ids: Array[String]) -> Array[D.SalvagePackageStateDto]:
 	var result: Array[D.SalvagePackageStateDto] = []
 	for package: D.SalvagePackageStateDto in host.state.rows("salvage_package_state"):
@@ -613,7 +619,7 @@ func atomic_open_failure_checks(package_id: String) -> void:
 	checkpoint_store.fault = ""
 	check(host.state == authority and host.store.active_state == authority and Codec.new().encode_row("salvage_package_state", package_row(package_id)) == package_before and host.state.player().credit == credit_before and rng_record() == rng_before and host.state.rows("action_receipt_state").size() == receipts_before and host.auto_slot == auto_before, "failed GUI identification preserves original live authority, sealed reward, funds, RNG, action receipts and slot rotation")
 	check(host.store._records("SELECT snapshot_id,status,simulation_tick FROM save_snapshot ORDER BY snapshot_id") == snapshots_before and host.store._records("SELECT slot_id,current_snapshot_id,content_snapshot_id,generation FROM save_slot ORDER BY slot_id") == slots_before and host.store._records("SELECT p.profile_id,p.world_id,r.resume_snapshot_id,r.last_committed_sequence FROM profile_resume p JOIN runtime_session r ON r.world_id=p.world_id ORDER BY p.profile_id") == resume_before, "injected failure after pointer publication rolls back snapshots, save slots and durable resume endpoint")
-	await show_page("warehouse")
+	await show_page("salvage")
 	check(action_button("open_salvage", package_id) != null and package_row(package_id).status == "sealed", "failed durable identification remains retryable through the actual station UI")
 
 func route_and_gate_mass_checks() -> void:
@@ -761,7 +767,7 @@ func salvage_checks() -> void:
 	check(is_equal_approx(group.respawn_remaining_s, outside_before - 2.0), "world time advances encounter cooldown outside its currently loaded system")
 	host.gameplay.call("tick", float(host.store.catalog.rule("combat_exit_delay_s")) + 0.2)
 	if not await dock_at("station_echo_depot"): return
-	await show_page("warehouse")
+	await show_page("salvage")
 	var first: D.SalvagePackageStateDto = package_row(salvage_ids[0])
 	var first_reward: Dictionary = host.store.catalog.one("salvage_reward_defs", "reward_id", first.reward_id)
 	var warehouse: String = warehouse_id("station_echo_depot")
@@ -781,11 +787,18 @@ func salvage_checks() -> void:
 	check(host.state.player().credit == before_credit + int(first_reward.credit_units) and rng_record() == before_open_rng, "opening twice does not pay or redraw the package")
 	await capture("salvage-station-opened")
 	var second: D.SalvagePackageStateDto = package_row(salvage_ids[1])
+	await show_page("warehouse")
+	var transfer_row: Dictionary = warehouse_row_for(second.package_id)
+	check(not transfer_row.is_empty() and str(transfer_row.kind) == "salvage" and str(transfer_row.container_id) == second.host_container_id and not bool(transfer_row.remote), "sealed package has its exact current-cargo identity in the real dual warehouse list")
+	if not transfer_row.is_empty():
+		var transfer_button: Button = transfer_row.get("button") as Button
+		var transfer_amount: SpinBox = transfer_row.get("amount") as SpinBox
+		check(transfer_button != null and not transfer_button.disabled and str(transfer_button.get_meta("action", "")) == "move_salvage" and str(transfer_button.get_meta("target", "")) == second.package_id and str(transfer_button.get_meta("extra", "")) == warehouse and transfer_amount != null and is_equal_approx(transfer_amount.min_value, 1.0) and is_equal_approx(transfer_amount.max_value, 1.0), "dual warehouse package row exposes only its real one-package station transfer")
 	production_action("move_salvage", second.package_id, 1, warehouse)
 	check(second.host_container_id == warehouse, "sealed recovery package can move to the actual local station warehouse")
 	pending_package = Codec.new().encode_row("salvage_package_state", second)
 	pending_rng = rng_record()
-	await show_page("warehouse")
+	await show_page("salvage")
 	check(action_button("open_salvage", second.package_id) != null, "unopened station recovery package has a discoverable identification action")
 	await capture("salvage-station-sealed")
 
