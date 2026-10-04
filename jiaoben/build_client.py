@@ -167,6 +167,53 @@ def verify_exported_warehouse(executable: Path, build_id: str, logs: Path) -> di
             'capture_folder': str(directory), 'capture_count': len(captures), 'captures': captures}
 
 
+def verify_exported_row_quantities(executable: Path, build_id: str, logs: Path) -> dict:
+    script = (ROOT / 'jiaoben/tests/row_quantity_v17.gd').resolve()
+    directory = (ROOT / 'jiaoben/tmp/row-quantity-v17' / str(uuid.uuid4())).resolve()
+    directory.mkdir(parents=True)
+    stdout_log = (logs / f'{build_id}-mac-row-quantities.log').resolve()
+    engine_log = (logs / f'{build_id}-mac-row-quantities-engine.log').resolve()
+    environment = os.environ.copy()
+    environment.pop('XJ_TEST_DATABASE', None)
+    environment['XJ_ROW_QUANTITY_V17_SCRIPT'] = str(script)
+    environment['XJ_ROW_QUANTITY_V17_DIRECTORY'] = str(directory)
+    text = run([str(executable.resolve()), '--audio-driver', 'CoreAudio', '--log-file',
+                str(engine_log), '--', '--xj-verify-row-quantities'], stdout_log, environment, timeout=480)
+    diagnostic = re.compile(r'^(?:\s*(?:SCRIPT ERROR|ERROR|WARNING):|.*[Ll]eak(?:ed|ing)?\b|.*Resource still in use)', re.M)
+    if not engine_log.is_file() or diagnostic.search(text) or diagnostic.search(engine_log.read_text(errors='replace')):
+        raise RuntimeError(f'Actual exported row quantity acceptance has diagnostics: {stdout_log}')
+    summaries = re.findall(r'^ROW_QUANTITY_V17_FINAL_JSON (.+)$', text, re.M)
+    if len(summaries) != 1:
+        raise RuntimeError(f'Actual exported row quantity result is missing or repeated: {stdout_log}')
+    result = json.loads(summaries[0])
+    if (result.get('result') != 'PASS' or type(result.get('checks')) is not int or result['checks'] <= 0
+            or result.get('failures') != 0 or result.get('failure_labels') != []
+            or result.get('layouts') != 4 or result.get('gui_transactions', 0) < 12
+            or result.get('stale_rejections', 0) < 7 or result.get('invalid_cases') != 5
+            or result.get('blur_quote_checks') != 1
+            or result.get('restarts') != 1
+            or result.get('revision') != 'inline-warehouse-independent-business-amounts'
+            or Path(result.get('database_path', '')).resolve() != directory / 'progress.db'
+            or not re.search(r'^ROW_QUANTITY_V17_RESULT PASS checks=' + str(result['checks'])
+                             + r' captures=' + str(result.get('captures')) + r' failures=0$', text, re.M)):
+        raise RuntimeError(f'Actual exported row quantity acceptance failed its complete matrix: {stdout_log}')
+    captures = [{'name': path.stem, 'path': str(path), 'sha256': sha(path)} for path in sorted(directory.glob('*.png'))]
+    if (len(captures) != result.get('captures') or len(captures) < 6
+            or any(Path(item['path']).read_bytes()[:8] != b'\x89PNG\r\n\x1a\n' for item in captures)):
+        raise RuntimeError(f'Actual exported row quantity capture evidence incomplete: {directory}')
+    return {'result': 'PASS', 'checks': result['checks'], 'failures': 0,
+            'scope': 'actual exported PCK; single-line warehouse and compact buttons, independent market/industry row quantities, 12 real GUI buy/sell/manufacture/recycle actions, five invalid text cases, seven stale contexts, four layouts and SQLite reopen; declared item/ship/funds fixtures',
+            'entry_point': '--xj-verify-row-quantities', 'executable': str(executable.resolve()),
+            'gui_transactions': result['gui_transactions'], 'invalid_cases': result['invalid_cases'],
+            'blur_quote_checks': result['blur_quote_checks'],
+            'stale_rejections': result['stale_rejections'], 'layouts': result['layouts'],
+            'restarts': result['restarts'], 'revision': result['revision'],
+            'acceptance_script': str(script), 'acceptance_script_sha256': sha(script),
+            'stdout_log': str(stdout_log), 'stdout_log_sha256': sha(stdout_log),
+            'engine_log': str(engine_log), 'engine_log_sha256': sha(engine_log),
+            'capture_folder': str(directory), 'capture_count': len(captures), 'captures': captures}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--platform', choices=['all', 'mac', 'windows'], default='all')
@@ -252,11 +299,11 @@ def main() -> None:
             text = run([str(output / 'Contents/MacOS/星际战舰'), '--audio-driver', 'CoreAudio',
                         '--log-file', str(logs / f'{build_id}-mac-presentation-engine.log'),
                         '--', '--xj-verify-presentation'], logs / f'{build_id}-mac-presentation.log', env)
-            if not re.search(r'PRESENTATION_CLIENT_RESULT PASS checks=104 failures=0', text):
+            if not re.search(r'PRESENTATION_CLIENT_RESULT PASS checks=110 failures=0', text):
                 raise RuntimeError('Actual exported presentation lifecycle did not pass')
             if re.search(r'^(WARNING:|.*Leaked instance:|.*Resource still in use)', text, re.M):
                 raise RuntimeError('Actual exported presentation exited with diagnostics')
-            capture_names = ('title', 'map', 'archive', 'station', 'npc', 'flight', 'approach', 'warp', 'arrival', 'resources', 'save-wait', 'attitude-level', 'business-goods', 'business-hulls', 'camera-near-station', 'warehouse-dual')
+            capture_names = ('title', 'map', 'archive', 'station', 'npc', 'flight', 'approach', 'warp', 'arrival', 'resources', 'save-wait', 'attitude-level', 'business-goods', 'business-hulls', 'camera-near-station', 'warehouse-dual', 'business-industry')
             captures = []
             for name in capture_names:
                 capture = visual_folder / f'release-{name}.png'
@@ -265,13 +312,16 @@ def main() -> None:
                 captures.append({'name': name, 'sha256': sha(capture)})
             evidence['verification']['mac_presentation'] = {
                 'result': 'actual release Metal/CoreAudio Chinese font, archive cards, radar, celestial bearing, selected line, station F qualification, hangar/NPC, lifecycle, departure, cockpit visibility recovery without flight mutation and SQLite save, graphical star chart with frozen spatial topology, directed door connections, search/risk selection, one selected-sector detail panel, exact mineral node readouts, clipped zoom/center/full-map views and unchanged runtime/SQLite snapshots, actual equipment, local warp source commit/exterior arrival/physical selection/validated docking, interpolated render poses, visible pointer, disabled right mouse and left-drag/release preserving accepted warp, canonical resource_state qualification, distant reserve intelligence, actual finite last-unit mining and inventory output, mineral countdown and paused clock, top flight tools, full-height overview, side-by-side ship and equipment row, one compact real deferred-save notice and cancellation preserving its paid mining cycle, bounded ship leveling, explicit roll, upright recovery view and finite vertical headings, shared business lists with item/hull portraits and final operation column, authoritative taxed unit/total quotes and stock, same-row quantity updates, disabled purchasing with readable prices, all station business pages and station restoration without economic or physical mutation, full first-tick manual world-axis yaw with old bank, W plus A/D priority and view thrust, swept-sphere station and wormhole endpoints and movement, responsive left observation and release, restored physical/input/view state PASS',
-                'capture_folder': str(visual_folder), 'checks': 104, 'captures': captures}
+                'capture_folder': str(visual_folder), 'checks': 110, 'captures': captures,
+                'row_quantity_scope': 'single-line warehouse, compact buttons, independent market and industry inputs, fixed single items, live quotes and unchanged authoritative state'}
             evidence['verification']['mac'] = 'actual exported app: resource hashes/new/save/reopen/resume PASS; ad-hoc signature PASS'
             evidence['verification']['mac_encounter_mission'] = verify_exported_encounters(
                 output / 'Contents/MacOS/星际战舰', build_id, logs)
             evidence['verification']['mac_combat_automation'] = verify_exported_combat_automation(
                 output / 'Contents/MacOS/星际战舰', build_id, logs)
             evidence['verification']['mac_warehouse'] = verify_exported_warehouse(
+                output / 'Contents/MacOS/星际战舰', build_id, logs)
+            evidence['verification']['mac_row_quantities'] = verify_exported_row_quantities(
                 output / 'Contents/MacOS/星际战舰', build_id, logs)
             archive = staging / '星际战舰-macOS.zip'
             run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(folder), str(archive)],

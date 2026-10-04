@@ -29,6 +29,7 @@ func configure(ship_rows: Array[Dictionary], station_rows: Array[Dictionary], sh
 	elif not bool(station_rows[0].current_station):
 		var empty: Label = _label(station.content, "当前空间站仓库为空。", 13, UISkin.MUTED)
 		station.content.move_child(empty, 0)
+	_set_compact(false)
 
 func fit_height(available: float) -> void:
 	# The outer service page owns only the headings; each inventory scrolls itself.
@@ -36,10 +37,11 @@ func fit_height(available: float) -> void:
 	_set_compact(available < 240.0)
 
 func _set_compact(compact: bool) -> void:
-	if compact == _compact: return
 	_compact = compact
+	var cell: Dictionary = _cell_sizes()
 	for column: Dictionary in refs.get("columns", []):
 		var frame: PanelContainer = column.column
+		frame.custom_minimum_size.x = 180 if compact else 220
 		(frame.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(4 if compact else 7)
 		column.content_layout.add_theme_constant_override("separation", 2 if compact else 5)
 		column.heading.add_theme_font_size_override("font_size", 14 if compact else 17)
@@ -48,37 +50,50 @@ func _set_compact(compact: bool) -> void:
 		column.subheading.autowrap_mode = TextServer.AUTOWRAP_OFF if compact else TextServer.AUTOWRAP_WORD_SMART
 		column.subheading.clip_text = compact
 		column.subheading.tooltip_text = column.subheading.text
-		for label: Label in [column.inventory_heading, column.location_heading]: label.add_theme_font_size_override("font_size", 10 if compact else 11)
+		(column.header_frame.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(int(cell.margin))
+		column.header.add_theme_constant_override("separation", int(cell.gap))
+		for label: Label in [column.inventory_heading, column.location_heading, column.amount_heading, column.action_heading]: label.add_theme_font_size_override("font_size", 10 if compact else 11)
+		_size_cell(column.image_heading, float(cell.image))
+		_size_cell(column.inventory_heading, float(cell.name), true)
+		_size_cell(column.location_heading, float(cell.location))
+		_size_cell(column.amount_heading, float(cell.amount))
+		_size_cell(column.action_heading, float(cell.button))
 		column.content.add_theme_constant_override("separation", 3 if compact else 5)
 	for row: Dictionary in refs.rows_by_id.values():
-		(row.row.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(3 if compact else 6)
-		row.content.add_theme_constant_override("separation", 2 if compact else 5)
-		row.top.add_theme_constant_override("separation", 4 if compact else 6)
-		row.info.add_theme_constant_override("separation", 4 if compact else 5)
-		row.names.add_theme_constant_override("separation", 1 if compact else 2)
-		row.image.custom_minimum_size = Vector2(24, 24) if compact else Vector2(32, 32)
+		(row.row.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(int(cell.margin))
+		row.top.add_theme_constant_override("separation", int(cell.gap))
+		row.info.add_theme_constant_override("separation", int(cell.gap))
+		row.actions.add_theme_constant_override("separation", int(cell.gap))
+		row.image.custom_minimum_size = Vector2(float(cell.image), float(cell.image))
+		_size_cell(row.names, float(cell.name), true)
+		_size_cell(row.location, float(cell.location))
 		row.name.add_theme_font_size_override("font_size", 12 if compact else 13)
-		row.quantity.add_theme_font_size_override("font_size", 11 if compact else 12)
+		row.policy_badge.add_theme_font_size_override("font_size", 10 if compact else 11)
+		row.quantity.add_theme_font_size_override("font_size", 10 if compact else 11)
 		for label: Label in [row.location, row.description, row.status]: label.add_theme_font_size_override("font_size", 10 if compact else 11)
-		# At high text scaling, held quantity shares the name line; the source
-		# column remains distinct and the transfer controls fit one complete card.
-		if compact:
-			row.quantity.reparent(row.name_line)
-			row.quantity.size_flags_horizontal = Control.SIZE_SHRINK_END
-			row.quantity.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			row.quantity.autowrap_mode = TextServer.AUTOWRAP_OFF
-		else:
-			row.quantity.reparent(row.names)
-			row.quantity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			row.quantity.size_flags_vertical = Control.SIZE_FILL
-			row.quantity.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		if is_instance_valid(row.amount):
+			_size_cell(row.amount, float(cell.amount))
+			_size_cell(row.button, float(cell.button))
 			row.amount.custom_minimum_size.y = 30 if compact else 34
 			row.button.custom_minimum_size.y = 30 if compact else 34
 			row.amount.add_theme_font_size_override("font_size", 11 if compact else 12)
 			row.amount.get_line_edit().add_theme_font_size_override("font_size", 11 if compact else 12)
 			row.button.add_theme_font_size_override("font_size", 11 if compact else 12)
 			row.amount_heading.add_theme_font_size_override("font_size", 10 if compact else 11)
+		else:
+			_size_cell(row.amount_placeholder, float(cell.amount))
+			_size_cell(row.action_placeholder, float(cell.button))
+			for label: Label in [row.amount_placeholder, row.action_placeholder]: label.add_theme_font_size_override("font_size", 10 if compact else 11)
+
+func _cell_sizes() -> Dictionary:
+	# Presentation dimensions only. The table scrolls horizontally when a pane
+	# is narrower; cargo, location and controls never reflow into another line.
+	return {"image": 24, "name": 156, "location": 72, "amount": 70, "button": 68, "gap": 4, "margin": 3} if _compact else {"image": 32, "name": 184, "location": 86, "amount": 82, "button": 76, "gap": 6, "margin": 5}
+
+func _size_cell(control: Control, width: float, expand: bool = false) -> void:
+	control.custom_minimum_size.x = width
+	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL if expand else Control.SIZE_FILL
+	control.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 func _column(node_name: String, title: String, subtitle: String, inventory_heading: String, location_heading: String) -> Dictionary:
 	var frame: PanelContainer = PanelContainer.new()
@@ -94,28 +109,46 @@ func _column(node_name: String, title: String, subtitle: String, inventory_headi
 	var heading: Label = _label(column, title, 17, UISkin.AMBER)
 	var subheading: Label = _label(column, subtitle, 11, UISkin.MUTED)
 	subheading.max_lines_visible = 2
-	var header: HBoxContainer = HBoxContainer.new()
-	header.add_theme_constant_override("separation", 6)
-	column.add_child(header)
-	var inventory_title: Label = _label(header, inventory_heading, 11, UISkin.MUTED)
-	var location: Label = _label(header, location_heading, 11, UISkin.MUTED)
-	location.custom_minimum_size.x = 70
-	location.size_flags_horizontal = Control.SIZE_FILL
-	location.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var scroll: ScrollContainer = ScrollContainer.new()
 	scroll.name = node_name + "Scroll"
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	scroll.follow_focus = true
 	column.add_child(scroll)
+	var table: VBoxContainer = VBoxContainer.new()
+	table.name = node_name + "Table"
+	table.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	table.add_theme_constant_override("separation", 4)
+	scroll.add_child(table)
+	var header_frame: PanelContainer = PanelContainer.new()
+	header_frame.name = node_name + "Header"
+	header_frame.add_theme_stylebox_override("panel", UISkin.flat(Color(0.065, 0.077, 0.087, 1.0), Color(0.25, 0.28, 0.30), 5))
+	table.add_child(header_frame)
+	var header: HBoxContainer = HBoxContainer.new()
+	header.add_theme_constant_override("separation", 6)
+	header_frame.add_child(header)
+	var image_heading: Control = Control.new()
+	header.add_child(image_heading)
+	var inventory_title: Label = _label(header, inventory_heading, 11, UISkin.MUTED)
+	var location: Label = _label(header, location_heading, 11, UISkin.MUTED)
+	location.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var amount_heading: Label = _label(header, "操作数量", 11, UISkin.MUTED)
+	amount_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var action_heading: Label = _label(header, "操作", 11, UISkin.MUTED)
+	action_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	for label: Label in [inventory_title, location, amount_heading, action_heading]:
+		label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		label.clip_text = true
+		label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		label.tooltip_text = label.text
 	var content: VBoxContainer = VBoxContainer.new()
 	content.name = node_name + "Rows"
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 5)
-	scroll.add_child(content)
-	return {"column": frame, "scroll": scroll, "content": content, "content_layout": column, "heading": heading, "subheading": subheading, "inventory_heading": inventory_title, "location_heading": location}
+	table.add_child(content)
+	return {"column": frame, "scroll": scroll, "table": table, "content": content, "content_layout": column, "heading": heading, "subheading": subheading, "header": header, "header_frame": header_frame, "image_heading": image_heading, "inventory_heading": inventory_title, "location_heading": location, "amount_heading": amount_heading, "action_heading": action_heading}
 
 func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	var remote: bool = bool(data.remote)
@@ -145,6 +178,7 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	image.custom_minimum_size = Vector2(32, 32)
+	image.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info.add_child(image)
 	var names: VBoxContainer = VBoxContainer.new()
@@ -157,30 +191,60 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	names.add_child(name_line)
 	var title: Label = _label(name_line, str(data.title), 13, UISkin.TEXT)
 	title.name = "WarehouseName"
-	var quantity: Label = _label(names, "%d %s" % [int(data.quantity), str(data.unit)], 12, UISkin.ICE)
+	title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	title.clip_text = true
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var policy_badge: Label = _label(name_line, str({"tutorial_protected": "保障", "mission_bound": "绑定", "loan_protected": "借用", "loan_bound": "借用"}.get(str(data.policy_id), "受限")), 11, UISkin.AMBER)
+	policy_badge.name = "WarehousePolicyBadge"
+	policy_badge.visible = str(data.policy_id) != "normal_owned"
+	policy_badge.autowrap_mode = TextServer.AUTOWRAP_OFF
+	policy_badge.size_flags_horizontal = Control.SIZE_SHRINK_END
+	policy_badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var quantity: Label = _label(name_line, "%d %s" % [int(data.quantity), str(data.unit)], 11, UISkin.ICE)
 	quantity.name = "WarehouseQuantity"
-	var location: Label = _label(top, str(data.location), 11, UISkin.MUTED if remote else UISkin.AMBER)
+	quantity.autowrap_mode = TextServer.AUTOWRAP_OFF
+	quantity.size_flags_horizontal = Control.SIZE_SHRINK_END
+	quantity.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var location: Label = _label(top, "当前站" if bool(data.current_station) else str(data.location).replace("\n", " · "), 11, UISkin.MUTED if remote else UISkin.AMBER)
 	location.name = "WarehouseLocation"
 	location.custom_minimum_size.x = 70
 	location.size_flags_horizontal = Control.SIZE_FILL
+	location.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	location.autowrap_mode = TextServer.AUTOWRAP_OFF
+	location.clip_text = true
+	location.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	location.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var details: Label = _label(content, str(data.detail), 11, UISkin.MUTED)
 	details.name = "WarehouseDescription"
-	details.visible = not str(data.detail).is_empty()
-	frame.tooltip_text = str(data.description)
+	# Details and policy remain available to references and tooltips; the table
+	# itself has exactly one visible line per asset.
+	details.visible = false
 	var status: Label = _label(content, str(data.policy), 11, UISkin.MUTED)
 	status.name = "WarehouseStatus"
+	status.visible = false
+	var actions: HBoxContainer = HBoxContainer.new()
+	actions.name = "WarehouseActions"
+	actions.add_theme_constant_override("separation", 6)
+	actions.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	top.add_child(actions)
 	var row: Dictionary = data.duplicate()
-	row.merge({"row": frame, "content": content, "top": top, "info": info, "names": names, "name_line": name_line, "image": image, "name": title, "description": details, "quantity": quantity, "location": location, "status": status, "amount": null, "button": null}, true)
+	row.merge({"row": frame, "content": content, "top": top, "info": info, "names": names, "name_line": name_line, "image": image, "name": title, "policy_badge": policy_badge, "description": details, "description_full": str(data.description), "quantity": quantity, "held_quantity": int(data.quantity), "location": location, "location_full": str(data.location).replace("\n", " · "), "status": status, "actions": actions, "amount": null, "button": null}, true)
 	refs.rows_by_id[data.id] = row
 	if remote:
 		status.text = "异地仓库 · 只读，需前往该站搬运"
+		var readonly: Label = _label(actions, "只读", 11, UISkin.MUTED)
+		readonly.autowrap_mode = TextServer.AUTOWRAP_OFF
+		readonly.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var visit: Label = _label(actions, "需前往", 11, UISkin.MUTED)
+		visit.autowrap_mode = TextServer.AUTOWRAP_OFF
+		visit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		row.amount_placeholder = readonly
+		row.action_placeholder = visit
+		_refresh_tooltip(row)
 		return row
-	var actions: HBoxContainer = HBoxContainer.new()
-	actions.name = "WarehouseActions"
-	actions.add_theme_constant_override("separation", 5)
-	content.add_child(actions)
 	var amount_heading: Label = _label(actions, "数量", 11, UISkin.MUTED)
+	amount_heading.visible = false
 	amount_heading.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	amount_heading.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	amount_heading.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -207,8 +271,9 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	var button: Button = Button.new()
 	button.name = "WarehouseTransfer"
 	button.text = "装入货舱" if bool(data.current_station) else "存入本站"
-	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button.custom_minimum_size = Vector2(0, 34)
+	button.size_flags_horizontal = Control.SIZE_FILL
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	button.custom_minimum_size = Vector2(76, 34)
 	button.add_theme_font_size_override("font_size", 12)
 	for style: String in ["normal", "disabled"]: button.add_theme_stylebox_override(style, UISkin.hud_button())
 	for style: String in ["hover", "pressed"]: button.add_theme_stylebox_override(style, UISkin.hud_button(true))
@@ -239,10 +304,23 @@ func _update_quote(row: Dictionary) -> void:
 	var reason: String = str(result.get("reason", ""))
 	row.status.text = str(row.policy) + (" · " + reason if not reason.is_empty() else "")
 	row.button.tooltip_text = reason if not reason.is_empty() else "将本行的 %d %s转入%s。" % [int(row.amount.value), str(row.unit), "当前舰船货舱" if bool(row.current_station) else "当前空间站仓库"]
+	_refresh_tooltip(row)
+
+func _refresh_tooltip(row: Dictionary) -> void:
+	var tooltip: String = "%s · 持有 %d %s\n所在地：%s" % [str(row.title), int(row.held_quantity), str(row.unit), str(row.location_full)]
+	for text: String in [str(row.description_full), str(row.status.text)]:
+		if not text.is_empty(): tooltip += "\n" + text
+	row.row.tooltip_text = tooltip
+	row.name.tooltip_text = tooltip
+	row.quantity.tooltip_text = tooltip
+	row.location.tooltip_text = tooltip
 
 func _reveal_local_control(control: Control) -> void:
 	# Reveal in the owning inventory only; the opposite pane keeps its position.
-	_reveal_local_control_after_layout.call_deferred(control)
+	# The SpinBox owns its arrows outside the embedded LineEdit's rectangle.
+	# Focus on the editor must reveal the whole quantity control on both axes.
+	var target: Control = control.get_parent() as SpinBox if control is LineEdit and control.get_parent() is SpinBox else control
+	_reveal_local_control_after_layout.call_deferred(target)
 
 func _reveal_local_control_after_layout(control: Control) -> void:
 	if not is_instance_valid(control) or not is_inside_tree() or is_queued_for_deletion(): return
@@ -254,7 +332,7 @@ func _reveal_local_control_after_layout(control: Control) -> void:
 		ancestor = ancestor.get_parent()
 
 func snapshot_view() -> Dictionary:
-	var view: Dictionary = {"ship_scroll": refs.ship_scroll.scroll_vertical, "station_scroll": refs.station_scroll.scroll_vertical, "amounts": {}, "focus_id": "", "focus_amount": false}
+	var view: Dictionary = {"ship_scroll": refs.ship_scroll.scroll_vertical, "station_scroll": refs.station_scroll.scroll_vertical, "ship_scroll_horizontal": refs.ship_scroll.scroll_horizontal, "station_scroll_horizontal": refs.station_scroll.scroll_horizontal, "amounts": {}, "focus_id": "", "focus_amount": false}
 	var focus: Control = get_viewport().gui_get_focus_owner()
 	for id: String in refs.rows_by_id:
 		var row: Dictionary = refs.rows_by_id[id]
@@ -281,6 +359,8 @@ func _restore_position(view: Dictionary) -> void:
 		elif is_instance_valid(row.button) and not row.button.disabled: row.button.grab_focus()
 	refs.ship_scroll.set_deferred("scroll_vertical", int(view.get("ship_scroll", 0)))
 	refs.station_scroll.set_deferred("scroll_vertical", int(view.get("station_scroll", 0)))
+	refs.ship_scroll.set_deferred("scroll_horizontal", int(view.get("ship_scroll_horizontal", 0)))
+	refs.station_scroll.set_deferred("scroll_horizontal", int(view.get("station_scroll_horizontal", 0)))
 
 func _label(parent: Node, text: String, font_size: int, color: Color) -> Label:
 	var result: Label = Label.new()

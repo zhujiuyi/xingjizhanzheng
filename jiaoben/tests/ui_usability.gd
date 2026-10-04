@@ -70,14 +70,19 @@ func _run() -> void:
 	check(supported, "system fallback contains required Chinese glyphs")
 	ui.show_page("market")
 	await process_frame
-	check(int(ui.quantity_input.max_value) == int(host.store.catalog.rule("business_quantity_limit")), "quantity upper bound comes from catalog")
-	ui.quantity_input.value = 5
+	var quantity_limit: int = int(host.store.catalog.rule("business_quantity_limit"))
+	var quantity_controls: bool = not ui.quotes.is_empty() and ui.quantity_input == null and ui.body.find_child("OperationQuantity", true, false) == null
+	for quote: Dictionary in ui.quotes:
+		quantity_controls = quantity_controls and quote.get("amount") is SpinBox and int(quote.amount.max_value) == quantity_limit and quote.row.is_ancestor_of(quote.amount)
+	check(quantity_controls, "each market row owns its catalog-bounded quantity control without a global toolbar")
+	if not quantity_controls: host.free(); quit(1); return
+	for quote: Dictionary in ui.quotes: quote.amount.value = 5
 	for quote: Dictionary in ui.quotes:
 		var price: int = host.gameplay.economy.quote(quote.id, 5, false)
 		var unit_price: int = host.gameplay.economy.quote(quote.id, 1, false)
 		check(quote.total_label.text == str(price) and int(quote.total_label.get_meta("quote_amount", -1)) == price and quote.quantity_label.text == "5", "item total and quantity columns show actual taxed/reputation quote " + quote.id)
 		check(quote.unit_label.text == str(unit_price) and int(quote.unit_label.get_meta("quote_amount", -1)) == unit_price, "item unit-price column preserves independent integer tax rounding " + quote.id)
-		check(quote.total_label.tooltip_text.contains("%d 信用点；成交数量 5" % price) and quote.unit_label.tooltip_text.contains("%d 信用点" % unit_price), "item quote tooltips explain numeric-column units and actual quantity " + quote.id)
+		check(quote.total_label.tooltip_text.contains("%d 信用点；本行数量 5" % price) and quote.unit_label.tooltip_text == "每单位含税价格", "item quote tooltips explain numeric-column units and this row's actual quantity " + quote.id)
 		check(quote.status_label.text.begins_with("站点库存 %d" % int(quote.maximum)) and quote.status_label.tooltip_text == quote.status_label.text, "item status column retains actual stock and complete eligibility reason " + quote.id)
 	var echo_quote: Dictionary = {}
 	var iron_quote: Dictionary = {}
@@ -91,8 +96,8 @@ func _run() -> void:
 	if ship_filter != null: ship_filter.pressed.emit()
 	for quote: Dictionary in ui.quotes:
 		var price: int = host.gameplay.economy.quote_ship(quote.id)
-		check(quote.kind == "ship" and quote.quantity_label.text == "1" and quote.total_label.text == str(price) and quote.unit_label.text == str(price), "ship columns quote exactly one real hull regardless of quantity selector " + quote.id)
-		check(quote.total_label.tooltip_text.contains("%d 信用点；成交数量 1" % price) and not bool(quote.button.get_meta("uses_quantity", true)), "ship tooltip and command keep fixed quantity one " + quote.id)
+		check(quote.kind == "ship" and quote.get("amount") == null and quote.quantity_label.visible and quote.quantity_label.text == "1" and quote.total_label.text == str(price) and quote.unit_label.text == str(price), "ship columns quote exactly one real hull without a batch selector " + quote.id)
+		check(quote.total_label.tooltip_text.contains("%d 信用点；本行数量 1" % price) and not bool(quote.button.get_meta("uses_quantity", true)), "ship tooltip and command keep fixed quantity one " + quote.id)
 	ui.show_page("fitting")
 	var enabled: Button = button_text(ui, "关闭设备")
 	check(enabled != null, "enabled equipment offers off action")

@@ -241,15 +241,16 @@ func quote_checks() -> void:
 	if not check(not row.is_empty(), "market list contains the selected formal item row"): return
 	var economy: RefCounted = host.gameplay.get("economy")
 	check(quote_amount(row.unit_price) == int(economy.call("quote", stack_item_id, 1, false)) and quote_amount(row.total) == int(economy.call("quote", stack_item_id, 1, false)), "one-unit price and total use real reputation/tax quote")
-	host.ui.quantity_input.value = 2
+	(row.get("amount") as SpinBox).value = 2
 	await frames(3)
-	check(quote_amount(row.unit_price) == int(economy.call("quote", stack_item_id, 1, false)) and quote_amount(row.total) == int(economy.call("quote", stack_item_id, 2, false)) and "2" in str(row.quantity.text), "SpinBox changes actual quantity and rounded total without rebuilding an invented price")
+	check(quote_amount(row.unit_price) == int(economy.call("quote", stack_item_id, 1, false)) and quote_amount(row.total) == int(economy.call("quote", stack_item_id, 2, false)) and int((row.get("amount") as SpinBox).value) == 2, "SpinBox changes actual quantity and rounded total without rebuilding an invented price")
 	var stock: D.ShopStockStateDto = economy.call("_stock", stack_item_id)
 	var button: Button = action_button("buy_item", stack_item_id, "", false)
-	host.ui.quantity_input.value = stock.quantity + 1
+	(row.get("amount") as SpinBox).value = stock.quantity + 1
 	await frames(3)
 	check(button != null and button.disabled and not str(row.status.text).is_empty(), "quantity exceeding real inventory disables purchase with a visible row reason")
-	host.ui.quantity_input.value = 1
+	(row.get("amount") as SpinBox).value = 1
+	await frames(3)
 	var credit: int = host.state.player().credit
 	host.state.player().credit = 0; host.ui._update_quotes()
 	check(button != null and button.disabled and "信用点" in str(row.status.text), "insufficient funding is an explicit row reason")
@@ -258,9 +259,9 @@ func quote_checks() -> void:
 	await show_page("market", "ships")
 	row = row_for(normal_ship_def)
 	if not check(not row.is_empty(), "market displays a distinct hull list row"): return
-	host.ui.quantity_input.value = 2; await frames(3)
-	check(str(row.unit.text) == "艘" and "1" in str(row.quantity.text) and quote_amount(row.total) == int(economy.call("quote_ship", normal_ship_def, false)), "hull uses actual one-vessel unit and fixed quantity despite shared item SpinBox")
-	host.ui.quantity_input.value = 1
+	host.ui.quantity_value = 2; await frames(3)
+	check(str(row.unit.text) == "艘" and "1" in str(row.quantity.text) and quote_amount(row.total) == int(economy.call("quote_ship", normal_ship_def, false)), "hull uses actual one-vessel unit and fixed quantity despite unrelated legacy quantity")
+	host.ui.quantity_value = 1
 
 func protected_asset_checks() -> void:
 	await show_page("warehouse")
@@ -307,7 +308,7 @@ func purchase_and_move_checks() -> void:
 	if not await actual_click(action_button("switch_ship", normal_ship_id), "switch_ship", normal_ship_id): return
 	check(host.state.ship().ship_instance_id == normal_ship_id and host.state.ship().policy_id == "normal_owned", "actual fleet row switches to the legitimately purchased normal vessel")
 	await show_page("market", "buy")
-	host.ui.quantity_input.value = 1; await frames()
+	(row_for(stack_item_id).get("amount") as SpinBox).value = 1; await frames()
 	var before_quantity: int = int(inventory.call("count", warehouse, stack_item_id, true))
 	var item_price: int = int(economy.call("quote", stack_item_id, 1, false))
 	credit = host.state.player().credit
@@ -353,7 +354,7 @@ func fitting_checks() -> void:
 	var tech: Dictionary = host.store.catalog.one("module_tech_defs", "module_id", module_item_id)
 	host.gameplay.call("grant_unlock", str(tech.get("required_unlock_id", "")))
 	await show_page("market", "buy")
-	host.ui.quantity_input.value = 1; await frames()
+	(row_for(module_item_id).get("amount") as SpinBox).value = 1; await frames()
 	var old_ids: Dictionary = {}
 	for item: D.ItemInstanceStateDto in host.state.rows("item_instance_state"): old_ids[item.item_instance_id] = true
 	if not await actual_click(action_button("buy_item", module_item_id), "buy_item", module_item_id): return
@@ -425,10 +426,10 @@ func page_layout_checks() -> void:
 				valid_cells = bool(row.row.get_meta("business_row", false)) and not id.is_empty() and valid_cells
 				images = row.image.texture != null and row.image.texture.get_width() > 0 and row.image.texture.get_height() > 0 and images
 				for field: String in ["name", "description", "unit", "quantity", "unit_price", "total", "status"]:
-					readable = label_text_fits(row[field]) and readable
+					readable = (not (row[field] as Control).is_visible_in_tree() or label_text_fits(row[field])) and readable
 				var previous_x: float = -INF
 				for field: String in ["image", "name", "unit", "quantity", "unit_price", "total", "status", "actions"]:
-					var cell: Control = row[field]
+					var cell: Control = row.get("amount") as Control if field == "quantity" and row.get("amount") is SpinBox else row[field]
 					column_order = cell.global_position.x >= previous_x - 0.5 and column_order
 					previous_x = cell.global_position.x
 				for button: Button in buttons_below(row.row): all_actions_last = row.actions.is_ancestor_of(button) and all_actions_last
@@ -482,7 +483,7 @@ func warehouse_layout_checks(label: String, take_capture: bool, suffix: String) 
 	for row: Dictionary in business_rows():
 		valid = bool(row.row.get_meta("warehouse_row", false)) and str(row.row.get_meta("row_id", "")) == str(row.id) and valid
 		images = row.image.texture != null and row.image.texture.get_width() > 0 and row.image.texture.get_height() > 0 and images
-		for field: String in ["name", "quantity", "location", "status"]: readable = label_text_fits(row[field]) and readable
+		for field: String in ["name", "quantity", "location", "status"]: readable = (not (row[field] as Control).is_visible_in_tree() or label_text_fits(row[field])) and readable
 		if bool(row.remote):
 			operations = row.get("amount") == null and row.get("button") == null and operations
 		else:

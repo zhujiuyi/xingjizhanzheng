@@ -459,6 +459,8 @@ static func _business_list_checks(host: Node, evidence: Dictionary, output_dir: 
 	var initial_pose: Transform3D = host.world.flight.global_transform
 	var initial_quantity: int = host.ui.quantity_value
 	var initial_filter: String = host.ui.market_filter
+	var authority_before: String = _warehouse_authority_signature(host)
+	var durable_before: Dictionary = _star_chart_durable_state(host)
 	var economy: RefCounted = host.gameplay.get("economy")
 	await _business_show(host, "market", "buy")
 	var goods: Array[Dictionary] = _business_rows(host)
@@ -469,31 +471,41 @@ static func _business_list_checks(host: Node, evidence: Dictionary, output_dir: 
 		goods_valid = goods_valid and bool(entry.row.get_meta("business_row", false)) and entry.image.texture != null and entry.image.texture.get_width() > 0 and not entry.name.text.is_empty() and not entry.description.text.is_empty() and not entry.unit.text.is_empty()
 		var previous_x: float = -INF
 		for key: String in ["image", "name", "unit", "quantity", "unit_price", "total", "status", "actions"]:
-			var control: Control = entry[key]
+			var control: Control = entry.amount if key == "quantity" and is_instance_valid(entry.get("amount")) else entry[key]
 			columns_ordered = columns_ordered and control.global_position.x >= previous_x - 0.5
 			previous_x = control.global_position.x
 		for button: Node in entry.row.find_children("*", "Button", true, false): columns_ordered = columns_ordered and entry.actions.is_ancestor_of(button)
 		var id: String = str(entry.row.get_meta("row_id", ""))
 		var stock: RefCounted = economy.call("_stock", id)
-		quotes_valid = quotes_valid and stock != null and int(entry.unit_price.get_meta("quote_amount", -1)) == int(economy.call("quote", id, 1, false)) and int(entry.total.get_meta("quote_amount", -1)) == int(economy.call("quote", id, initial_quantity, false)) and (stock == null or entry.status.text.contains(str(stock.quantity)))
+		quotes_valid = quotes_valid and stock != null and int(entry.unit_price.get_meta("quote_amount", -1)) == int(economy.call("quote", id, 1, false)) and int(entry.total.get_meta("quote_amount", -1)) == int(economy.call("quote", id, 1, false)) and (stock == null or entry.status.text.contains(str(stock.quantity)))
 	_check(evidence, goods_valid, "packed market goods use real item identities, nonempty images, descriptions and units")
 	_check(evidence, columns_ordered, "packed business columns place images, descriptions, units, quantities, quotes and status before the final operation column")
 	_check(evidence, quotes_valid, "packed goods preserve actual frozen stock and reputation/tax unit and total quotes")
 	await _capture(host, output_dir, "business-goods")
 	var first_row: Node = goods[0].row if not goods.is_empty() else null
 	var list_node: Node = first_row.get_parent() if first_row != null else null
-	var changed_valid: bool = first_row != null and is_instance_valid(host.ui.quantity_input)
+	var changed_valid: bool = first_row != null and is_instance_valid(goods[0].get("amount"))
 	if changed_valid:
-		host.ui.quantity_input.value = 2
+		goods[0].amount.value = 2
 		for frame: int in range(3): await host.get_tree().process_frame
 		var changed_rows: Array[Dictionary] = _business_rows(host)
 		changed_valid = changed_rows.size() == goods.size() and changed_rows[0].row == first_row and first_row.get_parent() == list_node
-		for entry: Dictionary in changed_rows:
+		for index: int in range(changed_rows.size()):
+			var entry: Dictionary = changed_rows[index]
 			var id: String = str(entry.row.get_meta("row_id", ""))
-			changed_valid = changed_valid and entry.quantity.text == "2" and int(entry.total.get_meta("quote_amount", -1)) == int(economy.call("quote", id, 2, false)) and int(entry.unit_price.get_meta("quote_amount", -1)) == int(economy.call("quote", id, 1, false))
-		host.ui.quantity_input.value = initial_quantity
+			var expected_quantity: int = 2 if index == 0 else 1
+			changed_valid = changed_valid and int(entry.amount.value) == expected_quantity and entry.quantity.text == str(expected_quantity) and int(entry.total.get_meta("quote_amount", -1)) == int(economy.call("quote", id, expected_quantity, false)) and int(entry.unit_price.get_meta("quote_amount", -1)) == int(economy.call("quote", id, 1, false))
+		goods[0].amount.value = 1
 		for frame: int in range(3): await host.get_tree().process_frame
-	_check(evidence, changed_valid, "packed SpinBox refreshes real rounded quotes on the same list rows and restores its original quantity")
+	_check(evidence, changed_valid and host.ui.quantity_value == initial_quantity, "packed row SpinBox refreshes only its real rounded quote on the same list rows while other quantities and the legacy global value stay unchanged")
+	var compact: bool = goods.size() >= 2 and host.ui.quantity_input == null and host.ui.body.find_child("OperationQuantity", true, false) == null
+	for entry: Dictionary in goods:
+		compact = compact and is_instance_valid(entry.amount) and not entry.quantity.visible and not entry.description.visible and entry.name.autowrap_mode == TextServer.AUTOWRAP_OFF and not entry.name.tooltip_text.is_empty() and entry.row.size.y <= 64.0
+		var center: float = entry.image.global_position.y + entry.image.size.y * 0.5
+		for control: Control in [entry.name, entry.amount, entry.unit_price, entry.total, entry.status, entry.actions]:
+			compact = compact and absf(control.global_position.y + control.size.y * 0.5 - center) <= 1.0
+		for button: Node in entry.actions.find_children("*", "Button", true, false): compact = compact and button.size.y <= 34.0 and button.size.x <= 112.0
+	_check(evidence, compact, "packed market has compact one-line portraits, names, independent row quantities and small action buttons without a global quantity toolbar")
 	await _business_show(host, "market", "ships")
 	var hulls: Array[Dictionary] = _business_rows(host)
 	var hulls_valid: bool = not hulls.is_empty()
@@ -502,7 +514,7 @@ static func _business_list_checks(host: Node, evidence: Dictionary, output_dir: 
 	for entry: Dictionary in hulls:
 		var id: String = str(entry.row.get_meta("row_id", ""))
 		var price: int = int(economy.call("quote_ship", id, false))
-		hulls_valid = hulls_valid and entry.image.texture != null and entry.image.texture.get_width() > 0 and entry.unit.text == "艘" and entry.quantity.text == "1" and not entry.description.text.is_empty()
+		hulls_valid = hulls_valid and entry.image.texture != null and entry.image.texture.get_width() > 0 and entry.unit.text == "艘" and entry.quantity.text == "1" and entry.quantity.visible and not is_instance_valid(entry.get("amount")) and not entry.description.text.is_empty()
 		hull_quotes = hull_quotes and int(entry.unit_price.get_meta("quote_amount", -1)) == price and int(entry.total.get_meta("quote_amount", -1)) == price
 		if price > initial_credit:
 			var disabled: bool = false
@@ -511,6 +523,7 @@ static func _business_list_checks(host: Node, evidence: Dictionary, output_dir: 
 	_check(evidence, hulls_valid, "packed hull list keeps vessel portraits, descriptions, unit and one-vessel transaction quantity")
 	_check(evidence, hull_quotes and shortage_quote, "packed hull prices use real taxed quotes and remain readable when funds disable purchasing")
 	await _capture(host, output_dir, "business-hulls")
+	await _business_industry_fixed_checks(host, evidence, output_dir, initial_quantity)
 	var all_lists: bool = true
 	for variant: Dictionary in [{"page": "ships", "filter": ""}, {"page": "warehouse", "filter": ""}, {"page": "fitting", "filter": ""}, {"page": "industry", "filter": ""}, {"page": "research", "filter": ""}, {"page": "missions", "filter": ""}, {"page": "market", "filter": "buy"}, {"page": "market", "filter": "ships"}, {"page": "market", "filter": "sell"}]:
 		await _business_show(host, str(variant.page), str(variant.filter))
@@ -524,7 +537,59 @@ static func _business_list_checks(host: Node, evidence: Dictionary, output_dir: 
 	host.ui.market_filter = initial_filter
 	await _business_show(host, "station")
 	_check(evidence, host.ui.page == "station" and host.ui.station_layer.is_visible_in_tree() and host.ui.quantity_value == initial_quantity and host.state.player().credit == initial_credit and host.state.ship().ship_instance_id == initial_ship and host.world.flight.global_transform.is_equal_approx(initial_pose), "packed business presentation restores the station and original quantity without changing funds, assets or the existing starting pose")
+	_check(evidence, _warehouse_authority_signature(host) == authority_before and _star_chart_durable_state(host) == durable_before, "packed market and industry quantity edits, quotes and view refreshes preserve every runtime inventory/economy row and all durable snapshots, slots and sessions")
 	host.set_process(process_enabled); host.set_physics_process(physics_enabled)
+
+static func _business_industry_fixed_checks(host: Node, evidence: Dictionary, output_dir: String, initial_quantity: int) -> void:
+	await _business_show(host, "industry")
+	var recipes: Array[Dictionary] = []
+	for row: Dictionary in host.ui.quotes:
+		if row.kind == "recipe": recipes.append(row)
+	var valid: bool = recipes.size() >= 2 and host.ui.quantity_input == null and host.ui.body.find_child("OperationQuantity", true, false) == null
+	var first_amount: SpinBox = recipes[0].amount if not recipes.is_empty() else null
+	var first_id: String = str(recipes[0].target) if not recipes.is_empty() else ""
+	var first_node_id: int = recipes[0].row.get_instance_id() if not recipes.is_empty() else 0
+	var first_amount_id: int = first_amount.get_instance_id() if is_instance_valid(first_amount) else 0
+	if is_instance_valid(first_amount): first_amount.value = 2
+	for frame: int in range(3): await host.get_tree().process_frame
+	var economy: RefCounted = host.gameplay.get("economy")
+	for index: int in range(recipes.size()):
+		var row: Dictionary = recipes[index]
+		var batches: int = 2 if index == 0 else 1
+		var recipe: Dictionary = host.store.catalog.one("recipe_defs", "recipe_id", str(row.id))
+		var hull: bool = recipe.is_empty()
+		if hull: recipe = host.store.catalog.one("hull_recipe_defs", "hull_recipe_id", str(row.id))
+		var expected_output: String = str(recipe.get("ship_id" if hull else "output_item_id", ""))
+		var expected_units: int = batches if hull else int(recipe.get("output_quantity", 0)) * batches
+		valid = valid and not recipe.is_empty() and row.inputs_table == ("hull_recipe_inputs" if hull else "recipe_inputs") and row.inputs_key == ("hull_recipe_id" if hull else "recipe_id") and row.output_id == expected_output
+		valid = valid and int(row.amount.value) == batches and int(row.unit_label.get_meta("quote_amount", -1)) == int(economy.call("quote_manufacture", str(row.id), 1)) and int(row.total_label.get_meta("quote_amount", -1)) == int(economy.call("quote_manufacture", str(row.id), batches)) and row.quantity_label.text == str(batches)
+		for input: Dictionary in host.store.catalog.rows(str(row.inputs_table)):
+			if str(input.get(str(row.inputs_key), "")) != row.id: continue
+			var required: int = int(input.quantity) * batches
+			var input_name: String = str(host.store.catalog.one("item_defs", "item_id", str(input.item_id)).get("display_name", ""))
+			valid = valid and row.name_label.tooltip_text.contains("%s × %d" % [input_name, required])
+		var reason: String = str(host.ui._service_reason(str(row.service)))
+		if not bool(host.gameplay.call("unlocked", str(row.get("unlock", "")))): reason = "需解锁 " + str(host.ui._unlock_name(str(row.get("unlock", ""))))
+		if reason.is_empty(): reason = str(host.ui._materials_reason(str(row.inputs_table), str(row.inputs_key), str(row.id), batches))
+		if host.state.player().credit < int(economy.call("quote_manufacture", str(row.id), batches)): reason = "信用点不足"
+		if not reason.is_empty(): valid = valid and row.button.disabled and row.status_label.tooltip_text.contains(reason)
+		var output_name: String = str(host.store.catalog.one("ship_defs" if hull else "item_defs", "ship_id" if hull else "item_id", expected_output).get("display_name", ""))
+		valid = valid and row.name_label.tooltip_text.contains("本次产出：%s × %d" % [output_name, expected_units])
+	_check(evidence, valid and host.ui.quantity_value == initial_quantity, "packed industry uses independent batch quantities, actual per-batch and rounded total fees, batch-scaled input/output tooltips and real starting-material restrictions")
+	await _capture(host, output_dir, "business-industry")
+	host.ui.page_scroll.scroll_vertical = 120
+	host.ui.business_list_view.horizontal_scroll.scroll_horizontal = 37
+	for frame: int in range(3): await host.get_tree().process_frame
+	var vertical: int = host.ui.page_scroll.scroll_vertical
+	var horizontal: int = host.ui.business_list_view.horizontal_scroll.scroll_horizontal
+	host.ui.refresh_page()
+	for frame: int in range(6): await host.get_tree().process_frame
+	var restored: bool = not first_id.is_empty() and host.ui.page_scroll.scroll_vertical == vertical and host.ui.business_list_view.horizontal_scroll.scroll_horizontal == horizontal
+	for row: Dictionary in host.ui.quotes:
+		if row.kind != "recipe": continue
+		restored = restored and int(row.amount.value) == (2 if row.target == first_id else 1)
+		if row.target == first_id: restored = restored and row.row.get_instance_id() != first_node_id and row.amount.get_instance_id() != first_amount_id
+	_check(evidence, restored and host.ui.quantity_value == initial_quantity, "packed industry refresh replaces stale controls while restoring this page's independent row quantities and both scroll positions")
 
 static func _warehouse_fixed_checks(host: Node, evidence: Dictionary, output_dir: String) -> void:
 	# This fixed endpoint only reads the fresh world's real starting inventory.
@@ -566,9 +631,9 @@ static func _warehouse_fixed_checks(host: Node, evidence: Dictionary, output_dir
 		eligibility = eligibility and row.button.disabled == (not bool(quote.ok)) and str(row.button.get_meta("target", "")) == str(row.id) and str(row.button.get_meta("extra", "")) == str(row.destination) and row.amount.min_value == 1 and row.amount.value == 1
 		if row.policy_id != "normal_owned":
 			protected_rows += 1
-			eligibility = eligibility and row.button.disabled and not row.amount.editable and not str(quote.reason).is_empty() and str(row.status.text).contains(str(quote.reason))
+			eligibility = eligibility and row.button.disabled and not row.amount.editable and not str(quote.reason).is_empty() and str(row.status.text).contains(str(quote.reason)) and row.policy_badge.visible and not str(row.policy_badge.text).is_empty() and str(row.row.tooltip_text).contains(str(quote.reason))
 		elif row.kind == "stack" and row.amount.max_value >= 2: editable.append(row)
-	_check(evidence, eligibility and protected_rows > 0, "packed warehouse uses real transfer eligibility and keeps protected starting supplies visible with disabled controls and explicit reasons")
+	_check(evidence, eligibility and protected_rows > 0, "packed warehouse uses real transfer eligibility and keeps protected starting supplies visible with inline policy badges, disabled controls and explicit tooltip reasons")
 	var independent: bool = editable.size() >= 2
 	var original_global: int = host.ui.quantity_value
 	if independent:
@@ -581,6 +646,20 @@ static func _warehouse_fixed_checks(host: Node, evidence: Dictionary, output_dir
 		first.amount.value = 1
 		for frame: int in range(3): await host.get_tree().process_frame
 	_check(evidence, independent and _warehouse_authority_signature(host) == authority_before, "packed per-row quantities stay independent of held stock and market quantity without modifying the frozen starting economy or assets")
+	var single_line: bool = not rows.is_empty()
+	var compact_controls: bool = valid
+	for row: Dictionary in rows:
+		var center: float = row.top.global_position.y + row.top.size.y * 0.5
+		for control: Control in [row.image, row.name, row.quantity, row.location, row.amount, row.button]:
+			if not is_instance_valid(control): continue
+			single_line = single_line and absf(control.global_position.y + control.size.y * 0.5 - center) <= 1.0
+		single_line = single_line and not row.description.visible and not row.status.visible and row.row.size.y <= 50.0 and row.name.autowrap_mode == TextServer.AUTOWRAP_OFF and row.location.autowrap_mode == TextServer.AUTOWRAP_OFF and str(row.row.tooltip_text).contains(str(row.title))
+		var column: Dictionary = refs.columns[1 if bool(row.is_station) else 0]
+		compact_controls = compact_controls and column.scroll.horizontal_scroll_mode == ScrollContainer.SCROLL_MODE_AUTO and column.scroll.is_ancestor_of(column.header) and absf(column.location_heading.global_position.x - row.location.global_position.x) <= 1.0
+		if is_instance_valid(row.button):
+			compact_controls = compact_controls and row.button.size.x <= 88.0 and row.button.size_flags_horizontal == Control.SIZE_FILL and absf(column.amount_heading.global_position.x - row.amount.global_position.x) <= 1.0 and absf(column.action_heading.global_position.x - row.button.global_position.x) <= 1.0
+	_check(evidence, single_line, "packed warehouse keeps portrait, name, held stock, location, row quantity and transfer button on one horizontal line with complete item tooltips")
+	_check(evidence, compact_controls, "packed warehouse uses small transfer buttons and matching header columns inside independently scrollable tables")
 	await _capture(host, output_dir, "warehouse-dual")
 
 static func _warehouse_authority_signature(host: Node) -> String:

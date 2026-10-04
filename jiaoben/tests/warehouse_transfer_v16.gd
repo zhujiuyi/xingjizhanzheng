@@ -368,7 +368,7 @@ func movement_checks() -> void:
 		await show()
 	check(totals_by_item() == before, "all GUI transfers conserve goods, protection, reward identity, durability and quality")
 	host.ui.show_page("market"); await frames(4)
-	check(host.ui.quantity_input != null and int(host.ui.quantity_input.value) == 7, "market keeps its independent operation quantity after warehouse actions")
+	check(host.ui.quantity_input == null and host.ui.quantity_value == 7 and not host.ui.quotes.is_empty() and int((host.ui.quotes[0].get("amount") as SpinBox).value) == 1, "market row quantity remains independent of warehouse and unused legacy quantity")
 	await show()
 
 func reject(action: String, target: String, amount: int, destination: String, label: String) -> void:
@@ -437,15 +437,15 @@ func layout_checks() -> void:
 		var right_frame: Control = data.get("station_column") as Control
 		check(left_frame.global_position.x + left_frame.size.x <= right_frame.global_position.x + 1.0 and absf(left_frame.global_position.y - right_frame.global_position.y) <= 1.0, "cargo remains on left and station inventory on right " + suffix)
 		for row: Dictionary in rows():
-			check(label_fits(row.quantity) and label_fits(row.location) and label_fits(row.status), "quantity/location/restriction text remains readable " + suffix + " " + str(row.id))
+			check(label_fits(row.quantity) and label_fits(row.location) and (not (row.status as Control).is_visible_in_tree() or label_fits(row.status)), "quantity/location/restriction text remains readable " + suffix + " " + str(row.id))
 			check(str(row.row.get_meta("row_id", "")) == str(row.id), "responsive layout retains asset row identity " + suffix + " " + str(row.id))
 			var input: SpinBox = row.get("amount") as SpinBox
 			if input != null: check(input.size.x >= input.get_combined_minimum_size().x - 0.5 and input.size.y >= input.get_combined_minimum_size().y - 0.5, "per-row amount editor fits " + suffix + " " + str(row.id))
 		var right_offset: int = right.scroll_vertical
 		var left_rows: Array[Dictionary] = rows("ship_rows")
 		if not left_rows.is_empty():
-			await reveal(left_rows[-1].status)
-			check(visible(left_rows[-1].status) and right.scroll_vertical == right_offset, "cargo tail scroll never moves station list " + suffix)
+			await reveal(left_rows[-1].quantity)
+			check(visible(left_rows[-1].quantity) and right.scroll_vertical == right_offset, "cargo tail scroll never moves station list " + suffix)
 		var left_offset: int = left.scroll_vertical
 		var right_rows: Array[Dictionary] = rows("station_rows")
 		await reveal(right_rows[-1].location)

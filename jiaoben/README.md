@@ -1,6 +1,8 @@
 # 测试与辅助文件
 
-`tests/warehouse_transfer_v16_run.py`验证真实双列表与独立行数量、8 GUI搬运、矿舱/设备/密封包、远站排序灰色只读、容量/权限/过期回调、四布局及SQLite重开；加`--native`独占Metal/CoreAudio窗口，fresh UUID数据/图在tmp，严格双日志在logs。实际包通过固定外部Node入口`--xj-verify-warehouse`复验，production资源保持PCK；固定表现门槛现104项/16图，新增release-warehouse-dual。详见[43](../doc/43-双列表仓储与行内搬运.md)。
+`tests/row_quantity_v17_run.py`验证仓储单行、小按钮与远站只读，市场/工业独立行数量、12次GUI买卖/制造/拆解、五种非法数量拒绝、七种过期上下文、四布局和SQLite重开；加`--native`独占Metal/CoreAudio窗口，fresh UUID库/图在tmp，双日志与结构化结果在logs。实际包通过受限`--xj-verify-row-quantities`入口加载同一外部测试Node，res://保持实际PCK；构建清单记录测试源码、双日志与图的SHA256。详见[44](../doc/44-单行业务列表与行内数量.md)。
+
+`tests/warehouse_transfer_v16_run.py`验证真实双列表与独立行数量、8 GUI搬运、矿舱/设备/密封包、远站排序灰色只读、容量/权限/过期回调、四布局及SQLite重开；加`--native`独占Metal/CoreAudio窗口，fresh UUID数据/图在tmp，严格双日志在logs。实际包通过固定外部Node入口`--xj-verify-warehouse`复验，production资源保持PCK；v0.12.0固定表现门槛104项/16图，含release-warehouse-dual，当前门槛见下。详见[43](../doc/43-双列表仓储与行内搬运.md)。
 
 `tests/combat_automation_v15_run.py`验证真实八组合checkbox、正式双武器周期/支付与资格、近敌锁定/死亡换锁、范围接近和朝敌环绕、手动/X/Z/保存/跃迁边界、四布局真实飞行渲染/tooltip、SQL重开及25步大舰范围边缘。追加`--native`独占Metal/CoreAudio窗口，使用共用锁；UUID临时库/截图在tmp，严格双日志和结构结果在logs，scope/revision/global Z/飞行截图字段必须完整。新实际包通过受限显式`--xj-verify-combat-automation`加载同一固定外部测试Node，res://仍为包内PCK；构建脚本将测试源码/日志/图摘要纳入包清单。详见[42](../doc/42-战斗自动化与索敌环绕.md)。
 
@@ -10,7 +12,7 @@
 
 从根目录执行 `/usr/local/bin/python3.14 jiaoben/tests/star_chart_v13_run.py`，追加`--native`独占Metal/CoreAudio窗口。fresh tmp SQLite验证真实Main的单选情报、方向/门资格/载重变化、输入隔离、关闭重开/换世界/实际旅行绑定、四布局及120/300个纯UI节点；日志和结构化结果在logs，截图和DB在tmp。共用`feature-audit.lock`，不得与其它Godot检查/编辑器导入并行。原生Viewport事件与额外系统输入复查分别记录，最终结果见40。
 
-当前发行包内置表现门槛为104项/16图（保留原100项，再增加4项双列表仓库检查及一张仓储图），`build_client.py`必须用实际bundle/PCK独立运行；未通过不得发布。历史小节的旧检查数属于对应版本。
+当前发行包内置表现门槛为110项/17图（保留104项，增加2项仓储单行/小按钮和4项市场/工业独立数量/报价/状态不变检查，并增加release-business-industry图），`build_client.py`必须用实际bundle/PCK独立运行；未通过不得发布。历史小节的旧检查数属于对应版本。
 
 ## 全量功能审核
 
