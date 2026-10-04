@@ -4,6 +4,15 @@ extends RefCounted
 ## The fixed-step ship turn limit remains authoritative in the catalog.
 var pending_angles: Vector2 = Vector2.ZERO
 
+static func world_rotation_to_input(ship_basis: Basis, world_rotation: Vector3) -> Vector3:
+	# Camera yaw can use world-up while the ship is pitched or banked. Convert
+	# that same physical axis into FlightInputDto's local (pitch, yaw, -roll)
+	# convention before composing it with the other keyboard requests.
+	if not ship_basis.is_finite() or not world_rotation.is_finite() or absf(ship_basis.determinant()) < 0.000001:
+		return Vector3.ZERO
+	var local_spin: Vector3 = ship_basis.orthonormalized().inverse() * world_rotation
+	return Vector3(local_spin.x, local_spin.y, -local_spin.z)
+
 func keyboard_turn() -> Vector3:
 	# X=pitch, Y=yaw, Z=roll, matching FlightInputDto request fields. A combined
 	# attitude command consumes the same catalog turn budget as a single axis.

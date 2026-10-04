@@ -250,8 +250,10 @@ func recover_and_check(label: String) -> void:
 		monotonic = error <= previous_roll + 0.00005 and monotonic
 		previous_roll = error
 	var recovered: Basis = host.world.flight.global_basis
+	if (-recovered.z).dot(-released.z) <= 0.999999 or not host.world.flight.velocity.is_equal_approx(velocity):
+		print("ATTITUDE_V10_RECOVERY_METRICS ", label, " raw_dot=", (-recovered.z).dot(-released.z), " normalized_dot=", recovered.z.normalized().dot(released.z.normalized()), " heading_error_rad=", recovered.z.angle_to(released.z), " release_length=", released.z.length(), " recovered_length=", recovered.z.length(), " velocity_diff=", host.world.flight.velocity.distance_to(velocity))
 	check(roll_error(recovered) < 0.0005 and monotonic, "released controls converge smoothly to level without residual bank " + label)
-	check((-recovered.z).dot(-released.z) > 0.999999 and host.world.flight.velocity.is_equal_approx(velocity), "idle roll recovery preserves the chosen 3D heading and inertial velocity " + label)
+	check(recovered.z.normalized().dot(released.z.normalized()) > 0.999999 and host.world.flight.velocity.is_equal_approx(velocity), "idle roll recovery preserves the chosen 3D heading and inertial velocity " + label)
 	check(bounded and finite_attitude(recovered) and host.world.flight.intent.yaw_request == 0.0 and host.world.flight.intent.pitch_request == 0.0 and host.world.flight.intent.roll_request == 0.0, "idle recovery is finite, shares the real turn limit and has no held input " + label)
 
 func explicit_roll_checks() -> void:

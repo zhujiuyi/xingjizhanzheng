@@ -385,7 +385,9 @@ func input_checks() -> void:
 	for action: String in keyboard_axes:
 		Input.action_press(action); host._read_flight_input(1.0 / 60.0)
 		var expected: Vector2 = keyboard_axes[action]
-		check(Vector2(host.world.flight.intent.yaw_request, host.world.flight.intent.pitch_request).is_equal_approx(expected), "actual Main reads manual attitude independently of visible pointer " + action)
+		var actual_spin: Vector3 = host.world.flight.global_basis * Vector3(host.world.flight.intent.pitch_request, host.world.flight.intent.yaw_request, -host.world.flight.intent.roll_request)
+		var expected_spin: Vector3 = Vector3.UP * expected.x + host.world.flight.global_basis.x * expected.y
+		check(actual_spin.distance_to(expected_spin) < 0.00001, "actual Main reads manual attitude independently of visible pointer using the shared world yaw axis " + action)
 		Input.action_release(action)
 	host.world.flight.clear_intent()
 	await view_thrust_checks(station.global_position + Vector3(0, 1800, 7000))

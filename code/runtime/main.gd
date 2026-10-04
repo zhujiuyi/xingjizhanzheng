@@ -381,19 +381,26 @@ func _read_flight_input(delta: float = 0.0) -> void:
 	intent.thrust_y = Input.get_axis("down", "up")
 	intent.thrust_z = Input.get_axis("back", "forward")
 	var turn: Vector3 = flight_look.keyboard_turn()
-	intent.pitch_request = turn.x
-	intent.yaw_request = turn.y
-	intent.roll_request = turn.z
+	# A/D uses the same axis as the visible camera. A tilted local ship-up
+	# otherwise made the physical yaw compete with the world-up view yaw.
+	var yaw_axis: Vector3 = world.flight.global_basis.y if camera.mode == Types.CameraMode.FRONT else Vector3.UP
+	var combined: Vector3 = flight_look.world_rotation_to_input(world.flight.global_basis, yaw_axis * turn.y) + Vector3(turn.x, 0.0, turn.z)
+	var mapped: Vector3 = combined.limit_length(1.0)
+	intent.pitch_request = mapped.x
+	intent.yaw_request = mapped.y
+	intent.roll_request = mapped.z
 	intent.brake_requested = Input.is_action_pressed("brake")
 	intent.engine_cycle_requested = Input.is_action_pressed("boost")
 	var tick_delta := delta if delta > 0.0 else 1.0 / float(Engine.physics_ticks_per_second)
 	var turn_budget: float = float(world.flight.metrics.turn_radps) * tick_delta
-	if not is_zero_approx(turn.y): camera.steer_yaw(turn.y * turn_budget)
+	if not is_zero_approx(turn.y): camera.steer_yaw(turn.y * turn_budget / maxf(1.0, combined.length()))
 	if not is_zero_approx(intent.thrust_z):
 		var heading: Vector3 = camera.control_forward()
 		intent.view_thrust_direction = heading
 		var local_heading: Vector3 = world.flight.global_basis.inverse() * heading
-		if turn_budget > 0.0:
+		# W/S still advances along the visible view; explicit attitude keys own
+		# this tick's steering instead of being overwritten by view alignment.
+		if turn.is_zero_approx() and turn_budget > 0.0:
 			intent.yaw_request = clampf(atan2(-local_heading.x, -local_heading.z) / turn_budget, -1.0, 1.0)
 			intent.pitch_request = clampf(atan2(local_heading.y, Vector2(local_heading.x, local_heading.z).length()) / turn_budget, -1.0, 1.0)
 	if intent.engine_cycle_requested:

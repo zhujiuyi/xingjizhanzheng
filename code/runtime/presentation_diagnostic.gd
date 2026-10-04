@@ -143,6 +143,7 @@ static func run(host: Node, output_dir: String) -> bool:
 	await _hud_layout_checks(host, evidence)
 	await _capture(host, output_dir, "flight")
 	await _attitude_checks(host, evidence, output_dir)
+	await _manual_turn_camera_checks(host, evidence, output_dir)
 	var station_id: String = "station_anchor_port"
 	var station: Node3D = host.world.targets[station_id].node
 	host.set_process(false)
@@ -706,6 +707,184 @@ static func _attitude_checks(host: Node, evidence: Dictionary, output_dir: Strin
 	host.camera.step(0.0)
 	host.set_process(true)
 	host.set_physics_process(true)
+
+static func _manual_turn_camera_checks(host: Node, evidence: Dictionary, output_dir: String) -> void:
+	# These stimuli stay in the fresh opt-in diagnostic world. Drive the real
+	# Main input and Flight/Camera components without advancing business time.
+	var body: XJFlight = host.world.flight
+	var original_pose: Transform3D = body.global_transform
+	var original_velocity: Vector3 = body.velocity
+	var original_spin := Vector3(body.record.angular_x, body.record.angular_y, body.record.angular_z)
+	var original_intent = body.intent
+	var original_cruising: bool = body.cruising
+	var original_mode: Types.CameraMode = host.camera.mode
+	var original_player_mode: Types.CameraMode = host.state.player().camera_mode
+	var original_orbit: Vector2 = host.camera.orbit
+	var original_zoom: float = host.camera.zoom
+	var original_observation: Basis = host.camera.observation_basis
+	var original_target: String = host.ui.target_id
+	var original_process: bool = host.is_processing()
+	var original_physics: bool = host.is_physics_processing()
+	var original_pointer: Vector2 = host.get_viewport().get_mouse_position()
+	var old_actions: Dictionary = {}
+	for action: String in ["forward", "back", "up", "down", "pitch_up", "pitch_down", "yaw_left", "yaw_right", "roll_left", "roll_right", "brake", "boost"]:
+		old_actions[action] = Input.get_action_strength(action)
+		Input.action_release(action)
+	host.set_process(false)
+	host.set_physics_process(false)
+	var station: StaticBody3D = host.world.targets.get("station_anchor_port", {}).get("node")
+	var gate: StaticBody3D = null
+	for entry: Dictionary in host.world.targets.values():
+		if str(entry.kind) == "gate": gate = entry.node; break
+	var step_s: float = 1.0 / float(host.store.catalog.rule("simulation_hz"))
+	var budget: float = float(body.metrics.turn_radps) * step_s
+	var old_bank := Transform3D(Basis.from_euler(Vector3(0.65, -0.4, 0.9)), original_pose.origin + Vector3(0, 2200, 8000))
+	var first_response: bool = true
+	var combined_response: bool = true
+	for action: String in ["yaw_left", "yaw_right"]:
+		var direction: float = 1.0 if action == "yaw_left" else -1.0
+		for with_forward: bool in [false, true]:
+			body.global_transform = old_bank
+			body.velocity = Vector3.ZERO
+			body.clear_intent(); body.write_back(); body.reset_physics_interpolation()
+			host.camera.bind(body, host.store.catalog, Types.CameraMode.FOLLOW)
+			host.state.player().camera_mode = Types.CameraMode.FOLLOW
+			if with_forward: host.camera.observe(Vector2(95, -175), float(host.preferences.get("mouse_sensitivity", 0.0)))
+			host.camera.step(0.0)
+			var before: Quaternion = body.quaternion
+			var view_before: Vector3 = host.camera.control_forward()
+			var expected: Quaternion = (Basis(Vector3.UP, direction * budget) * body.global_basis).get_rotation_quaternion()
+			Input.action_press(action)
+			if with_forward: Input.action_press("forward")
+			host._read_flight_input(step_s)
+			var view_after: Vector3 = host.camera.control_forward()
+			var thrust_direction: Vector3 = body.intent.view_thrust_direction
+			body.simulate(step_s)
+			var difference: Quaternion = (before.inverse() * body.quaternion).normalized()
+			var actual_angle: float = 2.0 * atan2(Vector3(difference.x, difference.y, difference.z).length(), absf(difference.w))
+			var expected_error: Quaternion = (expected.inverse() * body.quaternion).normalized()
+			var error_angle: float = 2.0 * atan2(Vector3(expected_error.x, expected_error.y, expected_error.z).length(), absf(expected_error.w))
+			var correct_turn: bool = actual_angle >= budget * 0.995 and actual_angle <= budget + 0.00002 and error_angle < 0.00002 and view_after.distance_to(Basis(Vector3.UP, direction * budget) * view_before) < 0.00002
+			if with_forward:
+				combined_response = combined_response and correct_turn and body.velocity.length() > 0.0 and body.velocity.normalized().dot(thrust_direction) > 0.999 and thrust_direction.distance_to(view_after) < 0.00001
+			else: first_response = first_response and correct_turn
+			Input.action_release(action); Input.action_release("forward")
+	_check(evidence, first_response, "packed real Main A/D gives full first-step physical yaw on the camera world axis despite an old pitched bank")
+	_check(evidence, combined_response, "packed W plus A/D retains manual steering and accelerates along the actual visible three-dimensional view")
+	var station_collision: CollisionShape3D = station.get_node_or_null("CollisionShape3D") if station != null else null
+	var gate_collision: CollisionShape3D = gate.get_node_or_null("FrameCollision_0") if gate != null else null
+	_check(evidence, station_collision != null and gate_collision != null and (station.collision_layer & 64) != 0 and (gate.collision_layer & 64) != 0, "packed station and wormhole expose their actual solid camera-obstacle geometry")
+	for item: Dictionary in [{"name": "station", "collider": station_collision, "target": "station_anchor_port"}, {"name": "wormhole", "collider": gate_collision, "target": ""}]:
+		await _near_camera_case(host, evidence, output_dir, item)
+	for action: String in old_actions:
+		Input.action_release(action)
+		if float(old_actions[action]) > 0.0: Input.action_press(action, float(old_actions[action]))
+	body.global_transform = original_pose
+	body.velocity = original_velocity
+	body.intent = original_intent
+	body.cruising = original_cruising
+	body.write_back(original_spin)
+	body.reset_physics_interpolation()
+	host.camera.bind(body, host.store.catalog, original_mode)
+	host.camera.orbit = original_orbit
+	host.camera.zoom = original_zoom
+	host.camera.observation_basis = original_observation
+	host.state.player().camera_mode = original_player_mode
+	host.ui.target_id = original_target
+	host.camera.step(0.0)
+	host.ui.tick(1.0)
+	if DisplayServer.get_name() != "headless": host.get_viewport().warp_mouse(original_pointer)
+	host.set_process(original_process)
+	host.set_physics_process(original_physics)
+	_check(evidence, body.global_transform.is_equal_approx(original_pose) and body.velocity.is_equal_approx(original_velocity) and body.intent == original_intent and host.camera.mode == original_mode and host.state.player().camera_mode == original_player_mode and host.camera.orbit.is_equal_approx(original_orbit) and is_equal_approx(host.camera.zoom, original_zoom) and not host.observing and not host.pointer_drag_pressed, "packed control diagnostic restores the original physical state and view without residual input")
+
+static func _near_camera_case(host: Node, evidence: Dictionary, output_dir: String, item: Dictionary) -> void:
+	var collider: CollisionShape3D = item.collider
+	if collider == null or not collider.shape is BoxShape3D:
+		_check(evidence, false, "packed near-" + str(item.name) + " sphere endpoints remain safe")
+		_check(evidence, false, "packed near-" + str(item.name) + " camera movement sweeps remain safe")
+		_check(evidence, false, "packed near-" + str(item.name) + " left observation visibly responds and releases cleanly")
+		return
+	var body: XJFlight = host.world.flight
+	var hull: CollisionShape3D = body.get_node("CollisionShape3D")
+	var hull_half: Vector3 = (hull.shape as BoxShape3D).size * 0.5
+	var obstacle_half: Vector3 = (collider.shape as BoxShape3D).size * 0.5
+	body.global_transform = collider.global_transform * Transform3D(Basis(Vector3.UP, PI), Vector3(0, 0, obstacle_half.z + hull_half.z + 0.1))
+	body.velocity = Vector3.ZERO
+	body.clear_intent(); body.write_back(); body.reset_physics_interpolation()
+	host.camera.bind(body, host.store.catalog, Types.CameraMode.FOLLOW)
+	host.state.player().camera_mode = Types.CameraMode.FOLLOW
+	host.ui.target_id = str(item.target)
+	await host.get_tree().physics_frame
+	await host.get_tree().process_frame
+	host.camera.step(0.0)
+	host.ui.tick(1.0)
+	if DisplayServer.get_name() != "headless": host.get_viewport().warp_mouse(host.ui.root.size * 0.5)
+	await host.get_tree().process_frame
+	var pose: Transform3D = body.global_transform
+	var initial_orbit: Vector2 = host.camera.orbit
+	var previous_position: Vector3 = host.camera.camera.global_position
+	var previous_forward: Vector3 = host.camera.control_forward()
+	var endpoints_safe: bool = true
+	var paths_safe: bool = true
+	var turns: float = 0.0
+	var maximum_turn: float = 0.0
+	var down := InputEventMouseButton.new()
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.position = host.ui.root.size * 0.5
+	down.pressed = true
+	host._unhandled_input(down)
+	for tick: int in range(24):
+		var motion := InputEventMouseMotion.new()
+		motion.relative = Vector2(4, -1.5)
+		motion.screen_relative = motion.relative
+		motion.position = down.position + motion.relative * (tick + 1)
+		host._input(motion)
+		host.camera.step(1.0 / 60.0)
+		var at: Vector3 = host.camera.camera.global_position
+		var forward: Vector3 = host.camera.control_forward()
+		var query: PhysicsShapeQueryParameters3D = _near_camera_query(host, at)
+		var space: PhysicsDirectSpaceState3D = host.camera.get_world_3d().direct_space_state
+		endpoints_safe = endpoints_safe and space.intersect_shape(query, 1).is_empty() and at.is_finite() and host.camera.camera.global_basis.is_finite() and absf(host.camera.camera.global_basis.determinant() - 1.0) < 0.0001 and at.distance_to(host.camera.render_position()) >= host.camera.camera.near * 2.0
+		query.transform.origin = previous_position
+		query.motion = at - previous_position
+		if not query.motion.is_zero_approx():
+			var fractions: PackedFloat32Array = space.cast_motion(query)
+			paths_safe = paths_safe and fractions.size() >= 2 and fractions[0] >= 0.999
+		var angle: float = previous_forward.angle_to(forward)
+		turns += angle
+		maximum_turn = maxf(maximum_turn, angle)
+		previous_forward = forward
+		previous_position = at
+		await host.get_tree().process_frame
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.position = down.position + Vector2(96, -36)
+	up.pressed = false
+	host._input(up)
+	var held: Vector2 = host.camera.orbit
+	for tick: int in range(8): host.camera.step(1.0 / 60.0)
+	_check(evidence, endpoints_safe, "packed near-" + str(item.name) + " complete camera sphere stays finite, clear and separated from the ship")
+	_check(evidence, paths_safe, "packed near-" + str(item.name) + " every rendered camera move has a clear swept-sphere path")
+	_check(evidence, not held.is_equal_approx(initial_orbit) and host.camera.orbit.is_equal_approx(held) and turns > 0.002 and maximum_turn < 0.8 and not host.observing and not host.camera.observing and not host.pointer_drag_pressed and not host.pointer_pick_pending and body.global_transform.is_equal_approx(pose) and body.velocity == Vector3.ZERO and not host.local_navigation.active(), "packed near-" + str(item.name) + " actual left drag visibly rotates without reversal, ship movement or a release click")
+	if str(item.name) == "station": await _capture(host, output_dir, "camera-near-station")
+
+static func _near_camera_query(host: Node, at: Vector3) -> PhysicsShapeQueryParameters3D:
+	# Independently rebuild the required clearance from the shipped profile and
+	# near-plane frustum; endpoint and movement tests query the actual World3D.
+	var profile: Dictionary = host.camera._profile()
+	var size: Vector2 = host.camera.camera.get_viewport().get_visible_rect().size
+	var aspect: float = maxf(size.x, size.y) / maxf(1.0, minf(size.x, size.y))
+	var near_half: float = host.camera.camera.near * tan(deg_to_rad(host.camera.camera.fov) * 0.5)
+	var ball := SphereShape3D.new()
+	ball.radius = maxf(0.01, maxf(float(profile.collision_margin_m), near_half * sqrt(1.0 + aspect * aspect)) - 0.002)
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = ball
+	query.transform = Transform3D(Basis.IDENTITY, at)
+	query.margin = 0.0
+	query.collision_mask = 64
+	query.exclude = [host.world.flight.get_rid()]
+	return query
 
 static func _capture(host: Node, directory: String, name: String) -> void:
 	if DisplayServer.get_name() == "headless": return

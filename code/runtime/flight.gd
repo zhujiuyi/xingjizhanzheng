@@ -36,20 +36,24 @@ func simulate(delta: float) -> void:
 	var turn: float = float(metrics.turn_radps)
 	var requested_spin := (Vector3(intent.pitch_request, intent.yaw_request, -intent.roll_request) * turn).limit_length(turn)
 	var before: Quaternion = quaternion.normalized()
-	var desired: Quaternion = before
-	if requested_spin.length_squared() > 0.0:
-		desired = (before * Quaternion(requested_spin.normalized(), requested_spin.length() * delta)).normalized()
-	# Preserve the requested heading, but never retain accidental roll after a
-	# composite pitch/yaw turn. Explicit Q/E owns roll while held. A single
-	# bounded rotation shares the catalog turn budget with this stabilization.
-	if is_zero_approx(intent.roll_request):
-		desired = leveled_basis(Basis(desired)).get_rotation_quaternion().normalized()
-	var difference: Quaternion = (before.inverse() * desired).normalized()
-	if difference.w < 0.0: difference = -difference
-	var rotation_axis := Vector3(difference.x, difference.y, difference.z)
-	var angle: float = 2.0 * atan2(rotation_axis.length(), difference.w)
-	if angle > 0.0:
-		quaternion = before.slerp(desired, minf(1.0, turn * delta / angle)).normalized()
+	var requested_angle: float = requested_spin.length() * delta
+	var directed: Quaternion = before
+	if requested_angle > 0.0:
+		directed = (before * Quaternion(requested_spin.normalized(), requested_angle)).normalized()
+	# Attitude input owns its share of the catalog budget before stabilization.
+	# Combining a small heading change with a large old roll and limiting that
+	# combined target made A/D spend nearly all of its first ticks on recovery.
+	# The sum of these two bounded arcs never exceeds turn_radps * delta.
+	var remaining_budget: float = maxf(0.0, turn * delta - requested_angle)
+	quaternion = directed
+	if is_zero_approx(intent.roll_request) and remaining_budget > 0.0:
+		var leveled: Quaternion = leveled_basis(Basis(directed)).get_rotation_quaternion().normalized()
+		var recovery: Quaternion = (directed.inverse() * leveled).normalized()
+		if recovery.w < 0.0: recovery = -recovery
+		var recovery_axis := Vector3(recovery.x, recovery.y, recovery.z)
+		var recovery_angle: float = 2.0 * atan2(recovery_axis.length(), recovery.w)
+		if recovery_angle > 0.0:
+			quaternion = directed.slerp(leveled, minf(1.0, remaining_budget / recovery_angle)).normalized()
 	var applied: Quaternion = (before.inverse() * quaternion).normalized()
 	if applied.w < 0.0: applied = -applied
 	var applied_axis := Vector3(applied.x, applied.y, applied.z)
