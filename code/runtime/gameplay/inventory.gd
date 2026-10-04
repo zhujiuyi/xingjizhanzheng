@@ -64,6 +64,119 @@ func room(container_id: String, item_id: String, requested: int, moved_mass_cred
 	var by_mass: int = int(floor(maxf(0,m.max_payload_mass_kg-m.payload_mass_kg+moved_mass_credit)/item.unit_mass_kg)) if item.unit_mass_kg>0 else requested
 	return maxi(0, mini(requested, mini(by_volume,by_mass)))
 
+## Read-only admission quote for warehouse rows. Internal relocation retains
+## its existing policy semantics; this entry point describes user transfers.
+func quote_transfer(kind: String, target_id: String, quantity: int, destination: String) -> Dictionary:
+	var rejected: Dictionary = {"ok": false, "reason": "", "maximum": 0}
+	if g == null or g.state == null or g.state.player() == null or g.state.ship() == null:
+		rejected.reason = "当前档案不可用"
+		return rejected
+	var ship: D.ShipStateDto = g.state.ship()
+	if ship.status != T.ShipStatus.DOCKED or g.station().is_empty():
+		rejected.reason = "需要先停靠空间站"
+		return rejected
+	var service_available: bool = false
+	for service: Dictionary in g.rows("station_service_defs"):
+		if service.station_id == g.station() and service.service_id == "warehouse":
+			if not g.unlocked(str(service.required_unlock_id)):
+				rejected.reason = "本站仓库服务尚未解锁"
+				return rejected
+			service_available = true
+			break
+	if not service_available:
+		rejected.reason = "本站不提供仓库服务"
+		return rejected
+	var source_id: String = ""
+	var item_def_id: String = ""
+	var available: int = 1
+	var package_def_id: String = ""
+	match kind:
+		"stack":
+			var stack: D.InventoryStackStateDto = g.state.find("inventory_stack_state", "stack_id", target_id)
+			if stack == null:
+				rejected.reason = "货物已转移或不存在"
+				return rejected
+			if stack.policy_id != "normal_owned":
+				rejected.reason = "保障或任务绑定物资不可手动转移"
+				return rejected
+			source_id = stack.container_id
+			item_def_id = stack.item_def_id
+			available = stack.quantity
+		"item":
+			var item: D.ItemInstanceStateDto = g.state.find("item_instance_state", "item_instance_id", target_id)
+			if item == null or item.owner_player_id != g.state.player().player_id:
+				rejected.reason = "设备已转移或不属于当前玩家"
+				return rejected
+			if item.policy_id != "normal_owned":
+				rejected.reason = "保障或借用设备不可手动转移"
+				return rejected
+			if g.state.find("equipment_state", "item_instance_id", target_id) != null:
+				rejected.reason = "需先卸下已安装设备"
+				return rejected
+			source_id = item.container_id
+			item_def_id = item.item_def_id
+		"salvage":
+			var package: D.SalvagePackageStateDto = g.state.find("salvage_package_state", "package_id", target_id)
+			if package == null or package.status != "sealed" or not package.has_host_container_id:
+				rejected.reason = "打捞包不存在或已鉴定"
+				return rejected
+			source_id = package.host_container_id
+			package_def_id = package.package_def_id
+		_:
+			rejected.reason = "未知货物类型"
+			return rejected
+	var source: D.ContainerStateDto = g.state.find("container_state", "container_id", source_id)
+	var target: D.ContainerStateDto = g.state.find("container_state", "container_id", destination)
+	for container: D.ContainerStateDto in [source, target]:
+		if container == null or container.kind not in [T.ContainerKind.STATION, T.ContainerKind.CARGO, T.ContainerKind.MINERAL] or not accessible(container.container_id):
+			rejected.reason = "仅可转移当前舰与当前空间站的货物"
+			return rejected
+	if source_id == destination:
+		rejected.reason = "源与目标相同"
+		return rejected
+	var limit: int = int(g.rule("business_quantity_limit"))
+	var maximum: int = mini(available, limit)
+	var mass_credit: float = 0.0
+	if not package_def_id.is_empty():
+		if source.kind not in [T.ContainerKind.CARGO, T.ContainerKind.STATION] or target.kind not in [T.ContainerKind.CARGO, T.ContainerKind.STATION]:
+			rejected.reason = "打捞包只能放入货舱或空间站仓库"
+			return rejected
+		if g.encounters == null:
+			rejected.reason = "打捞服务不可用"
+			return rejected
+		var definition: Dictionary = g.definition("salvage_package_defs", "package_def_id", package_def_id)
+		if definition.is_empty():
+			rejected.reason = "打捞包定义不可用"
+			return rejected
+		if source.has_ship_instance_id and source.ship_instance_id == target.ship_instance_id:
+			mass_credit = float(definition.mass_kg)
+		if not g.encounters.can_hold(destination, package_def_id, mass_credit): maximum = 0
+	else:
+		var definition: Dictionary = g.definition("item_defs", "item_id", item_def_id)
+		if definition.is_empty():
+			rejected.reason = "货物定义不可用"
+			return rejected
+		if target.kind == T.ContainerKind.MINERAL and definition.item_type != "ore":
+			rejected.reason = "矿舱仅可装入原矿"
+			return rejected
+		if source.has_ship_instance_id and source.ship_instance_id == target.ship_instance_id:
+			mass_credit = float(definition.unit_mass_kg) * maximum
+		maximum = room(destination, item_def_id, maximum, mass_credit)
+	rejected.maximum = maximum
+	if quantity <= 0 or quantity > limit:
+		rejected.reason = "数量超出合法范围"
+		return rejected
+	if kind != "stack" and quantity != 1:
+		rejected.reason = "独立设备与打捞包每次转移一件"
+		return rejected
+	if quantity > available:
+		rejected.reason = "转移数量超过当前持有量"
+		return rejected
+	if quantity > maximum:
+		rejected.reason = "舱室体积或全舰载荷不足"
+		return rejected
+	return {"ok": true, "reason": "", "maximum": maximum}
+
 func count(container_id: String, item_id: String, normal_only: bool = true, mission_id: String = "") -> int:
 	var n: int = 0
 	for s in g.state.rows("inventory_stack_state"):

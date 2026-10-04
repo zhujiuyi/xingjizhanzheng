@@ -11,6 +11,7 @@ const EquipmentBar = preload("res://runtime/ui/equipment_bar.gd")
 const Context = preload("res://runtime/interaction_context.gd")
 const ResourceStatus = preload("res://runtime/resource_status.gd")
 const BusinessList = preload("res://runtime/ui/business_list.gd")
+const WarehousePanel = preload("res://runtime/ui/warehouse_panel.gd")
 const ItemPortraits = preload("res://runtime/ui/item_portraits.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
@@ -29,6 +30,7 @@ var body: VBoxContainer
 var page: String = ""
 var target_id: String = ""
 var quantity_input: SpinBox
+var warehouse_panel: XJWarehousePanel
 var new_name: LineEdit
 var menu_open: bool = true
 var target_list: VBoxContainer
@@ -446,8 +448,10 @@ func keyboard_blocked() -> bool:
 func refresh_page() -> void:
 	if not page.is_empty() and page != "settings" and page != "title":
 		var previous_scroll: int = page_scroll.scroll_vertical if is_instance_valid(page_scroll) else 0
+		var warehouse_view: Dictionary = warehouse_panel.snapshot_view() if page == "warehouse" and is_instance_valid(warehouse_panel) else {}
 		show_page(page)
 		if is_instance_valid(page_scroll): page_scroll.set_deferred("scroll_vertical", previous_scroll)
+		if not warehouse_view.is_empty() and is_instance_valid(warehouse_panel): warehouse_panel.restore_view(warehouse_view)
 
 func select_next() -> void:
 	if sector == null:
@@ -475,6 +479,7 @@ func _build_panel(title: String, description: String) -> void:
 	map_route_destination = ""
 	resource_chart = null
 	quantity_input = null
+	warehouse_panel = null
 	card_grid = null
 	panel.visible = true
 	panel.modulate = Color.WHITE
@@ -685,36 +690,80 @@ func _ships() -> void:
 		handoff.disabled = definition.get("return_station_id") != state.player().docked_station_id
 
 func _warehouse() -> void:
-	_quantity()
-	_text("仅显示当前站点仓库和当前驾驶舰的货舱。保护或任务绑定物资保留用途限制。", 14)
-	var warehouse: String = _warehouse_id()
-	var cargo: String = _ship_container(Types.ContainerKind.CARGO)
-	var mineral: String = _ship_container(Types.ContainerKind.MINERAL)
-	var count: int = 0
-	var list: VBoxContainer = _business_list("本地货物与设备")
-	list.call("add_section", "堆叠物资")
+	var warehouse: String = ""
+	var cargo: String = ""
+	for container: Dtos.ContainerStateDto in state.rows("container_state"):
+		if container.owner_player_id != state.player().player_id: continue
+		if container.kind == Types.ContainerKind.STATION and container.station_id == state.player().docked_station_id: warehouse = container.container_id
+		elif container.kind == Types.ContainerKind.CARGO and container.ship_instance_id == state.ship().ship_instance_id: cargo = container.container_id
+	var ship_rows: Array[Dictionary] = []
+	var station_rows: Array[Dictionary] = []
 	for stack: Dtos.InventoryStackStateDto in state.rows("inventory_stack_state"):
-		if not _local_container(stack.container_id): continue
-		var container: Dtos.ContainerStateDto = state.find("container_state", "container_id", stack.container_id)
-		count += 1
-		var entry: Dictionary = _asset_row(list, stack.stack_id, "item", stack.item_def_id, _item_name(stack.item_def_id), _item_description(stack.item_def_id), _item_unit(stack.item_def_id), str(stack.quantity), "—", "—", _container_name(container) + "\n" + _policy_name(stack.policy_id))
-		if stack.policy_id != "normal_owned":
-			entry.status.text += "\n仅供指定教学或合同使用"
-			continue
-		for destination: Dictionary in [{"id": warehouse, "title": "转入站点仓库"}, {"id": cargo, "title": "装入当前舰货舱"}, {"id": mineral, "title": "装入当前舰矿舱"}]:
-			if not str(destination.id).is_empty() and stack.container_id != destination.id:
-				_command(entry.actions, str(destination.title), "move_stack", stack.stack_id, str(destination.id))
-	list.call("add_section", "独立设备")
+		var data: Dictionary = _warehouse_row_data(stack.container_id, "stack", stack.stack_id, stack.item_def_id, stack.quantity, stack.policy_id, warehouse, cargo)
+		if data.is_empty(): continue
+		data.merge({"title": _item_name(stack.item_def_id), "description": _item_description(stack.item_def_id), "detail": "", "unit": _item_unit(stack.item_def_id), "thumbnail": ItemPortraits.texture("item", stack.item_def_id)})
+		if data.is_station: station_rows.append(data)
+		else: ship_rows.append(data)
 	for item: Dtos.ItemInstanceStateDto in state.rows("item_instance_state"):
-		if not _local_container(item.container_id): continue
-		var container: Dtos.ContainerStateDto = state.find("container_state", "container_id", item.container_id)
-		count += 1
-		var entry: Dictionary = _asset_row(list, item.item_instance_id, "item", item.item_def_id, _item_name(item.item_def_id), _item_description(item.item_def_id) + "\n耐久 %.0f · 品质 %.2f" % [item.durability, item.quality_multiplier], _item_unit(item.item_def_id), "1", "—", "—", _container_name(container) + "\n" + _policy_name(item.policy_id))
-		if item.policy_id != "normal_owned": continue
-		if item.container_id != warehouse and not warehouse.is_empty(): _command(entry.actions, "移至站点仓库", "move_item", item.item_instance_id, warehouse)
-		if item.container_id != cargo and not cargo.is_empty(): _command(entry.actions, "装入当前舰货舱", "move_item", item.item_instance_id, cargo)
-	count += _salvage_rows(list)
-	if count == 0: _text("本地没有可整理的货物。")
+		var data: Dictionary = _warehouse_row_data(item.container_id, "item", item.item_instance_id, item.item_def_id, 1, item.policy_id, warehouse, cargo)
+		if data.is_empty(): continue
+		var condition: String = "耐久 %.0f · 品质 %.2f" % [item.durability, item.quality_multiplier]
+		data.merge({"title": _item_name(item.item_def_id), "description": _item_description(item.item_def_id) + "\n" + condition, "detail": condition, "unit": _item_unit(item.item_def_id), "thumbnail": ItemPortraits.texture("item", item.item_def_id)})
+		if data.is_station: station_rows.append(data)
+		else: ship_rows.append(data)
+	var encounters: RefCounted = gameplay.get("encounters")
+	if encounters != null and encounters.has_method("packages"):
+		var packages: Array[Dictionary] = encounters.call("packages")
+		for package: Dictionary in packages:
+			var data: Dictionary = _warehouse_row_data(str(package.container_id), "salvage", str(package.package_id), "item", 1, "normal_owned", warehouse, cargo)
+			if data.is_empty(): continue
+			data.merge({"title": str(package.get("title", "未鉴定打捞包")), "description": "未鉴定密封包 · 体积 %.0f L · 质量 %.2f kg\n%s\n运到任意空间站后，在打捞鉴定页领取已封存的战利品。" % [float(package.get("volume_l", 0.0)), float(package.get("mass_kg", 0.0)), str(package.get("possible_rewards", "见数据库打捞说明"))], "detail": "密封打捞包 · 前往打捞鉴定页鉴定", "unit": "包", "thumbnail": ItemPortraits.texture("generic", "item")})
+			if data.is_station: station_rows.append(data)
+			else: ship_rows.append(data)
+	ship_rows.sort_custom(_warehouse_row_before)
+	station_rows.sort_custom(_warehouse_row_before)
+	warehouse_panel = WarehousePanel.new()
+	body.add_child(warehouse_panel)
+	var inventory: RefCounted = gameplay.get("inventory")
+	warehouse_panel.configure(ship_rows, station_rows, _ship_name(state.ship().ship_def_id) + " · 分舱位置见右列", "本站：" + _station_name(state.player().docked_station_id) + " · 异地只读", int(catalog.rule("business_quantity_limit")), Callable(inventory, "quote_transfer"))
+	var token: Dictionary = {"state": state, "world_id": state.world_id, "session_id": state.session_id, "epoch": state.epoch, "station_id": state.player().docked_station_id, "ship_id": state.ship().ship_instance_id}
+	warehouse_panel.transfer_requested.connect(_warehouse_transfer.bind(warehouse_panel, token))
+	page_scroll.resized.connect(_resize_warehouse_panel)
+	_resize_warehouse_panel.call_deferred()
+
+func _warehouse_row_data(container_id: String, kind: String, id: String, asset_id: String, quantity: int, policy_id: String, warehouse: String, cargo: String) -> Dictionary:
+	var container: Dtos.ContainerStateDto = state.find("container_state", "container_id", container_id)
+	if container == null or container.owner_player_id != state.player().player_id: return {}
+	var is_station: bool = container.kind == Types.ContainerKind.STATION and container.has_station_id
+	if not is_station and not _local_container(container_id): return {}
+	var current: bool = is_station and container.station_id == state.player().docked_station_id
+	var remote: bool = is_station and not current
+	var location: String = "当前站\n" + _station_name(container.station_id) if current else _station_name(container.station_id) if is_station else "矿舱" if container.kind == Types.ContainerKind.MINERAL else "货舱"
+	return {"id": id, "kind": kind, "asset_id": asset_id, "container_id": container_id, "station_id": container.station_id if is_station else "", "current_station": current, "remote": remote, "is_station": is_station, "location": location, "quantity": quantity, "policy_id": policy_id, "policy": _policy_name(policy_id), "destination": "" if remote else cargo if is_station else warehouse, "compartment_order": 1 if container.kind == Types.ContainerKind.MINERAL else 0}
+
+func _warehouse_row_before(left: Dictionary, right: Dictionary) -> bool:
+	if left.current_station != right.current_station: return bool(left.current_station)
+	if left.station_id != right.station_id: return _station_name(str(left.station_id)).naturalnocasecmp_to(_station_name(str(right.station_id))) < 0
+	if left.compartment_order != right.compartment_order: return int(left.compartment_order) < int(right.compartment_order)
+	var kinds: Dictionary = {"stack": 0, "item": 1, "salvage": 2}
+	if left.kind != right.kind: return int(kinds[left.kind]) < int(kinds[right.kind])
+	var compared: int = str(left.title).naturalnocasecmp_to(str(right.title))
+	return compared < 0 if compared != 0 else str(left.id) < str(right.id)
+
+func _warehouse_transfer(kind: String, id: String, quantity: int, destination: String, source: XJWarehousePanel, token: Dictionary) -> void:
+	if not is_inside_tree() or page != "warehouse" or not is_instance_valid(source) or source.is_queued_for_deletion() or warehouse_panel != source or state != token.state: return
+	if state.world_id != token.world_id or state.session_id != token.session_id or state.epoch != token.epoch: return
+	if not state.player().has_docked_station_id or state.player().docked_station_id != token.station_id or state.ship().ship_instance_id != token.ship_id: return
+	var inventory: RefCounted = gameplay.get("inventory")
+	var quote: Dictionary = inventory.call("quote_transfer", kind, id, quantity, destination)
+	if not bool(quote.get("ok", false)):
+		notify(str(quote.get("reason", "当前货物不可搬运")), true)
+		return
+	requested.emit(str({"stack": "move_stack", "item": "move_item", "salvage": "move_salvage"}.get(kind, "")), id, quantity, destination)
+
+func _resize_warehouse_panel() -> void:
+	if page == "warehouse" and is_instance_valid(warehouse_panel) and is_instance_valid(page_scroll) and page_scroll.size.y > 0.0:
+		warehouse_panel.fit_height(page_scroll.size.y)
 
 func _salvage() -> void:
 	_text("击毁普通遭遇群 → 靠近并回收残骸 → 将未鉴定打捞包运到任意空间站 → 鉴定并领取真实战利品。", 14)

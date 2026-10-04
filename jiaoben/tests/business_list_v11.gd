@@ -74,6 +74,13 @@ func buttons_below(node: Node) -> Array[Button]:
 
 func business_rows() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
+	if host.ui.page == "warehouse":
+		var warehouse_panel: Control = host.ui.get("warehouse_panel") as Control
+		if is_instance_valid(warehouse_panel):
+			var warehouse_refs: Dictionary = warehouse_panel.get("refs")
+			for key: String in ["ship_rows", "station_rows"]:
+				for row: Dictionary in warehouse_refs.get(key, []): result.append(row)
+		return result
 	for list_node: Node in lists_below(host.ui.body):
 		var values: Variant = list_node.get("rows")
 		if values is Array:
@@ -266,7 +273,7 @@ func protected_asset_checks() -> void:
 		var entity: RefCounted = item if item != null else stack
 		if entity == null or str(entity.get("policy_id")) == "normal_owned": continue
 		protected_rows += 1
-		for button: Button in buttons_below(row.actions):
+		for button: Button in buttons_below(row.row):
 			if str(button.get_meta("action", "")) in ["move_item", "move_stack", "sell_item", "recycle"]: maintained = button.disabled and maintained
 		maintained = not str(row.status.text).is_empty() and maintained
 	check(protected_rows > 0 and maintained, "initial guaranteed assets retain visible policy restrictions and no enabled transfer/trade action")
@@ -313,7 +320,9 @@ func purchase_and_move_checks() -> void:
 		if candidate.item_def_id == stack_item_id and candidate.container_id == warehouse and candidate.policy_id == "normal_owned": stack = candidate; break
 	if not check(stack != null, "purchase produces a legal warehouse stack"): return
 	var row: Dictionary = row_for(stack.stack_id)
-	check(not row.is_empty() and str(stack.quantity) in str(row.quantity.text), "warehouse row displays the actual stack quantity")
+	check(not row.is_empty() and str(stack.quantity) in str(row.quantity.text) and bool(row.current_station) and str(row.location.text).contains("当前"), "warehouse row displays actual stack quantity and current station location")
+	check(host.ui.quantity_input == null and row.get("amount") is SpinBox, "warehouse quantity is owned by this row rather than the detached global toolbar")
+	if not row.is_empty() and row.get("amount") is SpinBox: row.amount.value = 1
 	var cargo: String = str(inventory.call("hold", host.state.ship(), T.ContainerKind.CARGO))
 	var before_cargo: int = int(inventory.call("count", cargo, stack_item_id, true))
 	if not await actual_click(action_button("move_stack", stack.stack_id, cargo), "move_stack", stack.stack_id): return
@@ -392,6 +401,9 @@ func page_layout_checks() -> void:
 		for variant: Dictionary in variants:
 			await show_page(str(variant.page), str(variant.filter))
 			var label: String = str(variant.name) + " " + suffix
+			if str(variant.page) == "warehouse":
+				await warehouse_layout_checks(label, layout.size == Vector2i(1440, 900) and float(layout.scale) == 1.0, suffix)
+				continue
 			var list_nodes: Array[Node] = lists_below(host.ui.body)
 			var rows: Array[Dictionary] = business_rows()
 			if not check(not list_nodes.is_empty() and not rows.is_empty(), "business page uses populated list sections " + label): continue
@@ -455,6 +467,52 @@ func page_layout_checks() -> void:
 				await reveal(last_control)
 				await capture("market-hulls-actions-" + suffix)
 
+func warehouse_layout_checks(label: String, take_capture: bool, suffix: String) -> void:
+	var warehouse_panel: Control = host.ui.get("warehouse_panel") as Control
+	if not check(is_instance_valid(warehouse_panel) and bool(warehouse_panel.get_meta("warehouse_panel", false)), "warehouse uses its real dedicated dual-list component " + label): return
+	var data: Dictionary = warehouse_panel.get("refs")
+	var left: ScrollContainer = data.get("ship_scroll") as ScrollContainer
+	var right: ScrollContainer = data.get("station_scroll") as ScrollContainer
+	if not check(left != null and right != null and left != right and lists_below(host.ui.body).is_empty(), "warehouse has independent cargo/station scrolls without false BusinessList identity " + label): return
+	check(viewport_rect().encloses(host.ui.panel.get_global_rect()) and host.ui.panel.get_global_rect().encloses(left.get_global_rect()) and host.ui.panel.get_global_rect().encloses(right.get_global_rect()), "warehouse shell and both scrolls fit logical viewport " + label)
+	var valid: bool = true
+	var readable: bool = true
+	var images: bool = true
+	var operations: bool = true
+	for row: Dictionary in business_rows():
+		valid = bool(row.row.get_meta("warehouse_row", false)) and str(row.row.get_meta("row_id", "")) == str(row.id) and valid
+		images = row.image.texture != null and row.image.texture.get_width() > 0 and row.image.texture.get_height() > 0 and images
+		for field: String in ["name", "quantity", "location", "status"]: readable = label_text_fits(row[field]) and readable
+		if bool(row.remote):
+			operations = row.get("amount") == null and row.get("button") == null and operations
+		else:
+			operations = row.get("amount") is SpinBox and row.get("button") is Button and operations
+			if row.get("button") is Button: operations = row.row.is_ancestor_of(row.button) and row.row.is_ancestor_of(row.amount) and operations
+	check(valid and images, "warehouse real asset rows retain identity and nonempty portraits " + label)
+	check(readable, "warehouse quantity/location/restriction labels fit actual font height " + label)
+	check(operations and host.ui.quantity_input == null, "warehouse operations and quantity remain in their own rows " + label)
+	for key: String in ["ship_rows", "station_rows"]:
+		var values: Array = data.get(key, [])
+		if values.is_empty(): continue
+		var tail: Dictionary = values[-1]
+		var control: Control = tail.get("button") as Control
+		if control == null: control = tail.location
+		var other: ScrollContainer = right if key == "ship_rows" else left
+		var other_offset: int = other.scroll_vertical
+		await reveal(control)
+		check(visible_control(control) and other.scroll_vertical == other_offset, "warehouse independent scroll exposes tail and operation " + key + " " + label)
+	var focus_button: Button
+	for button: Button in buttons_below(warehouse_panel):
+		if not button.disabled and button.focus_mode == Control.FOCUS_ALL: focus_button = button
+	if focus_button != null:
+		host.get_viewport().gui_release_focus(); left.scroll_vertical = 0; right.scroll_vertical = 0
+		await frames(3); focus_button.grab_focus(); await frames(4)
+		check(host.get_viewport().gui_get_focus_owner() == focus_button and visible_control(focus_button), "warehouse keyboard focus exposes current row transfer " + label)
+		focus_button.release_focus()
+	if take_capture:
+		left.scroll_vertical = 0; right.scroll_vertical = 0; host.ui.page_scroll.scroll_vertical = 0
+		await capture("warehouse-" + suffix)
+
 func persistence_checks() -> void:
 	var inventory: RefCounted = host.gameplay.get("inventory")
 	var cargo: String = str(inventory.call("hold", host.state.ship(), T.ContainerKind.CARGO))
@@ -479,7 +537,7 @@ func persistence_checks() -> void:
 	check(host.state.player().credit == expected_credit and host.state.ship().ship_instance_id == normal_ship_id and int(inventory.call("count", cargo, stack_item_id, true)) == expected_units, "reopened SQLite restores exact GUI credit, purchased hull and transferred cargo")
 	check((host.state.find("equipment_state", "item_instance_id", purchased_module_id) != null) == expected_equipment, "reopened SQLite restores actual equipped module instance")
 	await show_page("warehouse")
-	check(not business_rows().is_empty(), "business list rebuilds from reopened database state")
+	check(not business_rows().is_empty() and is_instance_valid(host.ui.get("warehouse_panel")), "dual warehouse lists rebuild from reopened database state")
 
 func finish() -> void:
 	await release_host()

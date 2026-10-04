@@ -514,13 +514,83 @@ static func _business_list_checks(host: Node, evidence: Dictionary, output_dir: 
 	var all_lists: bool = true
 	for variant: Dictionary in [{"page": "ships", "filter": ""}, {"page": "warehouse", "filter": ""}, {"page": "fitting", "filter": ""}, {"page": "industry", "filter": ""}, {"page": "research", "filter": ""}, {"page": "missions", "filter": ""}, {"page": "market", "filter": "buy"}, {"page": "market", "filter": "ships"}, {"page": "market", "filter": "sell"}]:
 		await _business_show(host, str(variant.page), str(variant.filter))
-		all_lists = all_lists and not _business_rows(host).is_empty()
-	_check(evidence, all_lists, "packed fleet, loans, warehouse, fitting, industry, research, missions and all market modes use populated shared lists")
+		if variant.page == "warehouse":
+			var warehouse: Control = host.ui.warehouse_panel
+			all_lists = all_lists and is_instance_valid(warehouse) and not warehouse.refs.rows_by_id.is_empty()
+			await _warehouse_fixed_checks(host, evidence, output_dir)
+		else: all_lists = all_lists and not _business_rows(host).is_empty()
+	_check(evidence, all_lists, "packed warehouse uses its two inventory panes while fleet, loans, fitting, industry, research, missions and all market modes retain populated business lists")
 	host.ui.quantity_value = initial_quantity
 	host.ui.market_filter = initial_filter
 	await _business_show(host, "station")
 	_check(evidence, host.ui.page == "station" and host.ui.station_layer.is_visible_in_tree() and host.ui.quantity_value == initial_quantity and host.state.player().credit == initial_credit and host.state.ship().ship_instance_id == initial_ship and host.world.flight.global_transform.is_equal_approx(initial_pose), "packed business presentation restores the station and original quantity without changing funds, assets or the existing starting pose")
 	host.set_process(process_enabled); host.set_physics_process(physics_enabled)
+
+static func _warehouse_fixed_checks(host: Node, evidence: Dictionary, output_dir: String) -> void:
+	# This fixed endpoint only reads the fresh world's real starting inventory.
+	# Remote stations and actual transfers are covered by the separate v16 endpoint.
+	var pane: Control = host.ui.warehouse_panel
+	var valid: bool = is_instance_valid(pane)
+	var refs: Dictionary = pane.refs if valid else {}
+	var rows: Array[Dictionary] = []
+	if valid:
+		rows.append_array(refs.ship_rows)
+		rows.append_array(refs.station_rows)
+		var left: Control = refs.ship_column
+		var right: Control = refs.station_column
+		var scroll_left: ScrollContainer = refs.ship_scroll
+		var scroll_right: ScrollContainer = refs.station_scroll
+		valid = scroll_left != scroll_right and left.global_position.x + left.size.x <= right.global_position.x + 1.0 and absf(left.global_position.y - right.global_position.y) <= 1.0 and host.ui.page_scroll.get_global_rect().encloses(left.get_global_rect()) and host.ui.page_scroll.get_global_rect().encloses(right.get_global_rect())
+	_check(evidence, valid and host.ui.quantity_input == null and host.ui.body.find_child("OperationQuantity", true, false) == null, "packed warehouse has left cargo and right station panes, independent scrolling and no global operation quantity")
+	var authority_before: String = _warehouse_authority_signature(host)
+	var source_valid: bool = not rows.is_empty()
+	var expected: Dictionary = {}
+	for table: String in ["inventory_stack_state", "item_instance_state"]:
+		for source: RefCounted in host.state.rows(table):
+			var container: RefCounted = host.state.find("container_state", "container_id", source.container_id)
+			if container == null or container.owner_player_id != host.state.player().player_id: continue
+			if container.kind != Types.ContainerKind.STATION and not (container.kind in [Types.ContainerKind.CARGO, Types.ContainerKind.MINERAL] and container.ship_instance_id == host.state.ship().ship_instance_id): continue
+			var id: String = str(source.stack_id) if table == "inventory_stack_state" else str(source.item_instance_id)
+			expected[id] = int(source.quantity) if table == "inventory_stack_state" else 1
+	for row: Dictionary in rows:
+		source_valid = source_valid and expected.has(row.id) and int(str(row.quantity.text).get_slice(" ", 0)) == int(expected.get(row.id, -1)) and not str(row.name.text).is_empty() and not str(row.location.text).is_empty() and row.image.texture != null and row.image.texture.get_width() > 0
+	source_valid = source_valid and rows.size() == expected.size()
+	_check(evidence, source_valid, "packed warehouse rows retain real owned asset identities, held quantities, portraits and explicit compartment or station locations")
+	var eligibility: bool = not rows.is_empty()
+	var protected_rows: int = 0
+	var editable: Array[Dictionary] = []
+	var inventory: RefCounted = host.gameplay.get("inventory")
+	for row: Dictionary in rows:
+		if bool(row.remote): continue
+		var quote: Dictionary = inventory.call("quote_transfer", str(row.kind), str(row.id), int(row.amount.value), str(row.destination))
+		eligibility = eligibility and row.button.disabled == (not bool(quote.ok)) and str(row.button.get_meta("target", "")) == str(row.id) and str(row.button.get_meta("extra", "")) == str(row.destination) and row.amount.min_value == 1 and row.amount.value == 1
+		if row.policy_id != "normal_owned":
+			protected_rows += 1
+			eligibility = eligibility and row.button.disabled and not row.amount.editable and not str(quote.reason).is_empty() and str(row.status.text).contains(str(quote.reason))
+		elif row.kind == "stack" and row.amount.max_value >= 2: editable.append(row)
+	_check(evidence, eligibility and protected_rows > 0, "packed warehouse uses real transfer eligibility and keeps protected starting supplies visible with disabled controls and explicit reasons")
+	var independent: bool = editable.size() >= 2
+	var original_global: int = host.ui.quantity_value
+	if independent:
+		var first: Dictionary = editable[0]
+		var second: Dictionary = editable[1]
+		var held: String = str(first.quantity.text)
+		first.amount.value = 2
+		for frame: int in range(3): await host.get_tree().process_frame
+		independent = first.amount.value == 2 and second.amount.value == 1 and str(first.quantity.text) == held and host.ui.quantity_value == original_global
+		first.amount.value = 1
+		for frame: int in range(3): await host.get_tree().process_frame
+	_check(evidence, independent and _warehouse_authority_signature(host) == authority_before, "packed per-row quantities stay independent of held stock and market quantity without modifying the frozen starting economy or assets")
+	await _capture(host, output_dir, "warehouse-dual")
+
+static func _warehouse_authority_signature(host: Node) -> String:
+	var codec: XJStateCodec = XJStateCodec.new()
+	var result: Dictionary = {}
+	for table: String in XJRuntimeState.TABLES:
+		var encoded: Array[Dictionary] = []
+		for row: RefCounted in host.state.rows(table): encoded.append(codec.encode_row(table, row))
+		result[table] = encoded
+	return JSON.stringify(result)
 
 static func _mineral_checks(host: Node, evidence: Dictionary, output_dir: String) -> void:
 	# A separate fresh world and a legal inventory-created miner are explicit diagnostic

@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+`tests/warehouse_transfer_v16_run.py`验证真实双列表与独立行数量、8 GUI搬运、矿舱/设备/密封包、远站排序灰色只读、容量/权限/过期回调、四布局及SQLite重开；加`--native`独占Metal/CoreAudio窗口，fresh UUID数据/图在tmp，严格双日志在logs。实际包通过固定外部Node入口`--xj-verify-warehouse`复验，production资源保持PCK；固定表现门槛现104项/16图，新增release-warehouse-dual。详见[43](../doc/43-双列表仓储与行内搬运.md)。
+
 `tests/combat_automation_v15_run.py`验证真实八组合checkbox、正式双武器周期/支付与资格、近敌锁定/死亡换锁、范围接近和朝敌环绕、手动/X/Z/保存/跃迁边界、四布局真实飞行渲染/tooltip、SQL重开及25步大舰范围边缘。追加`--native`独占Metal/CoreAudio窗口，使用共用锁；UUID临时库/截图在tmp，严格双日志和结构结果在logs，scope/revision/global Z/飞行截图字段必须完整。新实际包通过受限显式`--xj-verify-combat-automation`加载同一固定外部测试Node，res://仍为包内PCK；构建脚本将测试源码/日志/图摘要纳入包清单。详见[42](../doc/42-战斗自动化与索敌环绕.md)。
 
 `tests/turn_response_v14.gd`验证九舰真实转速与输入优先级；`tests/manual_turn_v14_run.py`检查真实Main的九舰/装备/合法载荷216组合及UI隔离；`tests/camera_collision_v14_run.py`检查正式站/门264数值情境、6组真实插值帧采样、九舰FRONT贴面与SQLite重开。两runner用共用独占锁，`--native`独占Metal/CoreAudio窗口；库/图在tmp，严格双日志/结构结果在logs。旧Main复现用`--baseline-only --expect-defect`，旧Rig用`--baseline`，只在确认旧源码并完整恢复新源码时运行；缺陷复现不作验收PASS。结果与证据边界见[41](../doc/41-手动转向与近障碍相机修正.md)。
@@ -8,7 +10,7 @@
 
 从根目录执行 `/usr/local/bin/python3.14 jiaoben/tests/star_chart_v13_run.py`，追加`--native`独占Metal/CoreAudio窗口。fresh tmp SQLite验证真实Main的单选情报、方向/门资格/载重变化、输入隔离、关闭重开/换世界/实际旅行绑定、四布局及120/300个纯UI节点；日志和结构化结果在logs，截图和DB在tmp。共用`feature-audit.lock`，不得与其它Godot检查/编辑器导入并行。原生Viewport事件与额外系统输入复查分别记录，最终结果见40。
 
-当前发行包内置表现门槛为100项/15图（保留原90项，再增加10项转向/近障碍检查及一张贴站图），`build_client.py`必须用实际bundle/PCK独立运行；未通过不得发布。历史小节的旧检查数属于对应版本。
+当前发行包内置表现门槛为104项/16图（保留原100项，再增加4项双列表仓库检查及一张仓储图），`build_client.py`必须用实际bundle/PCK独立运行；未通过不得发布。历史小节的旧检查数属于对应版本。
 
 ## 全量功能审核
 

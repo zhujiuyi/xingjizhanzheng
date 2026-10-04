@@ -54,6 +54,9 @@ func _ready() -> void:
 	if arguments.has("--xj-verify-combat-automation") and not get_tree().has_meta("xj_combat_automation_diagnostic"):
 		_start_combat_automation_diagnostic()
 		return
+	if arguments.has("--xj-verify-warehouse") and not get_tree().has_meta("xj_warehouse_diagnostic"):
+		_start_warehouse_diagnostic()
+		return
 	if arguments.has("--xj-verify-store"):
 		var diagnostic := preload("res://runtime/data/diagnostic.gd")
 		get_tree().quit(0 if diagnostic.run(OS.get_environment("XJ_TEST_DATABASE"), arguments.has("--xj-verify-upgrade")) else 1)
@@ -167,6 +170,30 @@ func _start_combat_automation_diagnostic() -> void:
 		get_tree().quit(2)
 		return
 	get_tree().set_meta("xj_combat_automation_diagnostic", true)
+	set_process(false)
+	set_physics_process(false)
+	get_tree().root.add_child.call_deferred(diagnostic)
+	queue_free()
+
+func _start_warehouse_diagnostic() -> void:
+	var script_path: String = OS.get_environment("XJ_WAREHOUSE_V16_SCRIPT").replace("\\", "/")
+	var directory: String = OS.get_environment("XJ_WAREHOUSE_V16_DIRECTORY").replace("\\", "/")
+	var temporary: String = script_path.get_base_dir().get_base_dir().path_join("tmp/warehouse-transfer-v16")
+	if not script_path.is_absolute_path() or script_path.contains("..") or not script_path.ends_with("/jiaoben/tests/warehouse_transfer_v16.gd") or not FileAccess.file_exists(script_path) or not directory.is_absolute_path() or directory.contains("..") or not directory.begins_with(temporary + "/") or FileAccess.file_exists(directory.path_join("progress.db")):
+		push_error("Warehouse diagnostic requires its fixed test Node and fresh scoped directory")
+		get_tree().quit(2)
+		return
+	var source: Script = load(script_path)
+	if source == null or not source.can_instantiate():
+		push_error("Warehouse diagnostic test script cannot be loaded")
+		get_tree().quit(2)
+		return
+	var diagnostic: Node = source.new() as Node
+	if diagnostic == null:
+		push_error("Warehouse diagnostic requires a test Node")
+		get_tree().quit(2)
+		return
+	get_tree().set_meta("xj_warehouse_diagnostic", true)
 	set_process(false)
 	set_physics_process(false)
 	get_tree().root.add_child.call_deferred(diagnostic)
@@ -692,6 +719,12 @@ func _business_action(action: String, target: String, quantity: int, extra: Stri
 	if action == "open_salvage":
 		_identify_salvage(target, quantity)
 		return
+	if ui.page == "warehouse" and action in ["move_stack", "move_item", "move_salvage"]:
+		var kind: String = {"move_stack": "stack", "move_item": "item", "move_salvage": "salvage"}[action]
+		var quote: Dictionary = gameplay.get("inventory").call("quote_transfer", kind, target, quantity, extra)
+		if not bool(quote.ok):
+			ui.notify(str(quote.reason), true)
+			return
 	if action in ["dock", "request_rescue", "undock", "switch_ship"]:
 		_reset_combat_automation()
 		if local_navigation != null and local_navigation.active(): local_navigation.cancel()
