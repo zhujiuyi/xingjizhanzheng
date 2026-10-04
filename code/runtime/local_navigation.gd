@@ -25,6 +25,8 @@ var orbit_normal: Vector3 = Vector3.UP
 var _ship_id: String = ""
 var _sector_id: String = ""
 var _configured: bool = false
+var combat_managed: bool = false
+var combat_distance_m: float = 0.0
 
 func configure(sector: XJSector, runtime: XJRuntimeState, definitions: XJCatalog, business: RefCounted, stability: Callable = Callable()) -> bool:
 	world = sector
@@ -35,6 +37,7 @@ func configure(sector: XJSector, runtime: XJRuntimeState, definitions: XJCatalog
 	mode = ""
 	phase = "idle"
 	target_id = ""
+	_clear_combat_order()
 	_configured = rules.load_rules()
 	last_error = "" if _configured else rules.last_error
 	return _configured
@@ -46,7 +49,7 @@ func warp_active() -> bool:
 	return active() and mode == "warp"
 
 func inspect(id: String) -> Dictionary:
-	var result: Dictionary = {"target_id": id, "title": "", "kind": "", "distance_m": 0.0, "ready": false, "reason": "", "warp_ready": false, "warp_reason": "", "approach_ready": false, "approach_reason": "", "orbit_ready": false, "orbit_reason": "", "dock_ready": false, "dock_reason": "", "mode": mode, "phase": phase, "remaining_s": remaining_s}
+	var result: Dictionary = {"target_id": id, "title": "", "kind": "", "distance_m": 0.0, "ready": false, "reason": "", "warp_ready": false, "warp_reason": "", "approach_ready": false, "approach_reason": "", "orbit_ready": false, "orbit_reason": "", "dock_ready": false, "dock_reason": "", "mode": mode, "phase": phase, "remaining_s": remaining_s, "combat_managed": combat_managed, "combat_distance_m": combat_distance_m}
 	var reason: String = _target_reason(id)
 	if not reason.is_empty(): return _deny_all(result, reason)
 	var entry: Dictionary = world.targets[id]
@@ -77,13 +80,34 @@ func inspect(id: String) -> Dictionary:
 	return result
 
 func begin(requested_mode: String, id: String) -> bool:
+	return _begin(requested_mode, id)
+
+func begin_combat(requested_mode: String, id: String, weapon_distance_m: float) -> bool:
+	# Combat supplies a range derived from the installed weapons and real muzzles.
+	# Failed validation must leave an existing accepted navigation order intact.
+	return _begin(requested_mode, id, true, weapon_distance_m)
+
+func _begin(requested_mode: String, id: String, combat_order: bool = false, weapon_distance_m: float = 0.0) -> bool:
 	if requested_mode not in ["warp", "approach", "orbit", "dock"]: return _fail("未知导航操作")
-	if active(): return _fail("先停止当前自动航行")
+	if active() and (not combat_order or warp_active()): return _fail("先停止当前自动航行")
 	var context: Dictionary = inspect(id)
 	if not bool(context.get(requested_mode + "_ready", false)):
 		return _fail(str(context.get(requested_mode + "_reason", context.reason)))
+	if combat_order:
+		if requested_mode not in ["approach", "orbit"] or str(context.kind) != "npc": return _fail("战斗导航仅支持接近或环绕当前敌舰")
+		if not is_finite(weapon_distance_m) or weapon_distance_m <= 0.0: return _fail("有效武器射程不可用")
+		var target_rule: Dictionary = _target_rule(world.targets[id])
+		var requested_distance: float = minf(float(target_rule.orbit_radius_m if requested_mode == "orbit" else target_rule.approach_arrival_m), weapon_distance_m)
+		var target_node: Node3D = world.targets[id].node
+		var clearance: float = _radius_from_center(world.flight, world.flight.global_position) + _radius_from_center(target_node, target_node.global_position) + rules.value("collision_margin_m")
+		if not is_finite(clearance) or requested_distance <= clearance: return _fail("武器射程不足以保持舰体安全间距")
+	# A validated combat toggle may replace ordinary movement or its own order.
+	# Preserve the old navigation, velocity and ownership until all checks pass.
+	if active(): release_to_manual(false)
 	mode = requested_mode
 	target_id = id
+	combat_managed = combat_order
+	combat_distance_m = weapon_distance_m if combat_order else 0.0
 	_ship_id = state.ship().ship_instance_id
 	_sector_id = state.current_sector()
 	world.flight.clear_intent()
@@ -140,6 +164,10 @@ func tick(delta: float) -> void:
 		if next.is_equal_approx(destination): _arrive()
 		return
 	var target_rule: Dictionary = _target_rule(world.targets[target_id])
+	if combat_managed:
+		# Keep the ordinary NPC stand-off rules, capped by actual weapon geometry.
+		target_rule.approach_arrival_m = minf(float(target_rule.approach_arrival_m), combat_distance_m)
+		target_rule.orbit_radius_m = minf(float(target_rule.orbit_radius_m), combat_distance_m)
 	var offset: Vector3 = world.flight.global_position - node.global_position
 	var distance: float = offset.length()
 	var radial: Vector3 = offset / distance if distance > 0.000001 else -world.flight.global_basis.z
@@ -159,7 +187,7 @@ func tick(delta: float) -> void:
 		desired_velocity = -radial * minf(float(metrics.speed_mps) * rules.value("approach_speed_fraction"), safe_speed)
 		if remaining <= rules.value("arrival_tolerance_m") and world.flight.velocity.length() <= rules.value("arrival_speed_mps"):
 			_arrive(); return
-	_drive(desired_velocity, -radial if mode != "orbit" else desired_velocity.normalized(), delta)
+	_drive(desired_velocity, -radial if mode != "orbit" or combat_managed else desired_velocity.normalized(), delta)
 
 func cancel() -> void:
 	stop()
@@ -174,6 +202,7 @@ func release_to_manual(announce: bool = true) -> void:
 	phase = "cancelled"
 	remaining_s = 0.0
 	target_id = ""
+	_clear_combat_order()
 	if is_instance_valid(world) and is_instance_valid(world.flight):
 		world.flight.clear_intent()
 		world.flight.write_back()
@@ -185,6 +214,7 @@ func stop() -> void:
 	phase = "cancelled"
 	remaining_s = 0.0
 	target_id = ""
+	_clear_combat_order()
 	changed.emit(previous_mode, phase, "舰船已停止")
 
 func _drive(desired_velocity: Vector3, heading: Vector3, delta: float) -> void:
@@ -347,11 +377,28 @@ func _collider_radius(node: Node) -> float:
 	for child: Node in node.get_children(): radius = maxf(radius, _collider_radius(child))
 	return radius
 
+func _radius_from_center(node: Node, center: Vector3) -> float:
+	var radius: float = 0.0
+	if node is CollisionShape3D:
+		var collider: CollisionShape3D = node
+		if collider.shape != null and not collider.disabled:
+			var bounds: AABB = collider.shape.get_debug_mesh().get_aabb()
+			for index: int in range(8):
+				var corner: Vector3 = collider.global_transform * bounds.get_endpoint(index)
+				radius = maxf(radius, corner.distance_to(center))
+	for child: Node in node.get_children(): radius = maxf(radius, _radius_from_center(child, center))
+	return radius
+
+func _clear_combat_order() -> void:
+	combat_managed = false
+	combat_distance_m = 0.0
+
 func _arrive() -> void:
 	var id: String = target_id
 	_zero_motion()
 	phase = "arrived"
 	remaining_s = 0.0
+	_clear_combat_order()
 	changed.emit(mode, phase, "已到达 · " + str(world.targets[id].title) + "，舰船已停止")
 	arrived.emit(id)
 
@@ -360,6 +407,7 @@ func _abort(message: String) -> void:
 	remaining_s = 0.0
 	phase = "failed"
 	last_error = message
+	_clear_combat_order()
 	changed.emit(mode, phase, message)
 
 func _fail(message: String) -> bool:

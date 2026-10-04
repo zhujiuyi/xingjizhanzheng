@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+`tests/combat_automation_v15_run.py`验证真实八组合checkbox、正式双武器周期/支付与资格、近敌锁定/死亡换锁、范围接近和朝敌环绕、手动/X/Z/保存/跃迁边界、四布局真实飞行渲染/tooltip、SQL重开及25步大舰范围边缘。追加`--native`独占Metal/CoreAudio窗口，使用共用锁；UUID临时库/截图在tmp，严格双日志和结构结果在logs，scope/revision/global Z/飞行截图字段必须完整。新实际包通过受限显式`--xj-verify-combat-automation`加载同一固定外部测试Node，res://仍为包内PCK；构建脚本将测试源码/日志/图摘要纳入包清单。详见[42](../doc/42-战斗自动化与索敌环绕.md)。
+
 `tests/turn_response_v14.gd`验证九舰真实转速与输入优先级；`tests/manual_turn_v14_run.py`检查真实Main的九舰/装备/合法载荷216组合及UI隔离；`tests/camera_collision_v14_run.py`检查正式站/门264数值情境、6组真实插值帧采样、九舰FRONT贴面与SQLite重开。两runner用共用独占锁，`--native`独占Metal/CoreAudio窗口；库/图在tmp，严格双日志/结构结果在logs。旧Main复现用`--baseline-only --expect-defect`，旧Rig用`--baseline`，只在确认旧源码并完整恢复新源码时运行；缺陷复现不作验收PASS。结果与证据边界见[41](../doc/41-手动转向与近障碍相机修正.md)。
 
 ## 星图重塑

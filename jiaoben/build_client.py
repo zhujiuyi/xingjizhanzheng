@@ -88,6 +88,49 @@ def verify_exported_encounters(executable: Path, build_id: str, logs: Path) -> d
             'engine_diagnostics': 0, 'capture_folder': str(test_folder),
             'capture_count': len(captures), 'captures': captures}
 
+def verify_exported_combat_automation(executable: Path, build_id: str, logs: Path) -> dict:
+    script = (ROOT / 'jiaoben/tests/combat_automation_v15.gd').resolve()
+    directory = (ROOT / 'jiaoben/tmp/combat-automation-v15' / str(uuid.uuid4())).resolve()
+    directory.mkdir(parents=True)
+    stdout_log = (logs / f'{build_id}-mac-combat-automation.log').resolve()
+    engine_log = (logs / f'{build_id}-mac-combat-automation-engine.log').resolve()
+    environment = os.environ.copy()
+    environment.pop('XJ_TEST_DATABASE', None)
+    environment['XJ_AUTOMATION_V15_SCRIPT'] = str(script)
+    environment['XJ_AUTOMATION_V15_DIRECTORY'] = str(directory)
+    text = run([str(executable.resolve()), '--audio-driver', 'CoreAudio',
+                '--log-file', str(engine_log), '--', '--xj-verify-combat-automation'],
+               stdout_log, environment, timeout=420)
+    diagnostic = re.compile(r'^(?:SCRIPT ERROR:|ERROR:|WARNING:|.*[Ll]eaked.*|.*Resource still in use)', re.M)
+    if not engine_log.is_file() or diagnostic.search(text) or diagnostic.search(engine_log.read_text(errors='replace')):
+        raise RuntimeError(f'Exported combat automation has diagnostics: {stdout_log}')
+    summaries = re.findall(r'^COMBAT_AUTOMATION_V15_FINAL_JSON (.+)$', text, re.M)
+    if len(summaries) != 1:
+        raise RuntimeError(f'Exported combat automation has no unique result: {stdout_log}')
+    result = json.loads(summaries[0])
+    if (result.get('result') != 'PASS' or result.get('failures') != 0
+            or result.get('toggle_combinations') != 8 or result.get('large_hull_ticks') != 25
+            or result.get('global_z_cases') != 2
+            or result.get('rendered_flight_captures') != result.get('captures')
+            or result.get('revision') != 'range-buffer-and-large-hull'
+            or not result.get('native')
+            or Path(result.get('database_path', '')).resolve() != directory / 'progress.db'
+            or not re.search(r'^COMBAT_AUTOMATION_V15_RESULT PASS checks=' + str(result.get('checks')) + r' failures=0$', text, re.M)):
+        raise RuntimeError(f'Exported combat automation failed: {stdout_log}')
+    captures = [{'name': path.stem, 'path': str(path), 'sha256': sha(path)} for path in sorted(directory.glob('*.png'))]
+    if any(Path(item['path']).read_bytes()[:8] != b'\x89PNG\r\n\x1a\n' for item in captures):
+        raise RuntimeError(f'Exported combat automation has invalid PNG evidence: {directory}')
+    if len(captures) != result.get('captures') or len(captures) < 5:
+        raise RuntimeError(f'Exported combat automation capture evidence incomplete: {directory}')
+    return {'result': 'PASS', 'checks': result['checks'], 'failures': 0,
+            'scope': 'actual exported PCK; real eight GUI options, paid weapon cycles, nearest visible enemy locks, range pursuit and facing-target orbit, input/save/navigation isolation, layouts and SQLite; explicit hull/equipment/position fixtures',
+            'executable': str(executable.resolve()), 'entry_point': '--xj-verify-combat-automation',
+            'acceptance_script': str(script), 'acceptance_script_sha256': sha(script),
+            'stdout_log': str(stdout_log), 'stdout_log_sha256': sha(stdout_log),
+            'engine_log': str(engine_log), 'engine_log_sha256': sha(engine_log),
+            'capture_folder': str(directory), 'capture_count': len(captures), 'captures': captures}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--platform', choices=['all', 'mac', 'windows'], default='all')
@@ -189,6 +232,8 @@ def main() -> None:
                 'capture_folder': str(visual_folder), 'checks': 100, 'captures': captures}
             evidence['verification']['mac'] = 'actual exported app: resource hashes/new/save/reopen/resume PASS; ad-hoc signature PASS'
             evidence['verification']['mac_encounter_mission'] = verify_exported_encounters(
+                output / 'Contents/MacOS/星际战舰', build_id, logs)
+            evidence['verification']['mac_combat_automation'] = verify_exported_combat_automation(
                 output / 'Contents/MacOS/星际战舰', build_id, logs)
             archive = staging / '星际战舰-macOS.zip'
             run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(folder), str(archive)],

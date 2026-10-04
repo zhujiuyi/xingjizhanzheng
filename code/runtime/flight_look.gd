@@ -13,15 +13,16 @@ static func world_rotation_to_input(ship_basis: Basis, world_rotation: Vector3) 
 	var local_spin: Vector3 = ship_basis.orthonormalized().inverse() * world_rotation
 	return Vector3(local_spin.x, local_spin.y, -local_spin.z)
 
-func keyboard_turn() -> Vector3:
+func keyboard_turn(ignore_ui_axes: bool = false) -> Vector3:
 	# X=pitch, Y=yaw, Z=roll, matching FlightInputDto request fields. A combined
 	# attitude command consumes the same catalog turn budget as a single axis.
-	return Vector3(_axis("pitch_down", "pitch_up"), _axis("yaw_right", "yaw_left"), _axis("roll_left", "roll_right")).limit_length(1.0)
+	return Vector3(0.0 if ignore_ui_axes else _axis("pitch_down", "pitch_up"), _axis("yaw_right", "yaw_left"), _axis("roll_left", "roll_right")).limit_length(1.0)
 
-func manual_override_requested() -> bool:
+func manual_override_requested(ignore_ui_axes: bool = false) -> bool:
 	# Pointer movement, selection, camera observation and weapon activation are
 	# intentionally absent: only explicit motion commands take navigation over.
 	for action: String in ["forward", "back", "left", "right", "up", "down", "pitch_up", "pitch_down", "yaw_left", "yaw_right", "roll_left", "roll_right", "brake"]:
+		if ignore_ui_axes and action in ["up", "pitch_up", "pitch_down"]: continue
 		if InputMap.has_action(action) and Input.is_action_pressed(action): return true
 	return false
 

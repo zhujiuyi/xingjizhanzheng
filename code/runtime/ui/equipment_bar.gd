@@ -3,6 +3,7 @@ extends PanelContainer
 ## Read-only module snapshots. Only the host can enable modules or pay cycles.
 signal toggle_requested(item_id: String, enabled: bool)
 signal engine_requested()
+signal combat_option_requested(option: String, enabled: bool)
 const UISkin = preload("res://runtime/ui_theme.gd")
 var module_records: Array[Dictionary] = []
 var module_buttons: Dictionary = {}
@@ -16,7 +17,13 @@ var scroll: ScrollContainer
 var slot_records: Array[Dictionary] = []
 var slot_buttons: Dictionary = {}
 var empty_slot_buttons: Dictionary = {}
+var combat_option_buttons: Dictionary = {}
+var combat_options_row: HBoxContainer
+var combat_status_label: Label
 var _compact: bool = false
+var _combat_options: Dictionary = {"fire": false, "orbit": false, "seek": false}
+var _combat_message: String = "手动战斗"
+var _combat_blocked: bool = false
 
 func _ready() -> void:
 	name = "EquipmentCycles"
@@ -30,6 +37,7 @@ func _ready() -> void:
 	summary_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	summary_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	layout.add_child(header)
+	_build_combat_options(layout)
 	scroll = ScrollContainer.new()
 	scroll.name = "EquipmentScroll"
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -52,6 +60,7 @@ func _ready() -> void:
 
 func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = false) -> void:
 	module_records = records
+	_refresh_combat_controls()
 	slot_records.clear()
 	slot_buttons.clear()
 	if row == null: return
@@ -162,12 +171,104 @@ func responsive(compact: bool) -> void:
 	if header == null: return
 	add_theme_stylebox_override("panel", UISkin.hud_panel(2 if compact else 4))
 	header.visible = not compact
+	combat_status_label.visible = not compact
+	for option: String in combat_option_buttons:
+		var check: CheckBox = combat_option_buttons[option]
+		check.add_theme_font_size_override("font_size", 10 if compact else 11)
+		check.custom_minimum_size.y = 24
 	engine_button.custom_minimum_size = Vector2(54, 36 if compact else 28)
 	for labels: Dictionary in module_labels.values():
 		labels.title.add_theme_font_size_override("font_size", 10)
 		labels.status.add_theme_font_size_override("font_size", 9 if compact else 10)
 		labels.cost.visible = not compact
 	for button: Variant in slot_buttons.values(): button.custom_minimum_size = Vector2(96, 36) if compact else Vector2(106, 54)
+
+func _build_combat_options(parent: VBoxContainer) -> void:
+	combat_options_row = HBoxContainer.new()
+	combat_options_row.name = "CombatAutomationOptions"
+	combat_options_row.add_theme_constant_override("separation", 4)
+	parent.add_child(combat_options_row)
+	var titles: Dictionary = {"fire": "自动战斗", "orbit": "自动环绕", "seek": "自动索敌"}
+	var names: Dictionary = {"fire": "AutoCombatFire", "orbit": "AutoCombatOrbit", "seek": "AutoCombatSeek"}
+	var hints: Dictionary = {
+		"fire": "持续使用所有已启用且完好的武器。\n每件武器冷却完成，并满足射程、射界、\n电容和热量条件时自动发射。\n关闭此项停止自动发射，手动开火仍可使用。",
+		"orbit": "围绕当前战斗目标航行；超出武器范围时先接近。\n是否自动发射由自动战斗决定。\n手动推进、转向或 X 停船取消自动环绕，\n自动战斗保留。",
+		"seek": "自动锁定可探测的最近敌对舰船。\n目标消灭后重新寻找；超出武器范围时自动接近。\n进入范围后按自动战斗、自动环绕设定继续。\n手动推进、转向或 X 停船取消自动索敌，\n自动战斗保留。"
+	}
+	var options: Array[String] = ["fire", "orbit", "seek"]
+	for option: String in options:
+		var check: CheckBox = CheckBox.new()
+		check.name = str(names[option])
+		check.text = str(titles[option])
+		check.focus_mode = Control.FOCUS_ALL
+		check.mouse_filter = Control.MOUSE_FILTER_STOP
+		check.custom_minimum_size.y = 24
+		check.add_theme_font_size_override("font_size", 11)
+		check.add_theme_constant_override("h_separation", 3)
+		check.add_theme_stylebox_override("hover", UISkin.hud_button(true))
+		check.add_theme_stylebox_override("disabled", UISkin.hud_button(false))
+		check.add_theme_stylebox_override("focus", UISkin.focus_style())
+		check.set_meta("action", "set_combat_option")
+		check.set_meta("option", option)
+		check.set_meta("combat_hint", str(hints[option]))
+		check.toggled.connect(_request_combat_option.bind(option))
+		combat_options_row.add_child(check)
+		combat_option_buttons[option] = check
+	for index: int in range(options.size()):
+		var check: CheckBox = combat_option_buttons[options[index]]
+		var previous: CheckBox = combat_option_buttons[options[(index - 1 + options.size()) % options.size()]]
+		var next: CheckBox = combat_option_buttons[options[(index + 1) % options.size()]]
+		check.focus_previous = previous.get_path()
+		check.focus_next = next.get_path()
+		check.focus_neighbor_left = check.focus_previous
+		check.focus_neighbor_right = check.focus_next
+		check.focus_neighbor_top = check.focus_previous
+		check.focus_neighbor_bottom = check.focus_next
+	combat_status_label = _header_label(combat_options_row, "手动战斗", 10, UISkin.MUTED)
+	combat_status_label.name = "CombatAutomationStatus"
+	combat_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	combat_status_label.custom_minimum_size.x = 0
+	combat_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	combat_status_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	_refresh_combat_controls()
+
+func _request_combat_option(enabled: bool, option: String) -> void:
+	if _combat_blocked:
+		_refresh_combat_controls()
+		return
+	combat_option_requested.emit(option, enabled)
+
+func set_combat_automation_status(options: Dictionary, message: String = "", blocked: bool = false) -> void:
+	# This snapshot belongs to the controller; setting it never sends a command.
+	for option: String in _combat_options:
+		_combat_options[option] = bool(options.get(option, false))
+	_combat_message = message if not message.is_empty() else "手动战斗"
+	_combat_blocked = blocked
+	_refresh_combat_controls()
+
+func has_combat_option_focus() -> bool:
+	if not is_inside_tree() or not is_visible_in_tree(): return false
+	return get_viewport().gui_get_focus_owner() in combat_option_buttons.values()
+
+func _refresh_combat_controls() -> void:
+	if not is_instance_valid(combat_status_label): return
+	if combat_status_label.text != _combat_message: combat_status_label.text = _combat_message
+	if combat_status_label.tooltip_text != _combat_message: combat_status_label.tooltip_text = _combat_message
+	if combat_options_row.tooltip_text != _combat_message: combat_options_row.tooltip_text = _combat_message
+	for option: String in combat_option_buttons:
+		var check: CheckBox = combat_option_buttons[option]
+		var enabled: bool = bool(_combat_options.get(option, false))
+		if check.button_pressed != enabled: check.set_pressed_no_signal(enabled)
+		# The controller separates cancellable save waits from locked transitions.
+		if check.disabled != _combat_blocked: check.disabled = _combat_blocked
+		# Unchanged snapshots must not allocate styles or invalidate the theme.
+		if not check.has_meta("combat_visual_enabled") or bool(check.get_meta("combat_visual_enabled")) != enabled:
+			check.add_theme_stylebox_override("normal", UISkin.hud_button(enabled))
+			check.add_theme_stylebox_override("pressed", UISkin.hud_button(enabled))
+			check.add_theme_color_override("font_color", UISkin.AMBER if enabled else UISkin.TEXT)
+			check.set_meta("combat_visual_enabled", enabled)
+		var hint: String = str(check.get_meta("combat_hint")) + "\n当前：" + _combat_message
+		if check.tooltip_text != hint: check.tooltip_text = hint
 
 func _header_label(parent: Node, text: String, font_size: int, color: Color) -> Label:
 	var label: Label = Label.new()

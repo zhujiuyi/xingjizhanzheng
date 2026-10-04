@@ -2,6 +2,7 @@ extends Node3D
 ## Local host authority; UI and scenes only submit intent/read typed state.
 const Types = preload("res://contracts/contract_types.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
+const CombatAutomation = preload("res://runtime/combat_automation.gd")
 var progress_database_path: String = "user://database/progress.db"
 var store: XJGameStore
 var state: XJRuntimeState
@@ -14,6 +15,7 @@ var ui: XJUI
 var travel: XJTravel
 var local_navigation: XJLocalNavigation
 var auto_fire_target: String = ""
+var combat_automation: RefCounted
 var navigation_generation: int = 0
 var busy: bool = false
 var services_ready: bool = false
@@ -49,6 +51,9 @@ func _ready() -> void:
 	if arguments.has("--xj-verify-encounters") and not get_tree().has_meta("xj_encounter_diagnostic"):
 		_start_encounter_diagnostic()
 		return
+	if arguments.has("--xj-verify-combat-automation") and not get_tree().has_meta("xj_combat_automation_diagnostic"):
+		_start_combat_automation_diagnostic()
+		return
 	if arguments.has("--xj-verify-store"):
 		var diagnostic := preload("res://runtime/data/diagnostic.gd")
 		get_tree().quit(0 if diagnostic.run(OS.get_environment("XJ_TEST_DATABASE"), arguments.has("--xj-verify-upgrade")) else 1)
@@ -80,6 +85,7 @@ func _ready() -> void:
 	ui = XJUI.new()
 	add_child(ui)
 	ui.requested.connect(_command)
+	ui.target_selected.connect(_combat_selection_changed)
 	camera = XJCameraRig.new()
 	add_child(camera)
 	store = XJGameStore.new(progress_database_path)
@@ -135,6 +141,32 @@ func _start_encounter_diagnostic() -> void:
 		return
 	# Test-created Main instances take their normal production startup path.
 	get_tree().set_meta("xj_encounter_diagnostic", true)
+	set_process(false)
+	set_physics_process(false)
+	get_tree().root.add_child.call_deferred(diagnostic)
+	queue_free()
+
+func _start_combat_automation_diagnostic() -> void:
+	# Explicit release acceptance keeps all production resources in the PCK.
+	# This entry accepts only the fixed test Node and a fresh test-owned folder.
+	var script_path: String = OS.get_environment("XJ_AUTOMATION_V15_SCRIPT").replace("\\", "/")
+	var directory: String = OS.get_environment("XJ_AUTOMATION_V15_DIRECTORY").replace("\\", "/")
+	var temporary: String = script_path.get_base_dir().get_base_dir().path_join("tmp/combat-automation-v15")
+	if not script_path.is_absolute_path() or script_path.contains("..") or not script_path.ends_with("/jiaoben/tests/combat_automation_v15.gd") or not FileAccess.file_exists(script_path) or not directory.is_absolute_path() or directory.contains("..") or not directory.begins_with(temporary + "/") or FileAccess.file_exists(directory.path_join("progress.db")):
+		push_error("Combat automation diagnostic requires its fixed test script and a fresh scoped directory")
+		get_tree().quit(2)
+		return
+	var source: Script = load(script_path)
+	if source == null or not source.can_instantiate():
+		push_error("Combat automation test script cannot be loaded")
+		get_tree().quit(2)
+		return
+	var diagnostic: Node = source.new() as Node
+	if diagnostic == null:
+		push_error("Combat automation diagnostic must be a test Node")
+		get_tree().quit(2)
+		return
+	get_tree().set_meta("xj_combat_automation_diagnostic", true)
 	set_process(false)
 	set_physics_process(false)
 	get_tree().root.add_child.call_deferred(diagnostic)
@@ -201,6 +233,10 @@ func _physics_process(delta: float) -> void:
 		camera.bind(world.flight, store.catalog, state.player().camera_mode)
 	gameplay.call("begin_step", delta)
 	world.flight.metrics = gameplay.call("metrics", ship)
+	if _manual_navigation_override() and combat_automation != null:
+		combat_automation.relinquish_motion()
+	if combat_automation != null and not _exit_save_pending() and not travel.active() and not local_navigation.warp_active():
+		combat_automation.tick()
 	if local_navigation != null and local_navigation.active():
 		if _manual_navigation_override():
 			if Input.is_action_pressed("brake"):
@@ -211,6 +247,7 @@ func _physics_process(delta: float) -> void:
 			flight_look.clear()
 	if local_navigation == null or not local_navigation.active():
 		_read_flight_input(delta)
+		if combat_automation != null and not _manual_navigation_override(): combat_automation.hold_intent()
 	elif Input.is_action_pressed("boost") and _keyboard_control_allowed():
 		_request_engine_cycle()
 	gameplay.call("activate_repairs")
@@ -237,6 +274,7 @@ func _physics_process(delta: float) -> void:
 		travel.tick(delta)
 		return
 	if ship.status == Types.ShipStatus.DESTROYED:
+		_reset_combat_automation()
 		if last_destroyed_ship != ship.ship_instance_id:
 			last_destroyed_ship = ship.ship_instance_id
 			ui.notify("舰船已毁，按 Esc 使用救援返回空间站。", true)
@@ -296,8 +334,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("combat_toggle") and not event.is_echo():
 		# The global shortcut always stops the current fire order first, even
 		# when the player is inspecting a different station or scenic bearing.
-		var target: String = auto_fire_target if not auto_fire_target.is_empty() else ui.target_id
-		_command("combat_toggle", target, 1, "")
+		if combat_automation != null and bool(combat_automation.options.fire):
+			combat_automation.set_option("fire", false)
+			_sync_combat_automation()
+			ui.notify("已停止自动开火。")
+		else:
+			_command("combat_toggle", ui.target_id, 1, "")
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("target"):
@@ -380,7 +422,9 @@ func _read_flight_input(delta: float = 0.0) -> void:
 	var intent := world.flight.intent
 	intent.thrust_y = Input.get_axis("down", "up")
 	intent.thrust_z = Input.get_axis("back", "forward")
-	var turn: Vector3 = flight_look.keyboard_turn()
+	var option_focus: bool = ui.combat_option_has_focus()
+	if option_focus: intent.thrust_y = -Input.get_action_strength("down")
+	var turn: Vector3 = flight_look.keyboard_turn(option_focus)
 	# A/D uses the same axis as the visible camera. A tilted local ship-up
 	# otherwise made the physical yaw compete with the world-up view yaw.
 	var yaw_axis: Vector3 = world.flight.global_basis.y if camera.mode == Types.CameraMode.FRONT else Vector3.UP
@@ -512,34 +556,45 @@ func _interact(target_id: String = "") -> void:
 func _command(action: String, target: String, quantity: int, extra: String) -> void:
 	if busy:
 		ui.notify("存档操作正在完成，请稍候。")
+		if action == "set_combat_option": _sync_combat_automation()
 		return
 	if _exit_save_pending() and action not in ["cancel_save", "quit_without_save", "quit", "return_title", "preference", "show_ship", "hangar_focus"]:
 		ui.notify("正在等待稳定保存后离开；取消保存请求后可继续操作。")
+		if action == "set_combat_option": _sync_combat_automation()
 		return
 	match action:
+		"set_combat_option":
+			if combat_automation != null and _keyboard_control_allowed() and not travel.active() and not local_navigation.warp_active() and not _paused():
+				combat_automation.set_option(target, extra == "on")
+			_sync_combat_automation()
 		"mission_locate", "mission_travel", "mission_station":
 			_mission_navigation(action, target)
 		"nav_warp", "nav_approach", "nav_orbit", "nav_dock":
 			_navigation_command(action.trim_prefix("nav_"), target)
 		"nav_stop":
+			if combat_automation != null: combat_automation.relinquish_motion()
 			if local_navigation != null: local_navigation.stop()
 			_center_steering()
 		"combat_engage":
 			if not _combat_target_valid(target):
 				ui.notify("需选择探测范围内的存活敌舰，并安装可用武器。", true)
-			elif _navigation_command("approach", target):
-				auto_fire_target = target
+			elif _navigation_command("approach", target, true):
+				combat_automation.lock_target(target)
+				combat_automation.set_option("fire", true)
+				_sync_combat_automation()
 				ui.notify("交战指令已接受：接近并在武器条件满足时开火。")
 		"combat_toggle":
 			if auto_fire_target == target:
-				auto_fire_target = ""
+				combat_automation.set_option("fire", false)
 				ui.notify("已停止自动开火。")
 			elif _combat_target_valid(target):
-				auto_fire_target = target
+				combat_automation.lock_target(target)
+				combat_automation.set_option("fire", true)
 				ui.target_id = target
 				ui.notify("自动开火已开启：仅在射程、射界与视线满足时执行。")
 			else:
 				ui.notify("需选择探测范围内的存活敌舰，并安装可用武器。", true)
+			_sync_combat_automation()
 		"interact", "interact_target": _interact(target)
 		"show_ship":
 			if state == null or world == null or camera == null or state.ship().status != Types.ShipStatus.FLYING or ui.keyboard_blocked(): return
@@ -554,6 +609,7 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 				ui.notify("存档服务未就绪，无法新建远征。", true)
 				return
 			busy = true
+			_sync_combat_automation()
 			ui.set_operation_status("load", "正在建立远征")
 			ui.notify("正在建立远征")
 			await get_tree().process_frame
@@ -566,9 +622,11 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 				ui.notify("新建世界失败，已有档案保留。", true)
 				push_error(store.last_error + " " + last_error)
 			busy = false
+			_sync_combat_automation()
 			ui.set_operation_status("idle", "")
 		"load":
 			busy = true
+			_sync_combat_automation()
 			ui.set_operation_status("load", "正在验证存档并准备星系")
 			ui.notify("验证存档并准备星系")
 			await get_tree().process_frame
@@ -582,9 +640,11 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 				ui.notify("读档失败，当前世界与原档案保留。", true)
 				push_error(store.last_error)
 			busy = false
+			_sync_combat_automation()
 			ui.set_operation_status("idle", "")
 		"continue":
 			busy = true
+			_sync_combat_automation()
 			ui.set_operation_status("load", "正在恢复上次航行")
 			await get_tree().process_frame
 			var resumed := store.resume(_prepare_loaded)
@@ -596,10 +656,12 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 				ui.notify("恢复航行失败，原档案保留。", true)
 				push_error(store.last_error)
 			busy = false
+			_sync_combat_automation()
 			ui.set_operation_status("idle", "")
 		"save": _request_save(extra, int(target))
 		"cancel_save":
 			deferred_save = {}
+			_sync_combat_automation()
 			ui.set_operation_status("idle", "")
 			ui.notify("已取消等待中的保存请求。")
 		"quit_without_save":
@@ -631,7 +693,7 @@ func _business_action(action: String, target: String, quantity: int, extra: Stri
 		_identify_salvage(target, quantity)
 		return
 	if action in ["dock", "request_rescue", "undock", "switch_ship"]:
-		auto_fire_target = ""
+		_reset_combat_automation()
 		if local_navigation != null and local_navigation.active(): local_navigation.cancel()
 	var previous_ship := state.ship().ship_instance_id
 	var actor: RefCounted = gameplay
@@ -691,16 +753,19 @@ func _identify_salvage(package_id: String, quantity: int) -> void:
 		return
 	var old_page: String = ui.page
 	busy = true
+	_sync_combat_automation()
 	ui.set_operation_status("save", "正在提交打捞鉴定")
 	if not _stage_candidate(candidate, store.catalog) or not store.save(candidate, "auto", auto_slot):
 		_discard_staged()
 		busy = false
+		_sync_combat_automation()
 		ui.set_operation_status("idle", "")
 		ui.notify("鉴定未提交，回收包与资金保留。" + store.last_error, true)
 		return
 	auto_slot = (auto_slot + 1) % 3
 	_activate(candidate)
 	busy = false
+	_sync_combat_automation()
 	ui.set_operation_status("idle", "")
 	ui.show_page(old_page)
 	ui.notify(feedback)
@@ -822,6 +887,10 @@ func _activate(candidate: XJRuntimeState) -> void:
 	camera.bind(world.flight, store.catalog, state.player().camera_mode)
 	ui.slots = store.list_slots()
 	ui.bind(state, store.catalog, gameplay, world, camera)
+	combat_automation = CombatAutomation.new()
+	combat_automation.changed.connect(_sync_combat_automation)
+	combat_automation.acquired.connect(_combat_acquired)
+	combat_automation.configure(self)
 	presentation_stage = ""
 	deferred_save = {}
 	brake_hold.clear()
@@ -841,6 +910,8 @@ func _discard_staged() -> void:
 	staged_gameplay = null
 
 func _travel_changed(next_phase: int, message: String) -> void:
+	if next_phase == Types.TravelPhase.PREPARING: _reset_combat_automation()
+	_sync_combat_automation()
 	ui.set_operation_status("travel" if travel.active() else "idle", message if travel.active() else "", next_phase == Types.TravelPhase.PREPARING)
 	if next_phase == Types.TravelPhase.PREPARING and presentation != null:
 		presentation.jump(true)
@@ -865,9 +936,12 @@ func navigation_context(target_id: String) -> Dictionary:
 	result["navigation_target_id"] = local_navigation.target_id if local_navigation != null else ""
 	result["combat_ready"] = _combat_target_valid(target_id)
 	result["combat_active"] = not target_id.is_empty() and auto_fire_target == target_id
-	result["combat_target_id"] = auto_fire_target
-	result["combat_target_title"] = str(world.targets[auto_fire_target].title) if world != null and world.targets.has(auto_fire_target) else ""
-	result["combat_target_status"] = _auto_fire_status(auto_fire_target) if not auto_fire_target.is_empty() else ""
+	var locked: String = combat_automation.target_id if combat_automation != null else auto_fire_target
+	result["combat_target_id"] = locked
+	result["combat_target_title"] = str(world.targets[locked].title) if world != null and world.targets.has(locked) else ""
+	result["combat_target_status"] = combat_automation.status if combat_automation != null else (_auto_fire_status(locked) if not locked.is_empty() else "")
+	result["combat_options"] = combat_automation.options.duplicate() if combat_automation != null else {"fire": false, "orbit": false, "seek": false}
+	result["combat_automation_phase"] = combat_automation.phase if combat_automation != null else "idle"
 	result["combat_status"] = _auto_fire_status(target_id) if result.combat_active else ""
 	result["combat_reason"] = "仅向探测范围内敌舰开火；需满足武器射程、射界、视线、电容及热量条件。"
 	result["combat_engage_ready"] = bool(result.combat_ready) and bool(result.get("approach_ready", false))
@@ -878,7 +952,7 @@ func navigation_context(target_id: String) -> Dictionary:
 		for action: String in ["warp", "approach", "orbit", "dock", "combat", "combat_engage"]: result[action + "_reason"] = result.reason
 	return result
 
-func _navigation_command(mode: String, target_id: String) -> bool:
+func _navigation_command(mode: String, target_id: String, retain_combat_options: bool = false) -> bool:
 	if state == null or local_navigation == null or busy or _exit_save_pending() or ui.keyboard_blocked(): return false
 	if travel != null and travel.active():
 		ui.notify("请等待虫洞传送结束。", true)
@@ -907,15 +981,20 @@ func _navigation_command(mode: String, target_id: String) -> bool:
 	# An invalid replacement has already returned; only accepted commands hand
 	# motion over, keeping ordinary navigation transitions physically continuous.
 	if local_navigation.active(): local_navigation.release_to_manual(false)
-	if mode == "warp": auto_fire_target = ""
 	world.flight.clear_intent()
 	flight_look.clear()
 	ui.target_id = target_id
 	navigation_generation += 1
-	return local_navigation.begin(mode, target_id)
+	var accepted: bool = local_navigation.begin(mode, target_id)
+	if accepted:
+		if mode == "warp": _reset_combat_automation(false)
+		elif combat_automation != null and not retain_combat_options: combat_automation.relinquish_motion()
+		_sync_combat_automation()
+	return accepted
 
 func _local_navigation_changed(_mode: String, phase: String, message: String) -> void:
 	if local_navigation == null: return
+	_sync_combat_automation()
 	if local_navigation.warp_active():
 		if deferred_save.is_empty(): ui.set_operation_status("local_navigation", message)
 		if phase == "warmup" and presentation != null: presentation.jump(true)
@@ -943,19 +1022,40 @@ func _finalize_local_arrival(target_id: String, mode: String, generation: int) -
 		_queue_autosave()
 
 func _manual_navigation_override() -> bool:
-	return _keyboard_control_allowed() and flight_look.manual_override_requested()
+	return _keyboard_control_allowed() and flight_look.manual_override_requested(ui.combat_option_has_focus())
 
-func _combat_target_valid(target_id: String) -> bool:
+func _combat_selection_changed(target: String) -> void:
+	if combat_automation != null: combat_automation.manual_selection(target)
+
+func _combat_acquired(target: String) -> void:
+	ui._select_target(target)
+
+func _sync_combat_automation() -> void:
+	if combat_automation == null or ui == null: return
+	auto_fire_target = combat_automation.fire_target() if state != null and world != null else ""
+	var blocked: bool = state == null or state.ship().status != Types.ShipStatus.FLYING or busy or _exit_save_pending() or (travel != null and travel.active()) or (local_navigation != null and local_navigation.warp_active())
+	ui.set_combat_automation_status(combat_automation.options, combat_automation.status, blocked)
+	# The target card shares the same accepted lock/status as the weapon row.
+	if state != null and world != null: ui._update_navigation()
+
+func _reset_combat_automation(release_motion: bool = true) -> void:
+	if combat_automation != null: combat_automation.reset(release_motion)
+	auto_fire_target = ""
+
+func _enemy_target_valid(target_id: String) -> bool:
 	if state == null or world == null or gameplay == null or state.ship().status != Types.ShipStatus.FLYING: return false
 	if travel != null and travel.active(): return false
 	if local_navigation != null and local_navigation.warp_active(): return false
 	if not world.targets.has(target_id): return false
 	var target: Dictionary = world.targets[target_id]
 	var node: Variant = target.get("node")
-	if target.get("kind", "") != "npc" or not is_instance_valid(node): return false
+	if target.get("kind", "") != "npc" or not is_instance_valid(node) or not node.global_position.is_finite(): return false
 	var npc: RefCounted = state.find("npc_state", "npc_instance_id", target_id)
 	if npc == null or not npc.alive or npc.sector_id != state.current_sector(): return false
-	if world.flight.global_position.distance_to(node.global_position) > float(store.catalog.rule("target_marker_detection_range_m")): return false
+	return world.contact_visible(target, world.flight.global_position.distance_to(node.global_position))
+
+func _combat_target_valid(target_id: String) -> bool:
+	if not _enemy_target_valid(target_id): return false
 	for equipment: RefCounted in gameplay.call("equipped", state.ship()):
 		var definition: Dictionary = store.catalog.one("module_defs", "module_id", equipment.module_def_id)
 		var item: RefCounted = state.find("item_instance_state", "item_instance_id", equipment.item_instance_id)
@@ -994,6 +1094,12 @@ func _auto_fire_status(target_id: String) -> String:
 		if (-muzzle.basis.z).angle_to(muzzle.origin.direction_to(target.global_position)) > float(store.catalog.rule("player_weapon_fire_cone_half_angle_rad")): reason = "目标不在射界"; continue
 		if not world.line_of_sight(muzzle.origin, target.global_position, world.flight.get_rid(), target_id): reason = "挂点视线受阻"; continue
 		if equipment.cooldown_remaining_s > 0.0: reason = "武器循环中"; continue
+		var weapon: Dictionary = store.catalog.one("weapon_defs", "module_id", equipment.module_def_id)
+		if weapon.is_empty(): continue
+		if weapon.get("ammo_item_id") != null:
+			var inventory: RefCounted = gameplay.get("inventory")
+			var hold: String = str(inventory.call("hold", ship, Types.ContainerKind.CARGO))
+			if int(inventory.call("count", hold, weapon.ammo_item_id, false)) < int(weapon.ammo_per_cycle): reason = "弹药不足"; continue
 		if ship.energy < float(definition.energy_eu): reason = "电容不足"; continue
 		if ship.heat + float(definition.heat_hu) > float(world.flight.metrics.heat_max): reason = "等待散热"; continue
 		return "自动开火中"
@@ -1039,7 +1145,7 @@ func _request_save(kind: String, index: int, after: String = "") -> void:
 	if state == null:
 		return
 	if not after.is_empty():
-		auto_fire_target = ""
+		_reset_combat_automation()
 		_release_controls()
 		# An explicit exit stops new firing cycles and navigation before saving.
 		if local_navigation != null and local_navigation.active(): local_navigation.cancel()
@@ -1049,6 +1155,7 @@ func _request_save(kind: String, index: int, after: String = "") -> void:
 	var reason := _save_block_reason()
 	if not reason.is_empty():
 		deferred_save = {"kind": kind, "index": index, "after": after}
+		_sync_combat_automation()
 		save_wait_elapsed = 0.0
 		ui.set_operation_status("save", "等待%s结束后保存；暂停时请先继续航行" % reason, true)
 		return
@@ -1062,6 +1169,7 @@ func _save_now(kind: String, index: int, after: String = "") -> void:
 	if busy:
 		return
 	busy = true
+	_sync_combat_automation()
 	ui.set_operation_status("save", "正在保存航行进度")
 	await get_tree().process_frame
 	if store.save(state, kind, index):
@@ -1071,6 +1179,8 @@ func _save_now(kind: String, index: int, after: String = "") -> void:
 		if after == "quit":
 			get_tree().quit()
 		elif after == "return_title":
+			_reset_combat_automation(false)
+			combat_automation = null
 			local_navigation = null
 			auto_fire_target = ""
 			remove_child(world)
@@ -1089,6 +1199,7 @@ func _save_now(kind: String, index: int, after: String = "") -> void:
 		ui.notify("保存失败，当前世界与最后成功档保留。", true)
 		push_error(store.last_error)
 	busy = false
+	_sync_combat_automation()
 	ui.set_operation_status("idle", "")
 
 func _store_status(_phase: String, message: String) -> void:

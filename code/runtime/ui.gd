@@ -1,6 +1,7 @@
 class_name XJUI
 extends CanvasLayer
 signal requested(action: String, target: String, quantity: int, extra: String)
+signal target_selected(id: String)
 const Types = preload("res://contracts/contract_types.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
 const UISkin = preload("res://runtime/ui_theme.gd")
@@ -305,6 +306,7 @@ func bind(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted, world: X
 	target_id = ""
 	mission_page = 0
 	mission_focus_id = ""
+	set_combat_automation_status({})
 	show_page("station" if state.player().has_docked_station_id else "")
 	navigation_hud.configure(sector, camera, catalog)
 	_refresh_targets()
@@ -1321,6 +1323,7 @@ func _select_target(id: String) -> void:
 	_refresh_targets()
 	_update_npc_target()
 	_update_navigation()
+	target_selected.emit(target_id)
 
 func _target_type(kind: String) -> String:
 	return str({"station": "空间站", "gate": "虫洞门", "npc": "敌舰", "encounter": "敌舰群", "group": "敌舰群", "resource": "矿体", "signal": "信号", "wreck": "残骸", "marker": "航标", "planet": "天体"}.get(kind, "目标"))
@@ -2393,6 +2396,13 @@ func _build_equipment_bar() -> void:
 	flight_dock.add_child(equipment_bar)
 	equipment_bar.connect("toggle_requested", func(id: String, enabled: bool): requested.emit("set_module_enabled", id, 1, "on" if enabled else "off"))
 	equipment_bar.connect("engine_requested", func(): requested.emit("request_engine_cycle", "", 1, ""))
+	equipment_bar.connect("combat_option_requested", func(option: String, enabled: bool): requested.emit("set_combat_option", option, 1, "on" if enabled else "off"))
+
+func set_combat_automation_status(options: Dictionary, message: String = "", blocked: bool = false) -> void:
+	if is_instance_valid(equipment_bar): equipment_bar.call("set_combat_automation_status", options, message, blocked)
+
+func combat_option_has_focus() -> bool:
+	return is_instance_valid(equipment_bar) and bool(equipment_bar.call("has_combat_option_focus"))
 
 func _update_module_bar(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 	if not is_instance_valid(equipment_bar): return
