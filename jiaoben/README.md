@@ -172,3 +172,6 @@ sh jiaoben/run_godot.sh --audio-driver CoreAudio --path code --script ../jiaoben
 v0.11.0最终战斗自动化source headless574、Metal/CoreAudio605/5真实飞行图，9回归4217、Python129、字体901与原100表现通过；实际干净源`fc87c476`包`0.11.0-fc87c476-20261004-202947`独立6+100+460+605/35图、248资源/8包、签名与12严格日志通过，Windows原生待实机。见42/26。
 
 v0.12.0最终source仓储813headless、827Metal/CoreAudio/6图，6相关1498+旧business389、Python129、字体906、固定104表现均通过；实际干净源`266ab3f0`包`0.12.0-266ab3f0-20261004-225644`独立6+104+462+605+827/42图、248资源/8包、签名、14严格日志通过。初候选和旧依赖warehouse鉴定入口的测试不作新包证据，最终Node支持独立salvage入口。详见43/26，Windows原生待实机。
+
+
+v0.13.0实际交付`0.13.0-afdc5e1d-20261005-002457`来自干净已推送源`afdc5e1d`：实际Mac独立6+110+462+605+827+5,351项、49图通过，严格16份构建日志诊断0；资源248/8包、签名及ZIP/PNG/源码/日志摘要复核通过。最新独立汇总为`logs/row-v17-delivery-final.json`，完整源回归见44，实际包身份、链接及Windows原生边界见26。无SQL/数值或个人档案变更。
