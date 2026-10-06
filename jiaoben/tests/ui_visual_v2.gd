@@ -113,7 +113,11 @@ func _run() -> void:
 	ui.tick(1.0)
 	await capture("station-1440x900")
 	check(not ui.panel.visible and ui.station_layer.visible, "default station does not cover hangar with fullscreen menu")
-	check(ui.station_portraits.size() == 4 and ui.station_portraits[0].texture != null, "four NPC portrait AtlasTexture services loaded")
+	var service_icons_valid: bool = ui.station_services.find_child("NpcPortrait0", true, false) == null
+	for entry: Dictionary in XJServiceNavigation.PAGES:
+		var service_button: Button = ui.station_services.find_child("Service" + str(entry.id).to_pascal_case(), true, false)
+		service_icons_valid = service_icons_valid and service_button != null and service_button.text == str(entry.label) and service_button.icon != null
+	check(service_icons_valid, "eleven canonical compact service icons replace portrait navigation")
 	var center: Vector2 = ui.root.size * 0.5
 	check(not ui.station_services.get_global_rect().has_point(center) and not ui.station_details.get_global_rect().has_point(center), "station leaves center viewport open for 3D ship")
 	check(ui.root.find_child("UndockButton", true, false) != null, "bottom departure retains authoritative undock intent")
@@ -136,10 +140,12 @@ func _run() -> void:
 	check(first_title == "新手教学 1 · 出航准备", "first tutorial remains first visible mission list row with its chapter classification")
 	ui.market_filter = "buy"
 	ui.show_page("market")
-	ui.quantity_input.value = 5
 	var accurate: bool = true
 	for row: Dictionary in ui.quotes:
-		accurate = accurate and int(row.label.get_meta("quote_amount", -1)) == host.gameplay.economy.quote(row.id, 5)
+		var amount: SpinBox = row.get("amount") as SpinBox
+		if amount != null: amount.value = 5
+		var quantity: int = 5 if amount != null else 1
+		accurate = accurate and int(row.label.get_meta("quote_amount", -1)) == host.gameplay.economy.quote(row.id, quantity)
 	check(accurate and not ui.quotes.is_empty(), "redesigned market uses actual quantity/tax quote")
 	# Resize the current workbench without rebuilding it: list scroll remains accessible.
 	root.size = Vector2i(1280, 720)

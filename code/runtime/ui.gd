@@ -13,6 +13,7 @@ const ResourceStatus = preload("res://runtime/resource_status.gd")
 const BusinessList = preload("res://runtime/ui/business_list.gd")
 const WarehousePanel = preload("res://runtime/ui/warehouse_panel.gd")
 const ItemPortraits = preload("res://runtime/ui/item_portraits.gd")
+const ServiceNavigation = preload("res://runtime/ui/service_navigation.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
 var gameplay: RefCounted
@@ -73,7 +74,6 @@ var business_preserve_view: bool = false
 var live_missions: Array[Dictionary] = []
 var definition_cache: Dictionary = {}
 var friendly_names: Dictionary = {}
-const PAGE_TITLES: Dictionary = {"station": "空间站服务", "ships": "舰队与借船", "warehouse": "仓库与货舱", "fitting": "舰船配装", "market": "站点市场", "industry": "工业与回收", "salvage": "打捞鉴定", "missions": "任务与合同", "research": "科技与设施", "map": "星域航路", "pause": "暂停与存读档"}
 const ACTION_NAMES: Dictionary = {"undock": "已出港", "dock": "已停靠", "switch_ship": "已切换驾驶舰", "buy_item": "购买完成", "sell_item": "出售完成", "buy_ship": "船体购买完成", "sell_ship": "船体出售完成", "move_stack": "货物转移完成", "move_item": "设备转移完成", "fit_module": "配装完成", "unfit_module": "设备已卸下", "repair": "维修完成", "manufacture": "生产完成", "recycle": "拆解完成", "accept_mission": "任务已接取", "abandon_mission": "任务已放弃", "deliver_mission": "任务已交付", "claim_loan": "任务舰已交接", "handoff_loan": "借船已归还", "request_rescue": "救援完成", "start_scan": "扫描已开始", "stop_scan": "扫描已停止", "start_mining": "采矿已开始", "stop_mining": "采矿已停止", "set_module_enabled": "设备开关已更新", "request_engine_cycle": "增推已启用", "research": "研究完成", "build_base": "设施已建成", "recover_resource": "组件已回收", "pickup_wreck": "残骸已回收"}
 var preferences: Dictionary = {}
 var title_background: TextureRect
@@ -97,7 +97,6 @@ var station_departure: PanelContainer
 var station_ship_name: Label
 var station_ship_status: Label
 var station_status: Label
-var station_portraits: Array[TextureRect] = []
 var sidebar: VBoxContainer
 var card_grid: GridContainer
 var title_show_slots: bool = false
@@ -382,7 +381,7 @@ func show_page(next_page: String) -> void:
 		_station()
 		_responsive()
 		return
-	_build_panel(str(PAGE_TITLES.get(next_page, "航行服务")), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
+	_build_panel(ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
 	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
 		_text("此服务需要停靠空间站。使用星图找到站点，进入停靠范围并减速后按 F。")
 		_focus_page.call_deferred()
@@ -507,23 +506,29 @@ func _build_panel(title: String, description: String) -> void:
 	panel.modulate = Color.WHITE
 	panel.add_theme_stylebox_override("panel", UISkin.plate() if page != "title" else StyleBoxEmpty.new())
 	var shell: HBoxContainer = HBoxContainer.new()
-	shell.add_theme_constant_override("separation", 24)
+	shell.add_theme_constant_override("separation", 18)
 	panel.add_child(shell)
 	sidebar = VBoxContainer.new()
 	sidebar.name = "ServiceSidebar"
 	sidebar.visible = root.size.x >= 950 and state != null and page not in ["title", "settings"]
-	sidebar.custom_minimum_size.x = 178
+	sidebar.custom_minimum_size.x = 190
 	sidebar.add_theme_constant_override("separation", 8)
 	shell.add_child(sidebar)
 	if state != null and page not in ["title", "settings"]:
-		_module_heading(sidebar, "舰载终端", "服务 / 航路")
-		var available: Array[String] = ["missions", "map", "pause"]
-		if state.player().has_docked_station_id: available = ["station", "ships", "warehouse", "fitting", "market", "industry", "salvage", "missions", "research", "map", "pause"]
-		for key: String in available:
-			var item: Button = _button(sidebar, str(PAGE_TITLES[key]), show_page.bind(key))
-			item.custom_minimum_size.x = 178
-			item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			if key == page: _primary(item)
+		_module_heading(sidebar, "服务导航")
+		var service_scroll: ScrollContainer = ScrollContainer.new()
+		service_scroll.name = "ServiceSidebarScroll"
+		service_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		service_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		service_scroll.follow_focus = true
+		sidebar.add_child(service_scroll)
+		var service_rows: VBoxContainer = VBoxContainer.new()
+		service_rows.name = "ServiceSidebarRows"
+		service_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		service_rows.add_theme_constant_override("separation", 3)
+		service_scroll.add_child(service_rows)
+		for record: Dictionary in ServiceNavigation.pages(state.player().has_docked_station_id):
+			_service_button(service_rows, str(record.id), "sidebar")
 		var divider: HSeparator = HSeparator.new()
 		sidebar.add_child(divider)
 		var location: Label = _text_to(sidebar, _station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), 12)
@@ -537,18 +542,34 @@ func _build_panel(title: String, description: String) -> void:
 	var header: HBoxContainer = HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
 	layout.add_child(header)
+	if state != null and page not in ["title", "settings"]:
+		var heading_icon: TextureRect = TextureRect.new()
+		heading_icon.name = "PageHeadingIcon"
+		heading_icon.texture = ServiceNavigation.icon(page)
+		heading_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		heading_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		heading_icon.custom_minimum_size = Vector2(26, 26)
+		heading_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		heading_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		header.add_child(heading_icon)
 	var heading: Label = _text_to(header, title, 48 if page == "title" else 25)
+	heading.name = "PageHeading"
 	heading.custom_minimum_size.x = 90
 	heading.max_lines_visible = 2
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if state != null and page not in ["title", "settings"]:
 		var selector: OptionButton = OptionButton.new()
 		selector.name = "PageSelector"
-		selector.custom_minimum_size = Vector2(132, 36)
-		for key: String in PAGE_TITLES: selector.add_item(str(PAGE_TITLES[key])); selector.set_item_metadata(selector.item_count - 1, key)
+		selector.custom_minimum_size = Vector2(164, 32)
+		selector.add_theme_font_size_override("font_size", 12)
+		selector.add_theme_constant_override("icon_max_width", 20)
+		for record: Dictionary in ServiceNavigation.pages(state.player().has_docked_station_id):
+			selector.add_icon_item(ServiceNavigation.icon(str(record.id)), str(record.label))
+			selector.set_item_metadata(selector.item_count - 1, str(record.id))
 		for index: int in range(selector.item_count):
 			if selector.get_item_metadata(index) == page: selector.select(index)
 		selector.item_selected.connect(func(index: int): show_page(str(selector.get_item_metadata(index))))
+		selector.tooltip_text = "切换服务 · " + ServiceNavigation.label(page)
 		selector.visible = _service_sidebar_compact()
 		header.add_child(selector)
 	if page != "title":
@@ -584,40 +605,58 @@ func _station() -> void:
 	live_missions.clear()
 	card_grid = null
 	station_services = _frame(station_layer, "StationServices")
+	station_services.add_theme_stylebox_override("panel", UISkin.hud_panel(8))
 	station_services.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
 	station_services.offset_left = 22
-	station_services.offset_right = 282
-	station_services.offset_top = 96
-	station_services.offset_bottom = -120
+	station_services.offset_right = 242
+	station_services.offset_top = 64
+	station_services.offset_bottom = -110
 	var services: VBoxContainer = VBoxContainer.new()
-	services.add_theme_constant_override("separation", 12)
+	services.add_theme_constant_override("separation", 8)
 	station_services.add_child(services)
-	_module_heading(services, "驻站联络", "选择服务人员")
+	var service_heading: HBoxContainer = HBoxContainer.new()
+	service_heading.add_theme_constant_override("separation", 7)
+	services.add_child(service_heading)
+	var heading_icon: TextureRect = TextureRect.new()
+	heading_icon.name = "PageHeadingIcon"
+	heading_icon.texture = ServiceNavigation.icon("station")
+	heading_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	heading_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	heading_icon.custom_minimum_size = Vector2(20, 20)
+	heading_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	service_heading.add_child(heading_icon)
+	var heading: Label = _text_to(service_heading, ServiceNavigation.label("station"), 14)
+	heading.name = "PageHeading"
+	heading.add_theme_color_override("font_color", UISkin.ICE)
 	var service_scroll: ScrollContainer = ScrollContainer.new()
+	service_scroll.name = "StationServiceScroll"
 	page_scroll = service_scroll
 	service_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	service_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	service_scroll.follow_focus = true
 	services.add_child(service_scroll)
 	body = VBoxContainer.new()
-	body.add_theme_constant_override("separation", 10)
+	body.add_theme_constant_override("separation", 3)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	service_scroll.add_child(body)
-	station_portraits.clear()
-	_npc_service(body, 0, "航路与委托", "站务官 · 任务 / 航路", "missions")
-	_npc_service(body, 1, "舰队与补给", "补给官 · 市场 / 舰队", "market")
-	_npc_service(body, 2, "工业与整备", "工程师 · 制造 / 仓储", "industry")
-	_npc_service(body, 3, "科技与研究", "研究官 · 科技 / 设施", "research")
-	var shortcuts: HFlowContainer = HFlowContainer.new()
-	body.add_child(shortcuts)
-	_secondary(_button(shortcuts, "舰队", show_page.bind("ships")))
-	_secondary(_button(shortcuts, "配装", show_page.bind("fitting")))
-	_secondary(_button(shortcuts, "仓储", show_page.bind("warehouse")))
-	var salvage_shortcut: Button = _button(shortcuts, "打捞鉴定", show_page.bind("salvage"))
-	salvage_shortcut.name = "StationSalvage"
-	_secondary(salvage_shortcut)
-	var overview_button: Button = _command(shortcuts, "观察舰船", "hangar_focus")
+	for record: Dictionary in ServiceNavigation.pages(true):
+		_service_button(body, str(record.id), "hangar")
+	var context_divider: HSeparator = HSeparator.new()
+	body.add_child(context_divider)
+	var overview_button: Button = _command(body, "观察舰船", "hangar_focus")
 	overview_button.name = "HangarOverview"
-	_secondary(overview_button)
+	overview_button.icon = ServiceNavigation.texture(ServiceNavigation.OBSERVE_ICON)
+	overview_button.tooltip_text = "恢复机库全景，观察当前驾驶舰。"
+	_service_button_style(overview_button, false)
+	var needs: Dictionary = gameplay.get("economy").call("repair_requirements")
+	var price: int = int(gameplay.get("economy").call("quote_repair"))
+	var repair: Button = _command(body, "维修补给 · %d 信用点" % price, "repair", state.ship().ship_instance_id)
+	repair.name = "StationRepair"
+	repair.icon = ServiceNavigation.icon("fitting")
+	repair.tooltip_text = "维修补给 · %d 信用点\n需结构部件 × %d" % [price, int(needs.get("structural_units", 0))]
+	repair.disabled = state.player().credit < price
+	_service_button_style(repair, false)
+	_text_to(body, "需结构部件 × %d" % int(needs.get("structural_units", 0)), 11).add_theme_color_override("font_color", UISkin.MUTED)
 	station_details = _frame(station_layer, "StationShipDetails")
 	station_details.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
 	station_details.offset_left = -282
@@ -633,13 +672,6 @@ func _station() -> void:
 	station_ship_status = _text_to(details, "", 14)
 	var funds: Label = _text_to(details, "%d 信用点" % state.player().credit, 19)
 	funds.add_theme_color_override("font_color", UISkin.AMBER)
-	var needs: Dictionary = gameplay.get("economy").call("repair_requirements")
-	var price: int = int(gameplay.get("economy").call("quote_repair"))
-	var repair: Button = _command(details, "维修补给 · %d 信用点" % price, "repair", state.ship().ship_instance_id)
-	repair.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	repair.disabled = state.player().credit < price
-	_text_to(details, "需结构部件 × %d" % int(needs.get("structural_units", 0)), 12).add_theme_color_override("font_color", UISkin.MUTED)
-	_secondary(_button(details, "调整配装", show_page.bind("fitting")))
 	station_departure = _frame(station_layer, "StationDeparture")
 	station_departure.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	station_departure.offset_left = 22
@@ -655,7 +687,6 @@ func _station() -> void:
 	undock.name = "UndockButton"
 	undock.custom_minimum_size = Vector2(210, 44)
 	_primary(undock)
-	_secondary(_button(departure, "系统", show_page.bind("pause")))
 	_update_station_info()
 	_focus_page.call_deferred()
 
@@ -1528,7 +1559,7 @@ func _mission_location_text(info: Dictionary) -> String:
 	if not bool(info.get("local", false)):
 		result += "\n下一航点 · " + str(info.get("waypoint_title", "查看星图航路"))
 	elif not str(info.get("required_page", "")).is_empty():
-		result += "\n站内操作 · " + str(PAGE_TITLES.get(str(info.required_page), "空间站服务"))
+		result += "\n站内操作 · " + ServiceNavigation.label(str(info.required_page), "空间站服务")
 	if not str(info.get("route_reason", "")).is_empty(): result += "\n" + str(info.route_reason)
 	return result
 
@@ -2119,7 +2150,7 @@ func _update_hud_visibility() -> void:
 	_responsive_title()
 
 func _service_sidebar_compact() -> bool:
-	if root.size.x < 950: return true
+	if root.size.x < 950 or root.size.y < 560: return true
 	if not is_instance_valid(sidebar): return false
 	var top: float = 22.0
 	if is_instance_valid(operation_bar) and operation_bar.visible:
@@ -2301,18 +2332,25 @@ func _responsive() -> void:
 	if is_instance_valid(panel):
 		var selector: OptionButton = panel.find_child("PageSelector", true, false)
 		if selector != null: selector.visible = _service_sidebar_compact()
+		var heading: Label = panel.find_child("PageHeading", true, false)
+		if heading != null and page != "title": heading.add_theme_font_size_override("font_size", 19 if compact else 25)
+		if is_instance_valid(sidebar):
+			for service_button: Button in sidebar.find_children("Service*", "Button", true, false):
+				if service_button.has_meta("service_page_id"):
+					_service_button_style(service_button, str(service_button.get_meta("service_page_id")) == page)
 	if is_instance_valid(panel):
 		for grid: Node in panel.find_children("ModuleCards*", "GridContainer", true, false):
 			grid.columns = 2 if root.size.x >= 1200 and page != "title" else 1
 	if is_instance_valid(station_services):
+		station_services.add_theme_stylebox_override("panel", UISkin.hud_panel(6 if compact else 8))
 		station_services.offset_left = safe
-		station_services.offset_right = safe + (200 if compact else 260)
-		station_services.offset_top = 44 if compact else 96
-		station_services.offset_bottom = (-94 if compact else -120) - (40 if station_layer.visible and toast.visible else 0)
-		for heading: Label in station_services.find_children("NpcServiceTitle", "Label", true, false):
-			heading.add_theme_font_size_override("font_size", 13 if compact else 15)
+		station_services.offset_right = safe + (198 if compact else 220)
+		station_services.offset_top = 44 if compact else 64
+		station_services.offset_bottom = (-94 if compact else -110) - (40 if station_layer.visible and toast.visible else 0)
+		for service_button: Button in station_services.find_children("*", "Button", true, false):
+			_service_button_style(service_button, service_button.has_meta("service_page_id") and str(service_button.get_meta("service_page_id")) == "station")
 	if is_instance_valid(station_details):
-		station_details.visible = not compact
+		station_details.visible = not compact and root.size.y >= 560
 	if is_instance_valid(station_departure):
 		var station_notice_gap: float = 40.0 if station_layer.visible and toast.visible else 0.0
 		station_departure.offset_left = safe
@@ -2845,68 +2883,32 @@ func _update_station_info() -> void:
 	station_ship_name.text = _ship_name(state.ship().ship_def_id)
 	station_ship_status.text = "护盾  %.0f / %.0f\n装甲  %.0f / %.0f\n结构  %.0f / %.0f\n\n电容  %.0f / %.0f\n热量  %.0f%%\n\n货舱  %.0f / %.0f L\n矿舱  %.0f / %.0f L" % [state.ship().shield, float(metrics.shield_max), state.ship().armor, float(metrics.armor_max), state.ship().hull, float(metrics.hull_max), state.ship().energy, float(metrics.energy_max), state.ship().heat / maxf(float(metrics.heat_max), 1.0) * 100, float(metrics.cargo_used_l), float(metrics.cargo_capacity_l), float(metrics.mineral_used_l), float(metrics.mineral_capacity_l)]
 
-func _npc_service(parent: Node, portrait: int, title: String, subtitle: String, destination: String) -> void:
-	# Two sibling buttons keep viewing a person separate from opening their service.
-	var row: HBoxContainer = HBoxContainer.new()
-	row.name = "NpcCard" + str(portrait)
-	row.custom_minimum_size.y = 87
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 4)
-	parent.add_child(row)
-	var roles: Array[String] = ["operations", "supplies", "industry", "research"]
-	var view: Button = _command(row, "", "hangar_focus", roles[portrait])
-	view.name = "NpcPortrait" + str(portrait)
-	view.tooltip_text = "查看人员 · " + subtitle
-	view.custom_minimum_size = Vector2(70, 87)
-	var image: TextureRect = TextureRect.new()
-	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	image.custom_minimum_size = Vector2(62, 62)
-	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	view.add_child(image)
-	image.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	image.offset_left = 4
-	image.offset_right = -4
-	image.offset_top = 8
-	image.offset_bottom = 70
-	var atlas: Texture2D = UISkin.texture("res://assets/interface_v2/npc_portraits.png")
-	if atlas != null:
-		var region: AtlasTexture = AtlasTexture.new()
-		region.atlas = atlas
-		region.region = Rect2(Vector2((portrait % 2) * atlas.get_width() * 0.5, floori(portrait / 2.0) * atlas.get_height() * 0.5), Vector2(atlas.get_size()) * 0.5)
-		image.texture = region
-	station_portraits.append(image)
-	var badge: PanelContainer = PanelContainer.new()
-	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	badge.add_theme_stylebox_override("panel", UISkin.flat(Color(0.04, 0.07, 0.09, 0.92), UISkin.ICE, 0))
-	view.add_child(badge)
-	badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	badge.offset_left = 4
-	badge.offset_right = -4
-	badge.offset_top = 52
-	badge.offset_bottom = 72
-	var badge_text: Label = _label(badge, "查看", 11)
-	badge_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	badge_text.add_theme_color_override("font_color", UISkin.ICE)
-	var button: Button = _button(row, "", show_page.bind(destination))
-	button.name = "NpcService" + str(portrait)
-	button.custom_minimum_size = Vector2(0, 87)
+func _service_button(parent: Node, destination: String, surface: String) -> Button:
+	var button: Button = _button(parent, ServiceNavigation.label(destination), show_page.bind(destination))
+	button.name = "Service" + destination.to_pascal_case()
+	button.icon = ServiceNavigation.icon(destination)
+	button.tooltip_text = ServiceNavigation.label(destination)
+	button.set_meta("service_page_id", destination)
+	button.set_meta("service_surface", surface)
+	_service_button_style(button, destination == page)
+	return button
+
+func _service_button_style(button: Button, active: bool) -> void:
+	var small: bool = root.size.x < 950 or root.size.y < 560
+	button.custom_minimum_size = Vector2(0, 28 if small else 32)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button.tooltip_text = title + " · 打开服务"
-	var caption: VBoxContainer = VBoxContainer.new()
-	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	button.add_child(caption)
-	caption.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	caption.offset_left = 8
-	caption.offset_right = -8
-	caption.offset_top = 10
-	caption.offset_bottom = -10
-	var heading: Label = _text_to(caption, title, 13 if root.size.x < 950 else 15)
-	heading.name = "NpcServiceTitle"
-	heading.custom_minimum_size.x = 0
-	var detail: Label = _text_to(caption, subtitle, 11)
-	detail.custom_minimum_size.x = 0
-	detail.add_theme_color_override("font_color", UISkin.MUTED)
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.expand_icon = true
+	button.add_theme_constant_override("icon_max_width", 20 if small else 22)
+	button.add_theme_constant_override("h_separation", 7)
+	button.add_theme_font_size_override("font_size", 11 if small else 13)
+	button.add_theme_color_override("font_color", UISkin.AMBER if active else UISkin.TEXT)
+	button.add_theme_color_override("icon_normal_color", UISkin.AMBER if active else Color.WHITE)
+	button.add_theme_stylebox_override("normal", UISkin.hud_button(active))
+	button.add_theme_stylebox_override("hover", UISkin.hud_button(true))
+	button.add_theme_stylebox_override("pressed", UISkin.hud_button(true))
+	button.add_theme_stylebox_override("disabled", UISkin.hud_button())
 
 func _primary(button: Button) -> void:
 	button.add_theme_stylebox_override("normal", UISkin.button_style(Color("e2b46d")))

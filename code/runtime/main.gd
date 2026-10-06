@@ -57,6 +57,7 @@ func _ready() -> void:
 		{"flag": "--xj-verify-mission-display-v19", "file": "mission_display_v19.gd", "prefix": "mission-display-v19", "env": "XJ_MISSION_DISPLAY_V19", "meta": "xj_mission_display_v19_diagnostic"},
 		{"flag": "--xj-verify-warp-visual-v20", "file": "warp_visual_v20.gd", "prefix": "warp-visual-v20", "env": "XJ_WARP_VISUAL_V20", "meta": "xj_warp_visual_v20_diagnostic"},
 		{"flag": "--xj-verify-warp-scene-v21", "file": "warp_scene_v21.gd", "prefix": "warp-scene-v21", "env": "XJ_WARP_SCENE_V21", "meta": "xj_warp_scene_v21_diagnostic"},
+		{"flag": "--xj-verify-service-navigation-v22", "file": "service_navigation_v22.gd", "prefix": "service-navigation-v22", "env": "XJ_SERVICE_NAVIGATION_V22", "meta": "xj_service_navigation_v22_diagnostic"},
 		{"flag": "--xj-verify-spatial-business-v20", "file": "spatial_business_v20.gd", "prefix": "spatial-business-v20", "env": "XJ_SPATIAL_BUSINESS_V20", "meta": "xj_spatial_business_v20_diagnostic"},
 		{"flag": "--xj-verify-space-upgrade-v20", "file": "space_upgrade_v20.gd", "prefix": "space-upgrade-v20", "env": "XJ_SPACE_UPGRADE_V20", "meta": "xj_space_upgrade_v20_diagnostic"},
 		{"flag": "--xj-verify-spatial-navigation-v20", "file": "spatial_navigation_v20.gd", "prefix": "spatial-navigation-v20", "env": "XJ_SPATIAL_NAVIGATION_V20", "meta": "xj_spatial_navigation_v20_diagnostic"},
@@ -738,7 +739,7 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			var created := store.new_world(target.strip_edges() if not target.strip_edges().is_empty() else "断航远征", int(Time.get_unix_time_from_system()), _prepare_loaded)
 			if created != null:
 				_activate(created)
-				ui.notify("远征已建立，选择航路与委托开始教学。")
+				ui.notify("远征已建立，选择任务与合同开始教学。")
 			else:
 				_discard_staged()
 				ui.notify("新建世界失败，已有档案保留。", true)
@@ -947,7 +948,7 @@ func _mission_navigation(action: String, mission_id: String, announce: bool = tr
 	var missions: RefCounted = gameplay.get("missions")
 	var info: Dictionary = missions.station_guidance(mission_id) if action == "mission_station" else missions.guidance(mission_id)
 	if info.is_empty():
-		if announce: ui.notify("当前没有可定位的任务；可在航路与委托中查看教学或主线。")
+		if announce: ui.notify("当前没有可定位的任务；可在任务与合同中查看教学或主线。")
 		return
 	if state.ship().status == Types.ShipStatus.DOCKED:
 		if info.get("local", false) and str(info.get("target_id", "")) == gameplay.call("station"):

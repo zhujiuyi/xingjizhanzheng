@@ -235,7 +235,8 @@ def main() -> None:
                           CODE / 'assets/interface_v2/manifest.json', CODE / 'assets/hangar_v2/manifest.json',
                           CODE / 'assets/interface_v3/manifest.json', CODE / 'assets/navigation_v3/manifest.json',
                           CODE / 'assets/ship_v3/manifest.json', CODE / 'assets/station_v3/manifest.json',
-                          CODE / 'data/local_navigation_v1_manifest.json', CODE / 'data/warp_presentation_v3_manifest.json', CODE / 'assets/business_v11/manifest.json'):
+                          CODE / 'data/local_navigation_v1_manifest.json', CODE / 'data/warp_presentation_v3_manifest.json', CODE / 'assets/business_v11/manifest.json',
+                          CODE / 'assets/service_navigation_v1/manifest.json'):
         pack = json.loads(manifest_path.read_text())
         for resource in pack['resources']:
             resource_path = resource.get('resource_path', resource.get('path', ''))
@@ -330,7 +331,7 @@ def main() -> None:
             if not list(folder.glob('*.pck')) or not list(folder.glob('*.dll')):
                 raise RuntimeError('Windows runtime PCK or SQLite DLL absent')
             if output.read_bytes()[:2] != b'MZ': raise RuntimeError('Windows PE header absent')
-            evidence['verification']['windows'] = 'x64 release export and runtime components PASS; native Windows execution not available on this Mac'
+            evidence['verification']['windows'] = 'x64 release export and runtime components PASS; native Windows execution requires separate acceptance'
             archive = staging / '星际战舰-Windows-x64.zip'
             with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as bundle:
                 for source in sorted(folder.rglob('*')):

@@ -73,9 +73,12 @@ static func run(host: Node, output_dir: String) -> bool:
 	await _capture(host, output_dir, "station")
 	var crew: Node3D = host.hangar.get_service_anchor("operations")
 	_check(evidence, is_instance_valid(crew) and crew.is_visible_in_tree(), "packed 3D NPC service model is visible")
-	var portrait: Button = host.ui.station_services.find_child("NpcPortrait0", true, false)
-	_check(evidence, portrait != null, "packed NPC portrait exposes a view control")
-	if portrait != null: portrait.pressed.emit()
+	var service_icons_valid: bool = host.ui.station_services.find_child("NpcPortrait0", true, false) == null
+	for entry: Dictionary in XJServiceNavigation.PAGES:
+		var service_button: Button = host.ui.station_services.find_child("Service" + str(entry.id).to_pascal_case(), true, false)
+		service_icons_valid = service_icons_valid and service_button != null and service_button.text == str(entry.label) and service_button.icon != null
+	_check(evidence, service_icons_valid, "packed hangar exposes eleven canonical compact icon services without portrait controls")
+	await host._command("hangar_focus", "operations", 1, "")
 	var focus_deadline := Time.get_ticks_msec() + 3000
 	while Time.get_ticks_msec() < focus_deadline and host.hangar.get_camera().position.distance_to(host.hangar._camera_destination) > 1.0:
 		await host.get_tree().process_frame

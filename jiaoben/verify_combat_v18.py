@@ -18,6 +18,7 @@ CASES = {
     "mission-display": ("mission_display_v19.gd", "XJ_MISSION_DISPLAY_V19", "mission-display-v19", "MISSION_DISPLAY_V19", "--xj-verify-mission-display-v19"),
     "warp-visual": ("warp_visual_v20.gd", "XJ_WARP_VISUAL_V20", "warp-visual-v20", "WARP_VISUAL_V20", "--xj-verify-warp-visual-v20"),
     "warp-scene": ("warp_scene_v21.gd", "XJ_WARP_SCENE_V21", "warp-scene-v21", "WARP_SCENE_V21", "--xj-verify-warp-scene-v21"),
+    "service-navigation": ("service_navigation_v22.gd", "XJ_SERVICE_NAVIGATION_V22", "service-navigation-v22", "SERVICE_NAVIGATION_V22", "--xj-verify-service-navigation-v22"),
     "spatial-business": ("spatial_business_v20.gd", "XJ_SPATIAL_BUSINESS_V20", "spatial-business-v20", "SPATIAL_BUSINESS_V20", "--xj-verify-spatial-business-v20"),
     "space-upgrade": ("space_upgrade_v20.gd", "XJ_SPACE_UPGRADE_V20", "space-upgrade-v20", "SPACE_UPGRADE_V20", "--xj-verify-space-upgrade-v20"),
     "spatial-navigation": ("spatial_navigation_v20.gd", "XJ_SPATIAL_NAVIGATION_V20", "spatial-navigation-v20", "SPATIAL_NAVIGATION_V20", "--xj-verify-spatial-navigation-v20"),
@@ -141,6 +142,17 @@ def run_suite():
         if builtin:
             assert record["summary"]["checks"] >= (6 if name == "base-store" else 110)
             assert len(captures) == (0 if name == "base-store" else 17)
+        if name == "service-navigation":
+            summary = record["summary"]
+            assert summary["native"] == args.native and summary["checks"] >= 120
+            assert Path(summary["directory"]).resolve() == directory.resolve()
+            assert Path(summary["database_path"]).resolve() == (directory / "progress.db").resolve()
+            assert (directory / "progress.db").is_file() and len(captures) == (10 if args.native else 0)
+            windows = [item for item in summary["observations"] if item["kind"] == "window"]
+            assert {item["label"] for item in windows} == {
+                f"{width}x{height}-{scale}" for width, height in ((1280, 720), (1440, 900), (3440, 1370)) for scale in (100, 200)
+            }
+            assert len(windows) == 6 and len([item for item in summary["observations"] if item["kind"] == "row"]) == 66
         print(f"PASS {mode} {name}: {len(captures)} screenshots; {record['seconds']} s", flush=True)
     print(f"V18_ACCEPTANCE PASS {report_path}", flush=True)
 
