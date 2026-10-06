@@ -416,7 +416,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _input(event: InputEvent) -> void:
 	# Mouse/key release must end a gesture even after entering a HUD control.
-	if event.is_action_released("fire"):
+	# Native window events can arrive before _ready installs the input actions.
+	if InputMap.has_action("fire") and event.is_action_released("fire"):
 		fire_held = false
 		weapon_errors.clear()
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:

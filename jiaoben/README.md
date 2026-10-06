@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+`tests/input_startup.gd`直接调用真实Main的初始化前输入回调，覆盖四类未注册事件、正常Ctrl释放、Ctrl按下及无关键释放；不启动服务或打开个人存档。执行`sh jiaoben/run_godot.sh --headless --path code --script ../jiaoben/tests/input_startup.gd`时，须同时满足`INPUT_STARTUP_RESULT PASS checks=10 failures=0`、退出0及输出/独立引擎日志无错误、警告或泄漏。旧源码会输出PASS但仍产生四条缺失fire动作错误，不能只看断言摘要。
+
 `tests/row_quantity_v17_run.py`验证仓储单行、小按钮与远站只读，市场/工业独立行数量、12次GUI买卖/制造/拆解、五种非法数量拒绝、七种过期上下文、四布局和SQLite重开；加`--native`独占Metal/CoreAudio窗口，fresh UUID库/图在tmp，双日志与结构化结果在logs。实际包通过受限`--xj-verify-row-quantities`入口加载同一外部测试Node，res://保持实际PCK；构建清单记录测试源码、双日志与图的SHA256。详见[44](../doc/44-单行业务列表与行内数量.md)。
 
 `tests/warehouse_transfer_v16_run.py`验证真实双列表与独立行数量、8 GUI搬运、矿舱/设备/密封包、远站排序灰色只读、容量/权限/过期回调、四布局及SQLite重开；加`--native`独占Metal/CoreAudio窗口，fresh UUID数据/图在tmp，严格双日志在logs。实际包通过固定外部Node入口`--xj-verify-warehouse`复验，production资源保持PCK；v0.12.0固定表现门槛104项/16图，含release-warehouse-dual，当前门槛见下。详见[43](../doc/43-双列表仓储与行内搬运.md)。
