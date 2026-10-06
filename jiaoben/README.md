@@ -16,6 +16,8 @@ v0.14.0光影/武器/无人机专项：`verify_combat_v18.py`在Windows串行加
 
 ## 星图重塑
 
+v0.15.1正常跃迁专项为`py jiaoben/verify_combat_v18.py --only warp-scene --native`；actual-PCK加`--executable <EXE>`且不传source project path。正式站/门/矿出发、自然星空与行星、精确舰体轮廓、实际字形不透明内部像素、用户2859×945超宽与3440×1370在100%/200%及三视角受控；测试不加入checker环境。`test_warp_presentation.py`固定旧发布Git字节核旧DB/SQL/manifest不变、新FXv3闭合。基线模式EXPECTED_DEFECT不作为发布PASS，按[47](../doc/47-跃迁离场与真实背景虚化修正.md)记录边界。
+
 v0.15.0空间专项从根目录运行`py jiaoben/verify_combat_v18.py --only mission-display spatial-business spatial-navigation warp-visual space-upgrade`，原生加`--native`；actual-PCK加`--executable <Windows EXE>`且不传源码path。源码/实际包共享固定Node，WASAPI、独占共用锁、fresh UUID tmp库和严格双日志。空间升级fixture由`tests/prepare_space_upgrade_v20.py`固定旧Git catalog身份，通过query_only原生SQLite复制到受审内存adapter，同一路径用于源码和PCK；测试不打开个人档。`py -m unittest discover -s jiaoben/tests -p 'test_*.py'`含空间catalog及SQL完整绑定/不可变约束。规格与最终结果见[46](../doc/46-星系尺度与跃迁体验.md)和[26](../doc/26-开发阶段与交付记录.md)。
 
 同一runner的`--only base-store base-presentation --native`执行6项实际数据库与110项/17图内置表现门槛；源码直接运行固定Main CLI入口，实际EXE无需源码工程。store门槛强制headless/WASAPI且无截图，presentation真实原生窗口。所有进程均检查退出、完整结果及输出/引擎双日志；上一结果的截图文件存在不能代替新包验收。

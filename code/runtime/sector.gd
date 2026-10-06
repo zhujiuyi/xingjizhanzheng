@@ -25,6 +25,15 @@ var lighting_definition: Dictionary = {}
 var strategic_render_position: Dictionary = {}
 var collision_site_id: String = ""
 var _loaded_site_id: String = ""
+## A short departure projection is visual only. The real source nodes stay at
+## their encoded site coordinates while strategic navigation advances scalars.
+var departure_active: bool = false
+var departure_elapsed_s: float = 0.0
+var departure_projection: Node3D
+var _departure_heading: Vector3 = Vector3.FORWARD
+var _departure_duration_s: float = 0.0
+var _departure_distance_m: float = 0.0
+var _departure_parameters: Dictionary = {}
 
 func _process(_delta: float) -> void:
 	update_starlight()
@@ -363,6 +372,9 @@ func anchor_position(id: String) -> Vector3:
 	return Vector3(float(anchor.get("x_m", 0.0)), float(anchor.get("y_m", 0.0)), float(anchor.get("z_m", 0.0)))
 
 func contact_visible(entry: Dictionary, distance: float) -> bool:
+	# A durable source site is retained throughout strategic travel for safe
+	# cancellation. It must not remain a local radar echo during that transit.
+	if departure_active and target_is_local(str(entry.get("id", ""))) and not bool(entry.get("navigation_only", false)): return false
 	if str(entry.get("kind", "")) in ["npc", "wreck"] and not target_is_local(str(entry.get("id", ""))): return false
 	if str(entry.get("kind", "")) != "npc": return true
 	var sensor: float = float(catalog.rule("target_marker_detection_range_m"))
@@ -411,6 +423,11 @@ func target_site(id: String) -> String:
 func target_is_local(id: String) -> bool:
 	return not Space.supported(catalog) or (not target_site(id).is_empty() and target_site(id) == Space.current_site(state))
 
+func target_is_render_local(id: String) -> bool:
+	# Site identity stays at the durable origin until arrival. Display locality
+	# instead follows departure, so selecting the origin uses its true bearing.
+	return not departure_active and target_is_local(id)
+
 func strategic_components(encoded_position: Vector3) -> Dictionary:
 	return strategic_render_position if not strategic_render_position.is_empty() else Space.global_components(catalog, Space.current_site(state), encoded_position)
 
@@ -439,10 +456,118 @@ func apply_target_site(id: String) -> void:
 	var entry: Dictionary = targets[id]
 	if bool(entry.get("navigation_only", false)): return
 	var node: Node3D = entry.node
-	node.visible = target_is_local(id)
+	node.visible = target_is_local(id) and not departure_active
 	if node is CollisionObject3D:
 		var collider_site: String = collision_site_id if not collision_site_id.is_empty() else Space.current_site(state)
 		node.collision_layer = int(node.get_meta("site_collision_layer", 0)) if target_site(id) == collider_site else 0
+
+func configure_warp_projection(parameters: Dictionary) -> bool:
+	_departure_parameters.clear()
+	for key: String in ["warp_fx_departure_duration_s", "warp_fx_departure_distance_ship_lengths"]:
+		if not parameters.has(key) or not is_finite(float(parameters[key])) or float(parameters[key]) <= 0.0:
+			last_error = "跃迁离场表现数据库参数缺失或无效：" + key
+			return false
+	for key: String in ["warp_fx_departure_duration_s", "warp_fx_departure_distance_ship_lengths"]:
+		_departure_parameters[key] = float(parameters[key])
+	last_error = ""
+	return true
+
+func begin_strategic_departure(heading: Vector3, travel_duration_s: float) -> bool:
+	end_strategic_departure()
+	if _departure_parameters.is_empty():
+		last_error = "跃迁离场表现尚未从数据库配置，已停止跃迁"
+		return false
+	if not Space.supported(catalog) or not is_instance_valid(flight) or not is_finite(travel_duration_s) or travel_duration_s <= 0.0:
+		last_error = "跃迁离场表现缺少有效航行场景或航程"
+		return false
+	var ship_length: float = _departure_ship_length()
+	if ship_length <= 0.0:
+		last_error = "跃迁离场表现缺少舰船几何，已停止跃迁"
+		return false
+	departure_projection = Node3D.new()
+	departure_projection.name = "DepartureProjection"
+	add_child(departure_projection)
+	_departure_heading = heading.normalized() if not heading.is_zero_approx() else -flight.global_basis.z
+	_departure_duration_s = minf(float(_departure_parameters.warp_fx_departure_duration_s), travel_duration_s)
+	var extent: float = 0.0
+	for id: String in targets:
+		if not target_is_local(id) or bool(targets[id].get("navigation_only", false)): continue
+		var source: Node3D = targets[id].node
+		if not is_instance_valid(source) or not source.is_visible_in_tree(): continue
+		extent = maxf(extent, _copy_departure_meshes(source, id))
+	var camera: Camera3D = get_viewport().get_camera_3d()
+	# The displacement only needs to leave this camera's finite render volume.
+	# It does not represent, round, or overwrite the actual AU route distance.
+	var scene_distance: float = extent + ship_length * float(_departure_parameters.warp_fx_departure_distance_ship_lengths)
+	# 1.2 is a finite-camera clipping margin, not a route or gameplay distance.
+	_departure_distance_m = maxf(camera.far * 1.2, scene_distance + camera.global_position.distance_to(flight.global_position)) if camera != null else scene_distance
+	departure_elapsed_s = 0.0
+	departure_active = true
+	departure_projection.get_global_transform_interpolated()
+	departure_projection.reset_physics_interpolation()
+	for id: String in targets: apply_target_site(id)
+	last_error = ""
+	return true
+
+func _departure_ship_length() -> float:
+	var points: Array[Vector3] = []
+	if is_instance_valid(flight.visual): _collect_departure_hull(flight.visual, flight.global_transform.affine_inverse(), points)
+	if points.is_empty(): return 0.0
+	var bounds := AABB(points[0], Vector3.ZERO)
+	for point: Vector3 in points: bounds = bounds.expand(point)
+	return maxf(bounds.size.x, maxf(bounds.size.y, bounds.size.z))
+
+func _collect_departure_hull(node: Node, inverse: Transform3D, points: Array[Vector3]) -> void:
+	if node is MeshInstance3D:
+		var mesh: MeshInstance3D = node
+		if mesh.mesh != null:
+			var bounds: AABB = mesh.get_aabb()
+			for index: int in range(8): points.append(inverse * mesh.global_transform * bounds.get_endpoint(index))
+	for child: Node in node.get_children(): _collect_departure_hull(child, inverse, points)
+
+func _copy_departure_meshes(source: Node, target_id: String) -> float:
+	var extent: float = 0.0
+	if source is MeshInstance3D and source.mesh != null and source.is_visible_in_tree():
+		var original: MeshInstance3D = source
+		# Share immutable mesh/material resources, never duplicate scripts,
+		# physics bodies, particle simulations, or persistent entity metadata.
+		var copy := MeshInstance3D.new()
+		copy.mesh = original.mesh
+		copy.material_override = original.material_override
+		copy.material_overlay = original.material_overlay
+		copy.layers = original.layers
+		copy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		copy.set_meta("departure_target_id", target_id)
+		for surface: int in range(original.mesh.get_surface_count()):
+			copy.set_surface_override_material(surface, original.get_surface_override_material(surface))
+		departure_projection.add_child(copy)
+		copy.global_transform = original.get_global_transform_interpolated()
+		var bounds: AABB = original.get_aabb()
+		for corner: int in range(8):
+			extent = maxf(extent, (copy.global_transform * bounds.get_endpoint(corner)).distance_to(flight.global_position))
+	for child: Node in source.get_children():
+		extent = maxf(extent, _copy_departure_meshes(child, target_id))
+	return extent
+
+func advance_strategic_departure(elapsed_s: float) -> void:
+	if not departure_active or not is_instance_valid(departure_projection): return
+	departure_elapsed_s = maxf(0.0, elapsed_s)
+	var fraction: float = clampf(departure_elapsed_s / _departure_duration_s, 0.0, 1.0)
+	# Accelerating recession gives the ship a visible departure in every camera
+	# direction, then completely removes the old site's geometry from transit.
+	departure_projection.position = -_departure_heading * _departure_distance_m * fraction * fraction
+	departure_projection.visible = fraction < 1.0
+
+func end_strategic_departure() -> void:
+	if is_instance_valid(departure_projection):
+		departure_projection.hide()
+		remove_child(departure_projection)
+		departure_projection.queue_free()
+	departure_projection = null
+	departure_active = false
+	departure_elapsed_s = 0.0
+	if state != null and catalog != null:
+		for id: String in targets: apply_target_site(id)
 
 func set_collision_site(site_id: String) -> void:
 	collision_site_id = site_id

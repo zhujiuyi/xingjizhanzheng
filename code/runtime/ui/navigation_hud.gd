@@ -164,6 +164,7 @@ func _target_distance(id: String, node: Node3D) -> float:
 	return world.flight.global_position.distance_to(node.global_position)
 
 func _target_is_local(id: String) -> bool:
+	if world.has_method("target_is_render_local"): return bool(world.call("target_is_render_local", id))
 	return bool(world.call("target_is_local", id)) if world.has_method("target_is_local") else true
 
 func _target_direction(id: String, node: Node3D) -> Vector3:

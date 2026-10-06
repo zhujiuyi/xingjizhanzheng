@@ -17,6 +17,7 @@ CASES = {
     "upgrade": ("combat_upgrade_v18.gd", "XJ_UPGRADE_V18", "combat-upgrade-v18", "COMBAT_UPGRADE_V18", "upgrade"),
     "mission-display": ("mission_display_v19.gd", "XJ_MISSION_DISPLAY_V19", "mission-display-v19", "MISSION_DISPLAY_V19", "--xj-verify-mission-display-v19"),
     "warp-visual": ("warp_visual_v20.gd", "XJ_WARP_VISUAL_V20", "warp-visual-v20", "WARP_VISUAL_V20", "--xj-verify-warp-visual-v20"),
+    "warp-scene": ("warp_scene_v21.gd", "XJ_WARP_SCENE_V21", "warp-scene-v21", "WARP_SCENE_V21", "--xj-verify-warp-scene-v21"),
     "spatial-business": ("spatial_business_v20.gd", "XJ_SPATIAL_BUSINESS_V20", "spatial-business-v20", "SPATIAL_BUSINESS_V20", "--xj-verify-spatial-business-v20"),
     "space-upgrade": ("space_upgrade_v20.gd", "XJ_SPACE_UPGRADE_V20", "space-upgrade-v20", "SPACE_UPGRADE_V20", "--xj-verify-space-upgrade-v20"),
     "spatial-navigation": ("spatial_navigation_v20.gd", "XJ_SPATIAL_NAVIGATION_V20", "spatial-navigation-v20", "SPATIAL_NAVIGATION_V20", "--xj-verify-spatial-navigation-v20"),

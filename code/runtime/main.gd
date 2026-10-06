@@ -56,6 +56,7 @@ func _ready() -> void:
 		{"flag": "--xj-verify-upgrade-v18", "file": "combat_upgrade_v18.gd", "prefix": "combat-upgrade-v18", "env": "XJ_UPGRADE_V18", "meta": "xj_upgrade_v18_diagnostic"},
 		{"flag": "--xj-verify-mission-display-v19", "file": "mission_display_v19.gd", "prefix": "mission-display-v19", "env": "XJ_MISSION_DISPLAY_V19", "meta": "xj_mission_display_v19_diagnostic"},
 		{"flag": "--xj-verify-warp-visual-v20", "file": "warp_visual_v20.gd", "prefix": "warp-visual-v20", "env": "XJ_WARP_VISUAL_V20", "meta": "xj_warp_visual_v20_diagnostic"},
+		{"flag": "--xj-verify-warp-scene-v21", "file": "warp_scene_v21.gd", "prefix": "warp-scene-v21", "env": "XJ_WARP_SCENE_V21", "meta": "xj_warp_scene_v21_diagnostic"},
 		{"flag": "--xj-verify-spatial-business-v20", "file": "spatial_business_v20.gd", "prefix": "spatial-business-v20", "env": "XJ_SPATIAL_BUSINESS_V20", "meta": "xj_spatial_business_v20_diagnostic"},
 		{"flag": "--xj-verify-space-upgrade-v20", "file": "space_upgrade_v20.gd", "prefix": "space-upgrade-v20", "env": "XJ_SPACE_UPGRADE_V20", "meta": "xj_space_upgrade_v20_diagnostic"},
 		{"flag": "--xj-verify-spatial-navigation-v20", "file": "spatial_navigation_v20.gd", "prefix": "spatial-navigation-v20", "env": "XJ_SPATIAL_NAVIGATION_V20", "meta": "xj_spatial_navigation_v20_diagnostic"},
@@ -504,6 +505,7 @@ func _keyboard_control_allowed() -> bool:
 	return state != null and world != null and ui != null and not busy and not _exit_save_pending() and state.ship().status == Types.ShipStatus.FLYING and not ui.keyboard_blocked() and (DisplayServer.get_name() == "headless" or get_window().has_focus())
 
 func _world_target_at(screen_position: Vector2) -> String:
+	if local_navigation != null and local_navigation.warp_active(): return ""
 	if world == null or camera == null or state == null or state.ship().status != Types.ShipStatus.FLYING: return ""
 	var view: Camera3D = camera.camera
 	var start: Vector3 = view.project_ray_origin(screen_position)
@@ -1017,8 +1019,9 @@ func _activate(candidate: XJRuntimeState) -> void:
 	local_navigation.changed.connect(_local_navigation_changed)
 	local_navigation.arrived.connect(_local_navigation_arrived)
 	camera.bind(world.flight, store.catalog, state.player().camera_mode)
-	var visual_rules := XJLocalNavigationRules.new()
-	if visual_rules.load_rules(true):
+	var visual_rules := XJWarpPresentationRules.new()
+	if visual_rules.load_rules():
+		if not world.configure_warp_projection(visual_rules.parameters): ui.notify(world.last_error, true)
 		if not warp_visual.bind(world, camera, visual_rules.parameters): ui.notify(warp_visual.last_error, true)
 	else: ui.notify(visual_rules.last_error, true)
 	ui.slots = store.list_slots()

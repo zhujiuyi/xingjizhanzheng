@@ -11,7 +11,7 @@ class RawAssetExport extends EditorExportPlugin:
 	func _export_begin(_features: PackedStringArray, _is_debug: bool, _path: String, _flags: int) -> void:
 		var count: int = 0
 		var included: Dictionary = {}
-		for manifest_path in ["res://assets/manifest.json", "res://assets/placeholders/manifest.json", "res://assets/interface_v2/manifest.json", "res://assets/hangar_v2/manifest.json", "res://assets/interface_v3/manifest.json", "res://assets/navigation_v3/manifest.json", "res://assets/ship_v3/manifest.json", "res://assets/station_v3/manifest.json", "res://data/local_navigation_v1_manifest.json", "res://data/local_navigation_v2_manifest.json", "res://assets/business_v11/manifest.json"]:
+		for manifest_path in ["res://assets/manifest.json", "res://assets/placeholders/manifest.json", "res://assets/interface_v2/manifest.json", "res://assets/hangar_v2/manifest.json", "res://assets/interface_v3/manifest.json", "res://assets/navigation_v3/manifest.json", "res://assets/ship_v3/manifest.json", "res://assets/station_v3/manifest.json", "res://data/local_navigation_v1_manifest.json", "res://data/warp_presentation_v3_manifest.json", "res://assets/business_v11/manifest.json"]:
 			if not FileAccess.file_exists(manifest_path): continue
 			var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(manifest_path))
 			if not parsed is Dictionary or not parsed.has("resources"):

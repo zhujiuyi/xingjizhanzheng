@@ -182,7 +182,11 @@ func tick(delta: float) -> void:
 			if remaining_s <= 0.0 and angle <= rules.value("alignment_tolerance_rad"):
 				phase = "travel"
 				remaining_s = travel_duration_s
-				if _cross_site(): world.set_collision_site(_destination_site)
+				if _cross_site():
+					if not world.begin_strategic_departure(warp_heading, travel_duration_s):
+						_abort(world.last_error)
+						return
+					world.set_collision_site(_destination_site)
 				changed.emit(mode, phase, "正在跃迁 · " + str(world.targets[target_id].title))
 			return
 		if phase == "arrival_check":
@@ -192,11 +196,13 @@ func tick(delta: float) -> void:
 		if not _landing_clear(destination): _abort("目标落点被占用，跃迁已停止"); return
 		if _cross_site():
 			travel_elapsed_s = minf(travel_duration_s, travel_elapsed_s + delta)
+			world.advance_strategic_departure(travel_elapsed_s)
 			remaining_s = maxf(0.0, travel_duration_s - travel_elapsed_s)
 			var fraction: float = travel_elapsed_s / travel_duration_s
 			world.strategic_render_position = {"x": lerpf(float(_macro_origin.x), float(_macro_destination.x), fraction), "y": lerpf(float(_macro_origin.y), float(_macro_destination.y), fraction), "z": lerpf(float(_macro_origin.z), float(_macro_destination.z), fraction)}
 			if remaining_s <= 0.0:
 				phase = "arrival_check"
+				world.end_strategic_departure()
 				Space.assign(state, "ship", state.ship().ship_instance_id, _destination_site)
 				world.strategic_render_position = {}
 				world.flight.global_position = destination
@@ -399,6 +405,7 @@ func _shapes_clear(node: Node, displacement: Vector3) -> bool:
 func _zero_motion() -> void:
 	if is_instance_valid(world) and is_instance_valid(world.flight):
 		if warp_active() and _cross_site():
+			world.end_strategic_departure()
 			world.strategic_render_position = {}
 			# Travel is a strategic route between physical sites. An interrupted
 			# route restores the durable departure site, never an AU Vector3 pose.

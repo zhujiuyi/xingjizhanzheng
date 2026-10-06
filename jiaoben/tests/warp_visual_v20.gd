@@ -90,7 +90,11 @@ func _run() -> void:
 	check(fx.stream.global_basis.z.dot(-heading) > 0.99999 and fx.stream.global_position.is_equal_approx(host.camera.render_position()), "three-dimensional flow follows actual world heading and same-frame rendered ship")
 	check(fx.stream.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF and fx.stream.find_children("*", "CollisionObject3D", true, false).is_empty(), "visual stream adds no shadows or collision authority")
 	check(fx.mouse_filter == Control.MOUSE_FILTER_IGNORE and fx._blur.mouse_filter == Control.MOUSE_FILTER_IGNORE, "environment overlay cannot consume flight or HUD input")
-	check(fx.ship_rect.has_area() and bool(fx._material.get_shader_parameter("protect_ship")), "visible external hull receives a conservative projected protection rectangle")
+	check(fx.ship_rect.has_area() and bool(fx._material.get_shader_parameter("protect_ship")), "visible external hull enables actual mesh silhouette protection with a diagnostic bounds ROI")
+	check(fx._mask_viewport.own_world_3d and fx._mask_viewport.gui_disable_input
+		and not fx._mask_meshes.is_empty() and fx._mask_body.find_children("*", "CollisionObject3D", true, false).is_empty()
+		and fx._mask_camera.global_transform.is_equal_approx(host.camera.camera.global_transform)
+		and fx._mask_body.global_transform.is_equal_approx(host.camera.render_ship_transform()), "isolated mesh-only silhouette reuses same-frame camera and hull pose without physics or input")
 	for index: int in range(8):
 		var projected: Vector2 = host.camera.camera.unproject_position(host.camera.render_ship_transform() * fx._hull_bounds.get_endpoint(index)) / host.camera.camera.get_viewport().get_visible_rect().size
 		check(fx.ship_rect.grow(0.00001).has_point(projected), "hull mask covers visual bounds corner %d" % index)
@@ -282,11 +286,16 @@ func native_pixels(fx: XJWarpVisual, heading: Vector3) -> void:
 	fx._blur.show()
 	var blurred: Image = await capture("warp-grid-blurred")
 	if sharp == null or blurred == null: plane.free(); foreground.free(); return
+	var mask: Image = fx._mask_viewport.get_texture().get_image()
+	if not check(mask != null and not mask.is_empty() and mask.save_png(directory.path_join("warp-hull-mask.png")) == OK,
+		"native silhouette target records actual white hull against black empty sky"): plane.free(); foreground.free(); return
 	var hull: Rect2i = Rect2i(Vector2i(fx.ship_rect.position * Vector2(sharp.get_size())), Vector2i(fx.ship_rect.size * Vector2(sharp.get_size()))).intersection(Rect2i(Vector2i.ZERO, sharp.get_size()))
 	var hud: Rect2i = Rect2i(12, 12, 240, 70)
 	var changed: int = 0
 	var outside_samples: int = 0
 	var hull_max: float = 0.0
+	var hull_samples: int = 0
+	var empty_roi_changed: int = 0
 	var hud_max: float = 0.0
 	for y: int in range(0, sharp.get_height(), 3):
 		for x: int in range(0, sharp.get_width(), 3):
@@ -295,17 +304,39 @@ func native_pixels(fx: XJWarpVisual, heading: Vector3) -> void:
 			var after: Color = blurred.get_pixelv(point)
 			var difference: float = maxf(absf(before.r - after.r), maxf(absf(before.g - after.g), absf(before.b - after.b)))
 			if hud.has_point(point): hud_max = maxf(hud_max, difference)
-			elif hull.grow(-2).has_point(point): hull_max = maxf(hull_max, difference)
+			elif _mask_is_solid(mask, point, sharp.get_size()):
+				hull_samples += 1
+				hull_max = maxf(hull_max, difference)
 			else:
 				outside_samples += 1
 				if difference > 0.025: changed += 1
+				if hull.has_point(point) and _mask_value(mask, point, sharp.get_size()) < 0.01 and difference > 0.025: empty_roi_changed += 1
 	check(changed > 100 and outside_samples > 1000, "actual shader measurably blurs high-frequency 3D scenery")
-	check(hull.has_area() and hull_max <= 1.0 / 255.0, "protected hull-region pixels retain original sharp rendering")
+	check(hull_samples > 30 and hull_max <= 1.0 / 255.0, "actual opaque hull pixels retain original sharp rendering")
+	check(empty_roi_changed > 20, "empty scenery inside the old bounding rectangle participates in real blur")
 	check(hud_max <= 1.0 / 255.0, "foreground HUD glyphs retain original sharp pixels")
-	measurements.append({"changed_scenery_samples": changed, "scenery_samples": outside_samples, "hull_max_channel_difference": hull_max, "hud_max_channel_difference": hud_max, "fixture": "real-main-hull-plus-temporary-3d-checker-plane-and-foreground-HUD-swatch"})
+	measurements.append({"changed_scenery_samples": changed, "scenery_samples": outside_samples, "hull_samples": hull_samples,
+		"empty_bounds_roi_changed": empty_roi_changed, "hull_max_channel_difference": hull_max, "hud_max_channel_difference": hud_max,
+		"fixture": "real-main-hull-plus-temporary-3d-checker-plane-and-foreground-HUD-swatch"})
 	plane.free()
 	foreground.free()
 	fx.stream.show()
+
+func _mask_value(mask: Image, point: Vector2i, render_size: Vector2i) -> float:
+	var uv: Vector2 = (Vector2(point) + Vector2(0.5, 0.5)) / Vector2(render_size)
+	var at := Vector2i(uv * Vector2(mask.get_size()))
+	at.x = clampi(at.x, 0, mask.get_width() - 1)
+	at.y = clampi(at.y, 0, mask.get_height() - 1)
+	return mask.get_pixelv(at).r
+
+func _mask_is_solid(mask: Image, point: Vector2i, render_size: Vector2i) -> bool:
+	var uv: Vector2 = (Vector2(point) + Vector2(0.5, 0.5)) / Vector2(render_size)
+	var at := Vector2i(uv * Vector2(mask.get_size()))
+	for y: int in [-2, 0, 2]:
+		for x: int in [-2, 0, 2]:
+			var sample := Vector2i(clampi(at.x + x, 0, mask.get_width() - 1), clampi(at.y + y, 0, mask.get_height() - 1))
+			if mask.get_pixelv(sample).r < 0.995: return false
+	return true
 
 func finish() -> void:
 	if finishing: return
