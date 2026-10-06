@@ -37,7 +37,7 @@ static func inspect(sector: XJSector, state: XJRuntimeState, catalog: XJCatalog,
 	var node: Node3D = candidate_node as Node3D
 	if not node.is_inside_tree(): return result
 	result.target_id = target_id; result.title = str(target.get("title", target_id)); result.kind = str(target.kind)
-	result.distance_m = sector.flight.global_position.distance_to(node.global_position)
+	result.distance_m = sector.target_distance(target_id)
 	result.speed_mps = sector.flight.velocity.length()
 	match result.kind:
 		"station":
@@ -67,10 +67,11 @@ static func inspect(sector: XJSector, state: XJRuntimeState, catalog: XJCatalog,
 					for compatibility: Dictionary in catalog.rows("mining_compatibility"):
 						if compatibility.module_id == equipment.module_def_id and compatibility.item_id == definition.item_id:
 							result.range_m = maxf(result.range_m, float(catalog.one("module_defs", "module_id", equipment.module_def_id).range_m))
-	result.in_range = result.distance_m <= result.range_m
+	result.in_range = sector.target_is_local(target_id) and result.distance_m <= result.range_m
 	if state.ship().status != T.ShipStatus.FLYING: return _deny(result, "出港后才能交互" if state.ship().status == T.ShipStatus.DOCKED else "当前舰船不能交互")
+	if not sector.target_is_local(target_id): return _deny(result, "目标位于其他地点 · " + XJSpaceUnits.distance(result.distance_m) + "；先跃迁抵达")
 	if result.kind == "resource" and result.range_m <= 0.0: return _deny(result, "需要启用兼容的采集模块")
-	if not result.in_range: return _deny(result, "靠近目标 · 距离 %.0f / %.0f m" % [result.distance_m, result.range_m])
+	if not result.in_range: return _deny(result, "靠近目标 · 距离 %s / %s" % [XJSpaceUnits.distance(result.distance_m), XJSpaceUnits.distance(result.range_m)])
 	if result.max_speed_mps >= 0.0 and result.speed_mps > result.max_speed_mps: return _deny(result, "按 X 制动 · 速度 %.1f / %.1f m/s" % [result.speed_mps, result.max_speed_mps])
 	match result.kind:
 		"station":

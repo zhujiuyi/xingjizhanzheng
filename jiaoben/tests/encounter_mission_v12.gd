@@ -9,6 +9,7 @@ const Store = preload("res://runtime/data/store.gd")
 const Codec = preload("res://runtime/data/codec.gd")
 const Gameplay = preload("res://runtime/gameplay.gd")
 const Rng = preload("res://runtime/rng.gd")
+const Space = preload("res://runtime/space_coordinates.gd")
 var root: Window:
 	get: return get_tree().root
 var process_frame: Signal:
@@ -181,8 +182,13 @@ func command(action: String, target: String = "", quantity: int = 1, extra: Stri
 	host._command(action, target, quantity, extra)
 	await frames(3); await wait_writer()
 
-func place(point: Vector3) -> void:
-	# Explicit positioning witness; collision and production eligibility still run.
+func place(point: Vector3, anchor_id: String = "", site_id: String = "") -> void:
+	# Explicit positioning witness with a named source site. Numeric proximity
+	# never infers a runtime site; collision and production eligibility still run.
+	if Space.supported(host.store.catalog) and (not anchor_id.is_empty() or not site_id.is_empty()):
+		var selected: String = site_id if not site_id.is_empty() else Space.site_for_anchor(host.store.catalog, anchor_id)
+		check(Space.assign(host.state, "ship", host.state.ship().ship_instance_id, selected), "fixture explicitly assigns source site " + selected)
+		if host.world.has_method("refresh_site"): host.world.call("refresh_site")
 	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, point)
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
@@ -196,6 +202,11 @@ func relocate(sector_id: String) -> bool:
 	ship.sector_id = sector_id; ship.status = T.ShipStatus.FLYING
 	ship.has_station_id = false; ship.station_id = ""
 	ship.vel_x = 0.0; ship.vel_y = 0.0; ship.vel_z = 0.0
+	if Space.supported(host.store.catalog):
+		var station_anchor: String = ""
+		for station_def: Dictionary in host.store.catalog.rows("station_defs"):
+			if str(station_def.sector_id) == sector_id: station_anchor = str(station_def.station_anchor_id); break
+		if not check(Space.assign(host.state, "ship", ship.ship_instance_id, Space.site_for_anchor(host.store.catalog, station_anchor)), "fixture explicitly selects destination station site " + sector_id): return false
 	host.state.player().has_docked_station_id = false; host.state.player().docked_station_id = ""
 	for container: D.ContainerStateDto in host.state.rows("container_state"):
 		if container.ship_instance_id == ship.ship_instance_id: container.sector_id = sector_id
@@ -211,7 +222,7 @@ func dock_at(station_id: String) -> bool:
 	var station: Dictionary = host.store.catalog.one("station_defs", "station_id", station_id)
 	if host.state.current_sector() != str(station.sector_id):
 		if not await relocate(str(station.sector_id)): return false
-	place(host.world.anchor_position(str(station.station_anchor_id)))
+	place(host.world.anchor_position(str(station.station_anchor_id)), str(station.station_anchor_id))
 	await command("dock", station_id)
 	return check(host.state.player().has_docked_station_id and host.state.player().docked_station_id == station_id, "real docking service accepts fixture placement " + station_id)
 
@@ -285,11 +296,19 @@ func business_rows() -> Array[Dictionary]:
 		for child: Node in node.get_children(): pending.append(child)
 	return result
 
+func recommendation_button(role: String) -> Button:
+	for button: Button in buttons_below(host.ui.body):
+		if str(button.get_meta("mission_recommendation", "")) == role: return button
+	return null
+
 func campaign_entry_checks() -> void:
+	host.ui.mission_filter = "all"
+	host.ui.mission_status_filter = "all"
+	host.ui.mission_location_filter = "all"
 	await show_page("missions")
 	var kinds: Dictionary = {}
 	for button: Button in buttons_below(host.ui.body):
-		if button.has_meta("mission_filter"): kinds[str(button.get_meta("mission_filter"))] = button
+		if str(button.get_meta("mission_filter_dimension", "")) == "type": kinds[str(button.get_meta("mission_filter_value", ""))] = button
 	check(kinds.has("tutorial") and kinds.has("story") and kinds.has("contract") and kinds.story.text.contains("主线"), "mission tabs explicitly distinguish tutorial, main story and contracts")
 	if kinds.has("story"): await actual_click(kinds.story, "main story tab")
 	var missions: RefCounted = host.gameplay.get("missions")
@@ -301,11 +320,13 @@ func campaign_entry_checks() -> void:
 		check(row.name.text.contains("主线剧情") and row.description.text.contains("接取"), "each story row labels its chapter and remote acceptance station")
 	check(str(missions.call("missing_prerequisite", "story_mirror")) == "tutorial_flight", "locked first chapter resolves the earliest incomplete tutorial")
 	await capture("story-locked")
+	host.ui.mission_status_filter = "available"
+	host.ui.mission_location_filter = "local"
 	await show_page("research")
 	var research: Dictionary = host.store.catalog.one("research_defs", "research_id", "research_tech_ii")
 	var prerequisite: Button = action_button("show_mission", str(research.verification_mission_id))
 	if await actual_click(prerequisite, "research mainline prerequisite"):
-		check(host.ui.page == "missions" and host.ui.mission_filter == "story" and host.ui.mission_focus_id == str(research.verification_mission_id), "research action opens the precise story chapter with focus")
+		check(host.ui.page == "missions" and host.ui.mission_filter == "story" and host.ui.mission_status_filter == "all" and host.ui.mission_location_filter == "all" and host.ui.mission_focus_id == str(research.verification_mission_id), "research action opens the precise locked remote story chapter with focus despite prior status and location filters")
 		check(business_rows().any(func(row: Dictionary): return str(row.id) == str(research.verification_mission_id) and bool(row.row.get_meta("mission_focused", false))), "research prerequisite remains visible despite former task pagination")
 	await capture("research-story-prerequisite")
 
@@ -314,8 +335,10 @@ func tutorial_preconditions() -> void:
 	# paid scans, finite mining, bound goods, claims and loan cleanup are real.
 	await command("accept_mission", "tutorial_flight")
 	await command("undock")
+	place(host.world.anchor_position("anchor_anchor_flight_forward"), "anchor_anchor_flight_forward")
 	host.gameplay.call("record_event", "reach_anchor", "anchor_anchor_flight_forward", 1)
 	host.gameplay.call("record_event", "brake_at_anchor", "anchor_anchor_flight_forward", 1)
+	place(host.world.anchor_position("anchor_anchor_flight_turn"), "anchor_anchor_flight_turn")
 	host.gameplay.call("record_event", "reach_anchor", "anchor_anchor_flight_turn", 1)
 	await dock_at("station_anchor_port")
 	await command("deliver_mission", "tutorial_flight")
@@ -323,7 +346,7 @@ func tutorial_preconditions() -> void:
 	await command("accept_mission", "tutorial_scan_gate")
 	await command("undock")
 	var scan: Dictionary = host.store.catalog.one("signal_defs", "signal_id", "signal_anchor_gate_calibration")
-	place(host.world.anchor_position(str(scan.anchor_id)))
+	place(host.world.anchor_position(str(scan.anchor_id)), str(scan.anchor_id))
 	production_action("start_scan", "signal_anchor_gate_calibration")
 	host.gameplay.call("tick", 11.0)
 	check(host.state.find("discovery_state", "signal_id", "signal_anchor_gate_calibration") != null, "real paid scanner completes the prerequisite discovery")
@@ -335,7 +358,7 @@ func tutorial_preconditions() -> void:
 	host.gameplay.call("record_event", "transit_connection", "conn_anchor_echo", 1)
 	if not await relocate("sector_echo"): return
 	var mine: Dictionary = host.store.catalog.one("resource_node_locations", "node_id", "node_echo_ferrosilicate")
-	place(host.world.anchor_position(str(mine.anchor_id)) + Vector3.UP * 100.0)
+	place(host.world.anchor_position(str(mine.anchor_id)) + Vector3.UP * 100.0, str(mine.anchor_id))
 	production_action("start_mining", "node_echo_ferrosilicate")
 	host.gameplay.call("tick", 32.0)
 	host.gameplay.call("stop_interactions")
@@ -376,7 +399,7 @@ func combat_mission_checks() -> void:
 	await sync_ui()
 	var spawn: Dictionary = host.store.catalog.one("npc_spawn_defs", "spawn_id", npc.spawn_id)
 	var anchor: Vector3 = host.world.anchor_position(str(spawn.anchor_id))
-	place(anchor + Vector3(0.0, 500.0, float(host.store.catalog.rule("target_marker_detection_range_m")) * 2.0))
+	place(anchor + Vector3(0.0, 500.0, float(host.store.catalog.rule("target_marker_detection_range_m")) * 2.0), str(spawn.anchor_id))
 	await sync_ui()
 	if not check(host.ui.overview.filtered_ids.has(waypoint_id) and not host.ui.overview.filtered_ids.has(npc.npc_instance_id), "far scout appears as a mission site while individual ship remains undetected"): overview_diagnostic("scout-far", [waypoint_id, npc.npc_instance_id])
 	check(host.ui.mission_locate_button.is_visible_in_tree() and host.ui.mission_travel_button.is_visible_in_tree(), "flight HUD exposes persistent locate and travel actions")
@@ -396,7 +419,7 @@ func combat_mission_checks() -> void:
 		host._unhandled_input(event)
 		check(host.local_navigation.mode == before_mode and host.local_navigation.phase == before_phase and host.local_navigation.target_id == waypoint_id, "ordinary mouse observation does not cancel the task navigation order")
 		host.local_navigation.stop()
-	place(anchor + Vector3(0.0, 100.0, 900.0))
+	place(anchor + Vector3(0.0, 100.0, 900.0), str(spawn.anchor_id))
 	await sync_ui()
 	if not check(host.ui.overview.filtered_ids.has(npc.npc_instance_id), "actual scout becomes individually selectable nearby"): overview_diagnostic("scout-near", [waypoint_id, npc.npc_instance_id])
 	host.ui._select_target(npc.npc_instance_id)
@@ -412,6 +435,11 @@ func combat_mission_checks() -> void:
 	check(host.gameplay.get("missions").call("progress", missions.call("active"), 2).progress_units == 1, "actual death event advances the scout objective")
 	host.gameplay.call("tick", float(host.store.catalog.rule("combat_exit_delay_s")) + 0.1)
 	await dock_at("station_anchor_port")
+	await show_page("missions")
+	var ready_mission: D.MissionStateDto = missions.call("active")
+	var ready_marker: Button = recommendation_button("marker")
+	var ready_guidance: Dictionary = missions.call("guidance")
+	check(ready_mission != null and ready_mission.status == "ready" and ready_marker != null and ready_marker.text == "标记交付站" and str(ready_marker.get_meta("action", "")) == "mission_locate" and str(ready_guidance.get("target_id", "")) == "station_anchor_port", "real completed field objectives switch recommendation navigation to their designated turn-in station")
 	await command("deliver_mission", "tutorial_combat")
 	check(bool(missions.call("completed", "tutorial_combat")), "combat tutorial actual claim and loan return complete")
 
@@ -446,7 +474,7 @@ func story_route_checks() -> void:
 	info = missions.call("guidance")
 	check(bool(info.get("local", false)) and str(info.get("waypoint_id", "")) == "signal_echo_common_survey", "guidance automatically switches to the local objective in the destination system")
 	var scan: Dictionary = host.store.catalog.one("signal_defs", "signal_id", "signal_echo_common_survey")
-	place(host.world.anchor_position(str(scan.anchor_id)))
+	place(host.world.anchor_position(str(scan.anchor_id)), str(scan.anchor_id))
 	production_action("start_scan", "signal_echo_common_survey")
 	host.gameplay.call("tick", 11.0)
 	info = missions.call("guidance")
@@ -463,6 +491,13 @@ func story_route_checks() -> void:
 	var row_exists: bool = business_rows().any(func(row: Dictionary): return str(row.id) == "story_mirror")
 	check(row_exists and action_button("mission_station", "story_mirror") != null, "first chapter remains discoverable from Anchor with a usable station locator")
 	await capture("story-next-chapter")
+	host.ui.mission_filter = "tutorial"
+	host.ui.mission_status_filter = "completed"
+	host.ui.mission_location_filter = "all"
+	await show_page("missions")
+	var completed: Array[Dictionary] = host.ui._filtered_mission_definitions()
+	check(completed.size() == missions.call("chain", "tutorial").size() and completed.all(func(definition: Dictionary): return bool(missions.call("completed", str(definition.mission_id)))), "completed filter contains only actually rewarded tutorial history after the real task chain")
+	check(business_rows().all(func(row: Dictionary): return action_button("accept_mission", str(row.id)) != null and action_button("accept_mission", str(row.id)).disabled), "completed nonrepeatable tutorial history retains disabled reaccept permissions")
 
 func encounter_checks() -> void:
 	var encounters: RefCounted = host.gameplay.get("encounters")
@@ -486,7 +521,10 @@ func encounter_checks() -> void:
 		encounters = host.gameplay.get("encounters")
 		var waypoint_id: String = "group:" + str(definition.encounter_id)
 		var anchor: Vector3 = host.world.anchor_position(str(definition.anchor_id))
-		place(anchor + Vector3(0.0, 800.0, float(definition.reveal_range_m) * 2.5))
+		var station_anchor: String = ""
+		for station_def: Dictionary in host.store.catalog.rows("station_defs"):
+			if str(station_def.sector_id) == str(definition.sector_id): station_anchor = str(station_def.station_anchor_id); break
+		place(anchor + Vector3(0.0, 800.0, float(definition.reveal_range_m) * 2.5), station_anchor)
 		await sync_ui()
 		check(host.world.targets.has(waypoint_id) and str(host.world.targets[waypoint_id].kind) == "encounter", "real system group waypoint exists " + str(definition.sector_id))
 		check(host.ui.overview.filtered_ids.has(waypoint_id), "distant encounter group is discoverable in overview " + str(definition.sector_id))
@@ -498,7 +536,7 @@ func encounter_checks() -> void:
 				member_ids.append(npc.npc_instance_id)
 				check(not host.ui.overview.filtered_ids.has(npc.npc_instance_id), "far overview avoids individual contacts beyond sensors " + str(member.spawn_id))
 		check(member_ids.size() == 2 and int(encounters.call("remaining", str(definition.encounter_id))) == 2, "site contains its two independent authored ships " + str(definition.sector_id))
-		place(anchor + Vector3(0.0, 0.0, float(definition.reveal_range_m) * 1.5))
+		place(anchor + Vector3(0.0, 0.0, float(definition.reveal_range_m) * 1.5), str(definition.anchor_id))
 		await sync_ui()
 		var compact: bool = host.ui.overview.filtered_ids.has(waypoint_id)
 		for member_id: String in member_ids: compact = compact and not host.ui.overview.filtered_ids.has(member_id)
@@ -517,7 +555,7 @@ func encounter_checks() -> void:
 			body.global_transform = old_transform
 			wandering.pos_x = body.global_position.x; wandering.pos_y = body.global_position.y; wandering.pos_z = body.global_position.z
 			body.reset_physics_interpolation()
-		place(anchor + Vector3(0.0, 800.0, float(definition.reveal_range_m) * 2.5))
+		place(anchor + Vector3(0.0, 800.0, float(definition.reveal_range_m) * 2.5), station_anchor)
 		await sync_ui()
 		var navigation: Dictionary = host.local_navigation.inspect(waypoint_id)
 		check(bool(navigation.get("warp_ready", false)), "real local navigation accepts a distant group warp " + str(definition.sector_id) + ": " + str(navigation.get("warp_reason", "")))
@@ -533,13 +571,13 @@ func encounter_checks() -> void:
 				check(not host.local_navigation.active() and host.local_navigation.phase == "arrived", "real group warp completes without disappearing target")
 				check(host.world.flight.global_position.distance_to(anchor) < float(definition.reveal_range_m) and host.world.flight.velocity.is_zero_approx(), "group warp stops inside the detailed-contact reveal range")
 		else:
-			place(anchor + Vector3(0.0, 300.0, float(definition.warp_arrival_m)))
+			place(anchor + Vector3(0.0, 300.0, float(definition.warp_arrival_m)), str(definition.anchor_id))
 		await sync_ui()
 		var found: bool = true
 		for member_id: String in member_ids: found = found and host.ui.overview.filtered_ids.has(member_id)
 		if not check(found and host.ui.overview.filtered_ids.has(waypoint_id), "nearby group expands to real member contacts and retains the stable beacon " + str(definition.sector_id)): overview_diagnostic("group-near-" + str(definition.sector_id), member_ids + [waypoint_id])
 		if definition.sector_id == "sector_anchor": await capture("encounter-near-members")
-		place(anchor + Vector3(0.0, 800.0, float(definition.reveal_range_m) * 2.5))
+		place(anchor + Vector3(0.0, 800.0, float(definition.reveal_range_m) * 2.5), station_anchor)
 		await sync_ui()
 		found = host.ui.overview.filtered_ids.has(waypoint_id)
 		for member_id: String in member_ids: found = found and not host.ui.overview.filtered_ids.has(member_id)
@@ -665,7 +703,7 @@ func route_and_gate_mass_checks() -> void:
 	gate.remaining_mass_budget_kg = float(original.remaining_mass_budget_kg)
 	host.gameplay.call("tick", float(host.store.catalog.rule("combat_exit_delay_s")) + 0.2)
 	var anchor: Vector3 = host.world.anchor_position(str(endpoint.entry_anchor_id))
-	place(anchor)
+	place(anchor, str(endpoint.entry_anchor_id))
 	var budget_before: float = gate.remaining_mass_budget_kg
 	mass = float(host.gameplay.call("metrics", host.state.ship()).total_mass_kg)
 	if check(host.travel.begin(str(endpoint.endpoint_id)), "real finite wormhole accepts the salvaging hull and its sealed payload"):
@@ -682,6 +720,7 @@ func salvage_checks() -> void:
 	var encounters: RefCounted = host.gameplay.get("encounters")
 	refresh_group_id = "encounter_anchor_patrol"
 	var definition: Dictionary = host.store.catalog.one("encounter_defs", "encounter_id", refresh_group_id)
+	place(host.world.anchor_position(str(definition.anchor_id)), str(definition.anchor_id))
 	var group := host.state.find("encounter_state", "encounter_id", refresh_group_id) as D.EncounterStateDto
 	var sources: Array[D.NpcStateDto] = []
 	for member: Dictionary in host.store.catalog.rows("encounter_members"):
@@ -721,13 +760,13 @@ func salvage_checks() -> void:
 		var wreck := host.state.find("container_state", "container_id", package.host_container_id) as D.ContainerStateDto
 		if not check(wreck != null and wreck.kind == T.ContainerKind.WRECK, "package is contained in a durable physical wreck"): continue
 		var point: Vector3 = Vector3(wreck.pos_x, wreck.pos_y, wreck.pos_z)
-		place(point + Vector3.UP * float(host.store.catalog.rule("wreck_pickup_radius_m")) * 2.0)
+		place(point + Vector3.UP * float(host.store.catalog.rule("wreck_pickup_radius_m")) * 2.0, "", Space.site_for_entity(host.state, "wreck", wreck.container_id))
 		var origin: String = package.host_container_id
 		production_action("pickup_wreck", origin, 1, "", false)
 		check(package.host_container_id == origin and package.status == "sealed", "out-of-range salvage keeps the unopened package in its original wreck")
 		production_action("open_salvage", package.package_id, 1, "", false)
 		check(package.status == "sealed" and rng_record() == after_rng, "opening in flight is rejected without consuming the package or RNG")
-		place(point + Vector3.UP * float(host.store.catalog.rule("wreck_pickup_radius_m")) * 0.5)
+		place(point + Vector3.UP * float(host.store.catalog.rule("wreck_pickup_radius_m")) * 0.5, "", Space.site_for_entity(host.state, "wreck", wreck.container_id))
 		if package == packages[0]:
 			var inventory: RefCounted = host.gameplay.get("inventory")
 			var filler: String = "ammo_kinetic_slug_i"
@@ -884,6 +923,9 @@ func rare_reward_checks() -> void:
 	await sync_ui()
 	var npc := host.state.find("npc_state", "spawn_id", "spawn_anchor_patrol_leader") as D.NpcStateDto
 	if not check(npc != null and npc.alive, "rare test uses a real authored ambient scout"): return
+	var spawn: Dictionary = host.store.catalog.one("npc_spawn_defs", "spawn_id", npc.spawn_id)
+	place(host.world.anchor_position(str(spawn.anchor_id)), str(spawn.anchor_id))
+	await sync_ui()
 	host.gameplay.call("damage_npc", npc.npc_instance_id, Vector3.ONE * 100000.0)
 	var packages: Array[D.SalvagePackageStateDto] = packages_from_sources([npc.npc_instance_id])
 	if not check(packages.size() == 1 and packages[0].reward_id == str(module_reward.reward_id), "production destruction seals the catalog's equipment reward for the chosen world seed"): return
@@ -900,7 +942,7 @@ func rare_reward_checks() -> void:
 	print("ENCOUNTER_MISSION_V12_RARE_PRE_PROJECTION " + JSON.stringify({"source_npc_id": npc.npc_instance_id, "blocker_entity_id": str(collider.get_meta("entity_id", "")) if is_instance_valid(collider) else "", "blocker_path": str(collider.get_path()) if is_instance_valid(collider) else "none"}))
 	await sync_ui()
 	check(not host.world.targets.has(npc.npc_instance_id) and host.world.targets.has(package.host_container_id), "rare reward branch projects the dead scout away and creates its real wreck target")
-	place(wreck_point + pickup_offset)
+	place(wreck_point + pickup_offset, "", Space.site_for_entity(host.state, "wreck", wreck.container_id))
 	host.world.flight.global_basis = Basis.looking_at(host.world.flight.global_position.direction_to(wreck_point), Vector3.UP)
 	host.world.flight.write_back(); host.world.flight.reset_physics_interpolation()
 	host.camera.step(0.0)

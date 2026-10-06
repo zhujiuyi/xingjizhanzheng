@@ -16,6 +16,7 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 		for row in state.rows(table):
 			if codec.encode_row(table, row).is_empty(): return _fail(codec.last_error)
 	if not _validate_encounters(state, catalog): return false
+	if not _validate_space(state, catalog): return false
 	for ship in state.rows("ship_state"):
 		var norm: float = ship.quat_x * ship.quat_x + ship.quat_y * ship.quat_y + ship.quat_z * ship.quat_z + ship.quat_w * ship.quat_w
 		if abs(norm - 1.0) >= 0.00001: return _fail("Invalid normalized ship quaternion")
@@ -100,6 +101,31 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 			if volume > capacity: return _fail("Cargo volume exceeded")
 		if payload > definition.max_payload_mass_kg + 0.0000001: return _fail("Shared payload mass exceeded")
 	return true
+
+func _validate_space(state: State, catalog: XJCatalog) -> bool:
+	if not catalog.table_names.has("site_defs"):
+		return state.rows("spatial_state").is_empty() or _fail("Spatial state references legacy content")
+	var expected: Dictionary = {}
+	for ship in state.rows("ship_state"): expected["ship:" + ship.ship_instance_id] = ship.sector_id
+	for npc in state.rows("npc_state"): expected["npc:" + npc.npc_instance_id] = npc.sector_id
+	for container in state.rows("container_state"):
+		if container.kind == Types.ContainerKind.WRECK: expected["wreck:" + container.container_id] = container.sector_id
+	var seen: Dictionary = {}
+	for row in state.rows("spatial_state"):
+		var key: String = row.entity_kind + ":" + row.entity_id
+		var site: Dictionary = catalog.one("site_defs", "site_id", row.site_id)
+		if seen.has(key) or not expected.has(key) or site.is_empty() or str(site.sector_id) != str(expected[key]): return _fail("Invalid spatial entity/site context: " + key)
+		if row.entity_kind == "npc":
+			var npc: RefCounted = state.find("npc_state", "npc_instance_id", row.entity_id)
+			var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", npc.spawn_id)
+			if catalog.one("anchor_site_defs", "anchor_id", str(spawn.get("anchor_id", ""))).get("site_id") != row.site_id: return _fail("NPC site differs from its frozen spawn")
+		if row.entity_kind == "ship":
+			var ship: RefCounted = state.find("ship_state", "ship_instance_id", row.entity_id)
+			if ship.status == Types.ShipStatus.DOCKED:
+				var station: Dictionary = catalog.one("station_defs", "station_id", ship.station_id)
+				if catalog.one("anchor_site_defs", "anchor_id", str(station.get("station_anchor_id", ""))).get("site_id") != row.site_id: return _fail("Docked ship site differs from its frozen station")
+		seen[key] = true
+	return seen.size() == expected.size() or _fail("Missing spatial context for ship, NPC or wreck")
 
 func _validate_encounters(state: State, catalog: XJCatalog) -> bool:
 	var supported: bool = catalog.table_names.has("encounter_defs")

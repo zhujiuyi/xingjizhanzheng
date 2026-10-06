@@ -655,6 +655,12 @@ class SalvagePackageStateDto extends RefCounted:
 	var opened_station_id: String = ""
 	var opened_tick: int = 0
 
+## 实体所属地点；xyz仍由原实体持有，不复制另一份位置。
+class SpatialStateDto extends RefCounted:
+	var entity_kind: String = ""
+	var entity_id: String = ""
+	var site_id: String = ""
+
 ## 完整世界快照：所有已初始化星区状态都在数组中，不限当前已加载星区。
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
@@ -693,6 +699,7 @@ class WorldSnapshotDto extends RefCounted:
 	var base_module_state_rows: Array[BaseModuleStateDto] = []
 	var encounter_state_rows: Array[EncounterStateDto] = []
 	var salvage_package_state_rows: Array[SalvagePackageStateDto] = []
+	var spatial_state_rows: Array[SpatialStateDto] = []
 
 ## 表现派生值不是另一份定义：每次由 frozen catalog + 当前状态计算。
 class ShipMetricsViewDto extends RefCounted:

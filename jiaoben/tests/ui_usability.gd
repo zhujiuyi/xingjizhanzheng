@@ -2,6 +2,7 @@ extends SceneTree
 const Main = preload("res://runtime/main.gd")
 const D = preload("res://contracts/contract_dtos.gd")
 const T = preload("res://contracts/contract_types.gd")
+const Space = preload("res://runtime/space_coordinates.gd")
 var checks: int = 0
 var failures: Array[String] = []
 var emitted: Array[Dictionary] = []
@@ -35,6 +36,30 @@ func mission_rows(ui: Node) -> Array[Dictionary]:
 	for row: Dictionary in business_rows(ui):
 		if bool(row.row.get_meta("mission_row", false)): result.append(row)
 	return result
+func mission_filter_button(ui: Node, dimension: String, value: String) -> Button:
+	for node: Node in descendants(ui.body):
+		if node is Button and str(node.get_meta("mission_filter_dimension", "")) == dimension and str(node.get_meta("mission_filter_value", "")) == value: return node
+	return null
+func place_ui_anchor(host: Node, anchor_id: String) -> void:
+	# Presentation fixture preparation explicitly names its source anchor/site.
+	# Neither these tests nor gameplay infer a site from an encoded XYZ value.
+	var anchor: Dictionary = host.store.catalog.one("anchor_defs", "anchor_id", anchor_id)
+	var ship: D.ShipStateDto = host.state.ship()
+	ship.sector_id = str(anchor.sector_id); ship.status = T.ShipStatus.FLYING
+	ship.has_station_id = false; ship.station_id = ""
+	ship.pos_x = float(anchor.x_m); ship.pos_y = float(anchor.y_m); ship.pos_z = float(anchor.z_m)
+	ship.vel_x = 0.0; ship.vel_y = 0.0; ship.vel_z = 0.0
+	host.state.player().has_docked_station_id = false; host.state.player().docked_station_id = ""
+	for container: D.ContainerStateDto in host.state.rows("container_state"):
+		if container.ship_instance_id == ship.ship_instance_id: container.sector_id = ship.sector_id
+	if Space.supported(host.store.catalog): check(Space.assign(host.state, "ship", ship.ship_instance_id, Space.site_for_anchor(host.store.catalog, anchor_id)), "UI fixture assigns the named ship site " + anchor_id)
+	host.world.flight.global_position = Vector3(ship.pos_x, ship.pos_y, ship.pos_z)
+	host.world.flight.velocity = Vector3.ZERO
+	host.world.flight.write_back()
+	host.world.flight.reset_physics_interpolation()
+	host.world.refresh_site()
+	host.camera.bind(host.world.flight, host.store.catalog, host.state.player().camera_mode)
+	host.camera.step(0.0)
 func overview_ids_match(ui: Node, expected: Array[String]) -> bool:
 	var actual: Array[String] = []
 	for id: String in ui.overview.filtered_ids: actual.append(id)
@@ -109,13 +134,13 @@ func _run() -> void:
 	for node: Node in descendants(ui.body):
 		if node is Label or node is Button: technical = technical or node.text.contains("normal_owned") or node.text.contains("loan_") or node.text.contains("shuttle_")
 	check(not technical, "ship and loan names have no raw IDs or policies")
-	ui.mission_filter = "local"; ui.show_page("missions")
+	ui.mission_filter = "all"; ui.mission_status_filter = "all"; ui.mission_location_filter = "local"; ui.show_page("missions")
 	var first_rows: Array[Dictionary] = mission_rows(ui)
 	check(not first_rows.is_empty() and first_rows[0].id == "tutorial_flight" and first_rows[0].name.text == "新手教学 1 · 出航准备" and first_rows[0].status.text == "可接取", "new player first real mission row is available T0 tutorial")
 	if not first_rows.is_empty():
 		var accept: Button = meta_button(first_rows[0].actions, "action", "accept_mission")
 		check(accept != null and not accept.disabled and str(accept.get_meta("target", "")) == "tutorial_flight", "first tutorial row has an enabled action for the actual T0 definition")
-	ui.mission_filter = "all"; ui.show_page("missions")
+	ui.mission_location_filter = "all"; ui.show_page("missions")
 	var cards: Array[Dictionary] = mission_rows(ui)
 	check(cards.size() == 6, "all missions use the current business-list rows with six entries per full page")
 	check(button_text(ui, "下一页") != null and not button_text(ui, "下一页").disabled, "full forty mission list has pagination")
@@ -138,7 +163,7 @@ func _run() -> void:
 			check(ui.mission_page == index + 1, "real next-page control advances exactly once")
 	check(seen_missions.size() == expected_missions.size(), "every actual mission appears exactly once across all pages")
 	for kind: String in ["tutorial", "story", "contract"]:
-		var filter: Button = meta_button(ui.body, "mission_filter", kind)
+		var filter: Button = mission_filter_button(ui, "type", kind)
 		check(filter != null, "mission category has a real filter control " + kind)
 		if filter == null: continue
 		filter.pressed.emit()
@@ -149,15 +174,21 @@ func _run() -> void:
 		var matching: bool = filtered.size() == mini(6, total) and ui.mission_page == 0
 		for row: Dictionary in filtered: matching = matching and str(row.row.get_meta("mission_kind", "")) == kind
 		check(matching, "category filter resets pagination and shows only actual matching rows " + kind)
-	var available_filter: Button = meta_button(ui.body, "mission_filter", "available")
+	var all_types: Button = mission_filter_button(ui, "type", "all")
+	if all_types != null: all_types.pressed.emit()
+	var available_filter: Button = mission_filter_button(ui, "status", "available")
 	if available_filter != null: available_filter.pressed.emit()
 	var available_rows: Array[Dictionary] = mission_rows(ui)
 	check(available_filter != null and available_rows.size() == 1 and available_rows[0].id == "tutorial_flight" and available_rows[0].status.text == "可接取", "available filter excludes all locked initial missions")
-	var active_filter: Button = meta_button(ui.body, "mission_filter", "active")
+	var active_filter: Button = mission_filter_button(ui, "status", "active")
 	if active_filter != null: active_filter.pressed.emit()
 	check(active_filter != null and mission_rows(ui).is_empty(), "active filter does not invent an attempt before mission acceptance")
-	var local_filter: Button = meta_button(ui.body, "mission_filter", "local")
+	var local_filter: Button = mission_filter_button(ui, "location", "local")
 	if local_filter != null: local_filter.pressed.emit()
+	check(ui.mission_filter == "all" and ui.mission_status_filter == "active" and ui.mission_location_filter == "local", "location filter preserves the independent type and status choices")
+	var all_statuses: Button = mission_filter_button(ui, "status", "all")
+	if all_statuses != null: all_statuses.pressed.emit()
+	check(ui.mission_location_filter == "local" and not mission_rows(ui).is_empty() and mission_rows(ui)[0].id == "tutorial_flight", "status reset preserves the location and restores the legal first tutorial")
 	var kinds: Dictionary = {}
 	for definition: Dictionary in host.store.catalog.rows("mission_objective_defs"):
 		kinds[definition.objective_kind] = true
@@ -244,20 +275,21 @@ func _run() -> void:
 	if spawn.is_empty(): host.queue_free(); await process_frame; quit(1); return
 	npc.spawn_id = str(spawn.spawn_id)
 	npc.sector_id = host.state.current_sector()
+	place_ui_anchor(host, str(spawn.anchor_id))
 	var npc_point: Vector3 = host.world.flight.global_position + Vector3(0, 0, -100)
 	npc.pos_x = npc_point.x; npc.pos_y = npc_point.y; npc.pos_z = npc_point.z
 	var npc_definition: Dictionary = host.store.catalog.one("npc_full_defs", "npc_id", spawn.npc_id)
 	npc.shield = float(npc_definition.shield_max) * 0.5
 	npc.armor = float(npc_definition.armor_max)
 	npc.hull = float(npc_definition.hull_max)
-	check(host.state.add("npc_state", npc) and host.world.sync_entities(), "production entity sync creates the fixture's actual visible NPC target")
+	var npc_added: bool = host.state.add("npc_state", npc)
+	if Space.supported(host.store.catalog): check(npc_added and Space.assign(host.state, "npc", npc.npc_instance_id, Space.site_for_anchor(host.store.catalog, str(spawn.anchor_id))), "NPC presentation fixture keeps its actual frozen spawn site")
+	check(npc_added and host.world.sync_entities(), "production entity sync creates the fixture's actual visible NPC target")
+	if Space.supported(host.store.catalog): check(Space.site_for_entity(host.state, "npc", npc.npc_instance_id) == Space.current_site(host.state), "nearby NPC and player fixtures share the actual spawn site")
 	ui._refresh_targets()
 	var npc_button: Button = ui.target_buttons.get(npc.npc_instance_id)
 	check(npc_button != null, "the real nearby NPC has a selectable overview control")
 	if npc_button != null: npc_button.pressed.emit()
-	host.gameplay.work.scan_target = "signal_anchor_gate_calibration"
-	host.gameplay.work.scan_progress = 30.0
-	host.gameplay.work.scan_remaining = 1.5
 	root.size = Vector2i(1280, 720)
 	root.content_scale_size = Vector2i(640, 360)
 	await process_frame
@@ -276,6 +308,18 @@ func _run() -> void:
 	ui.overview.filter_buttons.combat.pressed.emit()
 	check(combat_contacts.has(npc.npc_instance_id) and overview_ids_match(ui, combat_contacts), "real combat filter includes the detected NPC and excludes all navigation contacts")
 	ui.overview.filter_buttons.all.pressed.emit()
+	# The scan readout is a second presentation fixture at its actual signal
+	# site, after the NPC defense checks; the two sites are astronomically apart.
+	var signal_def: Dictionary = host.store.catalog.one("signal_defs", "signal_id", "signal_anchor_gate_calibration")
+	place_ui_anchor(host, str(signal_def.anchor_id))
+	check(host.world.sync_entities(), "scan fixture refreshes the actual signal-site entities")
+	host.gameplay.work.scan_target = str(signal_def.signal_id)
+	host.gameplay.work.scan_progress = 30.0
+	host.gameplay.work.scan_remaining = 1.5
+	ui._refresh_targets()
+	ui.tick(1.0)
+	await process_frame
+	await process_frame
 	check(ui.work_box.visible and ui.work_progress.value > 0 and ui.work_label.text.contains("1.5"), "scan displays actual completion and cycle remainder")
 	check(Rect2(Vector2.ZERO, ui.root.size).encloses(ui.work_stop.get_global_rect()) and not ui.work_stop.get_global_rect().intersects(ui.toast.get_global_rect()), "200 percent active work stop is visible and clear of notification")
 	if DisplayServer.get_name() != "headless":

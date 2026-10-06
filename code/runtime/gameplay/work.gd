@@ -36,8 +36,9 @@ func disable_equipment(item_id:String)->void:
 		for equipment in g.equipped(g.state.ship()):
 			if equipment.enabled and not g.definition("mining_defs","module_id",equipment.module_def_id).is_empty():any_enabled=true
 		if not any_enabled:stop_mining()
-func _distance(anchor:Dictionary)->float:return g.position(g.state.ship()).distance_to(g.anchor_position(anchor))
+func _distance(anchor:Dictionary)->float:return g.anchor_distance(g.state.ship(),anchor)
 func _los(anchor:Dictionary,target:String)->bool:
+	if not g.same_anchor_site(g.state.ship(),anchor):return false
 	return g.spatial_validator.call(g.position(g.state.ship()),g.anchor_position(anchor),target) if g.spatial_validator.is_valid() else true
 func start_scan(signal_id:String)->bool:
 	var def:Dictionary=g.definition("signal_defs","signal_id",signal_id)
@@ -46,6 +47,7 @@ func start_scan(signal_id:String)->bool:
 	if def.occurrence_mode=="fixed" and g.state.find("discovery_state","signal_id",signal_id)!=null:return g.fail("此固定信号已经完成测绘")
 	var anchor:Dictionary=g.definition("anchor_defs","anchor_id",def.anchor_id)
 	if anchor.sector_id!=g.state.current_sector():return g.fail("信号不在当前星区")
+	if not g.same_anchor_site(g.state.ship(),anchor):return g.fail("需要先跃迁至信号所在地点")
 	stop_scan();scan_target=signal_id
 	for e in g.equipped(g.state.ship()):
 		if e.module_def_id.begins_with("module_scanner_") and e.enabled:scan_equipment=e.item_instance_id;break
@@ -57,6 +59,8 @@ func start_mining(node_id:String)->bool:
 	if def.is_empty() or location.is_empty() or def.sector_id!=g.state.current_sector() or not g.unlocked(location.required_unlock_id) or g.state.ship().status!=T.ShipStatus.FLYING:return g.fail("矿点不可用")
 	var item:Dictionary=g.definition("item_defs","item_id",def.item_id)
 	if item.item_type!="ore":return g.fail("此组件节点应使用近距离回收")
+	var anchor:Dictionary=g.definition("anchor_defs","anchor_id",location.anchor_id)
+	if not g.same_anchor_site(g.state.ship(),anchor):return g.fail("需要先跃迁至矿点所在地点")
 	if not _loan_target_allowed(node_id):return g.fail("教学借船仅可采集当前任务指定矿点")
 	var compatible:bool=false
 	for e in g.equipped(g.state.ship()):
@@ -145,6 +149,7 @@ func recover_resource(node_id:String,quantity:int)->bool:
 	if def.is_empty() or location.is_empty() or not g.unlocked(location.required_unlock_id) or def.sector_id!=g.state.current_sector() or g.state.ship().status!=T.ShipStatus.FLYING:return g.fail("回收节点不可用")
 	if g.definition("item_defs","item_id",def.item_id).item_type=="ore":return g.fail("原矿需要采集设备")
 	var anchor:Dictionary=g.definition("anchor_defs","anchor_id",location.anchor_id)
+	if not g.same_anchor_site(g.state.ship(),anchor):return g.fail("需要先跃迁至回收节点所在地点")
 	if _distance(anchor)>anchor.interaction_radius_m or not _los(anchor,node_id):return g.fail("需要接近组件节点且视线无遮挡")
 	var node:D.ResourceStateDto=g.state.find("resource_state","node_id",node_id)
 	if node==null:return g.fail("资源状态不可用")
@@ -166,7 +171,7 @@ func _scan_tick(delta:float)->void:
 		mod=g.definition("module_defs","module_id",e.module_def_id)
 	var range_m:float=g.rule("basic_scan_range_m") if mod.is_empty() else mod.range_m
 	var cycle:float=g.rule("basic_scan_cycle_s") if mod.is_empty() else mod.cycle_s
-	if anchor.sector_id!=g.state.current_sector() or _distance(anchor)>range_m or not _los(anchor,scan_target):
+	if not g.same_anchor_site(g.state.ship(),anchor) or _distance(anchor)>range_m or not _los(anchor,scan_target):
 		stop_scan();g.status_text="扫描中断：距离或视线不满足";return
 	if not scan_paid:
 		if e!=null:
@@ -196,7 +201,7 @@ func _mining_tick(delta:float)->void:
 	var location:Dictionary=g.definition("resource_node_locations","node_id",mining_target)
 	var anchor:Dictionary=g.definition("anchor_defs","anchor_id",location.anchor_id)
 	var node:D.ResourceStateDto=g.state.find("resource_state","node_id",mining_target)
-	if node==null or node.remaining_units<=0 or anchor.sector_id!=g.state.current_sector():stop_mining();return
+	if node==null or node.remaining_units<=0 or not g.same_anchor_site(g.state.ship(),anchor):stop_mining();return
 	if available_resource_units(mining_target)<=0:
 		g.status_text="采矿结束：任务样本已足够或剩余矿量为教学预留";stop_mining();return
 	for e in g.equipped(g.state.ship()):

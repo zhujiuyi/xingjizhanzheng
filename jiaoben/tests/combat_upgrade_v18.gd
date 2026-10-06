@@ -8,6 +8,8 @@ const Codec = preload("res://runtime/data/codec.gd")
 const Gameplay = preload("res://runtime/gameplay.gd")
 const D = preload("res://contracts/contract_dtos.gd")
 const T = preload("res://contracts/contract_types.gd")
+const Space = preload("res://runtime/space_coordinates.gd")
+const LEGACY_INPUT_SHA256: String = "ad1af1504d36493040f6d7a0b6d0b35bb72b5e35db233799385fa77846c292c3"
 var checks: int = 0
 var failures: Array[String] = []
 var directory: String
@@ -198,11 +200,13 @@ func success_checks(previous: State) -> State:
 	if not check(upgraded != null, "reviewed combat upgrade commits successfully after rollback retries: " + store.last_error): return null
 	upgraded_snapshot = upgraded.snapshot.meta.snapshot_id; upgraded_content = upgraded.snapshot.content.content_snapshot_id; upgraded_hash = upgraded.snapshot.content.content_hash
 	check(upgraded.world_id == previous.world_id and upgraded_content != source_content and upgraded_hash != source_hash, "new frozen content branch preserves world identity")
-	check(int(store.catalog.rows("catalog_meta")[0].schema_version) == 5 and store.catalog.rows("weapon_defs").size() == 18 and store.catalog.rows("system_lighting_defs").size() == 10, "new branch actually exposes schema5 combat, drones and stellar lighting")
+	var metadata: Dictionary = store.catalog.rows("catalog_meta")[0]
+	check(int(metadata.schema_version) == 6 and metadata.content_version == "v0.7-space" and metadata.ruleset_version == "singleplayer_space_v3" and store.catalog.rows("weapon_defs").size() == 18 and store.catalog.rows("system_lighting_defs").size() == 10 and Space.supported(store.catalog), "new branch exposes exact schema6 spacev3 identity with combat, drones, lighting and strategic locations")
 	var now: Dictionary = state_rows(upgraded)
 	for table: String in State.TABLES:
-		if table in ["equipment_state", "manufacture_input_state", "shop_stock_state", "shop_ship_stock_state"]: continue
+		if table in ["equipment_state", "manufacture_input_state", "shop_stock_state", "shop_ship_stock_state", "spatial_state"]: continue
 		check(now[table] == old_state[table], "upgrade preserves every unchanged typed state table " + table)
+	spatial_checks(upgraded)
 	for prior_text: String in old_state["manufacture_input_state"]: check(now["manufacture_input_state"].has(prior_text), "existing real manufacturing input ledger remains exactly unchanged")
 	check(now["shop_ship_stock_state"] == old_state["shop_ship_stock_state"], "existing hull market prices, inventories and refresh timers remain exactly unchanged")
 	for item: D.ItemInstanceStateDto in upgraded.rows("item_instance_state"):
@@ -246,7 +250,7 @@ func success_checks(previous: State) -> State:
 		check(stock != null and stock.quantity == int(definition.initial_units), "new weapon initial stock follows authoritative SQL " + str(definition.station_id) + "/" + str(definition.item_id))
 	check(manual_slots() == historic_manual and frozen_values(source_content, source_tables) == historic_frozen and sealed_values(historic_snapshots) == historic_payload, "successful upgrade preserves all old manual pointers and all sealed state/frozen rows")
 	var receipt: Array[Dictionary] = store._records("SELECT * FROM content_upgrade_record WHERE world_id=? AND source_snapshot_id=?", [previous.world_id, source_snapshot])
-	check(receipt.size() == 1 and receipt[0].upgrade_kind == "combat_rebalance_v1" and receipt[0].upgraded_snapshot_id == upgraded_snapshot, "one exact source receipt identifies the reviewed combat branch")
+	check(receipt.size() == 1 and receipt[0].upgrade_kind == "strategic_space_v1" and receipt[0].upgraded_snapshot_id == upgraded_snapshot and receipt[0].old_content_id == source_content and receipt[0].new_content_id == upgraded_content, "one exact source receipt identifies the combined reviewed combat and strategic-space branch")
 	var lineage: Array[Dictionary] = store._records("SELECT parent_snapshot_id FROM snapshot_lineage WHERE child_snapshot_id=?", [upgraded_snapshot])
 	check(lineage.size() == 1 and lineage[0].parent_snapshot_id == source_snapshot, "new branch links to its real sealed old source")
 	var auto: Array[Dictionary] = store._records("SELECT current_snapshot_id,content_snapshot_id FROM save_slot WHERE world_id=? AND slot_kind='auto' AND slot_index=0", [previous.world_id])
@@ -258,12 +262,39 @@ func success_checks(previous: State) -> State:
 	check(store.upgrade_content(upgraded) == upgraded and endpoints() == before and FileAccess.get_sha256(path) == backup_hash, "repeating on current branch creates no receipt, snapshot or backup replacement")
 	return upgraded
 
+func spatial_checks(upgraded: State) -> void:
+	check(old_state["spatial_state"].is_empty(), "original schema4 fixture has no invented strategic contexts")
+	var expected: Dictionary = {}
+	for ship: D.ShipStateDto in upgraded.rows("ship_state"): expected["ship:" + ship.ship_instance_id] = ship.sector_id
+	for npc: D.NpcStateDto in upgraded.rows("npc_state"): expected["npc:" + npc.npc_instance_id] = npc.sector_id
+	for container: D.ContainerStateDto in upgraded.rows("container_state"):
+		if container.kind == T.ContainerKind.WRECK: expected["wreck:" + container.container_id] = container.sector_id
+	var seen: Dictionary = {}
+	for context: RefCounted in upgraded.rows("spatial_state"):
+		var key: String = str(context.entity_kind) + ":" + str(context.entity_id)
+		if not check(expected.has(key) and not seen.has(key), "strategic context names exactly one existing entity " + key): continue
+		seen[key] = true
+		var site: Dictionary = store.catalog.one("site_defs", "site_id", str(context.site_id))
+		check(not site.is_empty() and str(site.get("sector_id", "")) == str(expected[key]), "strategic entity context belongs to its exact original sector " + key)
+		if str(context.entity_kind) == "ship":
+			var bound_ship: D.ShipStateDto = upgraded.find("ship_state", "ship_instance_id", str(context.entity_id))
+			if bound_ship.has_station_id:
+				var station_definition: Dictionary = store.catalog.one("station_defs", "station_id", bound_ship.station_id)
+				check(str(context.site_id) == Space.site_for_anchor(store.catalog, str(station_definition.station_anchor_id)), "stored station-bound hull adopts that exact station site " + bound_ship.ship_instance_id)
+		elif str(context.entity_kind) == "npc":
+			var bound_npc: D.NpcStateDto = upgraded.find("npc_state", "npc_instance_id", str(context.entity_id))
+			var spawn: Dictionary = store.catalog.one("npc_spawn_defs", "spawn_id", bound_npc.spawn_id)
+			check(str(context.site_id) == Space.site_for_anchor(store.catalog, str(spawn.anchor_id)), "NPC strategic context binds its original frozen spawn " + bound_npc.npc_instance_id)
+	check(seen.size() == expected.size() and upgraded.rows("spatial_state").size() == expected.size(), "ship, NPC and wreck strategic contexts have complete unique coverage with no extra actors")
+	var station: Dictionary = store.catalog.one("station_defs", "station_id", "station_anchor_port")
+	check(Space.current_site(upgraded) == Space.site_for_anchor(store.catalog, str(station.station_anchor_id)), "prepared ordinary cruiser remains bound to the declared Anchor station after upgrade")
+
 func reopen_and_replay() -> State:
 	if game != null: game.dispose(); game = null
 	store.close(); store = FaultStore.new(database_path)
 	if not check(store.open(), "upgraded archive independently reopens from disk: " + store.last_error): return null
 	var resumed: State = store.resume()
-	check(resumed != null and resumed.snapshot.meta.snapshot_id == upgraded_snapshot and resumed.snapshot.content.content_hash == upgraded_hash, "resume after complete close restores the exact committed combat branch")
+	check(resumed != null and resumed.snapshot.meta.snapshot_id == upgraded_snapshot and resumed.snapshot.content.content_hash == upgraded_hash and int(resumed.snapshot.content.catalog_schema_version) == 6 and resumed.snapshot.content.ruleset_version == "singleplayer_space_v3", "resume after complete close restores the exact committed combined combat and space branch")
 	var before: Dictionary = endpoints()
 	var recovered: State = store.load(str(source_slot.slot_id), source_snapshot, int(source_slot.generation))
 	if not check(recovered != null and recovered.snapshot.content.content_hash == source_hash and not store.catalog.table_names.has("weapon_behavior_defs"), "old manual endpoint still independently loads its own schema4 frozen rules"): return null
@@ -308,7 +339,7 @@ func quality_capacity_reopen_checks() -> void:
 	# isolated instance fixture, not a replacement module definition.
 	if game != null: game.dispose(); game = null
 	var current: State = store.active_state
-	if not check(current != null and store.catalog.table_names.has("weapon_behavior_defs"), "quality regression starts on a real upgraded schema5 branch"): return
+	if not check(current != null and store.catalog.table_names.has("weapon_behavior_defs") and Space.supported(store.catalog) and int(store.catalog.rows("catalog_meta")[0].schema_version) == 6, "quality regression starts on the real upgraded schema6 space/combat branch"): return
 	game = Gameplay.new(); game.setup(current, store.catalog)
 	var inventory: RefCounted = game.get("inventory")
 	var warehouse: String = str(inventory.call("warehouse", "station_anchor_port"))
@@ -334,7 +365,7 @@ func quality_capacity_reopen_checks() -> void:
 	game.dispose(); game = null; store.close(); store = FaultStore.new(database_path)
 	if not check(store.open(), "quality-aware save independently reopens after complete Store close: " + store.last_error): return
 	var loaded: State = store.resume()
-	if not check(loaded != null, "schema5 resume validates real quality-scaled HP instead of the legacy quality-one path: " + store.last_error): return
+	if not check(loaded != null, "schema6 resume validates real quality-scaled HP instead of the legacy quality-one path: " + store.last_error): return
 	armor = loaded.find("item_instance_state", "item_instance_id", armor_id)
 	shield = loaded.find("item_instance_state", "item_instance_id", shield_id)
 	check(armor != null and shield != null and armor.quality_multiplier == 1.25 and shield.quality_multiplier == 1.35 and armor.durability == 72.0 and shield.durability == 68.0, "SQLite reopen preserves both actual module qualities and durability exactly")
@@ -353,7 +384,7 @@ func quality_capacity_reopen_checks() -> void:
 	game.dispose(); game = null; store.close(); store = FaultStore.new(database_path)
 	if not check(store.open(), "disabled high-quality module archive independently reopens"): return
 	loaded = store.resume()
-	if not check(loaded != null, "disabled-module state resumes under the new schema5 validator"): return
+	if not check(loaded != null, "disabled-module state resumes under the new schema6 validator"): return
 	var equipment: D.EquipmentStateDto = loaded.find("equipment_state", "item_instance_id", armor_id)
 	armor = loaded.find("item_instance_state", "item_instance_id", armor_id)
 	check(equipment != null and not equipment.enabled and armor != null and armor.quality_multiplier == 1.25 and loaded.ship().armor == disabled_armor and loaded.ship().shield == expected_shield, "reopen preserves disabled state, quality and lowered HP without retaining virtual passive capacity")
@@ -370,6 +401,7 @@ func _run() -> void:
 	database_path = directory.path_join("progress.db")
 	if not check(not FileAccess.file_exists(database_path), "migration test refuses to open an existing destination archive"): finish(); return
 	input_hash = FileAccess.get_sha256(legacy_source)
+	if not check(input_hash == LEGACY_INPUT_SHA256, "legacy input retains the exact reviewed released format6 archive identity"): finish(); return
 	if not check(DirAccess.make_dir_recursive_absolute(directory) == OK and DirAccess.copy_absolute(legacy_source, database_path) == OK, "copy the closed test archive before any writable Store open"): finish(); return
 	var witness: Object = read_only(database_path)
 	if not check(witness != null, "copied legacy archive independently opens with read-only SQL before schema migration"): finish(); return
@@ -379,18 +411,19 @@ func _run() -> void:
 	original_manual = canonical(witness.query_result.duplicate(true))
 	witness.query("SELECT snapshot_id,world_id,content_snapshot_id,status,simulation_tick FROM save_snapshot WHERE status='sealed' ORDER BY snapshot_id")
 	var original_headers: Array[String] = canonical(witness.query_result.duplicate(true))
-	witness.query("SELECT content_snapshot_id,content_hash,frozen_adapter_version FROM content_snapshot WHERE status='sealed' ORDER BY content_snapshot_id")
+	witness.query("SELECT * FROM content_snapshot WHERE status='sealed' ORDER BY content_snapshot_id")
 	var original_content: Array[String] = canonical(witness.query_result.duplicate(true))
 	witness.close_db()
 	store = FaultStore.new(database_path)
 	if not check(store.open(), "current Store opens copied real archive and executes reviewed schema migration: " + store.last_error): finish(); return
-	check(int(store._records("SELECT format_version FROM database_meta")[0].format_version) == 7 and int(store._records("PRAGMA user_version")[0].values()[0]) == 7, "format6 upgrades to format7 with matching SQLite user_version")
-	check(int(store._records("SELECT count(*) AS n FROM migration_history")[0].n) == 10, "ten reviewed migration entries are registered")
+	check(int(store._records("SELECT format_version FROM database_meta")[0].format_version) == 8 and int(store._records("PRAGMA user_version")[0].values()[0]) == 8, "format6 upgrades to format8 with matching SQLite user_version")
+	check(int(store._records("SELECT count(*) AS n FROM migration_history")[0].n) == 11, "eleven reviewed migration entries are registered")
 	backup_check(directory.path_join("migration-format6-backup.db"), "", "", 6)
-	check(canonical(store._records("SELECT snapshot_id,world_id,content_snapshot_id,status,simulation_tick FROM save_snapshot WHERE status='sealed' ORDER BY snapshot_id")) == original_headers and canonical(store._records("SELECT content_snapshot_id,content_hash,frozen_adapter_version FROM content_snapshot WHERE status='sealed' ORDER BY content_snapshot_id")) == original_content and manual_slots() == original_manual, "schema upgrade preserves all old sealed identities and original manual slots")
+	check(canonical(store._records("SELECT snapshot_id,world_id,content_snapshot_id,status,simulation_tick FROM save_snapshot WHERE status='sealed' ORDER BY snapshot_id")) == original_headers and canonical(store._records("SELECT * FROM content_snapshot WHERE status='sealed' ORDER BY content_snapshot_id")) == original_content and manual_slots() == original_manual, "schema upgrade preserves all old sealed content fields including V1 asset identities and original manual slots")
 	var previous: State = store.resume()
 	if not check(previous != null, "copied released world resumes its actual old frozen content: " + store.last_error): finish(); return
 	if not check(int(store.catalog.rows("catalog_meta")[0].schema_version) == 4 and not store.catalog.table_names.has("weapon_behavior_defs"), "resume retains schema4 rules before explicit combat upgrade"): finish(); return
+	check(previous.snapshot.content.content_version == "v0.5-integrity" and previous.snapshot.content.ruleset_version == "singleplayer_v0_5" and previous.snapshot.content.frozen_adapter_version == "frozen_catalog_v0_5" and previous.snapshot.content.asset_manifest_version == "art-full-v1" and previous.snapshot.content.asset_manifest_sha256 == "1ec8b2bfdcbd1fc75d0d9749b416f651df564f6b3a4eeec1a4e348da4e9a0e6e", "exact archived schema4 rules and original V1 asset manifest remain authoritative before explicit upgrade")
 	if not prepare_legacy_fixture(previous): finish(); return
 	failure_checks(previous)
 	if success_checks(previous) == null: finish(); return

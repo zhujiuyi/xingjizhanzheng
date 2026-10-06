@@ -13,6 +13,7 @@ var observation_basis: Basis = Basis.IDENTITY
 var _render_pose: Transform3D = Transform3D.IDENTITY
 var _render_frame: int = -1
 var _collision_sphere := SphereShape3D.new()
+var _warp_fov_offset_deg: float = 0.0
 
 func _ready() -> void:
 	# Camera motion is updated at render frequency from the interpolated ship
@@ -25,6 +26,7 @@ func _ready() -> void:
 	add_child(camera)
 
 func bind(body: XJFlight, definitions: RefCounted, camera_mode: Types.CameraMode) -> void:
+	set_warp_fov_offset(0.0)
 	ship = body
 	catalog = definitions
 	mode = camera_mode
@@ -55,6 +57,21 @@ func begin_observation() -> void:
 func end_observation() -> void:
 	# Releasing the button ends dragging without a camera jump or heading reset.
 	observing = false
+
+func set_warp_fov_offset(degrees: float) -> void:
+	# Presentation owns this temporary offset; camera profiles remain authority.
+	# Apply it immediately as well as in step(), so teardown cannot leave a
+	# widened lens on a paused or unbound camera.
+	_warp_fov_offset_deg = maxf(0.0, degrees) if is_finite(degrees) else 0.0
+	if not is_instance_valid(camera): return
+	var profile: Dictionary = _profile()
+	if profile.is_empty(): return
+	var base_fov: float = float(profile.fov_deg)
+	if is_instance_valid(ship) and ship.record.status == Types.ShipStatus.DOCKED:
+		base_fov = _presentation("station_camera_fov_deg")
+		camera.fov = base_fov
+	else:
+		camera.fov = minf(179.0, base_fov + _warp_fov_offset_deg)
 
 func control_forward() -> Vector3:
 	# Manual forward/reverse thrust follows the view that is currently visible.
@@ -133,7 +150,7 @@ func step(delta: float) -> void:
 	_render_pose = _sample_ship_transform()
 	_render_frame = Engine.get_process_frames()
 	_clamp_orbit(profile)
-	camera.fov = float(profile.fov_deg)
+	camera.fov = minf(179.0, float(profile.fov_deg) + _warp_fov_offset_deg)
 	camera.near = float(profile.near_m)
 	camera.far = float(profile.far_m)
 	_configure_collision_sphere(profile)

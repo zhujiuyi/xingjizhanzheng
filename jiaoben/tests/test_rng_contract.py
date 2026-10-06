@@ -5,6 +5,7 @@ Algorithm sources: https://www.pcg-random.org/using-pcg-c-basic.html
 https://github.com/imneme/pcg-c-basic/blob/master/pcg_basic.c
 https://github.com/imneme/pcg-c-basic/blob/master/pcg32-demo.c
 """
+from contextlib import closing
 import sqlite3
 import unittest
 
@@ -107,7 +108,7 @@ class PcgContractTests(unittest.TestCase):
                 for _ in range(77):
                     rng.next_uint32()
                 saved = rng.snapshot()
-                with sqlite3.connect(":memory:") as db:
+                with closing(sqlite3.connect(":memory:")) as db, db:
                     db.execute("CREATE TABLE rng (state_hi INTEGER, state_lo INTEGER, increment_hi INTEGER, increment_lo INTEGER) STRICT")
                     db.execute("INSERT INTO rng VALUES (?,?,?,?)", saved)
                     restored = ReferencePcg32.restore_world(*db.execute("SELECT * FROM rng").fetchone())

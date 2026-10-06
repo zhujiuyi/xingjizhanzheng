@@ -4,6 +4,7 @@ extends RefCounted
 signal changed(phase: int, message: String)
 const Types = preload("res://contracts/contract_types.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
+const Space = preload("res://runtime/space_coordinates.gd")
 var phase: Types.TravelPhase = Types.TravelPhase.IDLE
 var last_error: String = ""
 var remaining_s: float = 0.0
@@ -69,8 +70,9 @@ func _eligible() -> bool:
 	if ship.status != Types.ShipStatus.FLYING:
 		return _fail("出港后才能通过虫洞")
 	var anchor: Dictionary = catalog.one("anchor_defs", "anchor_id", endpoint.entry_anchor_id)
-	var point := Vector3(ship.pos_x, ship.pos_y, ship.pos_z)
-	if point.distance_to(Vector3(anchor.x_m, anchor.y_m, anchor.z_m)) > float(catalog.rule("gate_entry_radius_m")):
+	if not Space.same_site(state, catalog, "ship", ship.ship_instance_id, str(anchor.get("anchor_id", ""))):
+		return _fail("需要先跃迁至虫洞入口所在地点")
+	if Space.anchor_distance(state, catalog, ship, anchor) > float(catalog.rule("gate_entry_radius_m")):
 		return _fail("靠近虫洞入口后再传送")
 	if Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length() > float(catalog.rule("gate_max_entry_speed_mps")):
 		return _fail("虫洞入口速度过高，按 X 制动")
@@ -92,6 +94,7 @@ func _eligible() -> bool:
 	if ship.energy < float(connection.energy_cost_eu) or state.player().credit < int(connection.fee_credit):
 		return _fail("航门费用或电容不足")
 	for npc: Dtos.NpcStateDto in state.rows("npc_state"):
+		if Space.supported(catalog) and (npc.sector_id != ship.sector_id or Space.site_for_entity(state, "npc", npc.npc_instance_id) != Space.current_site(state)): continue
 		if npc.alive and npc.behavior_phase in [Types.NpcPhase.ACQUIRE, Types.NpcPhase.PURSUE, Types.NpcPhase.ATTACK, Types.NpcPhase.DISENGAGE]:
 			return _fail("仍处于交战，先脱离敌舰")
 	return true
@@ -137,6 +140,10 @@ func _commit() -> void:
 	var candidate := store.clone_state(state)
 	var ship := candidate.ship()
 	var anchor: Dictionary = catalog.one("anchor_defs", "anchor_id", endpoint.exit_anchor_id)
+	if Space.supported(catalog) and not Space.assign(candidate, "ship", ship.ship_instance_id, Space.site_for_anchor(catalog, str(anchor.get("anchor_id", "")))):
+		store.set_transfer_barrier(state, "")
+		_fail("目的地空间地点不可用，保留出发恢复点")
+		return
 	ship.sector_id = endpoint.target_sector_id
 	ship.pos_x = float(anchor.x_m)
 	ship.pos_y = float(anchor.y_m)

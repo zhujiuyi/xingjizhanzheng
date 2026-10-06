@@ -14,6 +14,21 @@ func action(g:Gameplay,name:String,target:String="",quantity:int=1,extra:String=
 	var r:D.ActionResultDto=g.act(name,target,quantity,extra)
 	if r.phase!=T.ActionPhase.APPLIED:print("REJECT ",name," ",r.display_reason_key)
 	return r.phase==T.ActionPhase.APPLIED
+func place_anchor(g:Gameplay,anchor_id:String,docked_station_id:String="")->void:
+	# Explicit fixture relocation to a named database anchor; no coordinate-based
+	# inference is used by gameplay or by this preparation helper.
+	var anchor:Dictionary=g.definition("anchor_defs","anchor_id",anchor_id)
+	var ship:D.ShipStateDto=g.state.ship()
+	ship.sector_id=anchor.sector_id;ship.pos_x=anchor.x_m;ship.pos_y=anchor.y_m;ship.pos_z=anchor.z_m
+	ship.vel_x=0;ship.vel_y=0;ship.vel_z=0
+	ship.status=T.ShipStatus.FLYING if docked_station_id.is_empty() else T.ShipStatus.DOCKED
+	ship.has_station_id=not docked_station_id.is_empty();ship.station_id=docked_station_id
+	g.state.player().has_docked_station_id=not docked_station_id.is_empty();g.state.player().docked_station_id=docked_station_id
+	for container in g.state.rows("container_state"):
+		if container.ship_instance_id==ship.ship_instance_id:container.sector_id=ship.sector_id
+	expect(g.assign_anchor_site("ship",ship.ship_instance_id,anchor_id),"fixture assigns authored anchor site "+anchor_id)
+func place_station(g:Gameplay,station_id:String,docked:bool=false)->void:
+	place_anchor(g,str(g.definition("station_defs","station_id",station_id).station_anchor_id),station_id if docked else "")
 func manufacture_tier_fixture(g:Gameplay,recipe_id:String,label:String)->D.ItemInstanceStateDto:
 	# Acquire the published recipe through real local purchases, then verify the
 	# service fee, consumed assets, output and per-instance materials ledger.
@@ -58,21 +73,23 @@ func _initialize()->void:
 	expect(action(g,"accept_mission","tutorial_flight"),"T0 accept")
 	var initial_undock:D.ActionResultDto=g.act("undock")
 	expect(initial_undock.phase==T.ActionPhase.APPLIED and not initial_undock.autosave_request_id.is_empty(),"persistent action supplies autosave request")
-	g.record_event("reach_anchor","anchor_anchor_flight_forward",1);g.record_event("brake_at_anchor","anchor_anchor_flight_forward",1);g.record_event("reach_anchor","anchor_anchor_flight_turn",1)
-	s.ship().pos_x=0;s.ship().pos_y=0;s.ship().pos_z=0
+	place_anchor(g,"anchor_anchor_flight_forward")
+	g.record_event("reach_anchor","anchor_anchor_flight_forward",1);g.record_event("brake_at_anchor","anchor_anchor_flight_forward",1)
+	place_anchor(g,"anchor_anchor_flight_turn");g.record_event("reach_anchor","anchor_anchor_flight_turn",1)
+	place_station(g,"station_anchor_port")
 	expect(action(g,"dock","station_anchor_port"),"dock")
 	expect(action(g,"deliver_mission","tutorial_flight"),"T0 claim")
 	expect(s.player().credit==5800,"exact T0 payout")
 	expect(not action(g,"deliver_mission","tutorial_flight"),"no duplicate payout")
 	expect(action(g,"accept_mission","tutorial_scan_gate"),"T1 accept")
 	# Scan device uses basic installed-free calibration; real range and cycle are enforced.
-	action(g,"undock");s.ship().pos_x=400;s.ship().pos_y=80;s.ship().pos_z=-1600
+	action(g,"undock");place_anchor(g,"anchor_anchor_beacon")
 	expect(action(g,"start_scan","signal_anchor_gate_calibration"),"basic scan available")
 	g.tick(11)
 	expect(g.work.scan_target.is_empty(),"scan completed")
 	expect(s.find("discovery_state","signal_id","signal_anchor_gate_calibration")!=null,"scan persisted discovery")
 	expect(not g.take_autosave_request().is_empty(),"asynchronous scan supplies autosave request")
-	s.ship().pos_x=0;s.ship().pos_y=0;s.ship().pos_z=0;action(g,"dock","station_anchor_port")
+	place_station(g,"station_anchor_port");action(g,"dock","station_anchor_port")
 	expect(action(g,"deliver_mission","tutorial_scan_gate"),"T1 claim")
 	expect(action(g,"accept_mission","tutorial_mining_delivery"),"T2 accept")
 	expect(action(g,"claim_loan","loan_tutorial_miner"),"free miner loan")
@@ -81,16 +98,12 @@ func _initialize()->void:
 	expect(s.ship().ship_def_id=="miner_anvil","miner controlled")
 	expect(not action(g,"sell_ship",borrowed),"bound loan not sellable")
 	action(g,"undock");g.record_event("transit_connection","conn_anchor_echo",1)
-	s.ship().sector_id="sector_echo";s.ship().pos_x=1000;s.ship().pos_y=0;s.ship().pos_z=-1800
-	for h in s.rows("container_state"):
-		if h.ship_instance_id==borrowed:h.sector_id="sector_echo"
+	place_anchor(g,str(g.definition("resource_node_locations","node_id","node_echo_ferrosilicate").anchor_id))
 	expect(action(g,"start_mining","node_echo_ferrosilicate"),"mining starts")
 	g.tick(32);g.stop_interactions()
 	expect(loan.quota_remaining_units==0,"tutorial quota respected")
 	expect(g.missions.active().collected_units==150,"historical collected exact")
-	s.ship().sector_id="sector_anchor";s.ship().pos_x=0;s.ship().pos_y=0;s.ship().pos_z=0
-	for h in s.rows("container_state"):
-		if h.ship_instance_id==borrowed:h.sector_id="sector_anchor"
+	place_station(g,"station_anchor_port")
 	action(g,"dock","station_anchor_port")
 	expect(action(g,"deliver_mission","tutorial_mining_delivery"),"T2 atomic goods/payout/return")
 	expect(loan.status==T.LoanStatus.RETURNED,"loan returned")
@@ -111,21 +124,18 @@ func _initialize()->void:
 	var npc:D.NpcStateDto=s.find("npc_state","spawn_id","spawn_anchor_tutorial_scout")
 	expect(npc!=null and npc.alive,"T3 live target generated")
 	var before_bounty:int=s.player().credit
+	place_anchor(g,str(g.definition("npc_spawn_defs","spawn_id",npc.spawn_id).anchor_id))
 	g.damage_npc(npc.npc_instance_id,Vector3(99999,0,0))
 	expect(s.player().credit==before_bounty,"tutorial target no bounty")
 	expect(g.missions.progress(g.missions.active(),2).progress_units==1,"T3 death event independent of loot")
-	g.tick(16);s.ship().pos_x=0;s.ship().pos_y=0;s.ship().pos_z=0
+	g.tick(16);place_station(g,"station_anchor_port")
 	expect(action(g,"dock","station_anchor_port"),"T3 safe return")
 	expect(action(g,"deliver_mission","tutorial_combat"),"T3 claim and loan return")
 	expect(action(g,"accept_mission","tutorial_exploration"),"T4 accept")
 	expect(action(g,"claim_loan","loan_tutorial_lantern"),"T4 loan")
-	action(g,"undock");s.ship().sector_id="sector_echo";s.ship().pos_x=-1600;s.ship().pos_y=400;s.ship().pos_z=-2400
-	for h in s.rows("container_state"):
-		if h.ship_instance_id==s.ship().ship_instance_id:h.sector_id="sector_echo"
+	action(g,"undock");place_anchor(g,str(g.definition("signal_defs","signal_id","signal_echo_common_survey").anchor_id))
 	expect(action(g,"start_scan","signal_echo_common_survey"),"T4 contract-scoped signal")
-	g.tick(11);s.ship().sector_id="sector_anchor";s.ship().pos_x=0;s.ship().pos_y=0;s.ship().pos_z=0
-	for h in s.rows("container_state"):
-		if h.ship_instance_id==s.ship().ship_instance_id:h.sector_id="sector_anchor"
+	g.tick(11);place_station(g,"station_anchor_port")
 	expect(action(g,"dock","station_anchor_port"),"T4 return")
 	expect(action(g,"deliver_mission","tutorial_exploration"),"T4 payout")
 	expect(s.player().credit==14500 and g.unlocked("unlock_open_routes"),"complete tutorial exact cash and full routes")
@@ -163,13 +173,11 @@ func _initialize()->void:
 	var regions:Array[String]=["mirror","forge","iron","helios","drift","mist","rift","silent"]
 	for region in regions:
 		var station_id:String="station_"+region+"_hub"
-		s.ship().sector_id="sector_"+region;s.ship().status=T.ShipStatus.DOCKED;s.ship().has_station_id=true;s.ship().station_id=station_id;s.player().has_docked_station_id=true;s.player().docked_station_id=station_id
-		for hold in s.rows("container_state"):
-			if hold.ship_instance_id==s.ship().ship_instance_id:hold.sector_id=s.ship().sector_id
+		place_station(g,station_id,true)
 		expect(action(g,"accept_mission","story_"+region),region+" story accept")
 		action(g,"undock")
 		var anchor:Dictionary=c.one("anchor_defs","anchor_id","anchor_"+region+"_signal")
-		s.ship().pos_x=anchor.x_m;s.ship().pos_y=anchor.y_m;s.ship().pos_z=anchor.z_m
+		place_anchor(g,str(anchor.anchor_id))
 		expect(action(g,"start_scan","signal_"+region+"_relic"),region+" scan anomaly")
 		if region=="mirror":
 			g.tick(.1)
@@ -182,7 +190,7 @@ func _initialize()->void:
 			action(g,"start_scan","signal_mirror_relic")
 		g.tick(36)
 		expect(g.unlocked("unlock_site_"+region),region+" extraction unlocked by real scan")
-		s.ship().pos_x=0;s.ship().pos_y=0;s.ship().pos_z=0;action(g,"dock",station_id)
+		place_station(g,station_id);action(g,"dock",station_id)
 		var material:String=c.one("resource_node_defs","node_id","node_"+region+"_special").item_id
 		expect(action(g,"buy_item",material,5),region+" sample alternative procurement")
 		expect(action(g,"deliver_mission","story_"+region),region+" story atomic turnin")
@@ -226,14 +234,10 @@ func _initialize()->void:
 
 	if loaded!=null:
 		g.setup(loaded,store.catalog);s=loaded
-		s.ship().sector_id="sector_anchor";s.ship().status=T.ShipStatus.DOCKED;s.ship().has_station_id=true;s.ship().station_id="station_anchor_port";s.player().has_docked_station_id=true;s.player().docked_station_id="station_anchor_port"
-		for hold in s.rows("container_state"):
-			if hold.ship_instance_id==s.ship().ship_instance_id:hold.sector_id="sector_anchor"
+		place_station(g,"station_anchor_port",true)
 		expect(action(g,"accept_mission","contract_mining_iron"),"ordinary contract after full save/load")
 		expect(action(g,"claim_loan","loan_contract_miner"),"ordinary bounded loan")
-		action(g,"undock");s.ship().sector_id="sector_echo";s.ship().pos_x=1000;s.ship().pos_y=0;s.ship().pos_z=-1800
-		for hold in s.rows("container_state"):
-			if hold.ship_instance_id==s.ship().ship_instance_id:hold.sector_id="sector_echo"
+		action(g,"undock");place_anchor(g,str(g.definition("resource_node_locations","node_id","node_echo_ferrosilicate").anchor_id))
 		action(g,"start_mining","node_echo_ferrosilicate");g.tick(4.1);g.stop_interactions()
 		var ordinary_loan:D.LoanStateDto=g.work._active_loan();var remaining:int=ordinary_loan.quota_remaining_units;var attempt_id:String=g.missions.active().mission_instance_id
 		expect(remaining<600 and remaining>0,"ordinary paid quota consumed")

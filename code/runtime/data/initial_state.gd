@@ -18,6 +18,8 @@ func create(catalog: XJCatalog, seed_value: int) -> State:
 	var player_id: String = "player-local"
 	_add("player_state", {"player_id": player_id, "controlled_ship_id": ship_id, "currency_id": profile.currency_id, "credit": profile.starting_credit, "camera_mode": "follow", "docked_station_id": station.station_id})
 	_add("ship_state", {"ship_instance_id": ship_id, "owner_player_id": player_id, "ship_def_id": definition.ship_id, "sector_id": station.sector_id, "station_id": station.station_id, "status": "docked", "pos_x": anchor.x_m, "pos_y": anchor.y_m, "pos_z": anchor.z_m, "shield": definition.shield_max, "armor": definition.armor_max, "hull": definition.hull_max, "energy": definition.energy_max, "policy_id": grant.policy_id})
+	if catalog.table_names.has("site_defs"):
+		_add("spatial_state", {"entity_kind": "ship", "entity_id": ship_id, "site_id": catalog.one("anchor_site_defs", "anchor_id", anchor.anchor_id).site_id})
 	_add("container_state", {"container_id": "hold-cargo", "owner_player_id": player_id, "kind": "cargo", "ship_instance_id": ship_id, "ship_def_id": definition.ship_id, "sector_id": station.sector_id})
 	_add("container_state", {"container_id": "warehouse", "owner_player_id": player_id, "kind": "station", "station_id": station.station_id, "sector_id": station.sector_id})
 	if int(definition.mineral_cargo_l) > 0:

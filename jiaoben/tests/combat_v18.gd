@@ -8,6 +8,7 @@ const T = preload("res://contracts/contract_types.gd")
 const Validation = preload("res://runtime/data/validation.gd")
 const Codec = preload("res://runtime/data/codec.gd")
 const State = preload("res://runtime/state.gd")
+const Space = preload("res://runtime/space_coordinates.gd")
 var host: Main
 var checks: int = 0
 var failures: Array[String] = []
@@ -45,7 +46,7 @@ func _target_evidence(label: String) -> void:
 	var entry: Dictionary = host.world.targets.get(enemy.npc_instance_id, {}) if enemy != null else {}
 	var node: Variant = entry.get("node")
 	var node_valid: bool = node is Node3D and is_instance_valid(node)
-	var distance: float = host.world.flight.global_position.distance_to(node.global_position) if node_valid else -1.0
+	var distance: float = host.world.target_distance(enemy.npc_instance_id) if node_valid else -1.0
 	var installed: D.EquipmentStateDto = host.state.find("equipment_state", "item_instance_id", drone_item_id)
 	var module: Dictionary = host.store.catalog.one("module_defs", "module_id", installed.module_def_id) if installed != null else {}
 	print("COMBAT_V18_TARGET_EVIDENCE " + JSON.stringify({"label": label, "ship_id": host.state.ship().ship_instance_id, "ship_status": T.ShipStatus.keys()[int(host.state.ship().status)], "ship_sector": host.state.ship().sector_id, "player_docked": host.state.player().has_docked_station_id, "busy": host.busy, "travel_active": host.travel.active(), "warp_active": host.local_navigation.warp_active(), "target_id": enemy.npc_instance_id if enemy != null else "", "target_kind": entry.get("kind", ""), "target_node_valid": node_valid, "target_alive": enemy != null and enemy.alive, "target_sector": enemy.sector_id if enemy != null else "", "distance_m": distance, "sensor_m": float(host.store.catalog.rule("target_marker_detection_range_m")), "contact_visible": host.world.contact_visible(entry, distance) if node_valid else false, "enemy_valid": host._enemy_target_valid(enemy.npc_instance_id) if enemy != null else false, "bay_control_range_m": module.get("range_m", 0.0), "bay_enabled": installed.enabled if installed != null else false, "bay_cooldown_s": installed.cooldown_remaining_s if installed != null else -1.0, "pending_count": host.world.projectiles.drones.size(), "geometry_los": host.world.line_of_sight(host.world.flight.global_position, node.global_position, host.world.flight.get_rid(), enemy.npc_instance_id) if node_valid and enemy != null else false, "gameplay_error": host.gameplay.last_error}))
@@ -129,9 +130,8 @@ func _prepare_drone_ship() -> bool:
 	if not await _wait_writer() or not check(host.state.ship().status == T.ShipStatus.FLYING and not host.state.player().has_docked_station_id, "real undock command enters flight before positioning any target"): return false
 	await _frames()
 	host.world.projectiles.set_paused(false)
-	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, base)
-	host.world.flight.velocity = Vector3.ZERO
-	host.world.flight.write_back()
+	var spawn: Dictionary = host.store.catalog.one("npc_spawn_defs", "spawn_id", "spawn_anchor_tutorial_scout")
+	await _preview_place(base, str(spawn.anchor_id))
 	enemy = D.NpcStateDto.new()
 	enemy.npc_instance_id = "combat-v18-durable-target"
 	enemy.spawn_id = "spawn_anchor_tutorial_scout"
@@ -142,6 +142,8 @@ func _prepare_drone_ship() -> bool:
 	enemy.behavior_phase = T.NpcPhase.PATROL
 	enemy.pos_x = base.x; enemy.pos_y = base.y; enemy.pos_z = base.z - 650.0
 	host.state.add("npc_state", enemy)
+	if Space.supported(host.store.catalog):
+		if not check(Space.assign(host.state, "npc", enemy.npc_instance_id, Space.site_for_anchor(host.store.catalog, str(spawn.anchor_id))), "explicit target keeps its frozen spawn site"): return false
 	if not check(host.world.sync_entities(), "production sector projects the explicit isolated target"): return false
 	enemy_node = host.world.targets[enemy.npc_instance_id].node
 	host.world.projectiles.hit.connect(_hit)
@@ -190,9 +192,11 @@ func _reset_sortie() -> void:
 	equipment.enabled = true; equipment.cooldown_remaining_s = 0.0; equipment.active_remaining_s = 0.0; equipment.cycle_paid = false
 	host.state.ship().energy = float(host.gameplay.metrics(host.state.ship()).energy_max)
 	host.state.ship().heat = 0.0; host.state.ship().overheated = false
-	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, base)
-	host.world.flight.velocity = Vector3.ZERO; host.world.flight.write_back()
 	enemy.alive = true; enemy.shield = 10000.0; enemy.armor = 10000.0; enemy.hull = 10000.0
+	var spawn: Dictionary = host.store.catalog.one("npc_spawn_defs", "spawn_id", enemy.spawn_id)
+	await _preview_place(base, str(spawn.anchor_id))
+	if not check(host.world.targets.has(enemy.npc_instance_id), "sortie reset projects the target in its declared spawn site"): return
+	enemy_node = host.world.targets[enemy.npc_instance_id].node
 	enemy_node.global_position = base + Vector3(0, 0, -650)
 	enemy.pos_x = enemy_node.global_position.x; enemy.pos_y = enemy_node.global_position.y; enemy.pos_z = enemy_node.global_position.z
 	host.auto_fire_target = enemy.npc_instance_id
@@ -291,10 +295,19 @@ func _guard_signature() -> Dictionary:
 		rows[table] = encoded
 	return {"rows": rows, "snapshot": host.state.snapshot.meta.snapshot_id, "content": host.state.snapshot.content.content_snapshot_id, "save_count": int(host.store._records("SELECT count(*) AS n FROM save_snapshot")[0].n)}
 
-func _preview_place(point: Vector3, basis: Basis = Basis.IDENTITY) -> void:
+func _preview_place(point: Vector3, anchor_id: String, basis: Basis = Basis.IDENTITY) -> void:
+	# A fixture explicitly adopts the selected station/gate/spawn context.
+	# Local xyz alone cannot identify an astronomical location.
+	if Space.supported(host.store.catalog):
+		var site: String = Space.site_for_anchor(host.store.catalog, anchor_id)
+		check(Space.assign(host.state, "ship", host.state.ship().ship_instance_id, site), "fixture player adopts explicit anchor site " + anchor_id)
 	host.world.flight.global_transform = Transform3D(basis, point)
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
+	host.world.flight.get_global_transform_interpolated()
+	host.world.flight.reset_physics_interpolation()
+	host.world.refresh_site()
+	check(host.world.sync_entities(), "fixture refreshes real scene visibility and NPC contexts " + anchor_id)
 	await get_tree().physics_frame; await get_tree().physics_frame
 
 func _gate_preview_evidence(endpoint_id: String, context: Dictionary, label: String) -> bool:
@@ -329,7 +342,7 @@ func _pending_preview_checks() -> void:
 	var station_id: String = "station_anchor_port"
 	var station: Dictionary = host.store.catalog.one("station_defs", "station_id", station_id)
 	var station_point: Vector3 = host.world.anchor_position(str(station.station_anchor_id)) + Vector3.BACK * float(host.store.catalog.rule("dock_radius_m")) * 0.75
-	await _preview_place(station_point)
+	await _preview_place(station_point, str(station.station_anchor_id))
 	if not check(host.local_navigation._landing_clear(station_point), "station witness uses actual unobstructed hull geometry inside dock distance"): return
 	var interaction: Dictionary = host.interaction_context(station_id)
 	var navigation: Dictionary = host.navigation_context(station_id)
@@ -345,7 +358,7 @@ func _pending_preview_checks() -> void:
 	var endpoint: Dictionary = host.store.catalog.one("gate_endpoint_defs", "endpoint_id", endpoint_id)
 	var gate_node: Node3D = host.world.targets[endpoint_id].node
 	var gate_point: Vector3 = host.world.anchor_position(str(endpoint.entry_anchor_id)) + gate_node.global_basis.z * float(host.store.catalog.rule("gate_entry_radius_m")) * 0.9
-	await _preview_place(gate_point, gate_node.global_basis)
+	await _preview_place(gate_point, str(endpoint.entry_anchor_id), gate_node.global_basis)
 	if not check(host.local_navigation._landing_clear(gate_point), "gate witness uses actual clear hull geometry inside entry distance"): return
 	interaction = host.interaction_context(endpoint_id)
 	if not check(_gate_preview_evidence(endpoint_id, interaction, "returning-wing"), "gate fixture satisfies every real range, speed, mass, budget, unlock, cost and world-state requirement except returning drones"): return
@@ -355,14 +368,16 @@ func _pending_preview_checks() -> void:
 	await _drain_sortie()
 	interaction = host.interaction_context(endpoint_id)
 	check(_gate_preview_evidence(endpoint_id, interaction, "recovered-wing") and bool(interaction.ready), "same legitimate gate becomes ready after only the transient drone barrier ends")
-	await _preview_place(station_point)
+	await _preview_place(station_point, str(station.station_anchor_id))
 	check(bool(host.interaction_context(station_id).ready) and bool(host.navigation_context(station_id).dock_ready), "same nearby station and automatic-dock previews become ready after recovery")
 	# Restore the isolated player's pose for the persistence fixture's cleanup.
-	await _preview_place(base)
+	var spawn: Dictionary = host.store.catalog.one("npc_spawn_defs", "spawn_id", enemy.spawn_id)
+	await _preview_place(base, str(spawn.anchor_id))
 
 func _persistence_check() -> void:
 	# Remove the deliberately durable target before saving any state fixture.
 	host.state.remove("npc_state", enemy)
+	Space.remove(host.state, "npc", enemy.npc_instance_id)
 	host.world.sync_entities()
 	host.pending_damage.clear()
 	host.gameplay.combat_remaining_s = 0.0

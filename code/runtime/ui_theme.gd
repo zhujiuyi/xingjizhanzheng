@@ -137,5 +137,6 @@ class Dial extends Control:
 			draw_line(center + direction * (radius + 5), center + direction * (radius + (10 if index % 2 == 0 else 7)), Color("536470"), 1.0, true)
 		var face: Font = get_theme_default_font()
 		var small: bool = size.x < 90
-		draw_string(face, Vector2(0, center.y + 4), "%.0f" % speed, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17 if small else 28, XJUITheme.TEXT)
-		draw_string(face, Vector2(0, center.y + (15 if small else 27)), "m / s", HORIZONTAL_ALIGNMENT_CENTER, size.x, 8 if small else 11, XJUITheme.MUTED)
+		var speed_text: PackedStringArray = XJSpaceUnits.speed(speed).split(" ")
+		draw_string(face, Vector2(0, center.y + 4), speed_text[0], HORIZONTAL_ALIGNMENT_CENTER, size.x, 17 if small else 28, XJUITheme.TEXT)
+		draw_string(face, Vector2(0, center.y + (15 if small else 27)), speed_text[1] if speed_text.size() > 1 else "", HORIZONTAL_ALIGNMENT_CENTER, size.x, 8 if small else 11, XJUITheme.MUTED)

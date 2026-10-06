@@ -3,6 +3,9 @@ extends Node3D
 ## Isolated visual stage only: never consumes a WorldSnapshot, physics or save state.
 const Factory=preload("res://runtime/visuals/industrial_visual_factory.gd")
 const SurfaceStyle=preload("res://runtime/surface_style.gd")
+const Space=preload("res://runtime/space_coordinates.gd")
+const Navigation=preload("res://runtime/navigation_catalog.gd")
+const StrategicWindow=preload("res://runtime/ui/window_space_strategic.gdshader")
 const ROOT="res://assets/hangar_v2/"
 const HANGAR_LAYER:int=1<<19
 const SERVICE_TITLES={"operations":"站务 · 航路值班官","industry":"工业 · 舰务技师","research":"科研 · 遗构分析师","supplies":"补给 · 物资协调员"}
@@ -19,6 +22,13 @@ var _camera_destination:Vector3
 var _camera_target:Vector3
 var _view_target:Vector3
 var _focused:String=""
+var _window_mesh:MeshInstance3D
+var _legacy_window_material:Material
+var _space_window_material:ShaderMaterial
+var _space_hash:String=""
+var _space_station_id:String=""
+var _space_context:Dictionary={}
+var _station_yaw:float=0.0
 
 func configure(definition_id:String,catalog:RefCounted)->void:
 	_catalog=catalog
@@ -27,6 +37,72 @@ func configure(definition_id:String,catalog:RefCounted)->void:
 
 func get_camera()->Camera3D:return _camera
 func get_service_anchor(role:String)->Node3D:return _crew.get(role)
+
+func set_space_context(catalog:XJCatalog,station_id:String)->bool:
+	var hash_value:String=catalog.content_hash if catalog!=null else ""
+	if hash_value==_space_hash and station_id==_space_station_id:
+		_update_window_basis()
+		return not _space_context.is_empty() or not Space.supported(catalog)
+	_space_hash=hash_value;_space_station_id=station_id;_space_context={}
+	if not Space.supported(catalog):
+		_apply_space_window()
+		return true
+	var station:Dictionary=catalog.one("station_defs","station_id",station_id)
+	var anchor:Dictionary=catalog.one("anchor_defs","anchor_id",str(station.get("station_anchor_id","")))
+	if station.is_empty() or anchor.is_empty():_apply_space_window();return false
+	var origin:Dictionary=Space.anchor_components(catalog,anchor)
+	var star:Dictionary={}
+	var planet:Dictionary={}
+	for row:Dictionary in catalog.rows("celestial_defs"):
+		if str(row.sector_id)!=str(station.sector_id):continue
+		if row.celestial_kind=="star":star=row
+		elif row.celestial_kind=="planet" and planet.is_empty():planet=row
+	if origin.is_empty() or star.is_empty() or planet.is_empty():_apply_space_window();return false
+	var star_point:Dictionary={"x":float(star.x_m),"y":float(star.y_m),"z":float(star.z_m)}
+	var planet_point:Dictionary={"x":float(planet.x_m),"y":float(planet.y_m),"z":float(planet.z_m)}
+	var star_distance:float=Space.scalar_distance(origin,star_point)
+	var planet_distance:float=Space.scalar_distance(origin,planet_point)
+	if not is_finite(star_distance) or not is_finite(planet_distance) or star_distance<=float(star.radius_m) or planet_distance<=float(planet.radius_m):_apply_space_window();return false
+	_station_yaw=float(anchor.yaw_rad)
+	var system:Dictionary=catalog.one("sector_defs","sector_id",str(station.sector_id))
+	var light:Dictionary=catalog.one("system_lighting_defs","system_id",str(system.get("system_id","")))
+	var palette:Dictionary={}
+	for row:Dictionary in Navigation.rows("celestial_visual_defs"):
+		if str(row.celestial_id)==str(planet.celestial_id):palette=row;break
+	if light.is_empty() or palette.is_empty():_apply_space_window();return false
+	_space_context={"content_hash":hash_value,"station_id":station_id,"sector_id":str(station.sector_id),"planet_id":str(planet.celestial_id),"star_id":str(star.celestial_id),
+		"planet_direction":Space.scalar_direction(origin,planet_point),"planet_light_direction":Space.scalar_direction(planet_point,star_point),"star_direction":Space.scalar_direction(origin,star_point),
+		"planet_sin_radius":float(planet.radius_m)/planet_distance,"star_sin_radius":float(star.radius_m)/star_distance,
+		"planet_angle_rad":asin(float(planet.radius_m)/planet_distance),"star_angle_rad":asin(float(star.radius_m)/star_distance),
+		"surface_color":Color(str(palette.surface_color)),"cloud_color":Color(str(palette.cloud_color)),"visual_seed":float(palette.visual_seed),
+		"star_color":Color(float(light.light_r),float(light.light_g),float(light.light_b))}
+	_apply_space_window()
+	return true
+
+func get_space_context()->Dictionary:
+	return _space_context.duplicate(true)
+
+func get_space_window_material()->ShaderMaterial:
+	return _space_window_material if not _space_context.is_empty() else null
+
+func _apply_space_window()->void:
+	if not is_instance_valid(_window_mesh):return
+	if _space_context.is_empty():_window_mesh.material_override=_legacy_window_material;return
+	if _space_window_material==null:
+		_space_window_material=ShaderMaterial.new();_space_window_material.shader=StrategicWindow
+		_space_window_material.set_shader_parameter("space_panorama",preload("res://assets/navigation_v3/space_panorama.png"))
+		_space_window_material.set_shader_parameter("surface_map",preload("res://assets/navigation_v3/planet_surface.png"))
+	for key:String in ["planet_direction","planet_light_direction","star_direction","planet_sin_radius","star_sin_radius","surface_color","cloud_color","visual_seed","star_color"]:
+		_space_window_material.set_shader_parameter(key,_space_context[key])
+	_window_mesh.material_override=_space_window_material
+	_update_window_basis()
+
+func _update_window_basis()->void:
+	if _space_window_material==null or _space_context.is_empty() or not is_inside_tree():return
+	# The indoor stage uses exhibition coordinates. Only its ray orientation is
+	# related to the station's actual yaw; its 15000m art offset is never a site.
+	var stage_frame:Basis=Basis(Vector3.UP,_station_yaw)*global_basis.orthonormalized().inverse()
+	_space_window_material.set_shader_parameter("stage_to_sector",stage_frame)
 
 func _ready()->void:
 	var parsed:Variant=JSON.parse_string(FileAccess.get_file_as_string(ROOT+"layout.json"))
@@ -84,6 +160,7 @@ func focus_service(role:String)->void:
 
 func _process(delta:float)->void:
 	if not _built or not is_visible_in_tree():return
+	_update_window_basis()
 	_time+=delta
 	_camera.position=_camera.position.lerp(_camera_destination,1.0-exp(-delta*3.4))
 	_view_target=_view_target.lerp(_camera_target,1.0-exp(-delta*3.4))
@@ -120,6 +197,8 @@ func _build_window()->void:
 	var mesh:MeshInstance3D=MeshInstance3D.new();mesh.name="StarViewport"
 	var quad:QuadMesh=QuadMesh.new();quad.size=Vector2(40,17.4);mesh.mesh=quad;mesh.position=Vector3(0,16,-33.5)
 	var material:ShaderMaterial=ShaderMaterial.new();material.shader=load(ROOT+"window_space.gdshader");mesh.material_override=material;mesh.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF;add_child(mesh)
+	_window_mesh=mesh;_legacy_window_material=material
+	_apply_space_window()
 
 func _build_lighting()->void:
 	var key:DirectionalLight3D=DirectionalLight3D.new();key.name="ExhibitionKey";key.rotation_degrees=Vector3(-48,-26,0);key.light_color=Color(.73,.84,.92);key.light_energy=2.0;key.shadow_enabled=true;key.directional_shadow_max_distance=100;key.light_cull_mask=HANGAR_LAYER;add_child(key)

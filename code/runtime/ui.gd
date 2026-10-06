@@ -53,7 +53,9 @@ var operation_bar: PanelContainer
 var operation_label: Label
 var operation_cancel: Button
 var page_scroll: ScrollContainer
-var mission_filter: String = "local"
+var mission_filter: String = "all"
+var mission_status_filter: String = "all"
+var mission_location_filter: String = "local"
 var mission_page: int = 0
 var mission_focus_id: String = ""
 var mission_navigation_row: HFlowContainer
@@ -214,7 +216,7 @@ func _ready() -> void:
 	mission_locate_button.name = "MissionLocate"
 	mission_travel_button = _button(mission_navigation_row, "前往目标", func(): requested.emit("mission_travel", "", 1, ""))
 	mission_travel_button.name = "MissionTravel"
-	mission_guide_button = _button(mission_navigation_row, "主线指引", func(): mission_filter = "story"; mission_focus_id = ""; mission_page = 0; show_page("missions"))
+	mission_guide_button = _button(mission_navigation_row, "主线指引", func(): mission_filter = "story"; mission_status_filter = "all"; mission_location_filter = "all"; mission_focus_id = ""; mission_page = 0; show_page("missions"))
 	mission_guide_button.name = "MissionGuide"
 	for action_button: Button in [mission_locate_button, mission_travel_button, mission_guide_button]:
 		action_button.custom_minimum_size = Vector2(76, 24)
@@ -428,11 +430,11 @@ func tick(delta: float) -> void:
 	var metrics: Dictionary = gameplay.call("metrics", ship)
 	var definition: Dictionary = _one("sector_defs", "sector_id", ship.sector_id)
 	top.text = "%s\n%s · %s · %d 信用点" % [_ship_name(ship.ship_def_id), _sector_name(ship.sector_id), _risk_name(str(definition.get("risk_zone_id", ""))), state.player().credit]
-	health.text = "护盾 %.0f/%.0f  装甲 %.0f/%.0f  结构 %.0f/%.0f\n电容 %.0f/%.0f  热量 %.0f/%.0f %s\n速度 %.0f m/s\n货舱 %.0f/%.0f L  矿舱 %.0f/%.0f L" % [ship.shield, metrics.shield_max, ship.armor, metrics.armor_max, ship.hull, metrics.hull_max, ship.energy, metrics.energy_max, ship.heat, metrics.heat_max, "过热" if ship.overheated else "", Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length(), metrics.cargo_used_l, metrics.cargo_capacity_l, metrics.mineral_used_l, metrics.mineral_capacity_l]
+	health.text = "护盾 %.0f/%.0f  装甲 %.0f/%.0f  结构 %.0f/%.0f\n电容 %.0f/%.0f  热量 %.0f/%.0f %s\n速度 %s\n货舱 %.0f/%.0f L  矿舱 %.0f/%.0f L" % [ship.shield, metrics.shield_max, ship.armor, metrics.armor_max, ship.hull, metrics.hull_max, ship.energy, metrics.energy_max, ship.heat, metrics.heat_max, "过热" if ship.overheated else "", XJSpaceUnits.speed(_display_speed()), metrics.cargo_used_l, metrics.cargo_capacity_l, metrics.mineral_used_l, metrics.mineral_capacity_l]
 	if root.size.x < 900:
 		top.tooltip_text = top.text
 		top.text = "%s · %s" % [_sector_name(ship.sector_id), _risk_name(str(definition.get("risk_zone_id", "")))]
-		health.text = "护盾 %.0f%% · 装甲 %.0f%% · 结构 %.0f%%\n电容 %.0f%% · 热量 %.0f%% %s\n速度 %.0f m/s · 货 %.0f/%.0f L" % [ship.shield / maxf(metrics.shield_max, 1.0) * 100, ship.armor / maxf(metrics.armor_max, 1.0) * 100, ship.hull / maxf(metrics.hull_max, 1.0) * 100, ship.energy / maxf(metrics.energy_max, 1.0) * 100, ship.heat / maxf(metrics.heat_max, 1.0) * 100, "过热" if ship.overheated else "", Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length(), metrics.cargo_used_l + metrics.mineral_used_l, metrics.cargo_capacity_l + metrics.mineral_capacity_l]
+		health.text = "护盾 %.0f%% · 装甲 %.0f%% · 结构 %.0f%%\n电容 %.0f%% · 热量 %.0f%% %s\n速度 %s · 货 %.0f/%.0f L" % [ship.shield / maxf(metrics.shield_max, 1.0) * 100, ship.armor / maxf(metrics.armor_max, 1.0) * 100, ship.hull / maxf(metrics.hull_max, 1.0) * 100, ship.energy / maxf(metrics.energy_max, 1.0) * 100, ship.heat / maxf(metrics.heat_max, 1.0) * 100, "过热" if ship.overheated else "", XJSpaceUnits.speed(_display_speed()), metrics.cargo_used_l + metrics.mineral_used_l, metrics.cargo_capacity_l + metrics.mineral_capacity_l]
 	objective.text = _objective_text()
 	objective.tooltip_text = objective.text
 	_update_instrument(ship, metrics)
@@ -478,7 +480,7 @@ func select_next() -> void:
 	for entry: Dictionary in sector.targets.values():
 		var node: Variant = entry.get("node")
 		if not is_instance_valid(node) or not node is Node3D: continue
-		if str(entry.get("kind", "")) != "npc" or _npc_visible(entry, sector.flight.global_position.distance_to(node.global_position)):
+		if str(entry.get("kind", "")) != "npc" or _npc_visible(entry, sector.target_distance(str(entry.id))):
 			keys.append(str(entry.id))
 	if keys.is_empty():
 		target_id = ""
@@ -947,11 +949,9 @@ func _industry() -> void:
 func _missions() -> void:
 	_text("本页不暂停飞行。目标按顺序完成；舰船损失保留当前任务，交付需要指定实物。", 14)
 	_campaign_summary()
-	var filter_row: HFlowContainer = HFlowContainer.new()
-	body.add_child(filter_row)
-	for filter: String in ["local", "available", "active", "tutorial", "story", "contract", "all"]:
-		var filter_button: Button = _button(filter_row, str({"local": "当前站点 / 星系", "available": "可接取", "active": "进行中", "tutorial": "新手教学", "story": "主线剧情", "contract": "地区合同", "all": "全部任务"}[filter]) + (" · 当前" if filter == mission_filter else ""), func(): mission_filter = filter; mission_focus_id = ""; mission_page = 0; show_page("missions"))
-		filter_button.set_meta("mission_filter", filter)
+	_mission_filter_group("type", "类型", ["all", "tutorial", "story", "contract"], {"all": "全部类型", "tutorial": "新手教学", "story": "主线剧情", "contract": "地区合同"}, mission_filter)
+	_mission_filter_group("status", "状态", ["all", "active", "available", "completed"], {"all": "全部状态", "active": "进行中", "available": "可接取", "completed": "已完成"}, mission_status_filter)
+	_mission_filter_group("location", "地点", ["local", "all"], {"local": "本站" if state.player().has_docked_station_id else "本星系", "all": "所有地点"}, mission_location_filter)
 	var filtered: Array[Dictionary] = _filtered_mission_definitions()
 	var pages: int = maxi(1, ceili(float(filtered.size()) / 6.0))
 	mission_page = clampi(mission_page, 0, pages - 1)
@@ -962,7 +962,10 @@ func _missions() -> void:
 	_text_to(navigation, "%d 项 · %d / %d 页" % [filtered.size(), mission_page + 1, pages], 14)
 	var next: Button = _button(navigation, "下一页", func(): mission_page += 1; show_page("missions"))
 	next.disabled = mission_page >= pages - 1
-	if filtered.is_empty(): _text("此筛选没有任务。可切换“全部任务”查看前置条件。")
+	if filtered.is_empty():
+		_text("没有同时符合这些筛选条件的任务。清除筛选可查看异地任务与尚未满足的前置条件。", 13)
+		var clear: Button = _button(body, "清除筛选", _clear_mission_filters)
+		clear.set_meta("mission_clear_filters", true)
 	var list: VBoxContainer = _business_list("任务与合同清单", "接取费用", "合同数")
 	var focused_action: Button
 	for definition: Dictionary in filtered.slice(mission_page * 6, mini((mission_page + 1) * 6, filtered.size())):
@@ -974,16 +977,20 @@ func _missions() -> void:
 		entry.row.set_meta("mission_kind", str(definition.mission_kind))
 		if active:
 			live_missions.append({"label": entry.status, "mission": current, "description": entry.description, "definition": definition, "progress": []})
-			var locate: Button = _mission_action(entry.actions, "定位任务目标", "mission_locate", str(definition.mission_id))
-			if str(definition.mission_id) == mission_focus_id: focused_action = locate
-			_mission_action(entry.actions, "前往任务目标", "mission_travel", str(definition.mission_id))
 			var deliver: Button = _command(entry.actions, "交付任务", "deliver_mission", current.mission_instance_id)
 			deliver.disabled = current.status != "ready" or state.player().docked_station_id != definition.turnin_station_id
-			_command(entry.actions, "放弃任务", "abandon_mission", current.mission_instance_id)
+			if current.status == "ready": _mission_row_primary(deliver)
+			var locate: Button = _mission_action(entry.actions, "定位任务目标", "mission_locate", str(definition.mission_id))
+			if str(definition.mission_id) == mission_focus_id: focused_action = locate
+			if current.status != "ready": _mission_row_primary(locate)
+			_mission_action(entry.actions, "前往任务目标", "mission_travel", str(definition.mission_id))
+			_secondary(_command(entry.actions, "放弃任务", "abandon_mission", current.mission_instance_id))
 		else:
 			var accept: Button = _command(entry.actions, "接取任务" if current == null else "重新接取", "accept_mission", str(definition.mission_id))
 			accept.disabled = not reason.is_empty()
+			_mission_row_primary(accept)
 			var station_action: Button = _mission_action(entry.actions, "定位接取站点", "mission_station", str(definition.mission_id))
+			_secondary(station_action)
 			if str(definition.mission_id) == mission_focus_id: focused_action = station_action
 		var prerequisite_id: String = str(gameplay.get("missions").call("missing_prerequisite", str(definition.mission_id)))
 		if not prerequisite_id.is_empty():
@@ -996,15 +1003,68 @@ func _missions() -> void:
 	_update_live_missions()
 	if focused_action != null: _focus_mission_action.call_deferred(focused_action)
 
+func _mission_row_primary(button: Button) -> void:
+	# BusinessList uses compact style margins for every state. Keep those
+	# metrics when emphasizing an action so disabling it cannot shrink its cell.
+	button.add_theme_stylebox_override("normal", UISkin.hud_button(true))
+	button.add_theme_stylebox_override("hover", UISkin.hud_button(true))
+	button.add_theme_stylebox_override("pressed", UISkin.hud_button(true))
+	button.add_theme_color_override("font_color", Color("ffdf9d"))
+
+func _mission_filter_group(dimension: String, title: String, values: Array[String], titles: Dictionary, selected: String) -> void:
+	var row: HFlowContainer = HFlowContainer.new()
+	row.name = "MissionFilter" + dimension.capitalize()
+	row.set_meta("mission_filter_dimension", dimension)
+	row.add_theme_constant_override("h_separation", 6)
+	row.add_theme_constant_override("v_separation", 4)
+	body.add_child(row)
+	var label: Label = _label(row, title, 13)
+	label.custom_minimum_size = Vector2(36, 30)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	label.add_theme_color_override("font_color", UISkin.MUTED)
+	for value: String in values:
+		var button: Button = _button(row, str(titles[value]), _set_mission_filter.bind(dimension, value))
+		button.custom_minimum_size = Vector2(0, 30)
+		button.autowrap_mode = TextServer.AUTOWRAP_OFF
+		button.add_theme_font_size_override("font_size", 13)
+		button.toggle_mode = true
+		button.button_pressed = value == selected
+		button.set_meta("mission_filter_dimension", dimension)
+		button.set_meta("mission_filter_value", value)
+		if value == selected: _primary(button)
+		else: _secondary(button)
+		button.tooltip_text = "仅修改%s筛选，保留其他筛选条件。" % title
+		if dimension == "location": button.tooltip_text += "\n按任务接取站点筛选；当前任务始终显示在页首。"
+		if dimension == "status" and value == "completed": button.tooltip_text += "\n展示已领取过奖励的任务；重接后正在进行的任务归入“进行中”。"
+
+func _set_mission_filter(dimension: String, value: String) -> void:
+	match dimension:
+		"type": mission_filter = value
+		"status": mission_status_filter = value
+		"location": mission_location_filter = value
+	mission_focus_id = ""
+	mission_page = 0
+	show_page("missions")
+
+func _clear_mission_filters() -> void:
+	mission_filter = "all"
+	mission_status_filter = "all"
+	mission_location_filter = "all"
+	mission_focus_id = ""
+	mission_page = 0
+	show_page("missions")
+
 func _filtered_mission_definitions() -> Array[Dictionary]:
 	var filtered: Array[Dictionary] = []
 	for definition: Dictionary in _defs("mission_summary_defs"):
 		var current: Dtos.MissionStateDto = _latest_mission(str(definition.mission_id))
 		var active: bool = current != null and current.status in ["active", "ready"]
 		var local: bool = definition.accept_station_id == state.player().docked_station_id if state.player().has_docked_station_id else _one("station_defs", "station_id", str(definition.accept_station_id)).get("sector_id") == state.current_sector()
-		if mission_filter == "local" and not local and not active: continue
-		if mission_filter == "available" and not _mission_reason(definition, current).is_empty(): continue
-		if mission_filter == "active" and not active: continue
+		if mission_location_filter == "local" and not local: continue
+		if mission_status_filter == "available" and not _mission_reason(definition, current).is_empty(): continue
+		if mission_status_filter == "active" and not active: continue
+		if mission_status_filter == "completed" and (active or not _mission_completed(str(definition.mission_id))): continue
 		if mission_filter in ["tutorial", "story", "contract"] and str(definition.mission_kind) != mission_filter: continue
 		filtered.append(definition)
 	filtered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -1019,6 +1079,8 @@ func show_mission(mission_id: String) -> void:
 	if definition.is_empty(): notify("未找到此任务的冻结定义。", true); return
 	mission_focus_id = mission_id
 	mission_filter = str(definition.mission_kind)
+	mission_status_filter = "all"
+	mission_location_filter = "all"
 	var index: int = 0
 	for entry: Dictionary in _filtered_mission_definitions():
 		if str(entry.mission_id) == mission_id: break
@@ -1053,7 +1115,8 @@ func _mission_category_title(definition: Dictionary) -> String:
 func _campaign_summary() -> void:
 	var service: RefCounted = gameplay.get("missions")
 	var summary: Array[String] = []
-	var next_id: String = ""
+	var current: Dtos.MissionStateDto = service.call("active")
+	var next_id: String = current.mission_def_id if current != null else ""
 	for kind: String in ["tutorial", "story"]:
 		var nodes: Array[Dictionary] = service.call("chain", kind)
 		var done: int = 0
@@ -1065,20 +1128,36 @@ func _campaign_summary() -> void:
 	if next_id.is_empty(): _text("主线航路已全部重建，可继续接取地区合同、研究与自由探索。", 13); return
 	var next_def: Dictionary = _one("mission_defs", "mission_id", next_id)
 	var missing: String = str(service.call("missing_prerequisite", next_id))
-	var note: String = "下一步 · " + _mission_category_title(next_def) + " · " + _mission_name(next_id) + "\n接取地点 · " + _sector_name(str(_one("station_defs", "station_id", str(next_def.accept_station_id)).get("sector_id", ""))) + " / " + _station_name(str(next_def.accept_station_id))
+	var card: PanelContainer = _frame(body, "MissionRecommendation")
+	var content: VBoxContainer = VBoxContainer.new()
+	content.add_theme_constant_override("separation", 5)
+	card.add_child(content)
+	_text_to(content, ("当前任务 · " if current != null else "推荐任务 · ") + _mission_category_title(next_def) + " · " + _mission_name(next_id), 15).add_theme_color_override("font_color", UISkin.AMBER)
+	var guidance: Dictionary = service.call("guidance", next_id) if current != null else service.call("station_guidance", next_id)
+	var note: String = "状态 · " + (_mission_status(current.status) if current != null else _mission_reason(next_def, _latest_mission(next_id)))
+	if note == "状态 · ": note += "可接取"
+	note += "\n" + _mission_location_text(guidance)
 	if not missing.is_empty(): note += "\n尚需完成 · " + _mission_name(missing)
-	if str(next_def.mission_kind) == "tutorial":
+	if current == null and str(next_def.mission_kind) == "tutorial":
 		var story_nodes: Array[Dictionary] = service.call("chain", "story")
 		if not story_nodes.is_empty():
 			var first_story_station: String = str(story_nodes[0].accept_station_id)
 			note += "\n完成新手教学后开启主线；第一章接取点 · " + _station_name(first_story_station)
-	_text(note, 13)
+	_text_to(content, note, 13)
 	var actions: HFlowContainer = HFlowContainer.new()
-	body.add_child(actions)
-	var show_next: Button = _button(actions, "查看下一步", show_mission.bind(next_id))
+	content.add_child(actions)
+	var show_next: Button = _button(actions, "查看当前任务" if current != null else "查看推荐任务", show_mission.bind(next_id))
+	show_next.autowrap_mode = TextServer.AUTOWRAP_OFF
 	show_next.set_meta("action", "show_mission")
 	show_next.set_meta("target", next_id)
-	_mission_action(actions, "定位接取地点", "mission_station", next_id)
+	show_next.set_meta("mission_recommendation", "view")
+	_primary(show_next)
+	var marker: Button = _mission_action(actions, "标记交付站" if current != null and current.status == "ready" else "标记任务目标" if current != null else "标记接取站", "mission_locate" if current != null else "mission_station", next_id)
+	marker.autowrap_mode = TextServer.AUTOWRAP_OFF
+	marker.set_meta("mission_recommendation", "marker")
+	marker.disabled = guidance.is_empty()
+	marker.tooltip_text = "指示任务地点，出港后选中相应航点；不会自动移动舰船或接取任务。\n" + _mission_location_text(guidance)
+	_secondary(marker)
 
 func _research() -> void:
 	var station_faction: String = str(_one("station_defs", "station_id", state.player().docked_station_id).get("faction_id", ""))
@@ -1356,14 +1435,13 @@ func _refresh_targets() -> void:
 	var detected_ids: Array[String] = []
 	for entry: Variant in sector.targets.values():
 		if not entry is Dictionary or not is_instance_valid(entry.get("node")) or not entry.node is Node3D: continue
-		var node: Node3D = entry.node
-		var distance: float = sector.flight.global_position.distance_to(node.global_position)
+		var distance: float = sector.target_distance(str(entry.id))
 		var kind: String = str(entry.get("kind", ""))
 		if kind == "npc":
 			if not _npc_visible(entry, distance): continue
 			var npc: Dtos.NpcStateDto = state.find("npc_state", "npc_instance_id", str(entry.id))
 			if npc != null and not npc.alive: continue
-		var record: Dictionary = {"id": str(entry.id), "title": _target_title(entry), "kind": kind, "type_title": _target_type(kind), "distance_m": distance, "navigation_only": bool(entry.get("navigation_only", false)), "known": kind != "npc"}
+		var record: Dictionary = {"id": str(entry.id), "title": _target_title(entry), "kind": kind, "type_title": _target_type(kind), "distance_m": distance, "navigation_only": bool(entry.get("navigation_only", false)), "remote_site": not sector.target_is_local(str(entry.id)), "known": kind != "npc"}
 		if kind == "resource":
 			var resource_info: Dictionary = ResourceStatus.inspect(state, catalog, str(entry.id))
 			record["resource_info"] = resource_info
@@ -1393,7 +1471,7 @@ func _selected_details() -> Dictionary:
 	var entry: Dictionary = sector.targets[target_id]
 	var node: Variant = entry.get("node")
 	if not is_instance_valid(node) or not node is Node3D: return {}
-	var details: Dictionary = {"id": target_id, "title": _target_title(entry), "kind": str(entry.kind), "type_title": _target_type(str(entry.kind)), "distance_m": sector.flight.global_position.distance_to(node.global_position), "navigation_only": bool(entry.get("navigation_only", false))}
+	var details: Dictionary = {"id": target_id, "title": _target_title(entry), "kind": str(entry.kind), "type_title": _target_type(str(entry.kind)), "distance_m": sector.target_distance(target_id), "navigation_only": bool(entry.get("navigation_only", false)), "remote_site": not sector.target_is_local(target_id)}
 	if str(entry.kind) == "resource": details["resource_info"] = ResourceStatus.inspect(state, catalog, target_id)
 	if str(entry.kind) == "encounter":
 		details["encounter_info"] = _encounter_summary(entry)
@@ -1406,6 +1484,10 @@ func _navigation_context() -> Dictionary:
 		var result: Variant = host.call("navigation_context", target_id)
 		if result is Dictionary: return result
 	return {"active": false, "reason": "选择目标后可查看航行指令。"}
+
+func _display_speed() -> float:
+	var context: Dictionary = _navigation_context()
+	return float(context.display_speed_mps) if context.has("display_speed_mps") else Vector3(state.ship().vel_x, state.ship().vel_y, state.ship().vel_z).length()
 
 func _draw_markers() -> void:
 	if camera == null or camera.camera == null or sector == null or panel.visible or station_layer.visible or state == null or state.ship().status != Types.ShipStatus.FLYING:
@@ -1664,7 +1746,7 @@ func _item_description(id: String) -> String:
 		if not weapon.is_empty():
 			description += _weapon_description(id, module, weapon)
 		else:
-			if float(module.range_m) > 0: description += " · 作用距离 %.0f m" % float(module.range_m)
+			if float(module.range_m) > 0: description += " · 作用距离 " + XJSpaceUnits.distance(float(module.range_m))
 			if float(module.cycle_s) > 0: description += " · 周期 %.2f s" % float(module.cycle_s)
 		var tech: Dictionary = _one("module_tech_defs", "module_id", id)
 		if not tech.is_empty(): description += "\n科技 %s · %s（%s）" % [str(tech.tech_level), _unlock_name(str(tech.required_unlock_id)), "已解锁" if _unlocked(str(tech.required_unlock_id)) else "未解锁"]
@@ -1684,16 +1766,16 @@ func _weapon_description(id: String, module: Dictionary, weapon: Dictionary) -> 
 	var damage: float = float(weapon.raw_damage)
 	var cycle: float = float(module.cycle_s)
 	result += "\n%s %.2f · 周期 %.2f s · %s %.2f" % ["单次集群总伤害" if is_drone else "单发原始伤害", damage, cycle, "理论 DPS 上界" if is_drone else "理论 DPS", damage / cycle if cycle > 0 else 0.0]
-	result += "\n%s %.0f m" % ["控制范围" if is_drone else "射程", float(module.range_m)]
+	result += "\n%s %s" % ["控制范围" if is_drone else "射程", XJSpaceUnits.distance(float(module.range_m))]
 	if is_drone:
 		var drone: Dictionary = _one("drone_defs", "module_id", id) if catalog.table_names.has("drone_defs") else {}
 		if not drone.is_empty():
-			result += " · 无人机 %d 架\n巡航 %.0f m/s · 攻击距离 %.0f m · 弹速 %.0f m/s" % [int(drone.drone_count), float(drone.speed_mps), float(drone.attack_range_m), float(drone.projectile_speed_mps)]
+			result += " · 无人机 %d 架\n巡航 %s · 攻击距离 %s · 弹速 %s" % [int(drone.drone_count), XJSpaceUnits.speed(float(drone.speed_mps)), XJSpaceUnits.distance(float(drone.attack_range_m)), XJSpaceUnits.speed(float(drone.projectile_speed_mps))]
 		result += "\n每次付费出击，每架攻击一次后回收；回收与冷却结束后再出击。"
 	elif weapon.projectile_speed_mps == null:
 		result += " · 瞬时射线"
 	else:
-		result += " · 弹速 %.0f m/s" % float(weapon.projectile_speed_mps)
+		result += " · 弹速 " + XJSpaceUnits.speed(float(weapon.projectile_speed_mps))
 	result += "\n每周期能量 %.2f EU · 热量 %.2f HU" % [float(module.energy_eu), float(module.heat_hu)]
 	result += " · 弹药 %s ×%d" % [_item_name(str(weapon.ammo_item_id)), int(weapon.ammo_per_cycle)] if weapon.ammo_item_id != null else " · 无弹药消耗"
 	result += "\n理论值不计命中、供能、散热" + ("与无人机往返耗时。" if is_drone else "。")
@@ -1715,7 +1797,7 @@ func _ship_description(id: String) -> String:
 	if definition.is_empty(): return "舰体定义未提供"
 	var role: Dictionary = _one("ship_role_defs", "ship_id", id)
 	var faction: String = str(_one("faction_defs", "faction_id", str(role.get("faction_id", ""))).get("display_name", ""))
-	return (faction + " · " if not faction.is_empty() else "") + "舰体基准：速度 %.0f m/s · 货舱 %d L · 矿舱 %d L\n护盾 %.0f · 装甲 %.0f · 结构 %.0f\n%s" % [float(definition.max_speed_mps), int(definition.cargo_l), int(definition.mineral_cargo_l), float(definition.shield_max), float(definition.armor_max), float(definition.hull_max), _ship_weapon_description(id)]
+	return (faction + " · " if not faction.is_empty() else "") + "舰体基准：速度 %s · 货舱 %d L · 矿舱 %d L\n护盾 %.0f · 装甲 %.0f · 结构 %.0f\n%s" % [XJSpaceUnits.speed(float(definition.max_speed_mps)), int(definition.cargo_l), int(definition.mineral_cargo_l), float(definition.shield_max), float(definition.armor_max), float(definition.hull_max), _ship_weapon_description(id)]
 
 func _service_reason(service: String) -> String:
 	for definition: Dictionary in _defs("station_service_defs"):
@@ -2016,7 +2098,7 @@ func _update_navigation() -> void:
 	interaction_button.text = "[F] " + label
 	interaction_button.disabled = not bool(interaction_candidate.ready)
 	interaction_button.tooltip_text = str(interaction_candidate.title) + " · " + str(interaction_candidate.reason)
-	interaction_label.text = str(interaction_candidate.title) + "\n" + ("接口就绪 · %.0f m" % float(interaction_candidate.distance_m) if interaction_candidate.ready else _friendly(str(interaction_candidate.reason)))
+	interaction_label.text = str(interaction_candidate.title) + "\n" + ("接口就绪 · " + XJSpaceUnits.distance(float(interaction_candidate.distance_m)) if interaction_candidate.ready else _friendly(str(interaction_candidate.reason)))
 	interaction_label.tooltip_text = interaction_label.text
 	interaction_label.add_theme_color_override("font_color", UISkin.ICE if interaction_candidate.ready else UISkin.AMBER)
 
@@ -2588,7 +2670,7 @@ func _build_instrument() -> void:
 	resources.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	resources.add_theme_constant_override("separation", 6)
 	row.add_child(resources)
-	compact_speed_label = _text_to(resources, "0 m/s · 跟随", 10)
+	compact_speed_label = _text_to(resources, XJSpaceUnits.speed(0.0) + " · 跟随", 10)
 	compact_speed_label.name = "CompactSpeed"
 	compact_speed_label.clip_text = true
 	compact_speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -2720,7 +2802,7 @@ func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 	var compact: bool = root.size.x < 950
 	var values: Array[float] = [ship.shield, ship.armor, ship.hull]
 	var maximums: Array[float] = [float(metrics.shield_max), float(metrics.armor_max), float(metrics.hull_max)]
-	var signature: String = JSON.stringify([compact, ship.ship_def_id, ship.shield, ship.armor, ship.hull, ship.energy, ship.heat, ship.overheated, Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length(), metrics.shield_max, metrics.armor_max, metrics.hull_max, metrics.energy_max, metrics.heat_max, metrics.cargo_used_l, metrics.cargo_capacity_l, metrics.mineral_used_l, metrics.mineral_capacity_l])
+	var signature: String = JSON.stringify([compact, ship.ship_def_id, ship.shield, ship.armor, ship.hull, ship.energy, ship.heat, ship.overheated, _display_speed(), metrics.shield_max, metrics.armor_max, metrics.hull_max, metrics.energy_max, metrics.heat_max, metrics.cargo_used_l, metrics.cargo_capacity_l, metrics.mineral_used_l, metrics.mineral_capacity_l])
 	if signature == telemetry_signature: return
 	telemetry_signature = signature
 	for index: int in range(3):
@@ -2728,7 +2810,7 @@ func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 		condition_bars[index].label.text = "%s %.0f%%" % [condition_bars[index].name, values[index] / maxf(maximums[index], 1.0) * 100.0] if compact else condition_bars[index].label.tooltip_text
 		condition_bars[index].bar.max_value = maxf(maximums[index], 1.0)
 		condition_bars[index].bar.value = values[index]
-	dial.speed = Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length()
+	dial.speed = _display_speed()
 	dial.ratios = Vector3(values[0] / maxf(maximums[0], 1.0), values[1] / maxf(maximums[1], 1.0), values[2] / maxf(maximums[2], 1.0))
 	dial.queue_redraw()
 	energy_label.tooltip_text = "电容  %.0f / %.0f" % [ship.energy, float(metrics.energy_max)]
@@ -2753,7 +2835,7 @@ func update_camera_status() -> void:
 	instrument_title.text = _ship_name(ship.ship_def_id) + "  /  " + view + " · V" + (" · 过热警报" if ship.overheated else "")
 	instrument_title.modulate = UISkin.AMBER if ship.overheated else Color.WHITE
 	instrument_title.tooltip_text = "V 循环切换跟随、舰首、战术视角。舰首视角从船头观察，不显示外部舰体；点击上方‘显示舰船’回到跟随视角。"
-	compact_speed_label.text = "%.0f m/s · %s" % [Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length(), ["跟随", "舰首隐藏", "战术"][int(camera.mode)]]
+	compact_speed_label.text = "%s · %s" % [XJSpaceUnits.speed(_display_speed()), ["跟随", "舰首隐藏", "战术"][int(camera.mode)]]
 	compact_speed_label.tooltip_text = instrument_title.text + "\n" + instrument_title.tooltip_text + "\n" + cargo_label.tooltip_text
 	instrument.tooltip_text = compact_speed_label.tooltip_text
 

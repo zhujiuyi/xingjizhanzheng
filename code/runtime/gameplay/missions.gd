@@ -1,6 +1,7 @@
 extends RefCounted
 const D = preload("res://contracts/contract_dtos.gd")
 const T = preload("res://contracts/contract_types.gd")
+const Space = preload("res://runtime/space_coordinates.gd")
 var g: RefCounted
 func _init(gameplay: RefCounted) -> void:g=gameplay
 
@@ -103,6 +104,9 @@ func accept(mission_id: String) -> bool:
 func record(kind: String,target: String,quantity: int) -> void:
 	var mission:D.MissionStateDto=active()
 	if mission==null or quantity<=0:return
+	if Space.supported(g.catalog) and kind in ["reach_anchor", "brake_at_anchor"]:
+		var anchor: Dictionary = g.definition("anchor_defs", "anchor_id", target)
+		if g.state.ship().status != T.ShipStatus.FLYING or not g.same_anchor_site(g.state.ship(), anchor) or g.anchor_distance(g.state.ship(), anchor) > float(anchor.get("interaction_radius_m", 0.0)): return
 	for obj in objectives(mission.mission_def_id):
 		var p:D.MissionObjectiveStateDto=progress(mission,obj.objective_index)
 		if p.progress_units>=obj.required_count:continue
@@ -215,7 +219,7 @@ func _station_location(station_id: String) -> Dictionary:
 func _anchor_location(anchor_id: String, target_id: String, kind: String, title: String) -> Dictionary:
 	var anchor: Dictionary = g.definition("anchor_defs", "anchor_id", anchor_id)
 	if anchor.is_empty(): return {}
-	return {"target_id": target_id, "target_kind": kind, "target_title": title, "anchor_id": anchor_id, "sector_id": str(anchor.sector_id), "position": Vector3(float(anchor.x_m), float(anchor.y_m), float(anchor.z_m)), "required_page": ""}
+	return {"target_id": target_id, "target_kind": kind, "target_title": title, "anchor_id": anchor_id, "site_id": Space.site_for_anchor(g.catalog, anchor_id), "sector_id": str(anchor.sector_id), "position": Vector3(float(anchor.x_m), float(anchor.y_m), float(anchor.z_m)), "required_page": ""}
 
 func _route_location(location: Dictionary, origin_sector: String) -> Dictionary:
 	if location.is_empty(): return {}
@@ -471,7 +475,7 @@ func rescue() -> bool:
 		for issue in g.state.rows("loan_issue_state"):
 			if issue.loan_id==loan.loan_id and issue.ship_instance_id==g.state.ship().ship_instance_id:station_id=g.definition("loan_service_defs","loan_service_id",loan.loan_service_id).station_id
 	for npc in g.state.rows("npc_state"):
-		if npc.alive and npc.sector_id==g.state.ship().sector_id and npc.behavior_phase in [T.NpcPhase.ACQUIRE,T.NpcPhase.PURSUE,T.NpcPhase.ATTACK,T.NpcPhase.DISENGAGE]:npc.behavior_phase=T.NpcPhase.RETURN
+		if npc.alive and g.same_entity_site("ship",g.state.ship(),"npc",npc) and npc.behavior_phase in [T.NpcPhase.ACQUIRE,T.NpcPhase.PURSUE,T.NpcPhase.ATTACK,T.NpcPhase.DISENGAGE]:npc.behavior_phase=T.NpcPhase.RETURN
 	var ship:D.ShipStateDto=null
 	for candidate in g.state.rows("ship_state"):
 		if candidate.status==T.ShipStatus.DOCKED and candidate.station_id==station_id and candidate.owner_player_id==g.state.player().player_id:

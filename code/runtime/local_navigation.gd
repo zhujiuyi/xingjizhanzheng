@@ -6,6 +6,7 @@ signal arrived(target_id: String)
 const T = preload("res://contracts/contract_types.gd")
 const D = preload("res://contracts/contract_dtos.gd")
 const Rules = preload("res://runtime/local_navigation_rules.gd")
+const Space = preload("res://runtime/space_coordinates.gd")
 var rules: Rules = Rules.new()
 var world: XJSector
 var state: XJRuntimeState
@@ -27,6 +28,15 @@ var _sector_id: String = ""
 var _configured: bool = false
 var combat_managed: bool = false
 var combat_distance_m: float = 0.0
+var path_length_m: float = 0.0
+var travel_duration_s: float = 0.0
+var travel_elapsed_s: float = 0.0
+var warp_heading: Vector3 = Vector3.FORWARD
+var _origin_site: String = ""
+var _destination_site: String = ""
+var _macro_origin: Dictionary = {}
+var _macro_destination: Dictionary = {}
+var _after_warp_mode: String = ""
 
 func configure(sector: XJSector, runtime: XJRuntimeState, definitions: XJCatalog, business: RefCounted, stability: Callable = Callable()) -> bool:
 	world = sector
@@ -38,12 +48,12 @@ func configure(sector: XJSector, runtime: XJRuntimeState, definitions: XJCatalog
 	phase = "idle"
 	target_id = ""
 	_clear_combat_order()
-	_configured = rules.load_rules()
+	_configured = rules.load_rules(catalog.table_names.has("site_defs"))
 	last_error = "" if _configured else rules.last_error
 	return _configured
 
 func active() -> bool:
-	return phase in ["warmup", "travel", "approach", "orbit"]
+	return phase in ["warmup", "travel", "arrival_check", "approach", "orbit"]
 
 func warp_active() -> bool:
 	return active() and mode == "warp"
@@ -56,7 +66,9 @@ func inspect(id: String) -> Dictionary:
 	var node: Node3D = entry.node
 	result.title = str(entry.title)
 	result.kind = str(entry.kind)
-	result.distance_m = world.flight.global_position.distance_to(node.global_position)
+	result.distance_m = world.target_distance(id)
+	result["remote_site"] = not world.target_is_local(id)
+	result["warp_distance_m"] = 0.0
 	result.approach_ready = true
 	result.orbit_ready = true
 	result.ready = true
@@ -64,6 +76,9 @@ func inspect(id: String) -> Dictionary:
 	result.dock_ready = entry.kind == "station" and pending.is_empty() and not bool(gameplay.call("in_combat"))
 	result.dock_reason = pending if entry.kind == "station" and not pending.is_empty() else "交战中不能停靠" if entry.kind == "station" and not result.dock_ready else ("仅空间站可以停靠" if entry.kind != "station" else "")
 	var target_rule: Dictionary = _target_rule(entry)
+	var arrival_point: Vector3 = _arrival_point(node, float(target_rule.warp_arrival_m)) if target_rule.warp_arrival_m != null else node.global_position
+	var path: float = _distance_to_landing(id, arrival_point)
+	result.warp_distance_m = path
 	if target_rule.warp_arrival_m == null:
 		result.warp_reason = "此目标只支持接近和环绕"
 	elif active():
@@ -72,12 +87,18 @@ func inspect(id: String) -> Dictionary:
 		result.warp_reason = pending + "后才能跃迁" if not pending.is_empty() else "脱离交战并等待设备周期结束后才能跃迁"
 	elif not _landing_clear(world.flight.global_position):
 		result.warp_reason = "先离开障碍物，再启动跃迁"
-	elif float(result.distance_m) < rules.value("min_warp_distance_m") or float(result.distance_m) <= float(target_rule.warp_arrival_m) + rules.value("arrival_tolerance_m"):
-		result.warp_reason = "已靠近目标，使用接近或停靠"
+	elif not is_finite(path) or path < rules.value("min_warp_distance_m"):
+		result.warp_reason = "实际航程 %s，最低跃迁航程 %s；使用接近或停靠" % [XJSpaceUnits.distance(path), XJSpaceUnits.distance(rules.value("min_warp_distance_m"))]
 	else:
-		var arrival_point: Vector3 = _arrival_point(node, float(target_rule.warp_arrival_m))
-		if not _landing_clear(arrival_point): result.warp_reason = "目标附近没有安全跃迁落点，请使用接近"
+		if world.target_is_local(id) and not _landing_clear(arrival_point): result.warp_reason = "目标附近没有安全跃迁落点，请使用接近"
 		else: result.warp_ready = true
+	if bool(result.remote_site):
+		result.approach_ready = result.warp_ready
+		result.approach_reason = result.warp_reason
+		result.dock_ready = entry.kind == "station" and result.warp_ready
+		result.dock_reason = result.warp_reason if entry.kind == "station" else "仅空间站可以停靠"
+		result.orbit_ready = false
+		result.orbit_reason = "目标位于其他地点，先跃迁抵达后再环绕"
 	return result
 
 func begin(requested_mode: String, id: String) -> bool:
@@ -105,7 +126,8 @@ func _begin(requested_mode: String, id: String, combat_order: bool = false, weap
 	# A validated combat toggle may replace ordinary movement or its own order.
 	# Preserve the old navigation, velocity and ownership until all checks pass.
 	if active(): release_to_manual(false)
-	mode = requested_mode
+	_after_warp_mode = requested_mode if requested_mode in ["approach", "dock"] and bool(context.get("remote_site", false)) else ""
+	mode = "warp" if not _after_warp_mode.is_empty() else requested_mode
 	target_id = id
 	combat_managed = combat_order
 	combat_distance_m = weapon_distance_m if combat_order else 0.0
@@ -119,6 +141,14 @@ func _begin(requested_mode: String, id: String, combat_order: bool = false, weap
 		last_safe_position = origin
 		_safe_positions = [origin]
 		destination = _arrival_point(node, float(_target_rule(world.targets[id]).warp_arrival_m))
+		warp_heading = world.target_direction(id)
+		_origin_site = Space.current_site(state)
+		_destination_site = world.target_site(id)
+		path_length_m = _distance_to_landing(id, destination)
+		travel_elapsed_s = 0.0
+		travel_duration_s = maxf(rules.value("min_warp_travel_s"), path_length_m / rules.value("warp_speed_mps")) if rules.version == 2 else path_length_m / rules.value("warp_speed_mps")
+		_macro_origin = Space.entity_components(state, catalog, "ship", state.ship())
+		_macro_destination = Space.global_components(catalog, _destination_site, destination)
 		remaining_s = rules.value("warmup_s")
 		world.flight.velocity = Vector3.ZERO
 		world.flight.write_back()
@@ -147,18 +177,42 @@ func tick(delta: float) -> void:
 	var node: Node3D = world.targets[target_id].node
 	if mode == "warp":
 		if phase == "warmup":
-			var angle: float = _heading_delta(destination - world.flight.global_position, delta)
+			var angle: float = _heading_delta(warp_heading, delta)
 			remaining_s = maxf(0.0, remaining_s - delta)
 			if remaining_s <= 0.0 and angle <= rules.value("alignment_tolerance_rad"):
 				phase = "travel"
+				remaining_s = travel_duration_s
+				if _cross_site(): world.set_collision_site(_destination_site)
 				changed.emit(mode, phase, "正在跃迁 · " + str(world.targets[target_id].title))
 			return
+		if phase == "arrival_check":
+			if not _landing_clear(destination): _abort("目标落点被占用，已退回出发地点"); return
+			_arrive()
+			return
 		if not _landing_clear(destination): _abort("目标落点被占用，跃迁已停止"); return
+		if _cross_site():
+			travel_elapsed_s = minf(travel_duration_s, travel_elapsed_s + delta)
+			remaining_s = maxf(0.0, travel_duration_s - travel_elapsed_s)
+			var fraction: float = travel_elapsed_s / travel_duration_s
+			world.strategic_render_position = {"x": lerpf(float(_macro_origin.x), float(_macro_destination.x), fraction), "y": lerpf(float(_macro_origin.y), float(_macro_destination.y), fraction), "z": lerpf(float(_macro_origin.z), float(_macro_destination.z), fraction)}
+			if remaining_s <= 0.0:
+				phase = "arrival_check"
+				Space.assign(state, "ship", state.ship().ship_instance_id, _destination_site)
+				world.strategic_render_position = {}
+				world.flight.global_position = destination
+				world.flight.velocity = Vector3.ZERO
+				world.flight.write_back()
+				world.refresh_site()
+				if not world.sync_entities(): _abort(world.last_error); return
+				world.flight.reset_physics_interpolation()
+			return
 		var previous: Vector3 = world.flight.global_position
-		var next: Vector3 = previous.move_toward(destination, rules.value("warp_speed_mps") * delta)
+		var effective_speed: float = minf(rules.value("warp_speed_mps"), path_length_m / rules.value("min_warp_travel_s")) if rules.version == 2 else rules.value("warp_speed_mps")
+		var next: Vector3 = previous.move_toward(destination, effective_speed * delta)
 		if _landing_clear(next):
 			last_safe_position = next
 			_safe_positions.append(next)
+			if _safe_positions.size() > 256: _safe_positions.remove_at(1)
 		world.flight.global_position = next
 		world.flight.velocity = (next - previous) / delta
 		world.flight.write_back()
@@ -309,9 +363,18 @@ func _stable() -> bool:
 	return bool(gameplay.call("save_eligible")) and not world.projectiles.has_pending()
 
 func _arrival_point(node: Node3D, distance: float) -> Vector3:
+	for id: String in world.targets:
+		if world.targets[id].node == node and not world.target_is_local(id): return node.global_position - world.target_direction(id) * distance
 	var radial: Vector3 = world.flight.global_position - node.global_position
 	if radial.length_squared() < 0.000001: radial = world.flight.global_basis.z
 	return node.global_position + radial.normalized() * distance
+
+func _distance_to_landing(id: String, point: Vector3) -> float:
+	if not Space.supported(catalog) or world.target_is_local(id): return world.flight.global_position.distance_to(point)
+	return Space.scalar_distance(Space.entity_components(state, catalog, "ship", state.ship()), Space.global_components(catalog, world.target_site(id), point))
+
+func _cross_site() -> bool:
+	return Space.supported(catalog) and not _origin_site.is_empty() and _origin_site != _destination_site
 
 func _landing_clear(point: Vector3) -> bool:
 	if not is_instance_valid(world) or not is_instance_valid(world.flight) or not world.is_inside_tree(): return false
@@ -335,6 +398,16 @@ func _shapes_clear(node: Node, displacement: Vector3) -> bool:
 
 func _zero_motion() -> void:
 	if is_instance_valid(world) and is_instance_valid(world.flight):
+		if warp_active() and _cross_site():
+			world.strategic_render_position = {}
+			# Travel is a strategic route between physical sites. An interrupted
+			# route restores the durable departure site, never an AU Vector3 pose.
+			if Space.current_site(state) == _origin_site: world.set_collision_site(_origin_site)
+			else:
+				Space.assign(state, "ship", state.ship().ship_instance_id, _origin_site)
+				world.flight.global_position = origin
+				world.refresh_site()
+				world.sync_entities()
 		if warp_active() and not _landing_clear(world.flight.global_position): _recover_warp_position()
 		world.flight.clear_intent()
 		world.flight.velocity = Vector3.ZERO
@@ -352,7 +425,7 @@ func _recover_warp_position() -> void:
 			last_safe_position = _safe_positions[index]
 			return
 	if _landing_clear(origin): world.flight.global_position = origin; last_safe_position = origin; return
-	if _landing_clear(destination): world.flight.global_position = destination; last_safe_position = destination; return
+	if not _cross_site() and _landing_clear(destination): world.flight.global_position = destination; last_safe_position = destination; return
 	# Dynamic bodies may occupy old samples. Search around the origin with spacing
 	# derived from the actual collider dimensions and SQLite safety margin.
 	var spacing: float = _collider_radius(world.flight) * 2.0 + rules.value("collision_margin_m")
@@ -396,7 +469,19 @@ func _clear_combat_order() -> void:
 
 func _arrive() -> void:
 	var id: String = target_id
+	# A completed strategic arrival keeps the destination context. Cancellation
+	# and failed clearance use _zero_motion's departure restoration instead.
+	if _cross_site():
+		_origin_site = _destination_site
+		world.strategic_render_position = {}
 	_zero_motion()
+	if not _after_warp_mode.is_empty():
+		mode = _after_warp_mode
+		_after_warp_mode = ""
+		phase = "approach"
+		remaining_s = 0.0
+		changed.emit(mode, phase, "已抵达地点，正在" + ("接近并停靠" if mode == "dock" else "接近目标"))
+		return
 	phase = "arrived"
 	remaining_s = 0.0
 	_clear_combat_order()

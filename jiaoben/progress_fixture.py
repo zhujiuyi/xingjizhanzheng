@@ -22,18 +22,19 @@ sys.path.insert(0, str(ROOT / "jiaoben"))
 import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
-MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql")
-FORMAT_VERSION = 7
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_6.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_6"
+MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql")
+FORMAT_VERSION = 8
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_7.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_7"
 REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_3": PROGRESS_DIR / "catalog_adapter_v0_3.sql",
     "frozen_catalog_v0_4": PROGRESS_DIR / "catalog_adapter_v0_4.sql",
     "frozen_catalog_v0_4_r2": PROGRESS_DIR / "catalog_adapter_v0_4_r2.sql",
     "frozen_catalog_v0_5": PROGRESS_DIR / "catalog_adapter_v0_5.sql",
-    "frozen_catalog_v0_6": ADAPTER,
+    "frozen_catalog_v0_6": PROGRESS_DIR / "catalog_adapter_v0_6.sql",
+    "frozen_catalog_v0_7": ADAPTER,
 }
-RULE_CODE_VERSION = "singleplayer_combat_v2"
+RULE_CODE_VERSION = "singleplayer_space_v3"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
 STATE_TABLES = (
@@ -45,7 +46,7 @@ STATE_TABLES = (
     "discovery_state", "unlock_state", "reputation_state", "resource_state", "gate_state",
     "ship_gate_cooldown_state", "sector_state", "station_economy_state", "shop_stock_state",
     "shop_ship_stock_state", "npc_state", "production_state", "rng_state", "action_receipt_state", "transfer_state", "base_module_state",
-    "encounter_state", "salvage_package_state",
+    "encounter_state", "salvage_package_state", "spatial_state",
 )
 
 
@@ -290,6 +291,8 @@ def initial_state(connection, snapshot, world, content):
         "vel_x": 0., "vel_y": 0., "vel_z": 0., "angular_x": 0., "angular_y": 0., "angular_z": 0.,
         "shield": ship["shield_max"], "armor": ship["armor_max"], "hull": ship["hull_max"], "energy": ship["energy_max"], "heat": 0.,
         "overheated": 0, "shield_delay_remaining_s": 0., "state_version": 0, "policy_id": grant["policy_id"]})
+    site = next(r["site_id"] for r in frozen("anchor_site_defs") if r["anchor_id"] == station["station_anchor_id"])
+    insert(connection, "spatial_state", {**ctx, "entity_kind": "ship", "entity_id": ship_id, "site_id": site})
     base_container = {**ctx, "owner_player_id": player_id, "sector_id": station["sector_id"]}
     insert(connection, "container_state", {**base_container, "container_id": "hold-cargo", "kind": "cargo", "ship_instance_id": ship_id, "ship_def_id": ship["ship_id"]})
     insert(connection, "container_state", {**base_container, "container_id": "warehouse", "kind": "station", "station_id": station["station_id"]})

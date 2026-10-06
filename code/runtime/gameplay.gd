@@ -8,6 +8,7 @@ const Economy = preload("res://runtime/gameplay/economy.gd")
 const Missions = preload("res://runtime/gameplay/missions.gd")
 const Work = preload("res://runtime/gameplay/work.gd")
 const Encounters = preload("res://runtime/gameplay/encounters.gd")
+const Space = preload("res://runtime/space_coordinates.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
 var inventory: RefCounted
@@ -97,8 +98,40 @@ func grant_unlock(unlock_id: String) -> void:
 func station() -> String:
 	return state.player().docked_station_id if state.player().has_docked_station_id else ""
 
+func spatial_site(kind: String, entity_id: String) -> String:
+	return Space.site_for_entity(state, kind, entity_id) if Space.supported(catalog) else ""
+
+func assign_anchor_site(kind: String, entity_id: String, anchor_id: String) -> bool:
+	if not Space.supported(catalog): return true
+	return Space.assign(state, kind, entity_id, Space.site_for_anchor(catalog, anchor_id))
+
+func same_anchor_site(row: RefCounted, anchor: Dictionary) -> bool:
+	if row == null or anchor.is_empty(): return false
+	if str(row.get("sector_id")) != str(anchor.get("sector_id", "")): return false
+	return Space.same_site(state, catalog, Space.row_kind(row), Space.row_id(row), str(anchor.anchor_id))
+
+func same_entity_site(kind_a: String, row_a: RefCounted, kind_b: String, row_b: RefCounted) -> bool:
+	if row_a == null or row_b == null or str(row_a.get("sector_id")) != str(row_b.get("sector_id")): return false
+	if not Space.supported(catalog): return true
+	var a: String = spatial_site(kind_a, Space.row_id(row_a))
+	return not a.is_empty() and a == spatial_site(kind_b, Space.row_id(row_b))
+
+func anchor_distance(row: RefCounted, anchor: Dictionary) -> float:
+	return Space.anchor_distance(state, catalog, row, anchor)
+
+func entity_distance(kind_a: String, row_a: RefCounted, kind_b: String, row_b: RefCounted) -> float:
+	return Space.entity_distance(state, catalog, kind_a, row_a, kind_b, row_b)
+
+func remove_npc(row: D.NpcStateDto) -> void:
+	if row == null: return
+	Space.remove(state, "npc", row.npc_instance_id)
+	state.remove("npc_state", row)
+
 func allowed_service(service: String) -> bool:
 	if station().is_empty(): return fail("需要先停靠站点")
+	var station_def: Dictionary = definition("station_defs", "station_id", station())
+	var anchor: Dictionary = definition("anchor_defs", "anchor_id", str(station_def.get("station_anchor_id", "")))
+	if Space.supported(catalog) and (state.ship().status != T.ShipStatus.DOCKED or not same_anchor_site(state.ship(), anchor)): return fail("舰船不在此站点的空间位置")
 	for row in rows("station_service_defs"):
 		if row.station_id == station() and row.service_id == service:
 			return true if unlocked(row.required_unlock_id) else fail("站点服务尚未解锁")
@@ -191,7 +224,8 @@ func _dock(station_id: String) -> bool:
 	if def.is_empty() or def.sector_id != ship.sector_id: return fail("站点不在当前星区")
 	if ship.status != T.ShipStatus.FLYING or in_combat(): return fail("当前不能停靠")
 	var anchor: Dictionary = definition("anchor_defs", "anchor_id", def.station_anchor_id)
-	if position(ship).distance_to(anchor_position(anchor)) > rule("dock_radius_m") or velocity(ship).length() > rule("dock_max_speed_mps"): return fail("需进入停靠范围并减速")
+	if not same_anchor_site(ship, anchor): return fail("需要先跃迁至站点所在地点")
+	if anchor_distance(ship, anchor) > rule("dock_radius_m") or velocity(ship).length() > rule("dock_max_speed_mps"): return fail("需进入停靠范围并减速")
 	work.stop_scan(); work.stop_mining()
 	ship.status = T.ShipStatus.DOCKED
 	ship.has_station_id = true; ship.station_id = station_id
@@ -211,6 +245,9 @@ func _undock() -> bool:
 	var def: Dictionary = definition("station_defs", "station_id", station_id)
 	var anchor: Dictionary = definition("anchor_defs", "anchor_id", def.undock_anchor_id)
 	var ship: D.ShipStateDto = state.ship()
+	var station_anchor: Dictionary = definition("anchor_defs", "anchor_id", str(def.get("station_anchor_id", "")))
+	if ship.status != T.ShipStatus.DOCKED or not same_anchor_site(ship, station_anchor): return fail("舰船不在当前停靠站点")
+	if not assign_anchor_site("ship", ship.ship_instance_id, str(anchor.get("anchor_id", ""))): return fail("出港地点空间定义不可用")
 	ship.status = T.ShipStatus.FLYING; ship.has_station_id = false; ship.station_id = ""
 	ship.pos_x = anchor.x_m; ship.pos_y = anchor.y_m; ship.pos_z = anchor.z_m
 	var rot: Quaternion = Quaternion(Vector3.UP, anchor.yaw_rad)
@@ -222,6 +259,9 @@ func _undock() -> bool:
 func _switch(ship_id: String) -> bool:
 	var candidate: D.ShipStateDto = state.find("ship_state", "ship_instance_id", ship_id)
 	if station().is_empty() or candidate == null or candidate.status != T.ShipStatus.DOCKED or candidate.station_id != station() or candidate.owner_player_id != state.player().player_id: return fail("只能在同站点换船")
+	var station_def: Dictionary = definition("station_defs", "station_id", station())
+	var anchor: Dictionary = definition("anchor_defs", "anchor_id", str(station_def.get("station_anchor_id", "")))
+	if not same_anchor_site(candidate, anchor): return fail("待切换舰船不在本站空间位置")
 	work.stop_scan(); work.stop_mining()
 	state.player().controlled_ship_id = ship_id
 	return true
@@ -482,6 +522,7 @@ func apply_damage(victim: RefCounted, raw: Vector3, resist: Dictionary) -> float
 func damage_npc(instance_id: String, raw_vector: Vector3) -> float:
 	var npc: D.NpcStateDto = state.find("npc_state", "npc_instance_id", instance_id)
 	if npc == null or not npc.alive or not raw_vector.is_finite() : return 0.0
+	if Space.supported(catalog) and not same_entity_site("ship", state.ship(), "npc", npc): return 0.0
 	var spawn: Dictionary = definition("npc_spawn_defs", "spawn_id", npc.spawn_id)
 	var def: Dictionary = definition("npc_full_defs", "npc_id", spawn.npc_id)
 	var resist: Dictionary = {"shield":Vector3.ZERO,"armor":Vector3.ZERO,"hull":Vector3.ZERO}
@@ -495,7 +536,7 @@ func damage_npc(instance_id: String, raw_vector: Vector3) -> float:
 		if spawn.bounty_enabled and not npc.bounty_claimed: state.player().credit += def.reward_credit; npc.bounty_claimed = true
 		var packaged: bool = encounters.on_destroy(npc)
 		if spawn.loot_enabled and not npc.loot_claimed and not packaged:
-			var wreck: String = inventory.wreck(npc.sector_id, position(npc))
+			var wreck: String = inventory.wreck(npc.sector_id, position(npc), spatial_site("npc", npc.npc_instance_id))
 			for loot in rows("npc_loot_defs"):
 				if loot.archetype_id == def.archetype_id: inventory.grant(wreck, loot.item_id, loot.quantity, "normal_owned")
 			npc.loot_claimed = true
@@ -528,22 +569,22 @@ func _sync_spawns(delta: float = 0.0) -> void:
 		var mission: D.MissionStateDto = missions.active_for_target("destroy_spawn", spawn.spawn_id)
 		if spawn.occurrence_mode == "mission_scoped" and mission == null:
 			for retired in state.rows("npc_state").duplicate():
-				if retired.spawn_id == spawn.spawn_id: state.remove("npc_state", retired)
+				if retired.spawn_id == spawn.spawn_id: remove_npc(retired)
 			continue
 		var existing: D.NpcStateDto = state.find("npc_state", "spawn_id", spawn.spawn_id)
 		if existing != null:
 			if spawn.occurrence_mode == "mission_scoped" and existing.mission_instance_id != mission.mission_instance_id:
-				state.remove("npc_state", existing)
+				remove_npc(existing)
 				existing = null
 		if existing != null:
 			if existing.alive: continue
 			if spawn.occurrence_mode == "mission_scoped":
 				if existing.mission_instance_id == mission.mission_instance_id: continue
-				state.remove("npc_state",existing)
+				remove_npc(existing)
 			else:
 				existing.respawn_remaining_s = maxf(0, existing.respawn_remaining_s - delta)
 				if spawn.respawn_s == null or existing.respawn_remaining_s > 0: continue
-				state.remove("npc_state",existing)
+				remove_npc(existing)
 		var row: D.NpcStateDto = D.NpcStateDto.new()
 		var def: Dictionary = definition("npc_full_defs", "npc_id", spawn.npc_id)
 		var anchor: Dictionary = definition("anchor_defs", "anchor_id", spawn.anchor_id)
@@ -554,11 +595,12 @@ func _sync_spawns(delta: float = 0.0) -> void:
 		row.alive = true; row.shield = def.shield_max; row.armor = def.armor_max; row.hull = def.hull_max
 		row.pos_x = anchor.x_m; row.pos_y = anchor.y_m; row.pos_z = anchor.z_m; row.behavior_phase = T.NpcPhase.PATROL
 		state.add("npc_state", row)
+		assign_anchor_site("npc", row.npc_instance_id, str(anchor.anchor_id))
 
 func in_combat() -> bool:
 	if combat_remaining_s > 0: return true
 	for npc in state.rows("npc_state"):
-		if npc.sector_id == state.current_sector() and npc.alive and npc.behavior_phase in [T.NpcPhase.ACQUIRE,T.NpcPhase.PURSUE,T.NpcPhase.ATTACK,T.NpcPhase.DISENGAGE]: return true
+		if same_entity_site("ship", state.ship(), "npc", npc) and npc.alive and npc.behavior_phase in [T.NpcPhase.ACQUIRE,T.NpcPhase.PURSUE,T.NpcPhase.ATTACK,T.NpcPhase.DISENGAGE]: return true
 	return false
 
 func save_blocked() -> bool:

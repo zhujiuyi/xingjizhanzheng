@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "code/data/catalog.db"
 SCHEMA = ROOT / "code/database/catalog_schema.sql"
 SEED = ROOT / "code/database/catalog_seed.sql"
+SPACE = ROOT / "code/database/space_v7.sql"
 HASH_ALGORITHM = "catalog_hash_v1"
 CONTENT_VIEWS = ("effective_connection_defs", "module_full_defs", "npc_full_defs", "mission_summary_defs")
 # Explicit table registry; column order and PK order come from the reviewed DDL.
@@ -112,11 +113,17 @@ CONTENT_TABLES = (
     "ship_weapon_permissions",
     "drone_defs",
     "system_lighting_defs",
+    "site_defs",
+    "anchor_site_defs",
+    "celestial_defs",
 )
 
 
 # Reviewed column/type/primary-key registry. Schema drift requires explicit registration.
 CONTENT_COLUMNS = {
+    'site_defs': 'site_id:TEXT:1|sector_id:TEXT:0|display_name:TEXT:0|site_kind:TEXT:0|x_m:REAL:0|y_m:REAL:0|z_m:REAL:0|pivot_x_m:REAL:0|pivot_y_m:REAL:0|pivot_z_m:REAL:0|local_radius_m:REAL:0',
+    'anchor_site_defs': 'anchor_id:TEXT:1|site_id:TEXT:0',
+    'celestial_defs': 'celestial_id:TEXT:1|sector_id:TEXT:0|display_name:TEXT:0|celestial_kind:TEXT:0|x_m:REAL:0|y_m:REAL:0|z_m:REAL:0|radius_m:REAL:0',
     'weapon_behavior_defs': 'module_id:TEXT:1|family_id:TEXT:0|size_class:INTEGER:0|fire_mode:TEXT:0|fire_cone_half_angle_rad:REAL:0',
     'ship_weapon_permissions': 'ship_id:TEXT:1|family_id:TEXT:2|max_size:INTEGER:0|max_installed:INTEGER:0',
     'drone_defs': 'module_id:TEXT:1|drone_count:INTEGER:0|speed_mps:REAL:0|acceleration_mps2:REAL:0|turn_rad_s:REAL:0|attack_range_m:REAL:0|projectile_speed_mps:REAL:0|sortie_timeout_s:REAL:0|return_radius_m:REAL:0',
@@ -485,6 +492,67 @@ def validate_content_graph(connection: sqlite3.Connection) -> None:
             break
     require(completed == set(missions), f"Mission prerequisite/unlock cycle or unreachable target: {set(missions) - completed}")
     validate_combat_content(connection)
+    validate_space_content(connection)
+
+
+def validate_space_content(connection: sqlite3.Connection) -> None:
+    """Verify astronomical/local separation and complete frozen location closure."""
+    def rows(table: str) -> list[dict[str, object]]:
+        cursor = connection.execute(f'SELECT * FROM "{table}"')
+        columns = [column[0] for column in cursor.description]
+        return [dict(zip(columns, row, strict=True)) for row in cursor]
+
+    def require(valid: bool, message: str) -> None:
+        if not valid:
+            raise ValueError(message)
+    sites = {row["site_id"]: row for row in rows("site_defs")}
+    anchors = {row["anchor_id"]: row for row in rows("anchor_defs")}
+    mapping = {row["anchor_id"]: row["site_id"] for row in rows("anchor_site_defs")}
+    require(set(mapping) == set(anchors), "Every anchor must have exactly one astronomical site")
+    require(set(mapping.values()) == set(sites), "An astronomical site cannot be empty or unreferenced")
+    for aid, sid in mapping.items():
+        anchor, site = anchors[aid], sites[sid]
+        require(anchor["sector_id"] == site["sector_id"], f"Anchor/site sector mismatch: {aid}")
+        require(math.dist((anchor["x_m"], anchor["y_m"], anchor["z_m"]),
+                          (site["pivot_x_m"], site["pivot_y_m"], site["pivot_z_m"])) < site["local_radius_m"],
+                f"Local anchor outside site radius: {aid}")
+    for station in rows("station_defs"):
+        require(mapping[station["station_anchor_id"]] == mapping[station["undock_anchor_id"]],
+                f"Undock changes astronomical site: {station['station_id']}")
+        for anchor in anchors.values():
+            if anchor["sector_id"] == station["sector_id"] and anchor["anchor_kind"] == "flight_marker":
+                require(mapping[anchor["anchor_id"]] == mapping[station["station_anchor_id"]],
+                        "Basic flight tutorial must remain inside its station site")
+    endpoints = rows("gate_endpoint_defs")
+    for endpoint in endpoints:
+        inverse = next(row for row in endpoints if row["connection_id"] == endpoint["connection_id"] and
+                       row["origin_sector_id"] == endpoint["target_sector_id"] and row["target_sector_id"] == endpoint["origin_sector_id"])
+        require(mapping[endpoint["entry_anchor_id"]] == mapping[inverse["exit_anchor_id"]],
+                f"Gate entry/return exit split into different sites: {endpoint['endpoint_id']}")
+    spawns = {row["spawn_id"]: row for row in rows("npc_spawn_defs")}
+    for point in rows("npc_patrol_points"):
+        require(mapping[point["anchor_id"]] == mapping[spawns[point["spawn_id"]]["anchor_id"]],
+                f"NPC patrol crosses astronomical sites: {point['spawn_id']}")
+    encounters = {row["encounter_id"]: row for row in rows("encounter_defs")}
+    for member in rows("encounter_members"):
+        require(mapping[spawns[member["spawn_id"]]["anchor_id"]] == mapping[encounters[member["encounter_id"]]["anchor_id"]],
+                f"Encounter fleet must share one local site: {member['encounter_id']}")
+    celestial = rows("celestial_defs")
+    for sector in rows("sector_defs"):
+        sid = sector["sector_id"]
+        local_sites = [row for row in sites.values() if row["sector_id"] == sid]
+        require(len(local_sites) >= 5, f"System lacks differentiated locations: {sid}")
+        distances = [math.dist((a["x_m"], a["y_m"], a["z_m"]), (b["x_m"], b["y_m"], b["z_m"]))
+                     for index, a in enumerate(local_sites) for b in local_sites[index+1:]]
+        require(min(distances) >= 0.01 * 149597870700.0, f"Astronomical sites still too close: {sid}")
+        require(max(distances) >= 0.5 * 149597870700.0, f"System still lacks an astronomical span: {sid}")
+        bodies = [row for row in celestial if row["sector_id"] == sid]
+        require(sum(row["celestial_kind"] == "star" for row in bodies) == 1, f"System needs one authoritative star: {sid}")
+        require(any(row["celestial_kind"] == "planet" for row in bodies), f"System lacks a real planetary backdrop: {sid}")
+        for body in bodies:
+            for site in local_sites:
+                distance = math.dist((body["x_m"], body["y_m"], body["z_m"]), (site["x_m"], site["y_m"], site["z_m"]))
+                require(distance > body["radius_m"] + site["local_radius_m"], f"Playable site inside celestial body: {site['site_id']}")
 
 
 def validate_combat_content(connection: sqlite3.Connection) -> None:
@@ -639,7 +707,7 @@ def build_catalog(output: Path = DEFAULT_OUTPUT) -> dict[str, object]:
         connection.execute("PRAGMA journal_mode=DELETE")
         connection.execute("PRAGMA synchronous=EXTRA")
         # One explicit transaction: schema, seed, checks and logical hash.
-        source = "BEGIN IMMEDIATE;\n" + SCHEMA.read_text(encoding="utf-8") + "\n" + SEED.read_text(encoding="utf-8")
+        source = "BEGIN IMMEDIATE;\n" + SCHEMA.read_text(encoding="utf-8") + "\n" + SEED.read_text(encoding="utf-8") + "\n" + SPACE.read_text(encoding="utf-8")
         connection.executescript(source)
         validate_database(connection)
         content_hash = logical_content_hash(connection)

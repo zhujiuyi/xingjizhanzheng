@@ -62,7 +62,7 @@ func check_instrument_content(ui: Node, label: String) -> void:
 	check(separate, "instrument labels and visible dial own separate bounds " + label)
 	if not compact: return
 	var ship: D.ShipStateDto = host.state.ship()
-	var speed_text: String = "%.0f m/s" % Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length()
+	var speed_text: String = XJSpaceUnits.speed(Vector3(ship.vel_x, ship.vel_y, ship.vel_z).length())
 	check(readable and not ui.dial.is_visible_in_tree() and ui.compact_speed_label.text.begins_with(speed_text) and ui.compact_speed_label.tooltip_text.contains("显示舰船"), "compact two-column readout retains readable values, true speed and view recovery " + label)
 	var ship_area: Rect2 = Rect2(ui.root.size * 0.5 - Vector2(36, 28), Vector2(72, 56))
 	check(not ui.equipment_bar.get_global_rect().intersects(ship_area) and not ui.instrument.get_global_rect().intersects(ship_area) and not ui.instrument.get_global_rect().intersects(ui.navigation.get_global_rect()), "compact bottom controls preserve central hull area and separate navigation " + label)
@@ -209,7 +209,7 @@ func _run() -> void:
 	host.world.flight.velocity = Vector3(3, 4, 12)
 	host.world.flight.write_back()
 	ui.tick(1.0)
-	check(ui.compact_speed_label.is_visible_in_tree() and ui.compact_speed_label.text.begins_with("13 m/s"), "compact speed reads a real nonzero flight velocity after production write-back")
+	check(ui.compact_speed_label.is_visible_in_tree() and ui.compact_speed_label.text.begins_with(XJSpaceUnits.speed(13.0)), "compact speed reads a real nonzero flight velocity in the appropriate unit after production write-back")
 	host.camera.bind(host.world.flight, host.store.catalog, T.CameraMode.FRONT)
 	ui.tick(1.0)
 	check(ui.compact_speed_label.text.contains("舰首隐藏") and ui.compact_speed_label.tooltip_text.contains("显示舰船"), "compact FRONT view explains the hidden exterior and actual recovery action")

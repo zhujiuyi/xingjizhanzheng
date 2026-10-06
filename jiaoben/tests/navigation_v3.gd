@@ -202,7 +202,7 @@ func _run() -> void:
 			host.ui.target_id = key; nav.selected_id = key; break
 	host.ui._update_navigation()
 	var selected_card: XJOverviewPanel = host.ui.overview
-	check(selected_card.is_visible_in_tree() and selected_card.selected_id == host.ui.target_id and selected_card.selected_distance.text.contains("航向参考") and not selected_card.selected_distance.text.contains("距离"), "visible selected card labels scenic planet as bearing rather than compressed physical distance")
+	check(selected_card.is_visible_in_tree() and selected_card.selected_id == host.ui.target_id and selected_card.selected_distance.text.contains("航向参考") and selected_card.selected_distance.text.contains(XJSpaceUnits.distance(host.world.target_distance(host.ui.target_id))), "visible selected card preserves celestial bearing eligibility and displays its authoritative distance")
 	check(not nav.selection_frame.visible and not selected_card.action_buttons["nav_warp"].visible and not selected_card.action_buttons["nav_approach"].visible and not selected_card.action_buttons["nav_orbit"].visible, "bearing selection owns one readout and offers no unsupported movement commands")
 	var dead := Node3D.new()
 	host.world.add_child(dead)

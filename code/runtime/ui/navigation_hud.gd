@@ -1,7 +1,7 @@
 class_name XJNavigationHUD
 extends Control
-## Local echoes use authoritative detection radius. Known scenic celestial
-## bearings sit on the perimeter and are explicitly distinguished from echoes.
+## Local echoes use authoritative detection radius. Known remote locations and
+## celestial bearings sit on the perimeter, distinguished from local echoes.
 signal selected(target_id: String)
 const UISkin = preload("res://runtime/ui_theme.gd")
 const Navigation = preload("res://runtime/navigation_catalog.gd")
@@ -51,6 +51,10 @@ class Radar extends Control:
 			elif contact.kind == "gate":
 				draw_polyline(PackedVector2Array([point + Vector2(0, -5), point + Vector2(5, 0), point + Vector2(0, 5), point + Vector2(-5, 0), point + Vector2(0, -5)]), color, 1.5, true)
 			else: draw_rect(Rect2(point - Vector2(3, 3), Vector2(6, 6)), color, false, 1.3)
+			if bool(contact.bearing):
+				var outward: Vector2 = (point - center).normalized()
+				var across: Vector2 = outward.orthogonal()
+				draw_polyline(PackedVector2Array([point + outward * 5 - across * 3, point + outward * 9, point + outward * 5 + across * 3]), color, 1.0, true)
 			if contact.id == host.selected_id: draw_arc(point, 9, 0, TAU, 24, UISkin.TEXT, 1.3, true)
 			var elevation_threshold: float = float(contact.distance_m) * 0.12 if contact.bearing else host.radius_m() * 0.12
 			if absf(float(contact.height_m)) > elevation_threshold:
@@ -61,7 +65,7 @@ class Radar extends Control:
 		# range remains in the header; keep the plot clear of optional captions.
 		if size.y >= face.get_height(10) * 6.0:
 			draw_string(face, Vector2(0, 12), "舰首 ↑", HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, UISkin.MUTED)
-			draw_string(face, Vector2(0, size.y - 9), "敌舰 / 设施 / 天体航向", HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, UISkin.MUTED)
+			draw_string(face, Vector2(0, size.y - 9), "局部回波 / 边缘航向", HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, UISkin.MUTED)
 	func _gui_input(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			var closest: String = ""
@@ -105,7 +109,7 @@ func _ready() -> void:
 		row.add_child(button)
 	radar = Radar.new()
 	radar.host = self
-	radar.tooltip_text = "左键拖动观察 · 双击总览接近 · 滚轮缩放\n雷达以舰首向上：敌舰、设施、天体航向；上下箭头表示相对高度。量程由上方控件设置。"
+	radar.tooltip_text = "左键拖动观察 · 双击总览接近 · 滚轮缩放\n雷达以舰首向上。内部为当前量程内的局部回波；边缘带外向箭头的是远程地点或天体航向，并非量程内回波。上下箭头表示相对高度。"
 	radar.custom_minimum_size = Vector2(200, 186)
 	layout.add_child(radar)
 	selection_frame = PanelContainer.new()
@@ -154,7 +158,22 @@ func _render_ship_transform() -> Transform3D:
 		return rig.call("render_ship_transform")
 	return world.flight.get_global_transform_interpolated()
 
-func _render_target_position(node: Node3D) -> Vector3:
+func _target_distance(id: String, node: Node3D) -> float:
+	if world.has_method("target_distance"): return float(world.call("target_distance", id))
+	# Legacy presentation-only fixtures have no strategic coordinates.
+	return world.flight.global_position.distance_to(node.global_position)
+
+func _target_is_local(id: String) -> bool:
+	return bool(world.call("target_is_local", id)) if world.has_method("target_is_local") else true
+
+func _target_direction(id: String, node: Node3D) -> Vector3:
+	return world.call("target_direction", id) if world.has_method("target_direction") else world.flight.global_position.direction_to(node.global_position)
+
+func _render_target_position(node: Node3D, id: String = "") -> Vector3:
+	if not id.is_empty() and not _target_is_local(id) and is_instance_valid(rig) and is_instance_valid(rig.camera):
+		# A remote hidden node only stores its site's local encoding. Project its
+		# true strategic direction within the far plane; never project that code.
+		return rig.camera.global_position + _target_direction(id, node) * rig.camera.far * 0.7
 	return node.get_global_transform_interpolated().origin
 
 func refresh() -> void:
@@ -164,13 +183,14 @@ func refresh() -> void:
 	for target: Dictionary in world.targets.values():
 		var node: Variant = target.get("node")
 		if not is_instance_valid(node) or not node is Node3D: continue
-		var distance: float = world.flight.global_position.distance_to(node.global_position)
+		var id: String = str(target.id)
+		var distance: float = _target_distance(id, node)
 		if world.has_method("contact_visible") and not world.call("contact_visible", target, distance): continue
-		var relative: Vector3 = render_ship.basis.inverse() * (_render_target_position(node) - render_ship.origin)
-		var bearing: bool = bool(target.get("navigation_only", false))
+		var bearing: bool = bool(target.get("navigation_only", false)) or not _target_is_local(id)
+		var relative: Vector3 = render_ship.basis.inverse() * _target_direction(id, node) if bearing else render_ship.basis.inverse() * (_render_target_position(node, id) - render_ship.origin)
 		if not bearing and distance > minf(radius_m(), sensor_limit): continue
-		contacts.append({"id": str(target.id), "title": str(target.title), "kind": str(target.kind), "relative": relative, "height_m": relative.y, "distance_m": distance, "bearing": bearing})
-	if is_instance_valid(range_label): range_label.text = ("雷达 %.1f km" if size.x < 950 else "局部态势 · %.1f km") % (radius_m() / 1000.0)
+		contacts.append({"id": id, "title": str(target.title), "kind": str(target.kind), "relative": relative, "height_m": float(relative.y) * distance if bearing else float(relative.y), "distance_m": distance, "bearing": bearing})
+	if is_instance_valid(range_label): range_label.text = ("雷达 " if size.x < 950 else "局部态势 · ") + XJSpaceUnits.distance(radius_m())
 	if is_instance_valid(radar): radar.queue_redraw()
 	_update_selection()
 	queue_redraw()
@@ -219,7 +239,7 @@ func target_geometry() -> Dictionary:
 	var camera: Camera3D = rig.camera
 	var inverse: Transform3D = camera.global_transform.affine_inverse()
 	var render_ship_position: Vector3 = _render_ship_transform().origin
-	var render_target_position: Vector3 = _render_target_position(node)
+	var render_target_position: Vector3 = _render_target_position(node, selected_id)
 	var ship_local: Vector3 = inverse * render_ship_position
 	var from: Vector2 = size * 0.5 if ship_local.z >= -0.001 else camera.unproject_position(render_ship_position)
 	var local: Vector3 = inverse * render_target_position
@@ -237,14 +257,14 @@ func target_geometry() -> Dictionary:
 		var half := size * 0.5 - Vector2(40, 40)
 		var factor: float = minf(half.x / maxf(absf(direction.x), 0.001), half.y / maxf(absf(direction.y), 0.001))
 		point = size * 0.5 + direction * factor
-	return {"start": from, "end": point, "on_screen": on_screen, "behind": behind, "kind": str(entry.kind), "title": str(entry.title), "distance_m": world.flight.global_position.distance_to(node.global_position), "bearing": bool(entry.get("navigation_only", false))}
+	return {"start": from, "end": point, "on_screen": on_screen, "behind": behind, "kind": str(entry.kind), "title": str(entry.title), "distance_m": _target_distance(selected_id, node), "bearing": bool(entry.get("navigation_only", false)) or not _target_is_local(selected_id), "navigation_only": bool(entry.get("navigation_only", false))}
 
 func _update_selection() -> void:
 	if not is_instance_valid(selection_frame): return
 	var geometry := target_geometry()
 	selection_frame.visible = selection_readout_enabled and not geometry.is_empty() and size.x >= 950 and not selection_obstructed
 	if geometry.is_empty(): return
-	selection_label.text = "已选定 · " + str(geometry.title) + "\n" + ("远景天体 · 航向参考" if geometry.bearing else "距离 %.1f km" % (float(geometry.distance_m) / 1000.0))
+	selection_label.text = "已选定 · " + str(geometry.title) + "\n距离 " + XJSpaceUnits.distance(float(geometry.distance_m)) + (" · 航向参考" if geometry.navigation_only else " · 远程地点" if geometry.bearing else "")
 	selection_label.add_theme_color_override("font_color", contact_color(str(geometry.kind)))
 
 func _process(_delta: float) -> void:
@@ -257,7 +277,7 @@ func update_annotations() -> void:
 	_update_selection()
 	var geometry := target_geometry()
 	if is_instance_valid(target_caption):
-		var title: String = "" if geometry.is_empty() else str(geometry.title) + (" · 远景航向" if geometry.bearing else " · %.0f m" % float(geometry.distance_m))
+		var title: String = "" if geometry.is_empty() else str(geometry.title) + " · " + XJSpaceUnits.distance(float(geometry.distance_m)) + (" · 航向" if geometry.bearing else "")
 		var area := Rect2() if geometry.is_empty() else caption_rect(title, geometry.end)
 		target_caption.visible = area.has_area()
 		if area.has_area():
@@ -275,12 +295,15 @@ func marker_geometry() -> Array[Dictionary]:
 		if str(entry.id) == selected_id: continue
 		var node: Variant = entry.get("node")
 		if not is_instance_valid(node) or not node is Node3D: continue
-		if world.has_method("contact_visible") and not world.call("contact_visible", entry, world.flight.global_position.distance_to(node.global_position)): continue
-		if not bool(entry.get("navigation_only", false)) and world.flight.global_position.distance_to(node.global_position) > sensor_limit: continue
-		var render_target_position: Vector3 = _render_target_position(node)
+		var id: String = str(entry.id)
+		var distance: float = _target_distance(id, node)
+		if world.has_method("contact_visible") and not world.call("contact_visible", entry, distance): continue
+		var bearing: bool = bool(entry.get("navigation_only", false)) or not _target_is_local(id)
+		if not bearing and distance > sensor_limit: continue
+		var render_target_position: Vector3 = _render_target_position(node, id)
 		if (rig.camera.global_transform.affine_inverse() * render_target_position).z >= -0.001: continue
 		var point: Vector2 = rig.camera.unproject_position(render_target_position)
-		if Rect2(Vector2.ZERO, size).has_point(point): markers.append({"id": str(entry.id), "point": point, "color": contact_color(str(entry.kind))})
+		if Rect2(Vector2.ZERO, size).has_point(point): markers.append({"id": id, "point": point, "color": contact_color(str(entry.kind)), "bearing": bearing})
 	return markers
 
 func caption_rect(title: String, finish: Vector2) -> Rect2:
@@ -299,7 +322,9 @@ func caption_rect(title: String, finish: Vector2) -> Rect2:
 
 func _draw() -> void:
 	if not is_visible_in_tree(): return
-	for marker: Dictionary in marker_geometry(): draw_arc(marker.point, 8, 0, TAU, 24, marker.color, 1.2, true)
+	for marker: Dictionary in marker_geometry():
+		if bool(marker.bearing): draw_polyline(PackedVector2Array([marker.point + Vector2(0, -6), marker.point + Vector2(5, 4), marker.point + Vector2(-5, 4), marker.point + Vector2(0, -6)]), marker.color, 1.0, true)
+		else: draw_arc(marker.point, 8, 0, TAU, 24, marker.color, 1.2, true)
 	var geometry := target_geometry()
 	if geometry.is_empty(): return
 	var start: Vector2 = geometry.start

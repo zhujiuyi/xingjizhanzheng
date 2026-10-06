@@ -180,7 +180,7 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 	var kind: String = str(details.get("kind", ""))
 	selected_title.text = str(details.get("title", "尚未选择目标"))
 	selected_title.tooltip_text = selected_title.text
-	selected_distance.text = "航向参考 · 远景天体" if bool(details.get("navigation_only", false)) else ("%s · %s" % [str(details.get("type_title", "目标")), format_distance(float(details.get("distance_m", 0.0)))]) if not selected_id.is_empty() else "左键选目标 · Tab切换"
+	selected_distance.text = ("%s · %s" % [str(details.get("type_title", "目标")), format_distance(float(details.get("distance_m", 0.0)))]) + (" · 航向参考" if bool(details.get("navigation_only", false)) else " · 远程地点" if bool(details.get("remote_site", false)) else "") if not selected_id.is_empty() else "左键选目标 · Tab切换"
 	selected_distance.tooltip_text = selected_distance.text if not selected_id.is_empty() else "左键短击模型、总览行或雷达回波选择目标；Tab 切换目标。总览双击会下令转向并接近；单次选择不攻击或改变当前开火目标。"
 	resource_detail.visible = kind == "resource" and not selected_id.is_empty()
 	if resource_detail.visible:
@@ -309,7 +309,8 @@ func _refresh_rows() -> void:
 			resource_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			resource_readout.hide()
 			target_buttons[id] = button
-		button.tooltip_text = "%s · %s\n%s" % [str(record.title), str(record.get("type_title", "")), "远景天体仅作航向参考" if bool(record.get("navigation_only", false)) else format_distance(float(record.distance_m)) + (" · 本星系已知位置" if bool(record.get("known", false)) else " · 传感器接触") + "\n单击选择 · 双击转向并接近"]
+		var qualification: String = " · 天体航向参考\n单击选择" if bool(record.get("navigation_only", false)) else (" · 远程已知地点" if bool(record.get("remote_site", false)) else " · 本星系已知位置" if bool(record.get("known", false)) else " · 传感器接触") + "\n单击选择 · 双击转向并前往"
+		button.tooltip_text = "%s · %s\n%s%s" % [str(record.title), str(record.get("type_title", "")), format_distance(float(record.distance_m)), qualification]
 		var resource: bool = str(record.get("kind", "")) == "resource"
 		var reserve: Label = button.get_node("ResourceState")
 		reserve.visible = resource
@@ -320,7 +321,7 @@ func _refresh_rows() -> void:
 			reserve.add_theme_font_size_override("font_size", 9 if _compact else 10)
 			reserve.add_theme_color_override("font_color", UISkin.AMBER if bool(record.get("resource_info", {}).get("depleted", false)) else UISkin.MUTED)
 			button.tooltip_text += "\n" + full_summary + "\n再生按世界时间推进；暂停与退出不推进。"
-		button.get_child(0).get_node("Distance").text = "方位" if bool(record.get("navigation_only", false)) else format_distance(float(record.distance_m))
+		button.get_child(0).get_node("Distance").text = format_distance(float(record.distance_m))
 		button.get_child(0).get_node("Name").text = str(record.title)
 		var name_label: Label = button.get_child(0).get_node("Name")
 		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if _compact else TextServer.AUTOWRAP_OFF
@@ -337,7 +338,7 @@ func _refresh_rows() -> void:
 			target_list.remove_child(button)
 			button.queue_free()
 			target_buttons.erase(id)
-	count_label.text = "%d 接触" % visible_rows.size()
+	count_label.text = "%d 目标" % visible_rows.size()
 	for key: String in filter_buttons: filter_buttons[key].add_theme_stylebox_override("normal", UISkin.hud_button(key == filter_mode))
 	for key: String in sort_buttons:
 		sort_buttons[key].text = {"distance": "距离", "name": "名称", "type": "类型"}[key] + (" +" if sort_ascending else " −") if sort_key == key else {"distance": "距离", "name": "名称", "type": "类型"}[key]
@@ -355,7 +356,7 @@ func _target_gui_input(event: InputEvent, id: String, button: Button) -> void:
 		return
 
 static func format_distance(distance_m: float) -> String:
-	return "%.1f km" % (distance_m / 1000.0) if distance_m >= 1000.0 else "%.0f m" % distance_m
+	return XJSpaceUnits.distance(distance_m)
 
 static func compact_resource_summary(info: Dictionary) -> String:
 	# Presentation only: preserve all stock/reservation digits in narrow HUDs.

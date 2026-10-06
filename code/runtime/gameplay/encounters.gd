@@ -35,6 +35,7 @@ func _spawn(member: Dictionary, generation: int) -> void:
 	row.shield = definition.shield_max; row.armor = definition.armor_max; row.hull = definition.hull_max
 	row.pos_x = anchor.x_m; row.pos_y = anchor.y_m; row.pos_z = anchor.z_m; row.behavior_phase = T.NpcPhase.PATROL
 	g.state.add("npc_state", row)
+	g.assign_anchor_site("npc", row.npc_instance_id, str(anchor.anchor_id))
 
 func remaining(encounter_id: String) -> int:
 	var count: int = 0
@@ -74,7 +75,7 @@ func tick(delta: float) -> void:
 		row.generation += 1
 		for member in members:
 			var previous: RefCounted = g.state.find("npc_state", "spawn_id", member.spawn_id)
-			if previous != null: g.state.remove("npc_state", previous)
+			if previous != null: g.remove_npc(previous)
 			_spawn(member, row.generation)
 
 func on_destroy(npc: D.NpcStateDto) -> bool:
@@ -99,7 +100,7 @@ func on_destroy(npc: D.NpcStateDto) -> bool:
 	var row: D.SalvagePackageStateDto = D.SalvagePackageStateDto.new()
 	row.package_id = g.id("salvage"); row.package_def_id = mapping.package_def_id
 	row.source_npc_instance_id = npc.npc_instance_id; row.source_generation = npc.generation
-	row.has_host_container_id = true; row.host_container_id = g.inventory.wreck(npc.sector_id, g.position(npc))
+	row.has_host_container_id = true; row.host_container_id = g.inventory.wreck(npc.sector_id, g.position(npc), g.spatial_site("npc", npc.npc_instance_id))
 	row.reward_id = selected.reward_id
 	g.state.add("salvage_package_state", row)
 	return true

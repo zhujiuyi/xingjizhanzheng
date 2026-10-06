@@ -5,7 +5,9 @@ const Main = preload("res://runtime/main.gd")
 const D = preload("res://contracts/contract_dtos.gd")
 const T = preload("res://contracts/contract_types.gd")
 const Codec = preload("res://runtime/data/codec.gd")
-const FILTERS: Array[String] = ["local", "available", "active", "tutorial", "story", "contract", "all"]
+const MISSION_TYPES: Array[String] = ["all", "tutorial", "story", "contract"]
+const MISSION_STATUSES: Array[String] = ["all", "active", "available", "completed"]
+const MISSION_LOCATIONS: Array[String] = ["local", "all"]
 const SIZES: Array[Vector2i] = [Vector2i(1440, 900), Vector2i(1280, 720), Vector2i(1920, 1080), Vector2i(2560, 1080), Vector2i(3440, 1370)]
 var host: Main
 var directory: String
@@ -64,7 +66,14 @@ func release_host() -> void:
 	await get_tree().create_timer(0.25).timeout
 
 func show(filter: String = "local", page_number: int = 0) -> void:
-	host.ui.mission_filter = filter
+	# Named scenarios are test conveniences; production controls select three
+	# independent dimensions rather than one mixed, mutually exclusive filter.
+	await show_filters(filter if filter in MISSION_TYPES else "all", filter if filter in MISSION_STATUSES else "all", "local" if filter == "local" else "all", page_number)
+
+func show_filters(kind: String, status: String, location: String, page_number: int = 0) -> void:
+	host.ui.mission_filter = kind
+	host.ui.mission_status_filter = status
+	host.ui.mission_location_filter = location
 	host.ui.mission_focus_id = ""
 	host.ui.mission_page = page_number
 	host.ui.show_page("missions")
@@ -100,6 +109,16 @@ func row_for(id: String) -> Dictionary:
 func action_button(action: String, target: String = "") -> Button:
 	for button: Button in buttons_below(host.ui.body):
 		if str(button.get_meta("action", "")) == action and (target.is_empty() or str(button.get_meta("target", "")) == target): return button
+	return null
+
+func filter_button(dimension: String, value: String) -> Button:
+	for button: Button in buttons_below(host.ui.body):
+		if str(button.get_meta("mission_filter_dimension", "")) == dimension and str(button.get_meta("mission_filter_value", "")) == value: return button
+	return null
+
+func recommendation_button(role: String) -> Button:
+	for button: Button in buttons_below(host.ui.body):
+		if str(button.get_meta("mission_recommendation", "")) == role: return button
 	return null
 
 func scroll_ancestors(control: Control) -> Array[ScrollContainer]:
@@ -145,7 +164,7 @@ func row_geometry(row: Dictionary, label: String, visit_actions: bool = false) -
 	check(not row.name.text.is_empty() and not row.description.text.is_empty() and not row.status.text.is_empty(), "real mission identity description and status remain visible " + label)
 	observations.append({"kind": "row", "label": label, "height": row.row.size.y, "description_lines": description.get_line_count(), "actions": actions.size()})
 
-func actual_click(button: Button, label: String) -> bool:
+func actual_click(button: Button, label: String, request_count: int = 1) -> bool:
 	if not check(is_instance_valid(button) and not button.disabled, "legal GUI action exists " + label): return false
 	await reveal(button)
 	var before: int = events.size()
@@ -174,7 +193,7 @@ func actual_click(button: Button, label: String) -> bool:
 		host.get_viewport().push_input(click, true)
 	await frames(6)
 	await wait_writer()
-	return check(events.size() == before + 1, "real GUI click emits exactly one production request " + label)
+	return check(events.size() == before + request_count, "real GUI click emits exactly %d production requests %s" % [request_count, label])
 
 func latest(id: String = "tutorial_flight") -> D.MissionStateDto:
 	return host.ui._latest_mission(id)
@@ -221,25 +240,94 @@ func window_geometry(label: String) -> void:
 	check(Rect2(Vector2.ZERO, host.ui.root.size).grow(2.0).encloses(host.ui.panel.get_global_rect()), "missions panel stays inside expanded viewport " + label)
 	observations.append({"kind": "window", "label": label, "mode": root.mode, "native_width": physical.x, "native_height": physical.y, "window_width": root.size.x, "window_height": root.size.y, "logical_width": visible.size.x, "logical_height": visible.size.y, "scale_factor": root.content_scale_factor, "aspect": root.content_scale_aspect, "mapped_left": top_left.x, "mapped_top": top_left.y, "mapped_right": bottom_right.x, "mapped_bottom": bottom_right.y})
 
+func expected_filter_ids(kind: String, status: String, location: String) -> Array[String]:
+	var result: Array[String] = []
+	for definition: Dictionary in host.store.catalog.rows("mission_defs"):
+		var id: String = str(definition.mission_id)
+		var current: D.MissionStateDto = latest(id)
+		var active: bool = current != null and current.status in ["active", "ready"]
+		var completed: bool = false
+		for attempt: D.MissionStateDto in host.state.rows("mission_state"):
+			if attempt.mission_def_id == id and attempt.reward_claimed: completed = true
+		if kind != "all" and str(definition.mission_kind) != kind: continue
+		if status == "active" and not active: continue
+		if status == "available" and not host.ui._mission_reason(definition, current).is_empty(): continue
+		if status == "completed" and (active or not completed): continue
+		if location == "local":
+			var local: bool = str(definition.accept_station_id) == host.state.player().docked_station_id if host.state.player().has_docked_station_id else str(host.store.catalog.one("station_defs", "station_id", str(definition.accept_station_id)).get("sector_id", "")) == host.state.current_sector()
+			if not local: continue
+		result.append(id)
+	result.sort()
+	return result
+
 func filters_and_pages(label: String, full_pages: bool = false) -> void:
-	for filter: String in FILTERS:
-		await show(filter)
-		var definitions: Array[Dictionary] = host.ui._filtered_mission_definitions()
-		var pages: int = maxi(1, ceili(float(definitions.size()) / 6.0)) if full_pages else 1
-		for index: int in range(pages):
-			if index > 0: await show(filter, index)
-			var rows: Array[Dictionary] = mission_rows()
-			check(rows.size() == mini(6, maxi(0, definitions.size() - index * 6)), "filter page contains exact formal rows " + label + "/" + filter + "/" + str(index))
-			for row: Dictionary in rows:
-				await row_geometry(row, label + "/" + filter + "/" + str(row.id), full_pages)
-				var definition: Dictionary = host.store.catalog.one("mission_defs", "mission_id", str(row.id))
-				var current: D.MissionStateDto = latest(str(row.id))
-				var active: bool = current != null and current.status in ["active", "ready"]
-				var button: Button = action_button("deliver_mission" if active else "accept_mission", current.mission_instance_id if active else str(row.id))
-				check(button != null, "formal row retains accept or deliver action " + label + "/" + str(row.id))
-				if button == null: continue
-				var disabled: bool = current.status != "ready" or host.state.player().docked_station_id != definition.turnin_station_id if active else not host.ui._mission_reason(definition, current).is_empty()
-				check(button.disabled == disabled, "UI disabled permission agrees with authoritative mission state " + label + "/" + str(row.id))
+	for kind: String in MISSION_TYPES:
+		for status: String in MISSION_STATUSES:
+			for location: String in MISSION_LOCATIONS:
+				await filter_pages(kind, status, location, label + "/" + kind + "/" + status + "/" + location, full_pages)
+
+func filter_pages(kind: String, status: String, location: String, label: String, full_pages: bool) -> void:
+	await show_filters(kind, status, location)
+	var expected: Array[String] = expected_filter_ids(kind, status, location)
+	var actual: Array[String] = []
+	for definition: Dictionary in host.ui._filtered_mission_definitions(): actual.append(str(definition.mission_id))
+	actual.sort()
+	check(actual == expected, "three independent filters match formal definitions and actual attempt history " + label)
+	var selected: Dictionary = {"type": kind, "status": status, "location": location}
+	for button: Button in buttons_below(host.ui.body):
+		var dimension: String = str(button.get_meta("mission_filter_dimension", ""))
+		if dimension.is_empty(): continue
+		check(button.toggle_mode and button.button_pressed == (str(button.get_meta("mission_filter_value", "")) == str(selected[dimension])) and not button.text.contains("当前"), "each dimension has its own unambiguous selected control " + label + "/" + dimension + "/" + button.text)
+		button_geometry(button, label + "/filter/" + dimension + "/" + button.text)
+	var pages: int = maxi(1, ceili(float(expected.size()) / 6.0)) if full_pages else 1
+	var seen: Array[String] = []
+	for index: int in range(pages):
+		if index > 0: await show_filters(kind, status, location, index)
+		var rows: Array[Dictionary] = mission_rows()
+		check(rows.size() == mini(6, maxi(0, expected.size() - index * 6)), "filter page contains exact formal rows " + label + "/" + str(index))
+		for row: Dictionary in rows:
+			check(expected.has(str(row.id)) and not seen.has(str(row.id)), "each row belongs to this filter exactly once " + label + "/" + str(row.id))
+			seen.append(str(row.id))
+			await row_geometry(row, label + "/" + str(row.id), full_pages)
+			var definition: Dictionary = host.store.catalog.one("mission_defs", "mission_id", str(row.id))
+			var current: D.MissionStateDto = latest(str(row.id))
+			var active: bool = current != null and current.status in ["active", "ready"]
+			var button: Button = action_button("deliver_mission" if active else "accept_mission", current.mission_instance_id if active else str(row.id))
+			check(button != null, "formal row retains accept or deliver action " + label + "/" + str(row.id))
+			if button == null: continue
+			var disabled: bool = current.status != "ready" or host.state.player().docked_station_id != definition.turnin_station_id if active else not host.ui._mission_reason(definition, current).is_empty()
+			check(button.disabled == disabled, "UI disabled permission agrees with authoritative mission state " + label + "/" + str(row.id))
+	if full_pages:
+		seen.sort()
+		check(seen == expected, "all filtered formal rows remain reachable across pages " + label)
+
+func filter_and_recommendation_gui() -> void:
+	await show_filters("all", "all", "local")
+	check(recommendation_button("view") != null and recommendation_button("view").text == "查看推荐任务", "fresh player receives a named recommended-task entry")
+	var marker: Button = recommendation_button("marker")
+	check(marker != null and marker.text == "标记接取站" and str(marker.get_meta("action", "")) == "mission_station" and str(marker.get_meta("target", "")) == "tutorial_flight", "unaccepted recommendation marks its real acceptance station")
+	var snapshots: int = host.state.rows("mission_state").size()
+	if not await actual_click(filter_button("type", "story"), "select story type independently", 0): return
+	check(host.ui.mission_filter == "story" and host.ui.mission_status_filter == "all" and host.ui.mission_location_filter == "local" and mission_rows().is_empty(), "type selection retains location and status and correctly has no local first chapter")
+	if not await actual_click(filter_button("location", "all"), "include remote locations independently", 0): return
+	check(host.ui.mission_filter == "story" and host.ui.mission_status_filter == "all" and not mission_rows().is_empty(), "location selection retains type and exposes remote chapters")
+	if not await actual_click(filter_button("status", "available"), "select legal available status independently", 0): return
+	check(host.ui.mission_filter == "story" and host.ui.mission_location_filter == "all" and mission_rows().is_empty(), "status selection retains type and does not pretend locked remote story is acceptable")
+	var clear: Button
+	for button: Button in buttons_below(host.ui.body):
+		if bool(button.get_meta("mission_clear_filters", false)): clear = button
+	if not await actual_click(clear, "clear all three filters from empty state", 0): return
+	check(host.ui.mission_filter == "all" and host.ui.mission_status_filter == "all" and host.ui.mission_location_filter == "all" and host.ui._filtered_mission_definitions().size() == host.store.catalog.rows("mission_defs").size(), "empty-state action restores the complete formal catalog")
+	await show_filters("contract", "available", "local")
+	host.ui.show_mission("story_mirror")
+	await frames(6)
+	var row: Dictionary = row_for("story_mirror")
+	check(host.ui.mission_filter == "story" and host.ui.mission_status_filter == "all" and host.ui.mission_location_filter == "all" and not row.is_empty() and bool(row.row.get_meta("mission_focused", false)), "precise prerequisite navigation reveals a locked remote mission despite previous combined filters")
+	check(action_button("accept_mission", "story_mirror") != null and action_button("accept_mission", "story_mirror").disabled and host.state.rows("mission_state").size() == snapshots, "filter and prerequisite navigation never grant acceptance or progression")
+	if not row.is_empty():
+		var focused: Control = host.get_viewport().gui_get_focus_owner()
+		check(focused != null and str(focused.get_meta("target", "")) == "story_mirror" and str(focused.get_meta("action", "")) == "mission_station", "remote locked mission focuses its accessible station marker")
+	await capture("mission-independent-filters-remote-prerequisite")
 
 func gui_mission_and_persistence() -> void:
 	await show("tutorial")
@@ -249,6 +337,8 @@ func gui_mission_and_persistence() -> void:
 	if not check(mission != null and mission.status == "active" and mission.attempt_number == 1, "GUI accepts real typed initial tutorial"): return
 	var initial_id: String = mission.mission_instance_id
 	await show("active")
+	var marker: Button = recommendation_button("marker")
+	check(recommendation_button("view") != null and recommendation_button("view").text == "查看当前任务" and marker != null and marker.text == "标记任务目标" and str(marker.get_meta("action", "")) == "mission_locate", "accepted recommendation switches to the actual pending objective rather than acceptance station")
 	var row: Dictionary = row_for("tutorial_flight")
 	if check(not row.is_empty(), "active filter exposes accepted tutorial"):
 		await row_geometry(row, "accepted-initial-tutorial", true)
@@ -309,15 +399,47 @@ func native_tooltip_check(button: Button) -> void:
 	check(button.tooltip_text.split("\n").size() == 13 and button.tooltip_text.contains("条件12"), "long tooltip retains every instructed stress condition")
 	if DisplayServer.get_name() == "headless": return
 	await reveal(button)
-	root.grab_focus()
-	var center: Vector2 = button.get_global_rect().get_center()
-	host.get_viewport().warp_mouse(center)
-	var motion := InputEventMouseMotion.new()
-	motion.position = center; motion.global_position = center
-	host.get_viewport().push_input(motion, true)
-	await get_tree().create_timer(0.85).timeout
-	await frames(4)
-	var tooltip: Label = find_tooltip(root, button.tooltip_text)
+	# Fullscreen restoration and nested scrolling settle asynchronously. Prove
+	# native pointer reachability before starting the tooltip dwell; a single
+	# warp followed by a sleep can leave the first action clipped above the page.
+	var stable: int = 0
+	var pointer_ready: bool = false
+	var previous: Rect2 = button.get_global_rect()
+	var deadline: int = Time.get_ticks_msec() + 4000
+	while Time.get_ticks_msec() < deadline:
+		if not root.has_focus(): root.grab_focus()
+		if not visible_control(button):
+			for scroll: ScrollContainer in scroll_ancestors(button): scroll.ensure_control_visible(button)
+		var rect: Rect2 = button.get_global_rect()
+		var center: Vector2 = rect.get_center()
+		host.get_viewport().warp_mouse(center)
+		var motion := InputEventMouseMotion.new()
+		motion.position = center; motion.global_position = center
+		host.get_viewport().push_input(motion, true)
+		await process_frame
+		var hovered: Control = host.get_viewport().gui_get_hovered_control()
+		var on_button: bool = hovered != null and (hovered == button or button.is_ancestor_of(hovered))
+		var actual_pointer: bool = root.has_focus() and button.get_global_rect().has_point(button.get_global_mouse_position())
+		stable = stable + 1 if rect.is_equal_approx(previous) and visible_control(button) and on_button and actual_pointer else 0
+		previous = rect
+		if stable >= 3: pointer_ready = true; break
+	check(pointer_ready, "native long-tooltip pointer settles on a fully visible stable action")
+	var tooltip: Label
+	if pointer_ready:
+		# Keep the actual cursor stationary while Godot's production delay runs;
+		# repeating synthetic motion during this dwell could reset the timer.
+		var delay_s: float = float(ProjectSettings.get_setting("gui/timers/tooltip_delay_sec", 0.5))
+		var dwell_deadline: int = Time.get_ticks_msec() + int(maxf(1.5, delay_s + 0.6) * 1000.0)
+		while Time.get_ticks_msec() < dwell_deadline:
+			await process_frame
+			tooltip = find_tooltip(root, button.tooltip_text)
+			if tooltip != null: break
+	var hover: Control = host.get_viewport().gui_get_hovered_control()
+	var scroll_positions: Array[Dictionary] = []
+	for scroll: ScrollContainer in scroll_ancestors(button): scroll_positions.append({"name": scroll.name, "horizontal": scroll.scroll_horizontal, "vertical": scroll.scroll_vertical, "rect": str(scroll.get_global_rect())})
+	var observation: Dictionary = {"kind": "tooltip-pointer", "pointer_ready": pointer_ready, "native_focus": root.has_focus(), "button_rect": str(button.get_global_rect()), "mouse": str(button.get_global_mouse_position()), "hover": str(hover.get_path()) if is_instance_valid(hover) else "none", "visible": visible_control(button), "scrolls": scroll_positions, "tooltip_found": tooltip != null}
+	observations.append(observation)
+	if tooltip == null: print("MISSION_DISPLAY_V19_TOOLTIP_DIAGNOSTIC " + JSON.stringify(observation))
 	if check(tooltip != null, "native real hover creates complete thirteen-line stress tooltip"):
 		var popup: Window = tooltip.get_window()
 		check(popup.size.x <= root.size.x and popup.size.y <= root.size.y and Rect2(Vector2.ZERO, Vector2(popup.size)).grow(1.0).encloses(tooltip.get_global_rect()), "native long tooltip text fits popup and native game window")
@@ -389,6 +511,7 @@ func _run() -> void:
 		await finish()
 		return
 	await filters_and_pages("initial-formal-catalog", true)
+	await filter_and_recommendation_gui()
 	await gui_mission_and_persistence()
 	if latest() != null and latest().status == "active":
 		await layouts()

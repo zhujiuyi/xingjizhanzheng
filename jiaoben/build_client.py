@@ -235,7 +235,7 @@ def main() -> None:
                           CODE / 'assets/interface_v2/manifest.json', CODE / 'assets/hangar_v2/manifest.json',
                           CODE / 'assets/interface_v3/manifest.json', CODE / 'assets/navigation_v3/manifest.json',
                           CODE / 'assets/ship_v3/manifest.json', CODE / 'assets/station_v3/manifest.json',
-                          CODE / 'data/local_navigation_v1_manifest.json', CODE / 'assets/business_v11/manifest.json'):
+                          CODE / 'data/local_navigation_v1_manifest.json', CODE / 'data/local_navigation_v2_manifest.json', CODE / 'assets/business_v11/manifest.json'):
         pack = json.loads(manifest_path.read_text())
         for resource in pack['resources']:
             resource_path = resource.get('resource_path', resource.get('path', ''))

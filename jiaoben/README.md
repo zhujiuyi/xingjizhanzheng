@@ -16,6 +16,8 @@ v0.14.0光影/武器/无人机专项：`verify_combat_v18.py`在Windows串行加
 
 ## 星图重塑
 
+v0.15.0空间专项从根目录运行`py jiaoben/verify_combat_v18.py --only mission-display spatial-business spatial-navigation warp-visual space-upgrade`，原生加`--native`；actual-PCK加`--executable <Windows EXE>`且不传源码path。源码/实际包共享固定Node，WASAPI、独占共用锁、fresh UUID tmp库和严格双日志。空间升级fixture由`tests/prepare_space_upgrade_v20.py`固定旧Git catalog身份，通过query_only原生SQLite复制到受审内存adapter，同一路径用于源码和PCK；测试不打开个人档。`py -m unittest discover -s jiaoben/tests -p 'test_*.py'`含空间catalog及SQL完整绑定/不可变约束。规格与最终结果见[46](../doc/46-星系尺度与跃迁体验.md)和[26](../doc/26-开发阶段与交付记录.md)。
+
 从根目录执行 `/usr/local/bin/python3.14 jiaoben/tests/star_chart_v13_run.py`，追加`--native`独占Metal/CoreAudio窗口。fresh tmp SQLite验证真实Main的单选情报、方向/门资格/载重变化、输入隔离、关闭重开/换世界/实际旅行绑定、四布局及120/300个纯UI节点；日志和结构化结果在logs，截图和DB在tmp。共用`feature-audit.lock`，不得与其它Godot检查/编辑器导入并行。原生Viewport事件与额外系统输入复查分别记录，最终结果见40。
 
 当前发行包内置表现门槛为110项/17图（保留104项，增加2项仓储单行/小按钮和4项市场/工业独立数量/报价/状态不变检查，并增加release-business-industry图），`build_client.py`必须用实际bundle/PCK独立运行；未通过不得发布。历史小节的旧检查数属于对应版本。

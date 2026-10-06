@@ -12,6 +12,7 @@ var content_hash: String = ""
 const ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_4_r2.sql"
 const ENCOUNTER_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_5.sql"
 const COMBAT_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_6.sql"
+const SPACE_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_7.sql"
 var adapter_path: String = ADAPTER_PATH
 
 func open(path: String = "res://data/catalog.db") -> bool:
@@ -29,6 +30,7 @@ func open(path: String = "res://data/catalog.db") -> bool:
 		return false
 	if not refresh(): return false
 	if int(rows("catalog_meta")[0].schema_version) <= 2: adapter_path = "res://database/progress/catalog_adapter_v0_3.sql"
+	elif table_names.has("site_defs"): adapter_path = SPACE_ADAPTER_PATH
 	elif table_names.has("weapon_behavior_defs"): adapter_path = COMBAT_ADAPTER_PATH
 	elif table_names.has("encounter_defs"): adapter_path = ENCOUNTER_ADAPTER_PATH
 	elif table_names.has("signal_unlock_rewards"): adapter_path = ADAPTER_PATH

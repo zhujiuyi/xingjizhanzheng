@@ -6,6 +6,7 @@ const Dtos = preload("res://contracts/contract_dtos.gd")
 const Factory = preload("res://runtime/visuals/industrial_visual_factory.gd")
 const StationVisual = preload("res://runtime/visuals/station_visual_adapter.gd")
 const Celestials = preload("res://runtime/celestial_backdrop.gd")
+const Space = preload("res://runtime/space_coordinates.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
 var gameplay: RefCounted
@@ -21,15 +22,27 @@ var key_light: DirectionalLight3D
 var stellar_position: Vector3
 var stellar_disc: MeshInstance3D
 var lighting_definition: Dictionary = {}
+var strategic_render_position: Dictionary = {}
+var collision_site_id: String = ""
+var _loaded_site_id: String = ""
 
 func _process(_delta: float) -> void:
 	update_starlight()
+	Celestials.update(self)
 
 func update_starlight() -> void:
 	if lighting_definition.is_empty() or not is_instance_valid(key_light):
 		return
 	var reference: Vector3 = flight.get_global_transform_interpolated().origin if is_instance_valid(flight) else Vector3.ZERO
 	var to_star: Vector3 = stellar_position - reference
+	var star: Dictionary = {}
+	var star_distance: float = to_star.length()
+	if Space.supported(catalog):
+		for celestial: Dictionary in catalog.rows("celestial_defs"):
+			if celestial.sector_id == state.current_sector() and celestial.celestial_kind == "star": star = celestial; break
+		var components: Dictionary = {"x": float(star.get("x_m", 0.0)), "y": float(star.get("y_m", 0.0)), "z": float(star.get("z_m", 0.0))}
+		to_star = Space.scalar_direction(strategic_components(reference), components)
+		star_distance = Space.scalar_distance(strategic_components(reference), components)
 	if to_star.length_squared() <= 0.000001:
 		return
 	var direction: Vector3 = to_star.normalized()
@@ -42,10 +55,10 @@ func update_starlight() -> void:
 		# disc is projected within the camera far plane and never collides.
 		var camera: Camera3D = get_viewport().get_camera_3d()
 		var eye: Vector3 = camera.get_global_transform_interpolated().origin if camera != null else reference
-		var ray: Vector3 = stellar_position - eye
-		var visible_distance: float = minf(ray.length(), camera.far * 0.75 if camera != null else 8000.0)
+		var ray: Vector3 = to_star if Space.supported(catalog) else stellar_position - eye
+		var visible_distance: float = camera.far * 0.75 if camera != null else 8000.0
 		stellar_disc.global_position = eye + ray.normalized() * visible_distance
-		stellar_disc.scale = Vector3.ONE * visible_distance * 0.009
+		stellar_disc.scale = Vector3.ONE * visible_distance * (float(star.radius_m) / star_distance if not star.is_empty() and star_distance > 0.0 else 0.009)
 
 func build(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted) -> bool:
 	state = runtime
@@ -155,14 +168,16 @@ func _clear_owners(node: Node) -> void:
 		_clear_owners(child)
 
 func sync_entities() -> bool:
+	refresh_site()
 	_sync_waypoints()
 	for id: String in npcs.keys():
-		if state.find("npc_state", "npc_instance_id", id) == null:
+		if state.find("npc_state", "npc_instance_id", id) == null or (Space.supported(catalog) and Space.site_for_entity(state, "npc", id) != Space.current_site(state)):
 			npcs.erase(id)
 			_remove_target(id)
 	for row: Dtos.NpcStateDto in state.rows("npc_state"):
 		if row.sector_id != state.current_sector():
 			continue
+		if Space.supported(catalog) and Space.site_for_entity(state, "npc", row.npc_instance_id) != Space.current_site(state): continue
 		if not row.alive:
 			if npcs.has(row.npc_instance_id):
 				var retired: CharacterBody3D = npcs[row.npc_instance_id]
@@ -193,11 +208,12 @@ func sync_entities() -> bool:
 		var group_id: String = gameplay.get("encounters").group_for_spawn(row.spawn_id)
 		targets[row.npc_instance_id]["group_target_id"] = "group:" + group_id if not group_id.is_empty() else "encounter:" + row.spawn_id if row.has_mission_instance_id else ""
 	for id: String in targets.keys():
-		if targets[id].kind == "wreck" and state.find("container_state", "container_id", id) == null:
+		if targets[id].kind == "wreck" and (state.find("container_state", "container_id", id) == null or not target_is_local(id)):
 			_remove_target(id)
 	for container: Dtos.ContainerStateDto in state.rows("container_state"):
 		if container.kind != Types.ContainerKind.WRECK or container.sector_id != state.current_sector() or targets.has(container.container_id):
 			continue
+		if Space.supported(catalog) and Space.site_for_entity(state, "wreck", container.container_id) != Space.current_site(state): continue
 		var wreck := _visual("wreck")
 		add_child(wreck)
 		wreck.position = Vector3(container.pos_x, container.pos_y, container.pos_z)
@@ -347,6 +363,7 @@ func anchor_position(id: String) -> Vector3:
 	return Vector3(float(anchor.get("x_m", 0.0)), float(anchor.get("y_m", 0.0)), float(anchor.get("z_m", 0.0)))
 
 func contact_visible(entry: Dictionary, distance: float) -> bool:
+	if str(entry.get("kind", "")) in ["npc", "wreck"] and not target_is_local(str(entry.get("id", ""))): return false
 	if str(entry.get("kind", "")) != "npc": return true
 	var sensor: float = float(catalog.rule("target_marker_detection_range_m"))
 	if distance > sensor: return false
@@ -371,7 +388,7 @@ func line_of_sight(from: Vector3, to: Vector3, excluded: RID = RID(), target_id:
 func in_safe_zone(point: Vector3) -> bool:
 	for key in definitions:
 		var anchor: Dictionary = definitions[key]
-		if anchor.anchor_kind == "station" and point.distance_to(anchor_position(key)) <= float(anchor.safe_radius_m):
+		if anchor.anchor_kind == "station" and (not Space.supported(catalog) or Space.site_for_anchor(catalog, key) == Space.current_site(state)) and point.distance_to(anchor_position(key)) <= float(anchor.safe_radius_m):
 			return true
 	return false
 
@@ -381,6 +398,77 @@ func _target(id: String, title: String, kind: String, node: Node3D, anchor_id: S
 	node.get_global_transform_interpolated()
 	node.reset_physics_interpolation()
 	targets[id] = {"id": id, "title": title, "kind": kind, "node": node, "anchor_id": anchor_id}
+	if node is CollisionObject3D:
+		node.set_meta("site_collision_layer", node.collision_layer)
+	apply_target_site(id)
+
+func target_site(id: String) -> String:
+	if not targets.has(id): return ""
+	var entry: Dictionary = targets[id]
+	if entry.kind in ["npc", "wreck"]: return Space.site_for_entity(state, str(entry.kind), id)
+	return Space.site_for_anchor(catalog, str(entry.get("anchor_id", "")))
+
+func target_is_local(id: String) -> bool:
+	return not Space.supported(catalog) or (not target_site(id).is_empty() and target_site(id) == Space.current_site(state))
+
+func strategic_components(encoded_position: Vector3) -> Dictionary:
+	return strategic_render_position if not strategic_render_position.is_empty() else Space.global_components(catalog, Space.current_site(state), encoded_position)
+
+func target_components(id: String) -> Dictionary:
+	if not targets.has(id): return {}
+	if bool(targets[id].get("navigation_only", false)) and Space.supported(catalog):
+		var celestial: Dictionary = catalog.one("celestial_defs", "celestial_id", id)
+		if not celestial.is_empty(): return {"x": float(celestial.x_m), "y": float(celestial.y_m), "z": float(celestial.z_m)}
+	var node: Node3D = targets[id].node
+	return Space.global_components(catalog, target_site(id), node.global_position)
+
+func target_distance(id: String) -> float:
+	if not targets.has(id) or not is_instance_valid(flight): return INF
+	var node: Node3D = targets[id].node
+	if not Space.supported(catalog) or (target_is_local(id) and strategic_render_position.is_empty()): return flight.global_position.distance_to(node.global_position)
+	return Space.scalar_distance(strategic_components(flight.global_position), target_components(id))
+
+func target_direction(id: String) -> Vector3:
+	if not targets.has(id) or not is_instance_valid(flight): return Vector3.ZERO
+	var node: Node3D = targets[id].node
+	if not Space.supported(catalog) or (target_is_local(id) and strategic_render_position.is_empty()): return flight.global_position.direction_to(node.global_position)
+	return Space.scalar_direction(strategic_components(flight.global_position), target_components(id))
+
+func apply_target_site(id: String) -> void:
+	if not Space.supported(catalog) or not targets.has(id): return
+	var entry: Dictionary = targets[id]
+	if bool(entry.get("navigation_only", false)): return
+	var node: Node3D = entry.node
+	node.visible = target_is_local(id)
+	if node is CollisionObject3D:
+		var collider_site: String = collision_site_id if not collision_site_id.is_empty() else Space.current_site(state)
+		node.collision_layer = int(node.get_meta("site_collision_layer", 0)) if target_site(id) == collider_site else 0
+
+func set_collision_site(site_id: String) -> void:
+	collision_site_id = site_id
+	for id: String in targets: apply_target_site(id)
+
+func refresh_site() -> void:
+	if not Space.supported(catalog): return
+	var site: String = Space.current_site(state)
+	if site == _loaded_site_id: return
+	_loaded_site_id = site
+	collision_site_id = site
+	for id: String in targets: apply_target_site(id)
+	update_starlight()
+
+func enforce_local_boundary() -> bool:
+	if not Space.supported(catalog) or not is_instance_valid(flight): return false
+	var site: Dictionary = catalog.one("site_defs", "site_id", Space.current_site(state))
+	if site.is_empty(): return false
+	var pivot := Vector3(site.pivot_x_m, site.pivot_y_m, site.pivot_z_m)
+	var offset: Vector3 = flight.position - pivot
+	if offset.length() <= float(site.local_radius_m): return false
+	flight.position = pivot + offset.normalized() * float(site.local_radius_m)
+	flight.velocity = Vector3.ZERO
+	flight.write_back()
+	flight.reset_physics_interpolation()
+	return true
 
 func _visual(kind: String, parameter: String = "") -> Node3D:
 	match kind:

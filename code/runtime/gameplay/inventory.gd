@@ -1,6 +1,7 @@
 extends RefCounted
 const D = preload("res://contracts/contract_dtos.gd")
 const T = preload("res://contracts/contract_types.gd")
+const Space = preload("res://runtime/space_coordinates.gd")
 var g: RefCounted
 func _init(gameplay: RefCounted) -> void: g = gameplay
 
@@ -28,8 +29,14 @@ func slot(ship: D.ShipStateDto, slot_type: String, index: int) -> D.ContainerSta
 func accessible(container_id: String) -> bool:
 	var c: D.ContainerStateDto = g.state.find("container_state", "container_id", container_id)
 	if c == null or c.owner_player_id != g.state.player().player_id: return false
-	if c.kind == T.ContainerKind.STATION: return c.station_id == g.station()
-	if c.kind == T.ContainerKind.WRECK: return c.sector_id == g.state.current_sector() and g.position(g.state.ship()).distance_to(Vector3(c.pos_x,c.pos_y,c.pos_z)) <= g.rule("wreck_pickup_radius_m")
+	if c.kind == T.ContainerKind.STATION:
+		if c.station_id != g.station(): return false
+		if not Space.supported(g.catalog): return true
+		var station_def: Dictionary = g.definition("station_defs", "station_id", c.station_id)
+		return g.state.ship().status == T.ShipStatus.DOCKED and g.same_anchor_site(g.state.ship(), g.definition("anchor_defs", "anchor_id", str(station_def.get("station_anchor_id", ""))))
+	if c.kind == T.ContainerKind.WRECK:
+		if Space.supported(g.catalog) and g.state.ship().status != T.ShipStatus.FLYING: return false
+		return g.same_entity_site("ship", g.state.ship(), "wreck", c) and g.entity_distance("ship", g.state.ship(), "wreck", c) <= g.rule("wreck_pickup_radius_m")
 	return c.ship_instance_id == g.state.ship().ship_instance_id and g.state.ship().status not in [T.ShipStatus.DESTROYED,T.ShipStatus.RETURNED]
 
 func totals(container_id: String) -> Dictionary:
@@ -316,11 +323,17 @@ func unfit(item_id: String) -> bool:
 func create_ship(ship_id: String, station_id: String, policy: String = "normal_owned", loadout_id: String = "", loan_id: String = "") -> D.ShipStateDto:
 	var def: Dictionary = g.definition("ship_defs","ship_id",ship_id)
 	var station: Dictionary = g.definition("station_defs","station_id",station_id)
+	if def.is_empty() or station.is_empty(): g.fail("舰体或站点定义不可用"); return null
+	var anchor: Dictionary = g.definition("anchor_defs", "anchor_id", str(station.station_anchor_id))
+	if Space.supported(g.catalog) and Space.site_for_anchor(g.catalog, str(anchor.get("anchor_id", ""))).is_empty(): g.fail("造舰站点缺少空间地点定义"); return null
 	var ship: D.ShipStateDto = D.ShipStateDto.new()
 	ship.ship_instance_id = g.id("ship"); ship.ship_def_id=ship_id; ship.owner_player_id = g.state.player().player_id
 	ship.sector_id=station.sector_id; ship.status=T.ShipStatus.DOCKED; ship.has_station_id=true; ship.station_id=station_id; ship.policy_id=policy
 	ship.shield=def.shield_max; ship.armor=def.armor_max; ship.hull=def.hull_max; ship.energy=def.energy_max
+	if Space.supported(g.catalog): ship.pos_x=float(anchor.get("x_m",0));ship.pos_y=float(anchor.get("y_m",0));ship.pos_z=float(anchor.get("z_m",0))
 	g.state.add("ship_state",ship)
+	if not g.assign_anchor_site("ship", ship.ship_instance_id, str(anchor.get("anchor_id", ""))):
+		g.state.remove("ship_state", ship);g.fail("无法记录新舰船的空间地点");return null
 	for kind in [T.ContainerKind.CARGO,T.ContainerKind.MINERAL]:
 		if kind == T.ContainerKind.MINERAL and def.mineral_cargo_l <= 0: continue
 		var c: D.ContainerStateDto = D.ContainerStateDto.new(); c.container_id=g.id("hold");c.owner_player_id=ship.owner_player_id;c.kind=kind;c.has_ship_instance_id=true;c.ship_instance_id=ship.ship_instance_id;c.has_ship_def_id=true;c.ship_def_id=ship_id;c.sector_id=ship.sector_id;g.state.add("container_state",c)
@@ -362,12 +375,17 @@ func retire(ship: D.ShipStateDto) -> void:
 			if package.status == "sealed" and package.has_host_container_id and package.host_container_id == c.container_id: g.state.remove("salvage_package_state", package)
 	ship.status = T.ShipStatus.RETURNED; ship.hull = 0; ship.has_station_id = false; ship.station_id = ""
 
-func wreck(sector: String, pos: Vector3) -> String:
+func wreck(sector: String, pos: Vector3, site_id: String = "") -> String:
+	if Space.supported(g.catalog):
+		var site: Dictionary = g.definition("site_defs", "site_id", site_id)
+		if site.is_empty() or str(site.sector_id) != sector: g.fail("残骸必须保留来源实体的空间地点"); return ""
 	var c: D.ContainerStateDto = D.ContainerStateDto.new();c.container_id=g.id("wreck");c.owner_player_id=g.state.player().player_id;c.kind=T.ContainerKind.WRECK;c.sector_id=sector;c.has_pos_x=true;c.has_pos_y=true;c.has_pos_z=true;c.pos_x=pos.x;c.pos_y=pos.y;c.pos_z=pos.z;g.state.add("container_state",c)
+	if Space.supported(g.catalog) and not Space.assign(g.state, "wreck", c.container_id, site_id):
+		g.state.remove("container_state", c);g.fail("无法记录残骸的空间地点");return ""
 	return c.container_id
 
 func ship_destroyed(ship: D.ShipStateDto) -> void:
-	var dest: String = wreck(ship.sector_id,g.position(ship))
+	var dest: String = wreck(ship.sector_id,g.position(ship),g.spatial_site("ship",ship.ship_instance_id))
 	var stack_groups:Dictionary={}
 	var item_groups:Dictionary={}
 	var packages: Array[D.SalvagePackageStateDto] = []
@@ -443,4 +461,5 @@ func remove_empty_wreck(container_id: String) -> void:
 		if item.container_id == container_id: return
 	for package: D.SalvagePackageStateDto in g.state.rows("salvage_package_state"):
 		if package.status == "sealed" and package.has_host_container_id and package.host_container_id == container_id: return
+	Space.remove(g.state, "wreck", container.container_id)
 	g.state.remove("container_state", container)

@@ -16,13 +16,27 @@ func action(g:G,name:String,target:String="",quantity:int=1,extra:String="")->bo
 	return result.phase==T.ActionPhase.APPLIED
 func place(g:G,station_id:String)->void:
 	var station:Dictionary=g.definition("station_defs","station_id",station_id)
+	var anchor:Dictionary=g.definition("anchor_defs","anchor_id",station.station_anchor_id)
 	var ship:D.ShipStateDto=g.state.ship()
 	ship.sector_id=station.sector_id;ship.status=T.ShipStatus.DOCKED;ship.has_station_id=true;ship.station_id=station_id
-	ship.pos_x=0;ship.pos_y=0;ship.pos_z=0;ship.vel_x=0;ship.vel_y=0;ship.vel_z=0
+	ship.pos_x=anchor.x_m;ship.pos_y=anchor.y_m;ship.pos_z=anchor.z_m;ship.vel_x=0;ship.vel_y=0;ship.vel_z=0
 	g.state.player().has_docked_station_id=true;g.state.player().docked_station_id=station_id
 	for container in g.state.rows("container_state"):
 		if container.ship_instance_id==ship.ship_instance_id:container.sector_id=ship.sector_id
+	expect(g.assign_anchor_site("ship",ship.ship_instance_id,str(anchor.anchor_id)),"fixture assigns station source site "+station_id)
 	g.inventory.warehouse(station_id)
+func place_anchor(g:G,anchor_id:String)->void:
+	# An explicit named-anchor fixture; runtime never infers sites from pose.
+	var anchor:Dictionary=g.definition("anchor_defs","anchor_id",anchor_id)
+	var ship:D.ShipStateDto=g.state.ship()
+	ship.sector_id=anchor.sector_id;ship.pos_x=anchor.x_m;ship.pos_y=anchor.y_m;ship.pos_z=anchor.z_m
+	ship.vel_x=0;ship.vel_y=0;ship.vel_z=0;ship.status=T.ShipStatus.FLYING;ship.has_station_id=false;ship.station_id=""
+	g.state.player().has_docked_station_id=false;g.state.player().docked_station_id=""
+	for container in g.state.rows("container_state"):
+		if container.ship_instance_id==ship.ship_instance_id:container.sector_id=ship.sector_id
+	expect(g.assign_anchor_site("ship",ship.ship_instance_id,anchor_id),"fixture assigns named anchor site "+anchor_id)
+func approach_station(g:G,station_id:String)->void:
+	place_anchor(g,str(g.definition("station_defs","station_id",station_id).station_anchor_id))
 func inputs(g:G,table:String,key:String,target:String)->void:
 	for input in g.rows(table):
 		if input[key]==target:g.inventory.grant(g.inventory.warehouse(g.station()),input.item_id,input.quantity)
@@ -88,9 +102,7 @@ func _initialize()->void:
 	var node:Dictionary=g.definition("resource_node_defs","node_id","node_forge_special")
 	var location:Dictionary=g.definition("resource_node_locations","node_id",node.node_id)
 	var anchor:Dictionary=g.definition("anchor_defs","anchor_id",location.anchor_id)
-	state.ship().sector_id=node.sector_id;state.ship().pos_x=anchor.x_m;state.ship().pos_y=anchor.y_m;state.ship().pos_z=anchor.z_m
-	for container in state.rows("container_state"):
-		if container.ship_instance_id==state.ship().ship_instance_id:container.sector_id=node.sector_id
+	place_anchor(g,str(anchor.anchor_id))
 	var resource:D.ResourceStateDto=state.find("resource_state","node_id",node.node_id)
 	var units:int=resource.remaining_units
 	expect(action(g,"start_mining",node.node_id),"II mines discovered specialty ore")
@@ -102,13 +114,11 @@ func _initialize()->void:
 	expect(resource.remaining_units<units,"II paid cycle extracts finite regional ore")
 	var component:Dictionary=g.definition("resource_node_defs","node_id","node_mist_special")
 	anchor=g.definition("anchor_defs","anchor_id",g.definition("resource_node_locations","node_id",component.node_id).anchor_id)
-	state.ship().sector_id=component.sector_id;state.ship().pos_x=anchor.x_m;state.ship().pos_y=anchor.y_m;state.ship().pos_z=anchor.z_m
-	for container in state.rows("container_state"):
-		if container.ship_instance_id==state.ship().ship_instance_id:container.sector_id=component.sector_id
+	place_anchor(g,str(anchor.anchor_id))
 	units=state.find("resource_state","node_id",component.node_id).remaining_units
 	expect(action(g,"recover_resource",component.node_id,3),"discovered non-ore component recovery")
 	expect(state.find("resource_state","node_id",component.node_id).remaining_units==units-3,"finite component output")
-	var wreck:String=g.inventory.wreck(state.current_sector(),g.position(state.ship()))
+	var wreck:String=g.inventory.wreck(state.current_sector(),g.position(state.ship()),g.spatial_site("ship",state.ship().ship_instance_id))
 	g.inventory.grant(wreck,"component_relic",3)
 	expect(action(g,"pickup_wreck",wreck),"real nearby wreck pickup")
 	expect(g.inventory.count(wreck,"component_relic")==0,"pickup consumes source")
@@ -149,16 +159,17 @@ func _initialize()->void:
 		expect(action(g,"accept_mission","contract_"+region+"_survey"),region+" repeated survey accept")
 		action(g,"undock")
 		anchor=g.definition("anchor_defs","anchor_id","anchor_"+region+"_contract_signal")
-		state.ship().pos_x=anchor.x_m;state.ship().pos_y=anchor.y_m;state.ship().pos_z=anchor.z_m
+		place_anchor(g,str(anchor.anchor_id))
 		expect(action(g,"start_scan","signal_"+region+"_contract"),region+" current-attempt signal")
 		g.tick(40)
-		state.ship().pos_x=0;state.ship().pos_y=0;state.ship().pos_z=0
+		approach_station(g,station_id)
 		expect(action(g,"dock",station_id) and action(g,"deliver_mission","contract_"+region+"_survey"),region+" actual survey settlement")
 		expect(action(g,"accept_mission","contract_"+region+"_combat"),region+" combat contract accept")
 		action(g,"undock")
 		var npc:D.NpcStateDto=state.find("npc_state","spawn_id","spawn_"+region+"_sentinel")
+		place_anchor(g,str(g.definition("npc_spawn_defs","spawn_id",npc.spawn_id).anchor_id))
 		g.damage_npc(npc.npc_instance_id,Vector3(999999,0,0));g.tick(16)
-		state.ship().pos_x=0;state.ship().pos_y=0;state.ship().pos_z=0
+		approach_station(g,station_id)
 		expect(action(g,"dock",station_id) and action(g,"deliver_mission","contract_"+region+"_combat"),region+" actual kill settlement")
 		expect(action(g,"accept_mission","contract_"+region+"_delivery"),region+" material contract accept")
 		var objective:Dictionary=g.missions.objectives("contract_"+region+"_delivery")[0]
@@ -171,39 +182,27 @@ func _initialize()->void:
 	expect(action(g,"accept_mission","contract_mining_iron") and action(g,"claim_loan","loan_contract_miner"),"normal mining contract and bounded loan")
 	action(g,"undock")
 	anchor=g.definition("anchor_defs","anchor_id",g.definition("resource_node_locations","node_id","node_echo_ferrosilicate").anchor_id)
-	state.ship().sector_id="sector_echo";state.ship().pos_x=anchor.x_m;state.ship().pos_y=anchor.y_m;state.ship().pos_z=anchor.z_m
-	for container in state.rows("container_state"):
-		if container.ship_instance_id==state.ship().ship_instance_id:container.sector_id="sector_echo"
+	place_anchor(g,str(anchor.anchor_id))
 	action(g,"start_mining","node_echo_ferrosilicate");g.tick(56);g.stop_interactions()
 	var ordinary_loan:D.LoanStateDto=g.work._active_loan()
 	expect(g.missions.active().collected_units==300 and ordinary_loan.quota_remaining_units<600,"normal contract requires actual collect and spends finite quota")
-	state.ship().sector_id="sector_anchor";state.ship().pos_x=0;state.ship().pos_y=0;state.ship().pos_z=0
-	for container in state.rows("container_state"):
-		if container.ship_instance_id==state.ship().ship_instance_id:container.sector_id="sector_anchor"
+	approach_station(g,"station_anchor_port")
 	expect(action(g,"dock","station_anchor_port") and action(g,"deliver_mission","contract_mining_iron"),"ordinary mining physical delivery")
 	expect(ordinary_loan.status==T.LoanStatus.RETURNED,"settlement returns bound hull but retains ordinary excess cargo")
 	expect(action(g,"accept_mission","contract_survey_echo") and action(g,"claim_loan","loan_contract_lantern"),"normal survey and loan")
 	action(g,"undock")
 	anchor=g.definition("anchor_defs","anchor_id",g.definition("signal_defs","signal_id","signal_echo_contract_survey").anchor_id)
-	state.ship().sector_id="sector_echo";state.ship().pos_x=anchor.x_m;state.ship().pos_y=anchor.y_m;state.ship().pos_z=anchor.z_m
-	for container in state.rows("container_state"):
-		if container.ship_instance_id==state.ship().ship_instance_id:container.sector_id="sector_echo"
+	place_anchor(g,str(anchor.anchor_id))
 	expect(action(g,"start_scan","signal_echo_contract_survey"),"normal loaned survey actual scanner")
 	g.tick(20)
-	state.ship().sector_id="sector_anchor";state.ship().pos_x=0;state.ship().pos_y=0;state.ship().pos_z=0
-	for container in state.rows("container_state"):
-		if container.ship_instance_id==state.ship().ship_instance_id:container.sector_id="sector_anchor"
+	approach_station(g,"station_anchor_port")
 	expect(action(g,"dock","station_anchor_port") and action(g,"deliver_mission","contract_survey_echo"),"ordinary survey return settlement")
 	expect(action(g,"accept_mission","contract_patrol_echo") and action(g,"claim_loan","loan_contract_kestrel"),"normal patrol and protected combat loan")
 	action(g,"undock")
-	state.ship().sector_id="sector_echo"
-	for container in state.rows("container_state"):
-		if container.ship_instance_id==state.ship().ship_instance_id:container.sector_id="sector_echo"
 	var patrol:D.NpcStateDto=state.find("npc_state","spawn_id","spawn_echo_contract_scout")
+	place_anchor(g,str(g.definition("npc_spawn_defs","spawn_id",patrol.spawn_id).anchor_id))
 	g.damage_npc(patrol.npc_instance_id,Vector3(999999,0,0));g.tick(16)
-	state.ship().sector_id="sector_anchor";state.ship().pos_x=0;state.ship().pos_y=0;state.ship().pos_z=0
-	for container in state.rows("container_state"):
-		if container.ship_instance_id==state.ship().ship_instance_id:container.sector_id="sector_anchor"
+	approach_station(g,"station_anchor_port")
 	expect(action(g,"dock","station_anchor_port") and action(g,"deliver_mission","contract_patrol_echo"),"ordinary patrol kill and return settlement")
 	expect(store.save(state,"manual",4),"all factories and regional output durable: "+store.last_error)
 	g.dispose();store.close()

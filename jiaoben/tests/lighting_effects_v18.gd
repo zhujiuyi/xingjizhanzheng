@@ -8,6 +8,7 @@ const Sector = preload("res://runtime/sector.gd")
 const Effects = preload("res://runtime/visuals/visual_effects.gd")
 const D = preload("res://contracts/contract_dtos.gd")
 const T = preload("res://contracts/contract_types.gd")
+const Space = preload("res://runtime/space_coordinates.gd")
 var checks: int = 0
 var failures: Array[String] = []
 var captures: int = 0
@@ -70,25 +71,30 @@ func _run() -> void:
 	host.set_physics_process(false)
 	host._sync_presentation_stage()
 	var ship: XJFlight = host.world.flight
-	# Keep the compressed planet away from the star bearing in the source
-	# reference image; the fixture never changes either celestial definition.
+	# Stage the hull in the later NPC fixture's declared spawn site. Changing
+	# local xyz alone must never invent or infer a strategic site.
+	var spawn: Dictionary = host.store.catalog.one("npc_spawn_defs", "spawn_id", "spawn_anchor_tutorial_scout")
+	if Space.supported(host.store.catalog):
+		check(Space.assign(host.state, "ship", ship.record.ship_instance_id, Space.site_for_anchor(host.store.catalog, str(spawn.anchor_id))), "flight image fixture adopts explicit spawn site")
 	ship.position = Vector3(3500, 3000, 2000)
 	ship.velocity = Vector3.ZERO
 	ship.basis = Basis.IDENTITY
+	host.world.refresh_site()
+	check(host.world.sync_entities(), "flight image fixture refreshes declared scene context")
 	host.ui.show_page("")
 	await _settle_pose()
 	check(not host.ui.top.text.is_empty() and host.ui.instrument_title.text.contains("雨燕") and host.ui.condition_bars[0].bar.max_value > 0.0 and host.ui.condition_bars[0].label.text.contains("/"), "flight HUD shows actual ship name and populated authoritative defense telemetry")
 	await _capture("flight-starlight-port")
-	var toward_star: Vector3 = (host.world.stellar_position - ship.global_position).normalized()
+	var toward_star: Vector3 = _star_direction(host.world, ship.global_position)
 	host.camera.camera.global_position = ship.global_position - toward_star * 90.0 + Vector3.UP * 15.0
 	host.camera.camera.look_at(ship.global_position)
 	host.world.update_starlight()
 	check(not host.camera.camera.is_position_behind(host.world.stellar_disc.global_position), "configured illuminating star has a real visible scene disc")
 	await _capture("stellar-source-reference", host.world.stellar_disc)
-	var first_local: Vector3 = ship.global_basis.inverse() * (host.world.stellar_position - ship.global_position).normalized()
+	var first_local: Vector3 = ship.global_basis.inverse() * _star_direction(host.world, ship.global_position)
 	ship.basis = Basis(Vector3.UP, PI)
 	await _settle_pose()
-	var second_local: Vector3 = ship.global_basis.inverse() * (host.world.stellar_position - ship.global_position).normalized()
+	var second_local: Vector3 = ship.global_basis.inverse() * _star_direction(host.world, ship.global_position)
 	check(first_local.distance_to(second_local) > 1.0, "actual hull rotation changes local incoming-light direction")
 	await _capture("flight-starlight-starboard")
 	if DisplayServer.get_name() != "headless":
@@ -113,18 +119,28 @@ func _lighting_catalog_checks() -> void:
 	var directions: Array[Vector3] = []
 	for definition: Dictionary in store.catalog.rows("sector_defs"):
 		state.ship().sector_id = str(definition.sector_id)
+		var station_definition: Dictionary = store.catalog.one("station_defs", "sector_id", str(definition.sector_id))
+		var station_anchor: Dictionary = store.catalog.one("anchor_defs", "anchor_id", str(station_definition.station_anchor_id))
+		if Space.supported(store.catalog):
+			check(Space.assign(state, "ship", state.ship().ship_instance_id, Space.site_for_anchor(store.catalog, str(station_anchor.anchor_id))), "system fixture adopts its declared station site " + str(definition.sector_id))
+		state.ship().pos_x = float(station_anchor.x_m)
+		state.ship().pos_y = float(station_anchor.y_m)
+		state.ship().pos_z = float(station_anchor.z_m)
 		var gameplay: Gameplay = Gameplay.new()
 		gameplay.setup(state, store.catalog)
 		var world: Sector = Sector.new()
 		viewport.add_child(world)
 		if check(world.build(state, store.catalog, gameplay), "actual lighting world builds " + state.current_sector()):
-			world.flight.position = Vector3.ZERO
+			var station_pose := Vector3(float(station_anchor.x_m), float(station_anchor.y_m), float(station_anchor.z_m))
+			world.flight.position = station_pose
+			world.flight.write_back()
+			world.flight.get_global_transform_interpolated()
 			world.flight.reset_physics_interpolation()
 			world.update_starlight()
 			var row: Dictionary = store.catalog.one("system_lighting_defs", "system_id", str(definition.system_id))
 			check(not row.is_empty() and not world.lighting_definition.is_empty(), "system has one authoritative stellar definition")
 			if not row.is_empty():
-				var direction: Vector3 = world.stellar_position.normalized()
+				var direction: Vector3 = _star_direction(world, station_pose)
 				directions.append(direction)
 				check(world.key_light.global_basis.z.normalized().dot(direction) > 0.99999, "directional rays originate from configured star")
 				check((world.stellar_disc.global_position - world.flight.global_position).normalized().dot(direction) > 0.99999, "visible stellar disc agrees with illuminating direction")
@@ -133,20 +149,26 @@ func _lighting_catalog_checks() -> void:
 				var before: Vector3 = world.key_light.global_basis.z
 				var lateral: Vector3 = before.cross(Vector3.UP)
 				if lateral.length_squared() < 0.000001: lateral = before.cross(Vector3.RIGHT)
-				world.flight.position = lateral.normalized() * 5000.0
+				world.flight.position = station_pose + lateral.normalized() * 5000.0
+				world.flight.write_back()
 				world.flight.reset_physics_interpolation()
 				world.update_starlight()
-				check(before.angle_to(world.key_light.global_basis.z) > 0.015, "translation changes stellar direction instead of fixed scene light")
+				if Space.supported(store.catalog):
+					check(before.normalized().dot(world.key_light.global_basis.z.normalized()) > 0.99999, "local five-kilometre motion keeps AU-distant stellar illumination stable")
+				else:
+					check(before.angle_to(world.key_light.global_basis.z) > 0.015, "legacy compressed translation changes stellar direction")
 				var translated_pose: Vector3 = world.flight.get_global_transform_interpolated().origin
-				var translated_ray: Vector3 = (world.stellar_position - translated_pose).normalized()
+				var translated_ray: Vector3 = _star_direction(world, translated_pose)
 				check(world.key_light.global_basis.z.normalized().dot(translated_ray) > 0.99999, "transverse translation uses the actual new star-to-ship ray")
 				check((world.stellar_disc.global_position - translated_pose).normalized().dot(translated_ray) > 0.99999, "stellar disc follows the same transversely changed light direction")
 				check(is_equal_approx(world.key_light.light_energy, float(row.energy)), "translation keeps scenic star energy stable")
-				world.flight.position = before.normalized() * 5000.0
+				world.flight.position = station_pose + before.normalized() * 5000.0
+				world.flight.write_back()
 				world.flight.reset_physics_interpolation()
 				world.update_starlight()
 				check(world.key_light.global_basis.z.normalized().dot(before.normalized()) > 0.99999, "radial movement preserves incoming-light direction before crossing the star")
 				check((world.stellar_disc.global_position - world.flight.get_global_transform_interpolated().origin).normalized().dot(before.normalized()) > 0.99999, "stellar disc also preserves its bearing during radial movement")
+				if Space.supported(store.catalog): _strategic_light_change(world, direction, station_pose)
 				world.apply_visual_quality("low")
 				check(not world.key_light.shadow_enabled, "low quality disables shadow without changing light direction")
 				world.apply_visual_quality("high")
@@ -170,7 +192,12 @@ func _lighting_catalog_checks() -> void:
 			star_max_separation_rad = maxf(star_max_separation_rad, separation)
 			pair_count += 1
 	check(directions.size() == 10 and pair_count == 45, "all ten configured systems contribute all forty-five star-bearing pairs")
-	check(star_min_separation_rad > 0.5, "every system has a distinct star bearing separated by over half a radian")
+	if Space.supported(store.catalog):
+		# Physical observers may have nearby orbital bearings. Only require
+		# distinct rays beyond numerical precision, not artificial separation.
+		check(star_min_separation_rad > 0.00001, "all ten physical system observers have distinct scalar star bearings beyond numerical precision")
+	else:
+		check(star_min_separation_rad > 0.5, "legacy compressed systems retain star bearings separated by over half a radian")
 	check(star_max_separation_rad > 2.6, "star bearings include substantially opposing illumination directions")
 	for axis: int in 3:
 		var positive: bool = directions.any(func(direction: Vector3): return direction[axis] > 0.0)
@@ -178,6 +205,52 @@ func _lighting_catalog_checks() -> void:
 		check(positive and negative, "stellar lighting covers both sides of world axis %d" % axis)
 	print("STELLAR_BEARINGS pairs=%d min_rad=%.6f max_rad=%.6f" % [pair_count, star_min_separation_rad, star_max_separation_rad])
 	store.close()
+
+func _star_components(catalog: XJCatalog, sector_id: String) -> Dictionary:
+	for row: Dictionary in catalog.rows("celestial_defs"):
+		if str(row.sector_id) == sector_id and str(row.celestial_kind) == "star":
+			return {"x": float(row.x_m), "y": float(row.y_m), "z": float(row.z_m)}
+	return {}
+
+func _star_direction(world: Sector, local_position: Vector3) -> Vector3:
+	if not Space.supported(world.catalog): return (world.stellar_position - local_position).normalized()
+	return Space.scalar_direction(world.strategic_components(local_position), _star_components(world.catalog, world.state.current_sector()))
+
+func _strategic_light_change(world: Sector, original_ray: Vector3, station_pose: Vector3) -> void:
+	# Choose an explicit frozen site for directional stress, never nearest-site
+	# inference. This scoped fixture is not a gameplay transition or save.
+	var original_site: String = Space.current_site(world.state)
+	var candidate: Dictionary = {}
+	var maximum: float = -1.0
+	var star: Dictionary = _star_components(world.catalog, world.state.current_sector())
+	for site: Dictionary in world.catalog.rows("site_defs"):
+		if str(site.sector_id) != world.state.current_sector() or str(site.site_id) == original_site: continue
+		var local := Vector3(float(site.pivot_x_m), float(site.pivot_y_m), float(site.pivot_z_m))
+		var ray: Vector3 = Space.scalar_direction(Space.global_components(world.catalog, str(site.site_id), local), star)
+		var separation: float = original_ray.angle_to(ray)
+		if separation > maximum or is_equal_approx(separation, maximum) and (candidate.is_empty() or str(site.site_id) < str(candidate.site_id)):
+			candidate = site
+			maximum = separation
+	if not check(not candidate.is_empty() and maximum > 0.015, "system has a frozen strategic site with a measurably different star bearing"): return
+	check(Space.assign(world.state, "ship", world.state.ship().ship_instance_id, str(candidate.site_id)), "strategic light fixture adopts the selected explicit site")
+	world.flight.position = Vector3(float(candidate.pivot_x_m), float(candidate.pivot_y_m), float(candidate.pivot_z_m))
+	world.flight.write_back()
+	world.flight.get_global_transform_interpolated()
+	world.flight.reset_physics_interpolation()
+	world.refresh_site()
+	check(world.sync_entities(), "strategic light fixture refreshes site-bound scene entities")
+	world.update_starlight()
+	var expected: Vector3 = _star_direction(world, world.flight.global_position)
+	check(world.key_light.global_basis.z.normalized().dot(expected) > 0.99999 and original_ray.angle_to(expected) > 0.015, "AU strategic relocation changes lighting to the exact scalar star-to-player direction")
+	check((world.stellar_disc.global_position - world.flight.global_position).normalized().dot(expected) > 0.99999, "strategic star disc agrees with the changed illuminating direction")
+	check(Space.assign(world.state, "ship", world.state.ship().ship_instance_id, original_site), "strategic light fixture restores its declared station site")
+	world.flight.position = station_pose
+	world.flight.write_back()
+	world.flight.get_global_transform_interpolated()
+	world.flight.reset_physics_interpolation()
+	world.refresh_site()
+	check(world.sync_entities(), "restored light fixture refreshes original scene entities")
+	world.update_starlight()
 
 func _lit_materials(node: Node) -> Array[Material]:
 	var materials: Array[Material] = []
@@ -267,6 +340,9 @@ func _feedback_checks() -> void:
 	var enemy_position: Vector3 = ship.global_position - ship.global_basis.z * 80.0
 	npc.pos_x = enemy_position.x; npc.pos_y = enemy_position.y; npc.pos_z = enemy_position.z
 	host.state.add("npc_state", npc)
+	if Space.supported(host.store.catalog):
+		var spawn: Dictionary = host.store.catalog.one("npc_spawn_defs", "spawn_id", npc.spawn_id)
+		check(Space.assign(host.state, "npc", npc.npc_instance_id, Space.site_for_anchor(host.store.catalog, str(spawn.anchor_id))), "enemy image fixture keeps frozen spawn context")
 	check(host.world.sync_entities(), "enemy fixture enters actual projection from unmodified NPC prototype")
 	var enemy: CharacterBody3D = host.world.npcs[npc.npc_instance_id]
 	enemy.reset_physics_interpolation()

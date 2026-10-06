@@ -45,6 +45,102 @@ class ProgressTests(unittest.TestCase):
         p.insert(self.db, "mission_state", mission)
         return mission
 
+    def spatial_npc(self, ctx, instance="npc-spatial-fixture", alive=0, phase="dead"):
+        """Declared authored spawn precondition, never inferred from XYZ."""
+        spawn = p.rows(self.db, "frozen_npc_spawn_defs", "content_snapshot_id=? AND occurrence_mode='ambient'", (self.content,))[0]
+        definition = p.rows(self.source, "npc_full_defs", "npc_id=?", (spawn["npc_id"],))[0]
+        anchor = p.rows(self.db, "frozen_anchor_defs", "content_snapshot_id=? AND anchor_id=?", (self.content, spawn["anchor_id"]))[0]
+        site = p.rows(self.db, "frozen_anchor_site_defs", "content_snapshot_id=? AND anchor_id=?", (self.content, spawn["anchor_id"]))[0]["site_id"]
+        row = {**ctx, "npc_instance_id": instance, "spawn_id": spawn["spawn_id"], "sector_id": spawn["sector_id"],
+               "generation": 0, "alive": alive, "shield": definition["shield_max"] if alive else 0.,
+               "armor": definition["armor_max"] if alive else 0., "hull": definition["hull_max"] if alive else 0.,
+               "pos_x": anchor["x_m"], "pos_y": anchor["y_m"], "pos_z": anchor["z_m"],
+               "quat_x": 0., "quat_y": 0., "quat_z": 0., "quat_w": 1., "vel_x": 0., "vel_y": 0., "vel_z": 0.,
+               "angular_x": 0., "angular_y": 0., "angular_z": 0., "behavior_phase": phase,
+               "wait_remaining_s": 0., "patrol_point_index": 0, "cooldown_remaining_s": 0.,
+               "respawn_remaining_s": 0., "bounty_claimed": 0, "loot_claimed": 0}
+        p.insert(self.db, "npc_state", row)
+        return row, site
+
+    def test_spatial_context_required_for_live_and_historical_entities(self):
+        for kind in ("controlled-ship", "returned-ship", "dead-npc", "wreck"):
+            with self.subTest(entity=kind):
+                ctx = self.candidate()
+                if kind == "controlled-ship":
+                    self.db.execute("DELETE FROM spatial_state WHERE snapshot_id='candidate' AND entity_kind='ship' AND entity_id='ship-guarantee'")
+                elif kind == "returned-ship":
+                    ship = p.rows(self.db, "ship_state", "snapshot_id='candidate' AND ship_instance_id='ship-guarantee'")[0]
+                    ship.update(ship_instance_id="returned-history", status="returned", station_id=None, hull=0.)
+                    p.insert(self.db, "ship_state", ship)
+                elif kind == "dead-npc":
+                    self.spatial_npc(ctx)
+                else:
+                    p.insert(self.db, "container_state", {**ctx, "container_id": "wreck-spatial-fixture", "owner_player_id": "player-local",
+                        "kind": "wreck", "sector_id": "sector_anchor", "pos_x": 0., "pos_y": 0., "pos_z": 0.})
+                with self.assertRaisesRegex(sqlite3.IntegrityError, "missing spatial context"):
+                    p.validate_snapshot(self.db, "candidate")
+                self.db.rollback()
+                self.assertEqual(self.pointer(), (self.initial, 1))
+
+    def test_spatial_context_rejects_wrong_sector_or_orphan_identity(self):
+        for mode in ("wrong-sector", "orphan-ship", "wrong-entity-kind"):
+            with self.subTest(mode=mode):
+                ctx = self.candidate()
+                if mode == "wrong-sector":
+                    site = p.rows(self.db, "frozen_site_defs", "content_snapshot_id=? AND sector_id='sector_echo'", (self.content,))[0]["site_id"]
+                    self.db.execute("UPDATE spatial_state SET site_id=? WHERE snapshot_id='candidate' AND entity_kind='ship'", (site,))
+                elif mode == "orphan-ship":
+                    site = p.rows(self.db, "spatial_state", "snapshot_id='candidate'")[0]["site_id"]
+                    p.insert(self.db, "spatial_state", {**ctx, "entity_kind": "ship", "entity_id": "missing-ship", "site_id": site})
+                else:
+                    self.db.execute("UPDATE spatial_state SET entity_kind='wreck' WHERE snapshot_id='candidate' AND entity_kind='ship'")
+                with self.assertRaisesRegex(sqlite3.IntegrityError, "orphan or wrong-sector spatial context"):
+                    p.validate_snapshot(self.db, "candidate")
+                self.db.rollback()
+                self.assertEqual(self.pointer(), (self.initial, 1))
+
+    def test_spatial_context_is_unique_and_sealed_rows_are_immutable(self):
+        ctx = p.context(self.initial, "world-a", self.content)
+        site = p.rows(self.db, "spatial_state", "snapshot_id=?", (self.initial,))[0]["site_id"]
+        for sql in ("UPDATE spatial_state SET entity_id='changed-identity' WHERE snapshot_id=?",
+                    "DELETE FROM spatial_state WHERE snapshot_id=?",
+                    "INSERT INTO spatial_state SELECT snapshot_id,world_id,content_snapshot_id,'ship','new-identity',site_id FROM spatial_state WHERE snapshot_id=?"):
+            with self.subTest(sql=sql), self.assertRaisesRegex(sqlite3.IntegrityError, "sealed snapshot is immutable"):
+                self.db.execute(sql, (self.initial,))
+        candidate = self.candidate()
+        with self.assertRaises(sqlite3.IntegrityError):
+            p.insert(self.db, "spatial_state", {**candidate, "entity_kind": "ship", "entity_id": "ship-guarantee", "site_id": site})
+        self.db.rollback()
+        self.assertEqual(p.rows(self.db, "spatial_state", "snapshot_id=?", (self.initial,)),
+                         [{**ctx, "entity_kind": "ship", "entity_id": "ship-guarantee", "site_id": site}])
+
+    def test_spatial_npc_must_stay_on_its_authored_spawn_site(self):
+        ctx = self.candidate()
+        npc, correct_site = self.spatial_npc(ctx)
+        other_site = next(row["site_id"] for row in p.rows(self.db, "frozen_site_defs", "content_snapshot_id=? AND sector_id=?", (self.content, npc["sector_id"])) if row["site_id"] != correct_site)
+        p.insert(self.db, "spatial_state", {**ctx, "entity_kind": "npc", "entity_id": npc["npc_instance_id"], "site_id": other_site})
+        with self.assertRaises(sqlite3.IntegrityError):
+            p.validate_snapshot(self.db, "candidate")
+        self.db.rollback()
+
+    def test_docked_ship_context_must_match_its_station_site(self):
+        self.candidate()
+        other_site = next(row["site_id"] for row in p.rows(self.db, "frozen_site_defs", "content_snapshot_id=? AND sector_id='sector_anchor'", (self.content,)) if row["site_kind"] != "station")
+        self.db.execute("UPDATE spatial_state SET site_id=? WHERE snapshot_id='candidate' AND entity_kind='ship'", (other_site,))
+        with self.assertRaises(sqlite3.IntegrityError):
+            p.validate_snapshot(self.db, "candidate")
+        self.db.rollback()
+
+    def test_hostile_ai_on_a_different_site_does_not_block_local_save(self):
+        ctx = self.candidate()
+        npc, site = self.spatial_npc(ctx, alive=1, phase="acquire")
+        p.insert(self.db, "spatial_state", {**ctx, "entity_kind": "npc", "entity_id": npc["npc_instance_id"], "site_id": site})
+        ship_site = p.rows(self.db, "spatial_state", "snapshot_id='candidate' AND entity_kind='ship' AND entity_id='ship-guarantee'")[0]["site_id"]
+        self.assertNotEqual(site, ship_site)
+        p.validate_snapshot(self.db, "candidate")
+        self.assertEqual(self.db.execute("SELECT status FROM save_snapshot WHERE snapshot_id='candidate'").fetchone(), ("sealed",))
+        self.db.rollback()
+
     def test_full_catalog_reference_closure_and_fixed_view_hash(self):
         self.assertEqual(p.verify_frozen_content(self.db, self.content), build_catalog.logical_content_hash(self.source))
         names = {r[0] for r in self.db.execute("SELECT table_name FROM content_table_manifest")}
@@ -73,7 +169,9 @@ class ProgressTests(unittest.TestCase):
                     "UPDATE frozen_encounter_defs SET respawn_seconds=respawn_seconds+1",
                     "DELETE FROM frozen_encounter_members",
                     "UPDATE frozen_salvage_package_defs SET mass_kg=mass_kg+1",
-                    "DELETE FROM frozen_salvage_reward_defs", "DELETE FROM frozen_npc_salvage_defs"):
+                    "DELETE FROM frozen_salvage_reward_defs", "DELETE FROM frozen_npc_salvage_defs",
+                    "UPDATE frozen_site_defs SET x_m=x_m+1", "DELETE FROM frozen_anchor_site_defs",
+                    "UPDATE frozen_celestial_defs SET radius_m=radius_m+1"):
             with self.subTest(sql=sql), self.assertRaises(sqlite3.IntegrityError):
                 self.db.execute(sql)
 
@@ -222,8 +320,16 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual(database.execute("SELECT * FROM migration_history ORDER BY migration_id").fetchall(), history)
         self.assertEqual(database.execute("SELECT display_name FROM profile").fetchall(), [("保留六版资料",)])
         self.assertEqual(database.execute("PRAGMA user_version").fetchone(), (6,))
-        p.apply_migrations(database)
+        # Applying 010 by itself still produces its historical format7. The
+        # current retry then adds 011 and must reach format8 without rewriting
+        # the older migration's SQL, recorded checksum or result.
+        with mock.patch.object(p, "MIGRATIONS", p.MIGRATIONS[:10]), mock.patch.object(p, "FORMAT_VERSION", 7):
+            p.apply_migrations(database)
         self.assertEqual(database.execute("SELECT format_version FROM database_meta").fetchone(), (7,))
+        self.assertEqual(database.execute("PRAGMA user_version").fetchone(), (7,))
+        self.assertEqual(database.execute("SELECT count(*) FROM sqlite_schema WHERE name='spatial_state'").fetchone(), (0,))
+        p.apply_migrations(database)
+        self.assertEqual(database.execute("SELECT format_version FROM database_meta").fetchone(), (8,))
         self.assertEqual(database.execute("SELECT * FROM migration_history ORDER BY migration_id").fetchall()[:9], history)
         self.assertEqual(database.execute("SELECT count(*) FROM sqlite_schema WHERE name='frozen_drone_defs'").fetchone(), (1,))
         self.assertEqual(database.execute("PRAGMA foreign_key_check").fetchall(), [])
@@ -242,7 +348,7 @@ class ProgressTests(unittest.TestCase):
         names = [row[0] for row in legacy.execute("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")]
         self.assertEqual(metadata["schema_version"], 4)
         self.assertEqual(len(names), 89)
-        self.assertEqual(len(build_catalog.CONTENT_TABLES), 93)
+        self.assertEqual(len(build_catalog.CONTENT_TABLES), 96)
         self.db.execute("BEGIN IMMEDIATE")
         self.db.execute("PRAGMA defer_foreign_keys=ON")
         cid = "historical-adapter-content"
@@ -507,12 +613,21 @@ class ProgressTests(unittest.TestCase):
         ctx = self.candidate()
         spawn = p.rows(self.db, "frozen_npc_spawn_defs", "content_snapshot_id=? AND occurrence_mode='ambient'", (self.content,))[0]
         npc = p.rows(self.source, "npc_full_defs", "npc_id=?", (spawn["npc_id"],))[0]
+        anchor = p.rows(self.db, "frozen_anchor_defs", "content_snapshot_id=? AND anchor_id=?", (self.content, spawn["anchor_id"]))[0]
+        site = p.rows(self.db, "frozen_anchor_site_defs", "content_snapshot_id=? AND anchor_id=?", (self.content, spawn["anchor_id"]))[0]["site_id"]
         p.insert(self.db, "npc_state", {**ctx, "npc_instance_id": "npc-test-acquire", "spawn_id": spawn["spawn_id"],
             "sector_id": spawn["sector_id"], "generation": 0, "alive": 1, "shield": npc["shield_max"], "armor": npc["armor_max"], "hull": npc["hull_max"],
-            "pos_x": 0., "pos_y": 0., "pos_z": 0., "quat_x": 0., "quat_y": 0., "quat_z": 0., "quat_w": 1.,
+            "pos_x": anchor["x_m"], "pos_y": anchor["y_m"], "pos_z": anchor["z_m"], "quat_x": 0., "quat_y": 0., "quat_z": 0., "quat_w": 1.,
             "vel_x": 0., "vel_y": 0., "vel_z": 0., "angular_x": 0., "angular_y": 0., "angular_z": 0.,
             "behavior_phase": "acquire", "wait_remaining_s": 0., "patrol_point_index": 0, "cooldown_remaining_s": 0.,
             "respawn_remaining_s": 0., "bounty_claimed": 0, "loot_claimed": 0})
+        p.insert(self.db, "spatial_state", {**ctx, "entity_kind": "npc", "entity_id": "npc-test-acquire", "site_id": site})
+        # The active AI is local to the explicitly placed flying player; an
+        # attack phase in a different site must not masquerade as local combat.
+        self.db.execute("UPDATE ship_state SET sector_id=?,station_id=NULL,status='flying',pos_x=?,pos_y=?,pos_z=? WHERE snapshot_id='candidate' AND ship_instance_id='ship-guarantee'", (spawn["sector_id"], anchor["x_m"], anchor["y_m"], anchor["z_m"]))
+        self.db.execute("UPDATE player_state SET docked_station_id=NULL WHERE snapshot_id='candidate'")
+        self.db.execute("UPDATE container_state SET sector_id=? WHERE snapshot_id='candidate' AND ship_instance_id='ship-guarantee'", (spawn["sector_id"],))
+        self.db.execute("UPDATE spatial_state SET site_id=? WHERE snapshot_id='candidate' AND entity_kind='ship' AND entity_id='ship-guarantee'", (site,))
         with self.assertRaisesRegex(sqlite3.IntegrityError, "active hostile AI"):
             p.validate_snapshot(self.db, "candidate")
         self.db.rollback()
@@ -527,6 +642,9 @@ class ProgressTests(unittest.TestCase):
             destroyed = p.rows(database, "ship_state", "snapshot_id=?", (snapshot,))[0]
             destroyed.update(ship_instance_id="old-loan-ship", ship_def_id="miner_anvil", station_id=None, status="destroyed", hull=0., policy_id=service["policy_id"])
             p.insert(database, "ship_state", destroyed)
+            station = p.rows(database, "frozen_station_defs", "content_snapshot_id=? AND station_id=?", (self.content, service["station_id"]))[0]
+            source_site = p.rows(database, "frozen_anchor_site_defs", "content_snapshot_id=? AND anchor_id=?", (self.content, station["station_anchor_id"]))[0]["site_id"]
+            p.insert(database, "spatial_state", {**ctx, "entity_kind": "ship", "entity_id": "old-loan-ship", "site_id": source_site})
             p.insert(database, "loan_state", {**ctx, "loan_id": "loan-contract-1", "player_id": "player-local", "loan_service_id": service["loan_service_id"], "mission_instance_id": "attempt-loan",
                 "status": "lost", "issuance_count": 1, "quota_remaining_units": service["operation_quota_units"]-1, "replacement_remaining_s": service["replacement_cooldown_s"]})
             p.insert(database, "loan_issue_state", {**ctx, "loan_id": "loan-contract-1", "issuance_index": 1, "ship_instance_id": "old-loan-ship", "status": "destroyed"})
@@ -607,8 +725,12 @@ class ProgressTests(unittest.TestCase):
             database.execute("DELETE FROM transfer_state WHERE snapshot_id=?", (snapshot,))
             p.insert(database, "transfer_state", {**ctx, "transfer_id": "transfer-1", "ship_instance_id": "ship-guarantee", "connection_id": "conn_anchor_echo", "endpoint": where})
             if where == "destination":
+                door = p.rows(database, "frozen_gate_endpoint_defs", "content_snapshot_id=? AND connection_id=? AND origin_sector_id='sector_anchor'", (self.content, "conn_anchor_echo"))[0]
+                exit_anchor = p.rows(database, "frozen_anchor_defs", "content_snapshot_id=? AND anchor_id=?", (self.content, door["exit_anchor_id"]))[0]
+                exit_site = p.rows(database, "frozen_anchor_site_defs", "content_snapshot_id=? AND anchor_id=?", (self.content, door["exit_anchor_id"]))[0]["site_id"]
                 database.execute("UPDATE player_state SET credit=credit-1,docked_station_id=NULL WHERE snapshot_id=?", (snapshot,))  # Test-only nonzero cost fault witness.
-                database.execute("UPDATE ship_state SET sector_id='sector_echo',station_id=NULL,status='flying' WHERE snapshot_id=?", (snapshot,))
+                database.execute("UPDATE ship_state SET sector_id='sector_echo',station_id=NULL,status='flying',pos_x=?,pos_y=?,pos_z=? WHERE snapshot_id=?", (exit_anchor["x_m"], exit_anchor["y_m"], exit_anchor["z_m"], snapshot))
+                database.execute("UPDATE spatial_state SET site_id=? WHERE snapshot_id=? AND entity_kind='ship' AND entity_id='ship-guarantee'", (exit_site, snapshot))
                 database.execute("UPDATE container_state SET sector_id='sector_echo' WHERE snapshot_id=? AND kind<>'station'", (snapshot,))
         p.save_copy(self.db, self.initial, "origin", "auto-world-a", 1, reason="travel_origin", transfer_id="transfer-1", mutate=lambda db, snap: endpoint(db, snap, "origin"))
         with self.assertRaises(RuntimeError):

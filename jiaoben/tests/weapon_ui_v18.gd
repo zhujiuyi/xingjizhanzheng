@@ -83,7 +83,7 @@ func tooltip_checks() -> void:
 		var text: String = host.ui._item_description(mid)
 		var is_drone: bool = profile.fire_mode == "drone"
 		check(text.contains("%.2f" % float(weapon.raw_damage)) and text.contains("周期 %.2f s" % float(module.cycle_s)) and text.contains("%.2f" % (float(weapon.raw_damage) / float(module.cycle_s))), "tooltip exact damage/cycle/DPS " + mid)
-		check(text.contains("%.0f m" % float(module.range_m)) and text.contains("能量 %.2f EU" % float(module.energy_eu)) and text.contains("热量 %.2f HU" % float(module.heat_hu)), "tooltip frozen range/energy/heat " + mid)
+		check(text.contains(XJSpaceUnits.distance(float(module.range_m))) and text.contains("能量 %.2f EU" % float(module.energy_eu)) and text.contains("热量 %.2f HU" % float(module.heat_hu)), "tooltip frozen range/energy/heat " + mid)
 		check(text.contains(host.ui._weapon_family_name(str(profile.family_id))) and text.contains(host.ui._weapon_size_name(int(profile.size_class))) and text.contains("已解锁"), "tooltip family/mount/actual technology " + mid)
 		if is_drone:
 			var drone: Dictionary = host.store.catalog.one("drone_defs", "module_id", mid)
@@ -91,7 +91,7 @@ func tooltip_checks() -> void:
 		elif weapon.projectile_speed_mps == null:
 			check(text.contains("瞬时射线"), "ray tooltip does not claim projectile flight " + mid)
 		else:
-			check(text.contains("弹速 %.0f m/s" % float(weapon.projectile_speed_mps)), "projectile tooltip exact physical speed " + mid)
+			check(text.contains("弹速 " + XJSpaceUnits.speed(float(weapon.projectile_speed_mps))), "projectile tooltip exact physical speed in the appropriate unit " + mid)
 		if weapon.ammo_item_id != null: check(text.contains("×%d" % int(weapon.ammo_per_cycle)), "tooltip exact magazine charge " + mid)
 	await show("market")
 	for mid: String in ["module_kinetic_lance_i", "module_kinetic_siege_i", "module_drone_swarm_i"]:

@@ -43,6 +43,7 @@ var pointer_pick_position: Vector2 = Vector2.ZERO
 var pointer_drag_pressed: bool = false
 var pointer_dragged: bool = false
 var pointer_drag_origin: Vector2 = Vector2.ZERO
+var local_boundary_warning_s: float = 0.0
 # This is a screen-space click tolerance, not a ship or combat balance value.
 const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 
@@ -54,6 +55,10 @@ func _ready() -> void:
 		{"flag": "--xj-verify-weapon-ui-v18", "file": "weapon_ui_v18.gd", "prefix": "weapon-ui-v18", "env": "XJ_WEAPON_UI_V18", "meta": "xj_weapon_ui_v18_diagnostic"},
 		{"flag": "--xj-verify-upgrade-v18", "file": "combat_upgrade_v18.gd", "prefix": "combat-upgrade-v18", "env": "XJ_UPGRADE_V18", "meta": "xj_upgrade_v18_diagnostic"},
 		{"flag": "--xj-verify-mission-display-v19", "file": "mission_display_v19.gd", "prefix": "mission-display-v19", "env": "XJ_MISSION_DISPLAY_V19", "meta": "xj_mission_display_v19_diagnostic"},
+		{"flag": "--xj-verify-warp-visual-v20", "file": "warp_visual_v20.gd", "prefix": "warp-visual-v20", "env": "XJ_WARP_VISUAL_V20", "meta": "xj_warp_visual_v20_diagnostic"},
+		{"flag": "--xj-verify-spatial-business-v20", "file": "spatial_business_v20.gd", "prefix": "spatial-business-v20", "env": "XJ_SPATIAL_BUSINESS_V20", "meta": "xj_spatial_business_v20_diagnostic"},
+		{"flag": "--xj-verify-space-upgrade-v20", "file": "space_upgrade_v20.gd", "prefix": "space-upgrade-v20", "env": "XJ_SPACE_UPGRADE_V20", "meta": "xj_space_upgrade_v20_diagnostic"},
+		{"flag": "--xj-verify-spatial-navigation-v20", "file": "spatial_navigation_v20.gd", "prefix": "spatial-navigation-v20", "env": "XJ_SPATIAL_NAVIGATION_V20", "meta": "xj_spatial_navigation_v20_diagnostic"},
 	]:
 		if arguments.has(str(v18_contract.flag)) and not get_tree().has_meta(str(v18_contract.meta)):
 			_start_v18_diagnostic(v18_contract)
@@ -298,14 +303,19 @@ func _process(delta: float) -> void:
 			if not stopped:
 				presentation.consume(delta)
 	# Camera and projected annotations must use the same rendered ship pose.
+	if is_instance_valid(warp_visual):
+		var warp_phase: String = local_navigation.phase if local_navigation != null and local_navigation.warp_active() else "warmup" if travel != null and travel.active() else "idle"
+		warp_visual.update_navigation(warp_phase, delta, float(preferences.get("vfx_intensity", 1.0)), _paused() or busy)
 	if camera != null:
 		if state == null or state.ship().status != Types.ShipStatus.DOCKED:
 			camera.step(delta)
-	if ui != null:
-		ui.tick(delta)
 	if is_instance_valid(warp_visual):
-		var warp_phase: String = local_navigation.phase if local_navigation != null and local_navigation.warp_active() else "idle"
-		warp_visual.update_navigation(warp_phase, delta, float(preferences.get("vfx_intensity", 1.0)), _paused() or busy)
+		warp_visual.update_pose(local_navigation.warp_heading if local_navigation != null and local_navigation.warp_active() else -world.flight.global_basis.z if is_instance_valid(world) and is_instance_valid(world.flight) else Vector3.FORWARD)
+	if world != null:
+		world.update_starlight()
+		XJCelestialBackdrop.update(world)
+	if ui != null: ui.tick(delta)
+	local_boundary_warning_s = maxf(0.0, local_boundary_warning_s - delta)
 
 func _physics_process(delta: float) -> void:
 	if state == null or world == null or busy or _paused():
@@ -356,7 +366,11 @@ func _physics_process(delta: float) -> void:
 		local_navigation.tick(delta)
 	else:
 		world.flight.simulate(delta)
-	world.simulate_npcs(delta)
+	if not warping:
+		if world.enforce_local_boundary() and local_boundary_warning_s <= 0.0:
+			ui.notify("已到达当前地点的局部航行边界；选择其他地点并跃迁继续航行。")
+			local_boundary_warning_s = 3.0
+		world.simulate_npcs(delta)
 	world.projectiles.simulate(delta)
 	_flush_damage()
 	gameplay.call("finish_step", delta)
@@ -548,6 +562,7 @@ func _read_flight_input(delta: float = 0.0) -> void:
 
 func _request_engine_cycle() -> void:
 	if _exit_save_pending(): return
+	if local_navigation != null and local_navigation.warp_active(): return
 	for equipment: Dtos.EquipmentStateDto in state.rows("equipment_state"):
 		var slot := state.find("container_state", "container_id", equipment.slot_container_id) as Dtos.ContainerStateDto
 		var definition: Dictionary = store.catalog.one("module_defs", "module_id", equipment.module_def_id)
@@ -561,7 +576,7 @@ func _fire_weapons(automatic: bool = false, target_override: String = "") -> voi
 		return
 	var target_node: Node3D
 	var selected_target: String = target_override if not target_override.is_empty() else ui.target_id
-	if world.targets.has(selected_target):
+	if world.targets.has(selected_target) and world.target_is_local(selected_target):
 		target_node = world.targets[selected_target].node
 	for equipment: Dtos.EquipmentStateDto in gameplay.call("equipped", state.ship()):
 		var slot := state.find("container_state", "container_id", equipment.slot_container_id) as Dtos.ContainerStateDto
@@ -948,7 +963,7 @@ func _mission_navigation(action: String, mission_id: String, announce: bool = tr
 	ui._select_target(id)
 	ui._update_mission_guidance()
 	if camera != null:
-		var direction: Vector3 = world.flight.global_position.direction_to(world.targets[id].node.global_position)
+		var direction: Vector3 = world.target_direction(id)
 		if direction.length_squared() > 0.000001:
 			_release_observation()
 			camera.orbit = Vector2.ZERO
@@ -971,6 +986,7 @@ func _record_arrival(candidate: XJRuntimeState, connection_id: String) -> void:
 
 func _activate(candidate: XJRuntimeState) -> void:
 	# All fallible construction happened in staging before the durable boundary.
+	if is_instance_valid(warp_visual): warp_visual.unbind()
 	if world != null:
 		remove_child(world)
 		world.queue_free()
@@ -1001,6 +1017,10 @@ func _activate(candidate: XJRuntimeState) -> void:
 	local_navigation.changed.connect(_local_navigation_changed)
 	local_navigation.arrived.connect(_local_navigation_arrived)
 	camera.bind(world.flight, store.catalog, state.player().camera_mode)
+	var visual_rules := XJLocalNavigationRules.new()
+	if visual_rules.load_rules(true):
+		if not warp_visual.bind(world, camera, visual_rules.parameters): ui.notify(warp_visual.last_error, true)
+	else: ui.notify(visual_rules.last_error, true)
 	ui.slots = store.list_slots()
 	ui.bind(state, store.catalog, gameplay, world, camera)
 	combat_automation = CombatAutomation.new()
@@ -1048,6 +1068,7 @@ func _travel_stable() -> bool:
 
 func navigation_context(target_id: String) -> Dictionary:
 	var result: Dictionary = local_navigation.inspect(target_id) if local_navigation != null else {"reason": "导航设备未就绪"}
+	result["display_speed_mps"] = local_navigation.path_length_m / local_navigation.travel_duration_s if local_navigation != null and local_navigation.warp_active() and local_navigation.phase == "travel" and local_navigation.travel_duration_s > 0.0 else world.flight.velocity.length() if world != null else 0.0
 	result["active"] = local_navigation != null and local_navigation.active()
 	result["navigation_target_id"] = local_navigation.target_id if local_navigation != null else ""
 	result["combat_ready"] = _combat_target_valid(target_id)
@@ -1083,7 +1104,8 @@ func _navigation_command(mode: String, target_id: String, retain_combat_options:
 	if not bool(context.get(mode + "_ready", false)):
 		ui.notify(str(context.get(mode + "_reason", context.get("reason", "当前无法执行导航"))), true)
 		return false
-	if mode == "warp":
+	var requires_warp: bool = mode == "warp" or (bool(context.get("remote_site", false)) and mode in ["approach", "dock"])
+	if requires_warp:
 		# The stable origin is durable before any movement or charge state begins.
 		# Local navigation never borrows wormhole receipts or transfer barriers.
 		if not _save_block_reason().is_empty():
@@ -1103,7 +1125,7 @@ func _navigation_command(mode: String, target_id: String, retain_combat_options:
 	navigation_generation += 1
 	var accepted: bool = local_navigation.begin(mode, target_id)
 	if accepted:
-		if mode == "warp": _reset_combat_automation(false)
+		if requires_warp: _reset_combat_automation(false)
 		elif combat_automation != null and not retain_combat_options: combat_automation.relinquish_motion()
 		_sync_combat_automation()
 	return accepted
@@ -1234,7 +1256,7 @@ func _check_objectives(delta: float) -> void:
 			var anchor: Dictionary = store.catalog.one("anchor_defs", "anchor_id", definition.target_anchor_id)
 			if anchor.sector_id != state.current_sector():
 				continue
-			var in_radius := world.flight.position.distance_to(world.anchor_position(anchor.anchor_id)) <= float(anchor.interaction_radius_m)
+			var in_radius := XJSpaceCoordinates.same_site(state, store.catalog, "ship", state.ship().ship_instance_id, anchor.anchor_id) and world.flight.position.distance_to(world.anchor_position(anchor.anchor_id)) <= float(anchor.interaction_radius_m)
 			var key := "%s:%d" % [mission.mission_instance_id, definition.objective_index]
 			if definition.objective_kind == "reach_anchor" and in_radius:
 				gameplay.call("record_event", "reach_anchor", anchor.anchor_id, 1)
@@ -1367,6 +1389,7 @@ func _sync_presentation_stage() -> void:
 		return
 	var docked := state.ship().status == Types.ShipStatus.DOCKED
 	if docked:
+		hangar.set_space_context(store.catalog, state.ship().station_id)
 		if hangar.ship_def_id != state.ship().ship_def_id:
 			hangar.change_ship(state.ship().ship_def_id)
 		if presentation_stage != "hangar": hangar.focus_service("")

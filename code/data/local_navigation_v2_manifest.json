@@ -1,0 +1,36 @@
+{
+  "asset_version": "local-navigation-v2",
+  "scope": "Fixed v2 strategic navigation; selected by frozen v0.7 world rules. v1 preserved for historical worlds.",
+  "resources": [
+    {
+      "path": "res://data/local_navigation_v2.db",
+      "sha256": "d978b7e5ebca0a6045ac9497b4bc93804193ced8d87a0a2ca5ae313b5eaf97f2",
+      "role": "readonly_local_gameplay_navigation_rules",
+      "source": "Project authored SQL; code/database/local_navigation_v2.sql"
+    },
+    {
+      "path": "res://runtime/ui/warp_visual.gd",
+      "sha256": "956c1893e64fab8a91e4c4ea90ccfea978ec1f6aa912fbc2cb0b2cb8e5578e02",
+      "role": "readonly_warp_presentation",
+      "source": "Project authored code and shader"
+    },
+    {
+      "path": "res://runtime/ui/warp_environment.gdshader",
+      "sha256": "ceba7e7448f8a5d363910041216834d7a6af03638e50c61e32885bbcd6512ecc",
+      "role": "readonly_warp_presentation",
+      "source": "Project authored code and shader"
+    },
+    {
+      "path": "res://runtime/ui/window_space_strategic.gdshader",
+      "sha256": "96eb675c0d496ed3c67b24d03c68ee1759e347b7b154121af80aa96f3c0a3223",
+      "role": "readonly_warp_presentation",
+      "source": "Project authored code and shader"
+    },
+    {
+      "path": "res://runtime/station_hangar.gd",
+      "sha256": "1aa7dcf63ce2d18dc421d7720daf36bc32e16912be6639fd28fcdea1e3c526b4",
+      "role": "readonly_warp_presentation",
+      "source": "Project authored code and shader"
+    }
+  ]
+}

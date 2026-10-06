@@ -10,7 +10,7 @@ class FullSingleplayerContentTests(unittest.TestCase):
  def setUpClass(cls):
   cls.db=sqlite3.connect(f'file:{ROOT / "code/data/catalog.db"}?mode=ro',uri=True);cls.db.row_factory=sqlite3.Row;cls.balance=Catalog()
  @classmethod
- def tearDownClass(cls):cls.db.close()
+ def tearDownClass(cls):cls.db.close();cls.balance.connection.close()
  def rows(self,t):return [dict(r) for r in self.db.execute('SELECT * FROM '+t)]
  def test_full_finite_scope(self):
   self.assertEqual(len(self.rows('system_defs')),10);self.assertEqual(len(self.rows('ship_defs')),9);self.assertEqual(len(self.rows('module_defs')),39)
