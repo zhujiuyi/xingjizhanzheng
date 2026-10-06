@@ -243,6 +243,21 @@
       "size_bytes": 2103
     },
     {
+      "resource_path": "res://assets/business_v11/items/module_drone_swarm_i.svg",
+      "sha256": "dd828b0421a866fcccc43d8e3686948b066e50a4e864529d4e430514e8585a27",
+      "size_bytes": 2244
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_drone_swarm_ii.svg",
+      "sha256": "7eedf3dabbef12559e64a31519608bfc52df93e4a51f11836164483645b6c30a",
+      "size_bytes": 2301
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_drone_swarm_iii.svg",
+      "sha256": "25f7dbcbc4f7b764e0cb06acfe4861bda5aeba65fef6aa0b404a7bb1ba6a78a7",
+      "size_bytes": 2358
+    },
+    {
       "resource_path": "res://assets/business_v11/items/module_engine_vector_i.svg",
       "sha256": "ad3982017e44e85bcb3f5eb2c384af3d1393e4a065820c5028ed7c5e03c319ee",
       "size_bytes": 2179
@@ -273,6 +288,21 @@
       "size_bytes": 2164
     },
     {
+      "resource_path": "res://assets/business_v11/items/module_kinetic_lance_i.svg",
+      "sha256": "5fbe5cb7dae43da37cd524dfbf4e64736b9dcdb556211f12175c3a9c6c3e1430",
+      "size_bytes": 2106
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_kinetic_lance_ii.svg",
+      "sha256": "6bfae8df30eb057aad177ce5a6d0121d8fa3a18c1a5fb91df3f40802b0ce2766",
+      "size_bytes": 2163
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_kinetic_lance_iii.svg",
+      "sha256": "178583d127466dc7abc8cc0f1c3cfb1a15d2a86181c62312f321fbeae9a4c32a",
+      "size_bytes": 2220
+    },
+    {
       "resource_path": "res://assets/business_v11/items/module_kinetic_needle_i.svg",
       "sha256": "d7e3f541d8cf1bc1cee97282969b312d983ebe971226a87d03078a5f76403ed0",
       "size_bytes": 2080
@@ -286,6 +316,21 @@
       "resource_path": "res://assets/business_v11/items/module_kinetic_needle_iii.svg",
       "sha256": "292d995d723646c68f591fe5fbe2efe1d6593d8f917a0e9e560f7544be22b381",
       "size_bytes": 2194
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_kinetic_siege_i.svg",
+      "sha256": "87d4693328c6287c260b3f5454d272ee6df53937a8a206058aac815752c277b8",
+      "size_bytes": 2152
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_kinetic_siege_ii.svg",
+      "sha256": "61b519900dd0d5a098836cbc2da3449d31601010351061ae7f7f13e5036bf072",
+      "size_bytes": 2209
+    },
+    {
+      "resource_path": "res://assets/business_v11/items/module_kinetic_siege_iii.svg",
+      "sha256": "695e8dcd2354f15e4681adb5064cb9ab4477a7c2727ed11f889701169950324e",
+      "size_bytes": 2266
     },
     {
       "resource_path": "res://assets/business_v11/items/module_pulse_breakwater_i.svg",
@@ -796,6 +841,21 @@
     },
     {
       "kind": "blueprint",
+      "id": "recipe_module_drone_swarm_i",
+      "resource_path": "res://assets/business_v11/items/module_drone_swarm_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_drone_swarm_ii",
+      "resource_path": "res://assets/business_v11/items/module_drone_swarm_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_drone_swarm_iii",
+      "resource_path": "res://assets/business_v11/items/module_drone_swarm_iii.svg"
+    },
+    {
+      "kind": "blueprint",
       "id": "recipe_module_engine_vector_ii",
       "resource_path": "res://assets/business_v11/items/module_engine_vector_ii.svg"
     },
@@ -816,6 +876,21 @@
     },
     {
       "kind": "blueprint",
+      "id": "recipe_module_kinetic_lance_i",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_lance_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_kinetic_lance_ii",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_lance_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_kinetic_lance_iii",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_lance_iii.svg"
+    },
+    {
+      "kind": "blueprint",
       "id": "recipe_module_kinetic_needle_ii",
       "resource_path": "res://assets/business_v11/items/module_kinetic_needle_ii.svg"
     },
@@ -823,6 +898,21 @@
       "kind": "blueprint",
       "id": "recipe_module_kinetic_needle_iii",
       "resource_path": "res://assets/business_v11/items/module_kinetic_needle_iii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_kinetic_siege_i",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_siege_i.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_kinetic_siege_ii",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_siege_ii.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_module_kinetic_siege_iii",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_siege_iii.svg"
     },
     {
       "kind": "blueprint",
@@ -1121,6 +1211,21 @@
     },
     {
       "kind": "item",
+      "id": "module_drone_swarm_i",
+      "resource_path": "res://assets/business_v11/items/module_drone_swarm_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_drone_swarm_ii",
+      "resource_path": "res://assets/business_v11/items/module_drone_swarm_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_drone_swarm_iii",
+      "resource_path": "res://assets/business_v11/items/module_drone_swarm_iii.svg"
+    },
+    {
+      "kind": "item",
       "id": "module_engine_vector_i",
       "resource_path": "res://assets/business_v11/items/module_engine_vector_i.svg"
     },
@@ -1151,6 +1256,21 @@
     },
     {
       "kind": "item",
+      "id": "module_kinetic_lance_i",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_lance_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_kinetic_lance_ii",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_lance_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_kinetic_lance_iii",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_lance_iii.svg"
+    },
+    {
+      "kind": "item",
       "id": "module_kinetic_needle_i",
       "resource_path": "res://assets/business_v11/items/module_kinetic_needle_i.svg"
     },
@@ -1163,6 +1283,21 @@
       "kind": "item",
       "id": "module_kinetic_needle_iii",
       "resource_path": "res://assets/business_v11/items/module_kinetic_needle_iii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_kinetic_siege_i",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_siege_i.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_kinetic_siege_ii",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_siege_ii.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_kinetic_siege_iii",
+      "resource_path": "res://assets/business_v11/items/module_kinetic_siege_iii.svg"
     },
     {
       "kind": "item",

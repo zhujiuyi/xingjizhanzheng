@@ -18,6 +18,34 @@ var last_error: String = ""
 var factory: Script
 var visual_environment: Environment
 var key_light: DirectionalLight3D
+var stellar_position: Vector3
+var stellar_disc: MeshInstance3D
+var lighting_definition: Dictionary = {}
+
+func _process(_delta: float) -> void:
+	update_starlight()
+
+func update_starlight() -> void:
+	if lighting_definition.is_empty() or not is_instance_valid(key_light):
+		return
+	var reference: Vector3 = flight.get_global_transform_interpolated().origin if is_instance_valid(flight) else Vector3.ZERO
+	var to_star: Vector3 = stellar_position - reference
+	if to_star.length_squared() <= 0.000001:
+		return
+	var direction: Vector3 = to_star.normalized()
+	var up: Vector3 = Vector3.FORWARD if absf(direction.dot(Vector3.UP)) > 0.98 else Vector3.UP
+	# A directional light emits along local -Z; its position is ignored.
+	# Shadow splits follow the camera while the star determines ray direction.
+	key_light.global_basis = Basis.looking_at(-direction, up)
+	if is_instance_valid(stellar_disc):
+		# The star's compressed scenic coordinate defines lighting. Its visible
+		# disc is projected within the camera far plane and never collides.
+		var camera: Camera3D = get_viewport().get_camera_3d()
+		var eye: Vector3 = camera.get_global_transform_interpolated().origin if camera != null else reference
+		var ray: Vector3 = stellar_position - eye
+		var visible_distance: float = minf(ray.length(), camera.far * 0.75 if camera != null else 8000.0)
+		stellar_disc.global_position = eye + ray.normalized() * visible_distance
+		stellar_disc.scale = Vector3.ONE * visible_distance * 0.009
 
 func build(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted) -> bool:
 	state = runtime
@@ -279,7 +307,10 @@ func simulate_npcs(delta: float) -> void:
 							"pulse": raw.z = amount
 						var muzzle := body.get_node_or_null("Hardpoints/weapon_0/muzzle") as Node3D
 						var origin := muzzle.global_position if muzzle != null else body.global_position
-						projectiles.fire(id, body.get_rid(), origin, origin.direction_to(flight.global_position), float(behavior.projectile_speed_mps) if behavior.projectile_speed_mps != null else 0.0, float(definition.range_m), raw)
+						var profile: Dictionary = {}
+						if catalog.table_names.has("weapon_behavior_defs"):
+							profile = {"family_id": str(definition.damage_type), "fire_mode": str(behavior.fire_mode)}
+						projectiles.fire(id, body.get_rid(), origin, origin.direction_to(flight.global_position), float(behavior.projectile_speed_mps) if behavior.projectile_speed_mps != null else 0.0, float(definition.range_m), raw, profile)
 						gameplay.call("mark_hostile_attempt")
 						row.cooldown_remaining_s = float(behavior.attack_cycle_s)
 				else:
@@ -391,7 +422,13 @@ func _make_environment() -> void:
 	world_environment.environment.sky_rotation = Vector3(0, float(absi(state.current_sector().hash()) % 1000) / 1000.0 * TAU, 0)
 	add_child(space)
 	Celestials.build(self, state.current_sector())
+	# A frozen old catalog keeps its original presentation and is never
+	# supplemented with the current catalog's gameplay definitions.
+	if catalog.table_names.has("system_lighting_defs"):
+		var sector_definition: Dictionary = catalog.one("sector_defs", "sector_id", state.current_sector())
+		lighting_definition = catalog.one("system_lighting_defs", "system_id", str(sector_definition.get("system_id", "")))
 	var sun := DirectionalLight3D.new()
+	sun.name = "StellarKeyLight"
 	key_light = sun
 	sun.light_color = Color(1.0, 0.96, 0.89)
 	sun.light_energy = 1.6
@@ -399,6 +436,34 @@ func _make_environment() -> void:
 	sun.directional_shadow_max_distance = 2000.0
 	sun.rotation_degrees = Vector3(-35, -30, 0)
 	add_child(sun)
+	if not lighting_definition.is_empty():
+		stellar_position = Vector3(lighting_definition.star_x_m, lighting_definition.star_y_m, lighting_definition.star_z_m)
+		sun.light_color = Color(lighting_definition.light_r, lighting_definition.light_g, lighting_definition.light_b)
+		sun.light_energy = float(lighting_definition.energy)
+		sun.directional_shadow_max_distance = float(lighting_definition.shadow_distance_m)
+		visual_environment.ambient_light_color = Color(0.43, 0.48, 0.57)
+		visual_environment.ambient_light_energy = float(lighting_definition.ambient_energy)
+		sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
+		stellar_disc = MeshInstance3D.new()
+		stellar_disc.name = "StellarDisc"
+		var sphere := SphereMesh.new()
+		sphere.radius = 1.0
+		sphere.height = 2.0
+		sphere.radial_segments = 32
+		sphere.rings = 16
+		stellar_disc.mesh = sphere
+		stellar_disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		stellar_disc.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_color = sun.light_color
+		material.emission_enabled = true
+		material.emission = sun.light_color
+		material.emission_energy_multiplier = sun.light_energy
+		stellar_disc.material_override = material
+		add_child(stellar_disc)
+		update_starlight()
+		return
 	var warm := DirectionalLight3D.new()
 	warm.light_color = Color(0.57, 0.65, 0.71)
 	warm.light_energy = 0.25

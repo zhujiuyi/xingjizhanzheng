@@ -176,7 +176,9 @@ class ProgressTests(unittest.TestCase):
         database = p.connect()
         self.addCleanup(database.close)
         pieces = ["BEGIN IMMEDIATE;"]
-        for name in p.MIGRATIONS[:-1]:
+        # This historical format5 fixture stops before 009, independently of
+        # how many later migrations the current release registers.
+        for name in p.MIGRATIONS[:8]:
             path = p.PROGRESS_DIR / name
             pieces.append(path.read_text(encoding="utf-8"))
             pieces.append("INSERT INTO migration_history VALUES(" + repr(name) + "," +
@@ -188,16 +190,88 @@ class ProgressTests(unittest.TestCase):
         prior_schema = database.execute("SELECT type,name,sql FROM sqlite_schema ORDER BY type,name").fetchall()
         self.assertEqual(database.execute("SELECT format_version FROM database_meta").fetchone(), (5,))
         with self.assertRaises(sqlite3.OperationalError):
-            p.apply_migrations(database, fault_after=len(p.MIGRATIONS))
+            p.apply_migrations(database, fault_after=9)
         self.assertEqual(database.execute("SELECT type,name,sql FROM sqlite_schema ORDER BY type,name").fetchall(), prior_schema)
         self.assertEqual(database.execute("SELECT * FROM migration_history ORDER BY migration_id").fetchall(), history)
         self.assertEqual(database.execute("SELECT display_name FROM profile").fetchall(), [("保留旧资料",)])
         self.assertEqual(database.execute("PRAGMA user_version").fetchone(), (5,))
         p.apply_migrations(database)
         self.assertEqual(database.execute("SELECT format_version FROM database_meta").fetchone(), (p.FORMAT_VERSION,))
-        self.assertEqual(database.execute("SELECT * FROM migration_history ORDER BY migration_id").fetchall()[:-1], history)
+        self.assertEqual(database.execute("SELECT * FROM migration_history ORDER BY migration_id").fetchall()[:8], history)
         self.assertEqual({r[0] for r in database.execute("SELECT name FROM sqlite_schema WHERE type='table' AND name LIKE '%_state'")}, set(p.STATE_TABLES))
         self.assertEqual(database.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_format6_010_failure_preserves_prior_schema_and_retry(self):
+        database = p.connect()
+        self.addCleanup(database.close)
+        pieces = ["BEGIN IMMEDIATE;"]
+        for name in p.MIGRATIONS[:9]:
+            path = p.PROGRESS_DIR / name
+            pieces.append(path.read_text(encoding="utf-8"))
+            pieces.append("INSERT INTO migration_history VALUES(" + repr(name) + "," +
+                          repr(hashlib.sha256(path.read_bytes()).hexdigest()) + "," + repr(p.utc_now()) + ");")
+        pieces.append("COMMIT;")
+        database.executescript("\n".join(pieces))
+        p.insert(database, "profile", {"profile_id": "format6-profile", "display_name": "保留六版资料", "created_utc": p.utc_now()})
+        history = database.execute("SELECT * FROM migration_history ORDER BY migration_id").fetchall()
+        schema = database.execute("SELECT type,name,sql FROM sqlite_schema ORDER BY type,name").fetchall()
+        self.assertEqual(database.execute("SELECT format_version FROM database_meta").fetchone(), (6,))
+        with self.assertRaises(sqlite3.OperationalError):
+            p.apply_migrations(database, fault_after=10)
+        self.assertEqual(database.execute("SELECT type,name,sql FROM sqlite_schema ORDER BY type,name").fetchall(), schema)
+        self.assertEqual(database.execute("SELECT * FROM migration_history ORDER BY migration_id").fetchall(), history)
+        self.assertEqual(database.execute("SELECT display_name FROM profile").fetchall(), [("保留六版资料",)])
+        self.assertEqual(database.execute("PRAGMA user_version").fetchone(), (6,))
+        p.apply_migrations(database)
+        self.assertEqual(database.execute("SELECT format_version FROM database_meta").fetchone(), (7,))
+        self.assertEqual(database.execute("SELECT * FROM migration_history ORDER BY migration_id").fetchall()[:9], history)
+        self.assertEqual(database.execute("SELECT count(*) FROM sqlite_schema WHERE name='frozen_drone_defs'").fetchone(), (1,))
+        self.assertEqual(database.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_old_fixed_adapter_hash_is_independent_of_current_registry(self):
+        legacy = p.adapter_connection("frozen_catalog_v0_5")
+        self.addCleanup(legacy.close)
+        # The maintained SQL retains the exact pre-v0.6 seed before its explicit
+        # rebalance section. Load it into the independently reviewed old DDL.
+        historical_seed = build_catalog.SEED.read_text(encoding="utf-8").split("-- v0.6 combat rebalance:", 1)[0]
+        legacy.executescript(historical_seed)
+        logical = p.adapter_hash(legacy)
+        legacy.execute("UPDATE catalog_meta SET content_hash=?", (logical,))
+        legacy.commit()
+        metadata = p.rows(legacy, "catalog_meta")[0]
+        names = [row[0] for row in legacy.execute("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")]
+        self.assertEqual(metadata["schema_version"], 4)
+        self.assertEqual(len(names), 89)
+        self.assertEqual(len(build_catalog.CONTENT_TABLES), 93)
+        self.db.execute("BEGIN IMMEDIATE")
+        self.db.execute("PRAGMA defer_foreign_keys=ON")
+        cid = "historical-adapter-content"
+        p.insert(self.db, "content_snapshot", {"content_snapshot_id": cid, "content_hash": logical,
+                 "pack_id": metadata["pack_id"], "content_version": metadata["content_version"],
+                 "catalog_schema_version": 4, "ruleset_version": metadata["ruleset_version"],
+                 "rules_code_version": "singleplayer_full_v1", "asset_manifest_version": p.ASSET_VERSION,
+                 "asset_manifest_sha256": p.verify_asset_manifest(), "frozen_adapter_version": "frozen_catalog_v0_5",
+                 "created_utc": p.utc_now(), "status": "building"})
+        for table in names:
+            info = legacy.execute(f'PRAGMA table_info("{table}")').fetchall()
+            signature = "|".join(f"{row[1]}:{row[2]}:{row[5]}" for row in info if not (table == "catalog_meta" and row[1] == "content_hash"))
+            data = p.rows(legacy, table)
+            for row in data:
+                p.insert(self.db, "frozen_" + table, {"content_snapshot_id": cid, **row})
+            p.insert(self.db, "content_table_manifest", {"content_snapshot_id": cid, "table_name": table,
+                     "schema_signature": signature, "row_count": len(data)})
+        for name, sql in legacy.execute("SELECT name,sql FROM sqlite_schema WHERE type='view'"):
+            p.insert(self.db, "content_view_manifest", {"content_snapshot_id": cid, "view_name": name,
+                     "reviewed_source_sql": sql, "sql_sha256": hashlib.sha256(sql.encode()).hexdigest()})
+        self.assertEqual(p.verify_frozen_content(self.db, cid), logical)
+        self.db.execute("UPDATE content_snapshot SET status='sealed' WHERE content_snapshot_id=?", (cid,))
+        self.db.commit()
+        with mock.patch.object(build_catalog, "CONTENT_TABLES", ("catalog_meta",)):
+            self.assertEqual(p.verify_frozen_content(self.db, cid), logical)
+        with self.assertRaisesRegex(ValueError, "Unsupported frozen adapter"):
+            p.adapter_connection("unregistered-future-adapter")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute("UPDATE frozen_ship_defs SET max_speed_mps=max_speed_mps+1 WHERE content_snapshot_id=?", (cid,))
 
     def test_every_registered_state_group_copies_and_loads_complete_payload(self):
         package_def = p.rows(self.source, "salvage_package_defs")[0]

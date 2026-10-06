@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+<defs>
+  <linearGradient id="metal" x1="0" y1="0" x2=".6" y2="1">
+    <stop stop-color="#c4d0d2"/><stop offset=".25" stop-color="#778a93"/>
+    <stop offset=".6" stop-color="#4c626c"/><stop offset="1" stop-color="#243843"/>
+  </linearGradient>
+  <linearGradient id="dark" x1="0" y1="0" x2="1" y2="1">
+    <stop stop-color="#354954"/><stop offset="1" stop-color="#102029"/>
+  </linearGradient>
+  <linearGradient id="accent" x1="0" y1="0" x2=".5" y2="1">
+    <stop stop-color="#b5a479"/><stop offset="1" stop-color="#344a55"/>
+  </linearGradient>
+</defs>
+<path d="M21 8h220l7 7v226l-7 7H15l-7-7V21Z" fill="#08151d" stroke="#29424d" stroke-width="2"/>
+<path d="M20 20h216v216H20Z" fill="none" stroke="#142b35"/>
+<path d="M24 56h208M24 128h208M24 200h208M56 24v208M128 24v208M200 24v208" stroke="#152831" stroke-width="1"/>
+<path d="M21 39V21h18M217 21h18v18M21 217v18h18M217 235h18v-18" fill="none" stroke="#54727f" stroke-width="3"/>
+<ellipse cx="128" cy="196" rx="78" ry="12" fill="#020a10" opacity=".65"/>
+<g stroke="#152934" stroke-width="2.3" stroke-linejoin="round"><path d="M35 150l45-49 70 18 37 53-50 33-81-16Z" fill="url(#dark)"/>
+<path d="M58 125l48-24 54 26-20 52-58-9Z" fill="url(#metal)"/>
+<path d="M88 82l24-21 113 44-17 27-116-38Z M74 109l24-21 112 42-21 30-110-39Z" fill="url(#metal)"/>
+<path d="M203 96l22 9-17 27-21-9Z M191 122l20 8-22 30-23-11Z" fill="#08141e"/>
+<path d="M121 69l7 30 M143 78l7 29 M165 87l6 30 M107 101l6 29 M132 109l6 30 M155 118l6 30" stroke="#607f89" stroke-width="8"/>
+<path d="M69 143l21 9-8 28-20-8Z M104 152l31 8-7 18-30-9Z" fill="url(#accent)"/>
+<path d="M48 145l-8 19 22 8M131 190l23-13" stroke="#bbc8c9" stroke-width="6"/><circle cx="83" cy="83" r="2.7" fill="#b0bec3"/><circle cx="177" cy="151" r="2.7" fill="#b0bec3"/></g>
+<g stroke="#69838d" stroke-width="2"><path d="M32 222v4"/><path d="M37 222v4"/><path d="M42 222v4"/><path d="M47 222v9"/><path d="M52 222v9"/><path d="M57 222v4"/><path d="M62 222v4"/><path d="M67 222v9"/><path d="M72 222v9"/></g><path d="M195 203v20" stroke="#b5a479" stroke-width="7"/><path d="M208 203v20" stroke="#b5a479" stroke-width="7"/><path d="M221 203v20" stroke="#b5a479" stroke-width="7"/>
+</svg>

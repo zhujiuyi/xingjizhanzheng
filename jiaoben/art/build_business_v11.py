@@ -61,10 +61,36 @@ def bolts(points: list[tuple[int, int]]) -> str:
     return "".join(f'<circle cx="{x}" cy="{y}" r="2.7" fill="#b0bec3"/>' for x, y in points)
 
 
-def module_art(item_id: str, tier: int) -> tuple[str, str]:
+def module_art(item_id: str, tier: int, family: str = "", size: int = 0) -> tuple[str, str]:
     colors = {1: "#8da9b2", 2: "#709bad", 3: "#b5a479"}
     accent = colors[tier]
-    if "kinetic" in item_id:
+    if family == "drone" or "drone" in item_id:
+        art = '''<path d="M45 146l42-74 95 7 33 79-49 40-90-9Z" fill="url(#metal)"/>
+<path d="M66 139l30-48 66 7 28 53-32 24-74-8Z" fill="url(#dark)"/>
+<path d="M88 105l25 3-13 41-29-6Z M119 109l24 3-7 42-29-4Z M150 114l22 3 9 39-38-2Z" fill="#08141e"/>
+<path d="M89 139l11-35 12 13 3 19-12 8Z M125 146l8-32 12 11 6 24-15 4Z M160 150l-1-27 12 8 12 23-15 4Z" fill="url(#accent)"/>
+<path d="M56 147l23 6-2 19-14-2Z M180 167l17-12 6 11-19 16Z" fill="url(#accent)"/>
+<path d="M93 67l14-25 15 21-10 14Z M146 60l13-24 19 25-14 13Z" fill="url(#metal)"/>
+<path d="M99 57l9-9 7 13 M152 51l8-9 10 16" stroke="#bed6df" stroke-width="3" fill="none"/>
+<path d="M95 164h42M103 175h32" stroke="#7796a0" stroke-width="4"/>'''
+    elif (family == "kinetic" and size == 3) or "kinetic_siege" in item_id:
+        art = '''<path d="M35 150l45-49 70 18 37 53-50 33-81-16Z" fill="url(#dark)"/>
+<path d="M58 125l48-24 54 26-20 52-58-9Z" fill="url(#metal)"/>
+<path d="M88 82l24-21 113 44-17 27-116-38Z M74 109l24-21 112 42-21 30-110-39Z" fill="url(#metal)"/>
+<path d="M203 96l22 9-17 27-21-9Z M191 122l20 8-22 30-23-11Z" fill="#08141e"/>
+<path d="M121 69l7 30 M143 78l7 29 M165 87l6 30 M107 101l6 29 M132 109l6 30 M155 118l6 30" stroke="#607f89" stroke-width="8"/>
+<path d="M69 143l21 9-8 28-20-8Z M104 152l31 8-7 18-30-9Z" fill="url(#accent)"/>
+<path d="M48 145l-8 19 22 8M131 190l23-13" stroke="#bbc8c9" stroke-width="6"/>'''
+    elif (family == "kinetic" and size == 2) or "kinetic_lance" in item_id:
+        art = '''<path d="M46 147l37-43 53 17 26 47-39 31-62-22Z" fill="url(#dark)"/>
+<path d="M66 111l38-27 42 22 9 48-41 27-37-15Z" fill="url(#metal)"/>
+<path d="M102 73l24-13 102 54-17 25-109-43Z" fill="url(#metal)"/>
+<path d="M210 104l18 10-17 25-23-9Z" fill="#08141e"/>
+<path d="M127 69l-7 31 M148 80l-7 28 M169 91l-7 26 M190 102l-8 26" stroke="#7896a0" stroke-width="9"/>
+<path d="M79 121l32 11-10 36-28-10Z" fill="url(#accent)"/>
+<path d="M64 164l19 6M89 178l20 7" stroke="#c6d4d7" stroke-width="4"/>
+<path d="M151 127l33 12" stroke="#b9cecf" stroke-width="4"/>'''
+    elif "kinetic" in item_id:
         art = '''<path d="M51 145l34-37 49 11 14 23-38 49-53-15Z" fill="url(#dark)"/>
 <path d="M86 89l39-14 63 39-13 21-60-26-28 7Z" fill="url(#metal)"/>
 <path d="M148 80l23-8 45 27-8 19-55-26Z" fill="url(#metal)"/>
@@ -271,7 +297,7 @@ def write_svg(relative: str, text: str) -> None:
     path = ASSETS / relative
     path.parent.mkdir(parents=True, exist_ok=True)
     ET.fromstring(text)
-    path.write_text(text + "\n", encoding="utf-8")
+    path.write_text(text + "\n", encoding="utf-8", newline="\n")
 
 
 def build(finalize: bool) -> dict:
@@ -279,10 +305,13 @@ def build(finalize: bool) -> dict:
     models: list[dict[str, str]] = []
     connection = sqlite3.connect(f"file:{CATALOG}?mode=ro", uri=True)
     module_tiers = dict(connection.execute("SELECT module_id,tech_level FROM module_tech_defs"))
+    has_profiles = connection.execute("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='weapon_behavior_defs'").fetchone() is not None
+    module_profiles = {mid: (family, size) for mid, family, size in connection.execute("SELECT module_id,family_id,size_class FROM weapon_behavior_defs")} if has_profiles else {}
     for item_id, item_type in connection.execute("SELECT item_id,item_type FROM item_defs ORDER BY item_id"):
         tier = module_tiers.get(item_id, 0)
         if item_type == "module":
-            content, accent = module_art(item_id, tier)
+            family, size = module_profiles.get(item_id, ("", 0))
+            content, accent = module_art(item_id, tier, family, size)
         elif item_type == "ore":
             content, accent = ore_art(item_id)
         else:
@@ -337,7 +366,7 @@ def build(finalize: bool) -> dict:
         "entries": sorted(entries, key=lambda entry: (entry["kind"], entry["id"])),
         "qa": {"status": "All declared portraits exist and checksums refreshed; native UI inspection is owned by the integrator." if not missing else "SVG complete; native ship captures pending.", "pending_resource_paths": missing},
     }
-    (ASSETS / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (ASSETS / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     return manifest
 
 

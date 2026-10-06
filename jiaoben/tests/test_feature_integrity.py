@@ -16,6 +16,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CODE = ROOT / "code"
+LEGACY_VISUAL_BYTES = {
+    "res://runtime/visuals/visual_effects.gd": "res://assets/legacy_art_full_v1/visual_effects.gd.txt",
+    "res://runtime/visuals/visual_effect_node.gd": "res://assets/legacy_art_full_v1/visual_effect_node.gd.txt",
+}
+
+
+def manifest_resource_path(data: dict, resource_path: str) -> Path:
+    """Resolve fixed V1 byte archives without loading them as GDScript."""
+    checked = LEGACY_VISUAL_BYTES.get(resource_path, resource_path) if data.get("asset_version") == "art-full-v1" else resource_path
+    return CODE / checked.removeprefix("res://")
+
+
+def manifest_canonical_hash(data: dict) -> str:
+    canonical = {key: value for key, value in data.items() if key != "manifest_sha256"}
+    return hashlib.sha256(json.dumps(canonical, ensure_ascii=False, sort_keys=True,
+                                     separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 def strings(source: str) -> set[str]:
@@ -37,7 +53,7 @@ class FeatureIntegrityTests(unittest.TestCase):
         cls.db = sqlite3.connect(f"file:{CODE / 'data/catalog.db'}?mode=ro", uri=True)
         cls.db.row_factory = sqlite3.Row
         cls.runtime = {
-            str(path.relative_to(CODE)): path.read_text(encoding="utf-8")
+            path.relative_to(CODE).as_posix(): path.read_text(encoding="utf-8")
             for path in (CODE / "runtime").rglob("*.gd")
         }
 
@@ -236,11 +252,18 @@ class FeatureIntegrityTests(unittest.TestCase):
         checked = 0
         for path in (CODE / "assets").rglob("manifest.json"):
             data = json.loads(path.read_text(encoding="utf-8"))
+            if "manifest_sha256" in data:
+                with self.subTest(manifest=path.relative_to(CODE).as_posix(), canonical=True):
+                    self.assertEqual(manifest_canonical_hash(data), data["manifest_sha256"])
             for asset in data.get("resources", []):
                 resource_path = asset.get("resource_path", asset.get("path", ""))
-                with self.subTest(manifest=str(path.relative_to(CODE)), asset=resource_path):
+                with self.subTest(manifest=path.relative_to(CODE).as_posix(), asset=resource_path):
                     self.assertTrue(resource_path.startswith("res://"))
-                    resource = CODE / resource_path.removeprefix("res://")
+                    self.assertNotIn("..", Path(resource_path.removeprefix("res://")).parts)
+                    resource = manifest_resource_path(data, resource_path)
+                    if data.get("asset_version") == "art-full-v1" and resource_path in LEGACY_VISUAL_BYTES:
+                        self.assertEqual(resource.suffix, ".txt", "V1 bytes are inert archives")
+                        self.assertNotIn(resource.relative_to(CODE).as_posix(), self.runtime)
                     self.assertTrue(resource.is_file())
                     self.assertEqual(hashlib.sha256(resource.read_bytes()).hexdigest(), asset["sha256"])
                     checked += 1
@@ -249,7 +272,7 @@ class FeatureIntegrityTests(unittest.TestCase):
     def test_literal_runtime_scene_resource_references_exist(self) -> None:
         # Dynamic ship/object factories are covered above and by manifest tests.
         sources = dict(self.runtime)
-        sources.update({str(path.relative_to(CODE)): path.read_text(encoding="utf-8") for path in (CODE / "assets").rglob("*.tscn")})
+        sources.update({path.relative_to(CODE).as_posix(): path.read_text(encoding="utf-8") for path in (CODE / "assets").rglob("*.tscn")})
         for source, text in sources.items():
             for reference in re.findall(r'"(res://[^"\n]+\.(?:gd|tscn|gdshader|png|svg|glb|otf|wav))"', text):
                 with self.subTest(source=source, reference=reference):

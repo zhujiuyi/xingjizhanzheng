@@ -34,7 +34,7 @@ static func run(test_path: String, upgrade: bool = false) -> bool:
 			if int(evidence.failures) == 0:
 				var loaded: XJRuntimeState = store.resume()
 				_check(evidence, loaded != null and loaded.world_id == world and loaded.player().credit == expected_credit, "release resume restores durable endpoint " + store.last_error)
-				_check(evidence, store._asset_version == "art-full-v1", "release canonical formal asset version")
+				_check(evidence, store._asset_version == "art-full-v2", "release canonical formal asset version")
 	store.close()
 	_finish(evidence)
 	return int(evidence.failures) == 0

@@ -76,6 +76,8 @@ static func inspect(sector: XJSector, state: XJRuntimeState, catalog: XJCatalog,
 		"station":
 			var station := catalog.one("station_defs", "station_id", target_id)
 			if station.is_empty() or station.sector_id != state.current_sector(): return _deny(result, "站点不在当前星区")
+			var pending: String = pending_attack_reason(sector)
+			if not pending.is_empty(): return _deny(result, pending)
 			if gameplay.call("in_combat"): return _deny(result, "交战中不能停靠，先脱离敌舰")
 		"gate":
 			var gate_reason := _gate_reason(sector, state, catalog, gameplay, target_id)
@@ -134,11 +136,17 @@ static func _gate_reason(sector: XJSector, state: XJRuntimeState, catalog: XJCat
 	var mass: float = float(gameplay.call("metrics", state.ship()).total_mass_kg)
 	if mass > float(connection.max_gross_mass_kg) or (gate.has_remaining_mass_budget_kg and mass > gate.remaining_mass_budget_kg): return "总质量超过航门额度，卸货或换用较小舰船"
 	if state.ship().energy < float(connection.energy_cost_eu) or state.player().credit < int(connection.fee_credit): return "航门费用或电容不足"
-	if not bool(gameplay.call("save_eligible")) or (is_instance_valid(sector.projectiles) and not sector.projectiles.active.is_empty()): return "先脱离交战、停止采集扫描并等待设备周期或弹丸结束"
+	var pending: String = pending_attack_reason(sector)
+	if not pending.is_empty(): return pending
+	if not bool(gameplay.call("save_eligible")): return "先脱离交战、停止采集扫描并等待设备周期结束"
 	# Travel's final validator rejects hostile phases before acquiring a barrier.
 	for npc: RefCounted in state.rows("npc_state"):
 		if npc.alive and npc.behavior_phase in [T.NpcPhase.ACQUIRE, T.NpcPhase.PURSUE, T.NpcPhase.ATTACK, T.NpcPhase.DISENGAGE]: return "仍处于交战，先脱离敌舰"
 	return ""
+
+static func pending_attack_reason(sector: XJSector) -> String:
+	if not is_instance_valid(sector) or not is_instance_valid(sector.projectiles) or not sector.projectiles.has_pending(): return ""
+	return "等待无人机回收" if not sector.projectiles.drones.is_empty() else "等待在途攻击结束"
 
 static func _line_of_sight(sector: XJSector, target_id: String, point: Vector3) -> bool:
 	return sector.line_of_sight(sector.flight.global_position, point, sector.flight.get_rid(), target_id)

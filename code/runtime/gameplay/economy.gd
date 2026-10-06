@@ -156,10 +156,12 @@ func recycle(item_id: String) -> bool:
 	if item==null or not g.inventory.accessible(item.container_id) or g.state.find("equipment_state","item_instance_id",item_id)!=null:return g.fail("先将模块卸到本站仓库")
 	if not g.definition("asset_policy_defs","policy_id",item.policy_id).may_recycle:return g.fail("受保护设备不能拆解")
 	var inputs: Dictionary = {}
-	if item.origin_kind==T.ItemOrigin.MANUFACTURE:
-		for row in g.state.rows("manufacture_input_state"):
-			if row.item_instance_id==item_id:inputs[row.input_item_id]=row.input_quantity
-	else:
+	# Actual manufacturing inputs and materialized historical standard inputs
+	# belong to the instance. Its origin tag remains unchanged during upgrades.
+	for row in g.state.rows("manufacture_input_state"):
+		if row.item_instance_id==item_id:inputs[row.input_item_id]=row.input_quantity
+	if inputs.is_empty() and item.origin_kind==T.ItemOrigin.MANUFACTURE:return g.fail("缺少合法材料追溯账本")
+	if inputs.is_empty():
 		if item.salvage_recipe_id.is_empty():return g.fail("设备没有冻结拆解来源")
 		inputs=_inputs("recipe_inputs","recipe_id",item.salvage_recipe_id,1)
 	if inputs.is_empty():return g.fail("缺少合法材料追溯账本")

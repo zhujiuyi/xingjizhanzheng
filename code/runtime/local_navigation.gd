@@ -60,15 +60,16 @@ func inspect(id: String) -> Dictionary:
 	result.approach_ready = true
 	result.orbit_ready = true
 	result.ready = true
-	result.dock_ready = entry.kind == "station" and not bool(gameplay.call("in_combat"))
-	result.dock_reason = "交战中不能停靠" if entry.kind == "station" and not result.dock_ready else ("仅空间站可以停靠" if entry.kind != "station" else "")
+	var pending: String = XJInteractionContext.pending_attack_reason(world)
+	result.dock_ready = entry.kind == "station" and pending.is_empty() and not bool(gameplay.call("in_combat"))
+	result.dock_reason = pending if entry.kind == "station" and not pending.is_empty() else "交战中不能停靠" if entry.kind == "station" and not result.dock_ready else ("仅空间站可以停靠" if entry.kind != "station" else "")
 	var target_rule: Dictionary = _target_rule(entry)
 	if target_rule.warp_arrival_m == null:
 		result.warp_reason = "此目标只支持接近和环绕"
 	elif active():
 		result.warp_reason = "先停止当前自动航行"
 	elif not _stable():
-		result.warp_reason = "脱离交战并等待弹丸和设备周期结束后才能跃迁"
+		result.warp_reason = pending + "后才能跃迁" if not pending.is_empty() else "脱离交战并等待设备周期结束后才能跃迁"
 	elif not _landing_clear(world.flight.global_position):
 		result.warp_reason = "先离开障碍物，再启动跃迁"
 	elif float(result.distance_m) < rules.value("min_warp_distance_m") or float(result.distance_m) <= float(target_rule.warp_arrival_m) + rules.value("arrival_tolerance_m"):
@@ -305,7 +306,7 @@ func _heading_delta(direction: Vector3, delta: float) -> float:
 
 func _stable() -> bool:
 	if stable.is_valid(): return stable.call() == true
-	return bool(gameplay.call("save_eligible")) and world.projectiles.active.is_empty()
+	return bool(gameplay.call("save_eligible")) and not world.projectiles.has_pending()
 
 func _arrival_point(node: Node3D, distance: float) -> Vector3:
 	var radial: Vector3 = world.flight.global_position - node.global_position

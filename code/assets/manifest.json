@@ -1,5 +1,5 @@
 {
-  "asset_version": "art-full-v1",
+  "asset_version": "art-full-v2",
   "format_version": 1,
   "coordinate_system": "meters_Y_up_negative_Z_front",
   "resources": [
@@ -374,14 +374,24 @@
       "sha256": "a123d51655ffdf4f5ad11dd5fe2c2a5c306198fb82ff44b067940714641b5627"
     },
     {
+      "asset_id": "visual_code_industrial_visual_factory",
+      "resource_path": "res://runtime/visuals/industrial_visual_factory.gd",
+      "sha256": "26acb22d7160f87aa3b51cdb064858c06082ad4e6d252f8f9bbe15f873155bc5"
+    },
+    {
+      "asset_id": "visual_code_station_visual_adapter",
+      "resource_path": "res://runtime/visuals/station_visual_adapter.gd",
+      "sha256": "1b1595d6e49053f9812490d8273e983117adae5747e0f68d4b1d76a4ce9d3c4a"
+    },
+    {
       "asset_id": "visual_code_visual_effect_node",
       "resource_path": "res://runtime/visuals/visual_effect_node.gd",
-      "sha256": "a82d07c03caab0ca1fd16ae7d213aaf3b5545114c85e0697d871401f4a9cf02a"
+      "sha256": "10bb55e5e88c86cd415565c62a24978def8eea6c1c497c26a44bc42aaf643377"
     },
     {
       "asset_id": "visual_code_visual_effects",
       "resource_path": "res://runtime/visuals/visual_effects.gd",
-      "sha256": "35956315bdcf0a873476f767376b329527bb8bfd1584f4bb926b050475d876ce"
+      "sha256": "3c441be77f00fefe7ef14a1b4b37eb03bdc37f3d6b02acf70a94194f46ed4af1"
     },
     {
       "asset_id": "visual_code_visual_factory",
@@ -394,6 +404,11 @@
       "sha256": "87c05bb4ab67f3c4ec270c386587ba1672f7d3eeb7e298191c9c3c97c319662b"
     },
     {
+      "asset_id": "visual_shader_contact_shield",
+      "resource_path": "res://runtime/visuals/shaders/contact_shield.gdshader",
+      "sha256": "027232548d86386c2e02b6725957d54a4d40d48a9e4cb4813817ac0bd1145d71"
+    },
+    {
       "asset_id": "visual_shader_shield",
       "resource_path": "res://runtime/visuals/shaders/shield.gdshader",
       "sha256": "46c6760f80a232cad5d77ea0ebab898c2bcfb95c191d9358417b27f94394cee1"
@@ -404,10 +419,30 @@
       "sha256": "0e61498604051d2fc0bd45e398bf13aa48d55c563910b62d275b93b9cbcae7c1"
     },
     {
+      "asset_id": "visual_shader_weapon_glow",
+      "resource_path": "res://runtime/visuals/shaders/weapon_glow.gdshader",
+      "sha256": "042412cb545378145324005f3dbdf19957d7ad2df70461a8023f45fe5da19087"
+    },
+    {
       "asset_id": "visual_shader_wormhole",
       "resource_path": "res://runtime/visuals/shaders/wormhole.gdshader",
       "sha256": "1512a3f1c4afcc3ef673c7df24be59b4ab9ff7af70dcab07256c2afa9e7e7b1a"
+    },
+    {
+      "asset_id": "legacy_art_full_v1_manifest",
+      "resource_path": "res://assets/legacy_art_full_v1/manifest.json",
+      "sha256": "8a13f2a2086ac0e74465d6501d131662be7a4dabaae5ce0d192c84fde368e83e"
+    },
+    {
+      "asset_id": "legacy_art_full_v1_effects_source",
+      "resource_path": "res://assets/legacy_art_full_v1/visual_effects.gd.txt",
+      "sha256": "35956315bdcf0a873476f767376b329527bb8bfd1584f4bb926b050475d876ce"
+    },
+    {
+      "asset_id": "legacy_art_full_v1_effect_node_source",
+      "resource_path": "res://assets/legacy_art_full_v1/visual_effect_node.gd.txt",
+      "sha256": "a82d07c03caab0ca1fd16ae7d213aaf3b5545114c85e0697d871401f4a9cf02a"
     }
   ],
-  "manifest_sha256": "1ec8b2bfdcbd1fc75d0d9749b416f651df564f6b3a4eeec1a4e348da4e9a0e6e"
+  "manifest_sha256": "f48392ef07a55eba8d04c4f20aa317a4d8cd64dfad10ad24269fe27ab20063eb"
 }

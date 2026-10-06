@@ -26,6 +26,21 @@ func body_at(parent: Node3D, point: Vector3, size: Vector3, id: String = "") -> 
 	return body
 func _hit(id: String, raw: Vector3, point: Vector3, owner: String) -> void:
 	hits.append({"id":id,"raw":raw,"point":point,"owner":owner})
+func combat_evidence(host: Main, label: String, shield_before: float) -> void:
+	var records: Array[Dictionary] = []
+	for shot: XJProjectiles.Projectile in host.world.projectiles.active:
+		var destination: Vector3 = shot.position + shot.direction * minf(shot.range_left, shot.speed * 0.5)
+		var ray := PhysicsRayQueryParameters3D.create(shot.position, destination, 3, [shot.excluded_rid])
+		var contact: Dictionary = host.world.get_world_3d().direct_space_state.intersect_ray(ray)
+		var collider: Object = contact.get("collider")
+		records.append({"owner_id": shot.owner_id, "excluded_rid": str(shot.excluded_rid), "position": str(shot.position), "direction": str(shot.direction), "speed_mps": shot.speed, "range_left_m": shot.range_left, "raw": [shot.raw_damage.x, shot.raw_damage.y, shot.raw_damage.z], "first_contact_id": str(collider.get_meta("entity_id", "")) if collider != null else "", "first_contact_kind": str(collider.get_meta("entity_kind", "")) if collider != null else "", "first_contact_class": collider.get_class() if collider != null else ""})
+	var pending: Dictionary = {}
+	for id: String in host.pending_damage:
+		var raw: Vector3 = host.pending_damage[id]
+		pending[id] = [raw.x, raw.y, raw.z]
+	var latest: Dictionary = {}
+	if not hits.is_empty(): latest = {"target": hits[-1].id, "owner": hits[-1].owner, "raw": [hits[-1].raw.x, hits[-1].raw.y, hits[-1].raw.z], "point": str(hits[-1].point)}
+	print("COMBAT_CLIENT_PHYSICAL_EVIDENCE " + JSON.stringify({"label": label, "host_busy": host.busy, "host_paused": host._paused(), "projectiles_paused": host.world.projectiles.paused, "active": records, "player_id": host.state.ship().ship_instance_id, "player_meta_id": host.world.flight.get_meta("entity_id", ""), "player_meta_kind": host.world.flight.get_meta("entity_kind", ""), "player_status": T.ShipStatus.keys()[int(host.state.ship().status)], "shield_before": shield_before, "shield_now": host.state.ship().shield, "pending_damage": pending, "latest_actual_hit": latest}))
 func _run() -> void:
 	var path := ProjectSettings.globalize_path("res://../jiaoben/tmp/combat-client.db")
 	DirAccess.remove_absolute(path)
@@ -35,7 +50,12 @@ func _run() -> void:
 	await process_frame
 	check(host.services_ready, "combat client database ready")
 	await host._command("new_world", "物理集成验收", 1, "")
-	host.busy = true
+	# Freeze only the host's automatic callbacks. Setting busy would impose a
+	# real simulation pause on its child projectile service in the render callback.
+	host.set_process(false)
+	host.set_physics_process(false)
+	check(not host.busy, "physical fixture begins after the actual writer is idle")
+	host.world.projectiles.set_paused(false)
 	var arena := Node3D.new()
 	root.add_child(arena)
 	var shots := XJProjectiles.new()
@@ -69,6 +89,7 @@ func _run() -> void:
 	await process_frame
 	# AI instance fixture uses an unmodified reviewed archetype and its configured home.
 	host.gameplay.act("undock")
+	host.world.projectiles.hit.connect(_hit)
 	var npc := D.NpcStateDto.new()
 	npc.npc_instance_id="physics-fixture-npc"
 	npc.spawn_id="spawn_anchor_tutorial_scout"
@@ -98,8 +119,11 @@ func _run() -> void:
 	host.world.simulate_npcs(1.0/60.0)
 	check(npc.behavior_phase==T.NpcPhase.ATTACK and host.world.projectiles.active.size()>0, "NPC fires real projectile inside range and firing cone")
 	var shield_before: float=player.record.shield
+	combat_evidence(host, "before-npc-projectile-step", shield_before)
 	host.world.projectiles.simulate(0.5)
+	combat_evidence(host, "after-sweep-before-authoritative-flush", shield_before)
 	host._flush_damage()
+	combat_evidence(host, "after-authoritative-flush", shield_before)
 	check(player.record.shield<shield_before, "NPC physical projectile settles authoritative player damage")
 	var station: Dictionary=host.store.catalog.one("station_defs","station_id","station_anchor_port")
 	player.position=host.world.anchor_position(station.station_anchor_id)

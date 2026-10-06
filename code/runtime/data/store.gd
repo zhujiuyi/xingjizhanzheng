@@ -8,12 +8,13 @@ const Codec = preload("res://runtime/data/codec.gd")
 const Initial = preload("res://runtime/data/initial_state.gd")
 const Validation = preload("res://runtime/data/validation.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
-const MIGRATIONS: Array[String] = ["001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql"]
+const MIGRATIONS: Array[String] = ["001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql"]
 const RULE_CODE_VERSION: String = "singleplayer_full_v1"
 const ADAPTER_VERSION: String = "frozen_catalog_v0_4_r2"
-const ADAPTERS: Dictionary = {"frozen_catalog_v0_3": "res://database/progress/catalog_adapter_v0_3.sql", "frozen_catalog_v0_4": "res://database/progress/catalog_adapter_v0_4.sql", "frozen_catalog_v0_4_r2": "res://database/progress/catalog_adapter_v0_4_r2.sql", "frozen_catalog_v0_5": "res://database/progress/catalog_adapter_v0_5.sql"}
+const ADAPTERS: Dictionary = {"frozen_catalog_v0_3": "res://database/progress/catalog_adapter_v0_3.sql", "frozen_catalog_v0_4": "res://database/progress/catalog_adapter_v0_4.sql", "frozen_catalog_v0_4_r2": "res://database/progress/catalog_adapter_v0_4_r2.sql", "frozen_catalog_v0_5": "res://database/progress/catalog_adapter_v0_5.sql", "frozen_catalog_v0_6": "res://database/progress/catalog_adapter_v0_6.sql"}
 const ASSET_PATH: String = "res://assets/manifest.json"
-const ASSET_MANIFESTS: Dictionary = {"art-full-v1": ASSET_PATH, "placeholder-b-v1": "res://assets/placeholders/manifest.json"}
+const ASSET_MANIFESTS: Dictionary = {"art-full-v2": ASSET_PATH, "art-full-v1": "res://assets/legacy_art_full_v1/manifest.json", "placeholder-b-v1": "res://assets/placeholders/manifest.json"}
+const LEGACY_VISUAL_BYTES: Dictionary = {"res://runtime/visuals/visual_effects.gd": "res://assets/legacy_art_full_v1/visual_effects.gd.txt", "res://runtime/visuals/visual_effect_node.gd": "res://assets/legacy_art_full_v1/visual_effect_node.gd.txt"}
 var path: String = "user://database/progress.db"
 var catalog_path: String = "res://data/catalog.db"
 var catalog: Catalog
@@ -197,7 +198,8 @@ func load(slot_id: String, expected_snapshot: String = "", expected_generation: 
 				_rollback("DTO mapping failed: " + _codec.last_error)
 				return null
 	var validator: Validation = Validation.new()
-	if not validator.validate(state, frozen, str(metadata.content_version) != "v0.5-integrity") or not _q("COMMIT"):
+	var legacy_capacity: bool = not frozen.table_names.has("weapon_behavior_defs") and str(metadata.content_version) != "v0.5-integrity"
+	if not validator.validate(state, frozen, legacy_capacity) or not _q("COMMIT"):
 		frozen.close()
 		_rollback(validator.last_error)
 		return null
@@ -234,8 +236,13 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 	var has_encounters: bool = catalog.table_names.has("encounter_defs")
 	var has_echo_recipe: bool = not catalog.one("recipe_defs", "recipe_id", "recipe_sensor_core_echo").is_empty()
 	var source_has_echo_recipe: bool = not _source.one("recipe_defs", "recipe_id", "recipe_sensor_core_echo").is_empty()
-	if has_encounters and (has_echo_recipe or not source_has_echo_recipe): return state
-	if not _source.table_names.has("encounter_defs") or not _additive_content(catalog, _source): return null
+	var rebalance: bool = _source.table_names.has("weapon_behavior_defs")
+	if rebalance:
+		if catalog.content_hash == _source.content_hash: return state
+		if not _reviewed_combat_upgrade(catalog, _source): return null
+	else:
+		if has_encounters and (has_echo_recipe or not source_has_echo_recipe): return state
+		if not _source.table_names.has("encounter_defs") or not _additive_content(catalog, _source): return null
 	var existing_upgrade: Array[Dictionary] = _records("SELECT r.upgraded_snapshot_id FROM content_upgrade_record r JOIN content_snapshot c ON c.content_snapshot_id=r.new_content_id WHERE r.world_id=? AND r.source_snapshot_id=? AND c.content_hash=?", [state.world_id, state.snapshot.meta.snapshot_id, _source.content_hash])
 	if not existing_upgrade.is_empty(): return self.load("snapshot:" + str(existing_upgrade[0].upgraded_snapshot_id), "", -1, prepare)
 	var destination: String = ProjectSettings.globalize_path(path).get_base_dir().path_join("content-upgrade-%s-%s-backup.db" % [state.world_id, state.snapshot.meta.snapshot_id])
@@ -255,6 +262,9 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 	var source_snapshot: String = state.snapshot.meta.snapshot_id
 	var old_content: String = state.snapshot.content.content_snapshot_id
 	_copy_content(candidate, _records("SELECT * FROM content_snapshot WHERE content_snapshot_id=?", [content_id])[0])
+	if rebalance and not _rebalance_candidate(candidate):
+		_rollback("新版规则配装检查未通过；旧档保留，请调整配装后重试。" + last_error)
+		return null
 	for definition in _source.rows("encounter_defs"):
 		if candidate.find("encounter_state", "encounter_id", definition.encounter_id) == null:
 			var encounter: Dtos.EncounterStateDto = Dtos.EncounterStateDto.new()
@@ -269,6 +279,11 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 					encounter.respawn_remaining_s = maxf(encounter.respawn_remaining_s, npc.respawn_remaining_s)
 			if living: encounter.respawn_remaining_s = 0.0
 			candidate.add("encounter_state", encounter)
+	if rebalance:
+		var validator: Validation = Validation.new()
+		if not validator.validate(candidate, _source):
+			_rollback("新版配装不兼容，已保留旧档；请调整后重试。" + validator.last_error)
+			return null
 	candidate.capture_sequence += 1
 	_prepare_meta(candidate, "migration", "")
 	var frozen: Catalog = Catalog.new()
@@ -279,12 +294,112 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 		staging_catalog = null; frozen.close(); _rollback("CONTENT_UPGRADE_STAGING_FAILED"); return null
 	var selection: Array[Dictionary] = _records("SELECT generation FROM save_slot WHERE slot_id=?", [_slot_id(state.world_id, "auto", 0)])
 	var generation: int = 0 if selection.is_empty() else int(selection[0].generation)
-	if not _write_snapshot(candidate) or not _insert("snapshot_lineage", {"child_snapshot_id": candidate.snapshot.meta.snapshot_id, "parent_snapshot_id": source_snapshot}) or not _insert("content_upgrade_record", {"world_id": state.world_id, "source_snapshot_id": source_snapshot, "upgraded_snapshot_id": candidate.snapshot.meta.snapshot_id, "old_content_id": old_content, "new_content_id": content_id, "upgrade_kind": "additive_encounters_v1", "created_utc": _utc()}) or not _publish(candidate, "auto", 0, generation) or not _checkpoint("content_upgrade") or not _q("COMMIT"):
+	if not _write_snapshot(candidate) or not _insert("snapshot_lineage", {"child_snapshot_id": candidate.snapshot.meta.snapshot_id, "parent_snapshot_id": source_snapshot}) or not _insert("content_upgrade_record", {"world_id": state.world_id, "source_snapshot_id": source_snapshot, "upgraded_snapshot_id": candidate.snapshot.meta.snapshot_id, "old_content_id": old_content, "new_content_id": content_id, "upgrade_kind": "combat_rebalance_v1" if rebalance else "additive_encounters_v1", "created_utc": _utc()}) or not _publish(candidate, "auto", 0, generation) or not _checkpoint("content_upgrade") or not _q("COMMIT"):
 		staging_catalog = null; frozen.close(); _rollback("CONTENT_UPGRADE_FAILED: " + last_error); return null
 	if catalog != _source: catalog.close()
 	catalog = frozen; staging_catalog = null; active_state = candidate
 	_end_operation(true)
 	return candidate
+
+func _reviewed_combat_upgrade(previous: Catalog, next: Catalog) -> bool:
+	var before: Dictionary = previous.rows("catalog_meta")[0]
+	var after: Dictionary = next.rows("catalog_meta")[0]
+	if before.pack_id != after.pack_id or int(before.schema_version) not in [3, 4] or int(after.schema_version) != 5 or after.content_version != "v0.6-combat" or after.ruleset_version != "singleplayer_combat_v2":
+		return _fail("Unreviewed combat rules upgrade; original world preserved")
+	# Only reviewed combat/economic columns may change. Identity, ownership,
+	# spatial content, physics budgets and every existing definition remain.
+	var mutable: Dictionary = {
+		"item_defs": ["base_ask_credit", "base_bid_credit"],
+		"module_defs": ["cycle_s", "range_m", "energy_eu", "heat_hu"],
+		"weapon_defs": ["raw_damage", "projectile_speed_mps"],
+		"npc_behavior_defs": ["fire_mode", "projectile_speed_mps"],
+		"ship_loadout_items": ["module_id"], "loadout_supply_defs": ["quantity"],
+		"recipe_defs": ["service_fee_credit"], "recipe_inputs": ["quantity"],
+		"recycle_outputs": ["quantity"]}
+	var extensible: Array[String] = ["item_defs", "module_defs", "weapon_defs", "module_activation_priority", "recipe_defs", "recipe_inputs", "recycle_outputs", "module_salvage_recipe_defs", "station_stock_defs", "recipe_access_defs", "presentation_defs", "module_tech_defs", "npc_defs", "anchor_defs", "npc_spawn_defs", "npc_patrol_points"]
+	for table: String in previous.table_names:
+		if table == "catalog_meta": continue
+		if not next.table_names.has(table) or Catalog.schema_signature(previous.column_info[table], table) != Catalog.schema_signature(next.column_info[table], table):
+			return _fail("Combat upgrade changes unreviewed schema: " + table)
+		var keys: Array[String] = []
+		for column: Dictionary in previous.column_info[table]:
+			if int(column.pk) > 0: keys.append(str(column.name))
+		var index: Dictionary = {}
+		for entry: Dictionary in next.rows(table): index[_content_key(entry, keys)] = entry
+		if previous.rows(table).size() != next.rows(table).size() and not extensible.has(table):
+			return _fail("Combat upgrade appends unreviewed rules: " + table)
+		for entry: Dictionary in previous.rows(table):
+			var key: String = _content_key(entry, keys)
+			if not index.has(key): return _fail("Combat upgrade removes existing definition: " + table + ":" + key)
+			for field: String in entry:
+				if entry[field] != index[key][field] and field not in mutable.get(table, []):
+					return _fail("Combat upgrade changes protected definition: " + table + ":" + field)
+	for view: String in previous.view_sql:
+		if not next.view_sql.has(view) or next.view_sql[view] != previous.view_sql[view]:
+			return _fail("Combat upgrade changes reviewed derived view: " + view)
+	return true
+
+func _rebalance_candidate(candidate: State) -> bool:
+	# Materialize the old standard provenance for purchased/looted equipment.
+	# Genuine manufactured ledgers remain untouched. Changing a recipe must not
+	# turn an existing item into newly invented recycling materials.
+	for item: Dtos.ItemInstanceStateDto in candidate.rows("item_instance_state"):
+		var recorded: bool = false
+		for ledger: Dtos.ManufactureInputStateDto in candidate.rows("manufacture_input_state"):
+			if ledger.item_instance_id == item.item_instance_id: recorded = true; break
+		if recorded or item.salvage_recipe_id.is_empty(): continue
+		for ingredient: Dictionary in catalog.rows("recipe_inputs"):
+			if ingredient.recipe_id != item.salvage_recipe_id: continue
+			var ledger: Dtos.ManufactureInputStateDto = Dtos.ManufactureInputStateDto.new()
+			ledger.item_instance_id = item.item_instance_id
+			ledger.input_item_id = ingredient.item_id
+			ledger.input_quantity = int(ingredient.quantity)
+			candidate.add("manufacture_input_state", ledger)
+	# Reprice station inventories, not player assets. Existing stock and consumed
+	# buyback allowance remain bounded; newly introduced goods receive seed stock.
+	for definition: Dictionary in _source.rows("station_stock_defs"):
+		var stock: Dtos.ShopStockStateDto
+		for row: Dtos.ShopStockStateDto in candidate.rows("shop_stock_state"):
+			if row.station_id == definition.station_id and row.item_def_id == definition.item_id:
+				stock = row; break
+		if stock == null:
+			stock = Dtos.ShopStockStateDto.new()
+			stock.station_id = definition.station_id; stock.item_def_id = definition.item_id
+			stock.quantity = int(definition.initial_units)
+			stock.buyback_remaining_units = int(definition.buyback_units_per_refresh)
+			stock.refresh_remaining_s = float(_source.one("station_defs", "station_id", definition.station_id).stock_refresh_s)
+			candidate.add("shop_stock_state", stock)
+		stock.quantity = mini(stock.quantity, int(definition.hard_cap_units))
+		stock.buyback_remaining_units = mini(stock.buyback_remaining_units, int(definition.buyback_units_per_refresh))
+		var item: Dictionary = _source.one("item_defs", "item_id", definition.item_id)
+		stock.ask_credit = int(item.base_ask_credit); stock.bid_credit = int(item.base_bid_credit)
+		stock.refresh_remaining_s = minf(stock.refresh_remaining_s, float(_source.one("station_defs", "station_id", definition.station_id).stock_refresh_s))
+	for stock: Dtos.ShopShipStockStateDto in candidate.rows("shop_ship_stock_state"):
+		var definition: Dictionary = _source.one("ship_defs", "ship_id", stock.ship_def_id)
+		stock.ask_credit = int(definition.base_ask_credit); stock.bid_credit = int(definition.base_bid_credit)
+		stock.refresh_remaining_s = minf(stock.refresh_remaining_s, float(_source.one("station_defs", "station_id", stock.station_id).stock_refresh_s))
+	for equipment: Dtos.EquipmentStateDto in candidate.rows("equipment_state"):
+		var module: Dictionary = _source.one("module_defs", "module_id", equipment.module_def_id)
+		equipment.cooldown_remaining_s = minf(equipment.cooldown_remaining_s, float(module.cycle_s))
+		equipment.active_remaining_s = minf(equipment.active_remaining_s, float(module.cycle_s))
+	# Preserve paid history, qualities, durability, IDs, progress, money and RNG.
+	# Never refill a damaged ship when maximums or active modifiers change.
+	var game: RefCounted = load("res://runtime/gameplay.gd").new()
+	# Metrics require only read-only definitions and inventory totals. Full setup
+	# refreshes missions/supplies/spawns and must not run inside this transform.
+	game.set("state", candidate)
+	game.set("catalog", _source)
+	var rules: Dictionary = {}
+	for rule: Dictionary in _source.rows("rule_parameters"):
+		rules[rule.parameter_id] = rule.value_integer if rule.value_integer != null else rule.value_real
+	game.set("_rules", rules)
+	game.set("inventory", load("res://runtime/gameplay/inventory.gd").new(game))
+	for ship: Dtos.ShipStateDto in candidate.rows("ship_state"):
+		var metrics: Dictionary = game.call("metrics", ship)
+		for field: String in ["shield", "armor", "hull", "energy", "heat"]:
+			ship.set(field, minf(float(ship.get(field)), float(metrics[field + "_max"])))
+	game.call("dispose")
+	return true
 
 func _additive_content(previous: Catalog, next: Catalog) -> bool:
 	var before_meta: Dictionary = previous.rows("catalog_meta")[0]
@@ -401,7 +516,7 @@ func _migrate() -> bool:
 	var existing: Array[Dictionary] = _records("SELECT name FROM sqlite_schema WHERE type='table'")
 	if not existing.is_empty():
 		var meta: Array[Dictionary] = _records("SELECT application_id,format_version FROM database_meta")
-		if meta.is_empty() or meta[0].application_id != "xingjizhanjian" or meta[0].format_version not in [1,2,3,4,5,6]: return _fail("Unsupported progress format; preserved")
+		if meta.is_empty() or meta[0].application_id != "xingjizhanjian" or meta[0].format_version not in [1,2,3,4,5,6,7]: return _fail("Unsupported progress format; preserved")
 		var applied_count: int = int(meta[0].format_version) + 3
 		if int(_records("SELECT count(*) AS n FROM migration_history")[0].n) != applied_count: return _fail("Migration history/format mismatch; preserved")
 		for name in MIGRATIONS.slice(0, applied_count):
@@ -419,7 +534,7 @@ func _migrate() -> bool:
 	for name in MIGRATIONS:
 		var source_path: String = "res://database/progress/" + name
 		if not _q(FileAccess.get_file_as_string(source_path)) or not _insert("migration_history", {"migration_id": name, "sql_sha256": FileAccess.get_sha256(source_path), "applied_utc": _utc()}) or not _checkpoint("migration:" + name): return _rollback("Migration interrupted: " + name)
-	return _q("PRAGMA user_version=6; COMMIT;")
+	return _q("PRAGMA user_version=7; COMMIT;")
 
 func _freeze() -> String:
 	var hash_value: String = _source.logical_hash()
@@ -548,7 +663,10 @@ func _verify_assets(manifest_path: String = ASSET_PATH) -> bool:
 	var seen: Dictionary = {}
 	for entry in manifest.resources:
 		var resource_path: String = entry.resource_path
-		if not resource_path.begins_with("res://") or resource_path.contains("..") or seen.has(resource_path) or not FileAccess.file_exists(resource_path) or FileAccess.get_sha256(resource_path) != entry.sha256: return _fail("Asset resource path/hash mismatch")
+		# V1's original code bytes remain archival data, never executable scripts.
+		# Current visual code belongs to V2; unchanged V1 model/audio paths stay live.
+		var checked_path: String = str(LEGACY_VISUAL_BYTES.get(resource_path, resource_path)) if str(manifest.asset_version) == "art-full-v1" else resource_path
+		if not resource_path.begins_with("res://") or resource_path.contains("..") or seen.has(resource_path) or not FileAccess.file_exists(checked_path) or FileAccess.get_sha256(checked_path) != entry.sha256: return _fail("Asset resource path/hash mismatch: " + resource_path)
 		seen[resource_path] = true
 	_asset_hash = actual
 	_asset_version = manifest.asset_version
@@ -623,10 +741,12 @@ static func _utc() -> String:
 	return Time.get_datetime_string_from_system(true) + "Z"
 
 static func _rule_version(definitions: Catalog) -> String:
+	if definitions.table_names.has("weapon_behavior_defs"): return "singleplayer_combat_v2"
 	return "singleplayer_b_v1" if int(definitions.rows("catalog_meta")[0].schema_version) <= 2 else RULE_CODE_VERSION
 
 static func _adapter_version(definitions: Catalog) -> String:
 	if int(definitions.rows("catalog_meta")[0].schema_version) <= 2: return "frozen_catalog_v0_3"
+	if definitions.table_names.has("weapon_behavior_defs"): return "frozen_catalog_v0_6"
 	if definitions.table_names.has("encounter_defs"): return "frozen_catalog_v0_5"
 	return ADAPTER_VERSION if definitions.table_names.has("signal_unlock_rewards") else "frozen_catalog_v0_4"
 

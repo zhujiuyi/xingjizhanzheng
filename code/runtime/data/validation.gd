@@ -25,6 +25,7 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 		var power: float = 0.0
 		var cpu: float = 0.0
 		var mass: float = 0.0
+		var weapon_families: Dictionary = {}
 		for equipment in state.rows("equipment_state"):
 			var container: RefCounted = state.find("container_state", "container_id", equipment.slot_container_id)
 			var item: RefCounted = state.find("item_instance_state", "item_instance_id", equipment.item_instance_id)
@@ -34,6 +35,22 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 			var module: Dictionary = catalog.one("module_defs", "module_id", equipment.module_def_id)
 			var item_def: Dictionary = catalog.one("item_defs", "item_id", item.item_def_id)
 			if module.is_empty() or item_def.is_empty(): return _fail("Missing fitted definition")
+			if item.item_def_id != equipment.module_def_id or not container.has_slot_type or not container.has_slot_index or container.kind != Types.ContainerKind.SLOT or not container.has_ship_def_id or container.ship_def_id != ship.ship_def_id: return _fail("Equipment item/slot mismatch")
+			var slot_type: String = ["weapon", "work", "utility", "structure"][int(container.slot_type)]
+			if slot_type != module.slot_type: return _fail("Equipment slot type mismatch")
+			var valid_slot: bool = false
+			for slot in catalog.rows("ship_slot_defs"):
+				if slot.ship_id == ship.ship_def_id and slot.slot_type == slot_type and int(slot.slot_index) == container.slot_index: valid_slot = true; break
+			if not valid_slot: return _fail("Equipment slot is not defined for hull")
+			if catalog.table_names.has("ship_weapon_permissions") and not catalog.one("weapon_defs", "module_id", equipment.module_def_id).is_empty():
+				var profile: Dictionary = catalog.one("weapon_behavior_defs", "module_id", equipment.module_def_id)
+				if profile.is_empty(): return _fail("Missing weapon behavior")
+				var permission: Dictionary = {}
+				for row in catalog.rows("ship_weapon_permissions"):
+					if row.ship_id == ship.ship_def_id and row.family_id == profile.family_id: permission = row; break
+				if permission.is_empty() or int(profile.size_class) > int(permission.max_size): return _fail("Weapon family or size is incompatible with hull")
+				weapon_families[profile.family_id] = int(weapon_families.get(profile.family_id, 0)) + 1
+				if int(weapon_families[profile.family_id]) > int(permission.max_installed): return _fail("Weapon family installation limit exceeded")
 			counts[equipment.module_def_id] = int(counts.get(equipment.module_def_id, 0)) + 1
 			power += module.power_pu
 			cpu += module.cpu_cu

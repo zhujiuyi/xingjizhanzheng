@@ -108,11 +108,19 @@ CONTENT_TABLES = (
     "salvage_package_defs",
     "salvage_reward_defs",
     "npc_salvage_defs",
+    "weapon_behavior_defs",
+    "ship_weapon_permissions",
+    "drone_defs",
+    "system_lighting_defs",
 )
 
 
 # Reviewed column/type/primary-key registry. Schema drift requires explicit registration.
 CONTENT_COLUMNS = {
+    'weapon_behavior_defs': 'module_id:TEXT:1|family_id:TEXT:0|size_class:INTEGER:0|fire_mode:TEXT:0|fire_cone_half_angle_rad:REAL:0',
+    'ship_weapon_permissions': 'ship_id:TEXT:1|family_id:TEXT:2|max_size:INTEGER:0|max_installed:INTEGER:0',
+    'drone_defs': 'module_id:TEXT:1|drone_count:INTEGER:0|speed_mps:REAL:0|acceleration_mps2:REAL:0|turn_rad_s:REAL:0|attack_range_m:REAL:0|projectile_speed_mps:REAL:0|sortie_timeout_s:REAL:0|return_radius_m:REAL:0',
+    'system_lighting_defs': 'system_id:TEXT:1|star_x_m:REAL:0|star_y_m:REAL:0|star_z_m:REAL:0|light_r:REAL:0|light_g:REAL:0|light_b:REAL:0|energy:REAL:0|ambient_energy:REAL:0|shadow_distance_m:REAL:0',
     'encounter_defs': 'encounter_id:TEXT:1|sector_id:TEXT:0|display_name:TEXT:0|anchor_id:TEXT:0|reveal_range_m:REAL:0|respawn_seconds:REAL:0|warp_arrival_m:REAL:0|required_unlock_id:TEXT:0',
     'encounter_members': 'encounter_id:TEXT:1|spawn_id:TEXT:2|member_index:INTEGER:0',
     'salvage_package_defs': 'package_def_id:TEXT:1|display_name:TEXT:0|volume_m3:REAL:0|mass_kg:REAL:0',
@@ -476,6 +484,145 @@ def validate_content_graph(connection: sqlite3.Connection) -> None:
         if len(completed) == previous_count:
             break
     require(completed == set(missions), f"Mission prerequisite/unlock cycle or unreachable target: {set(missions) - completed}")
+    validate_combat_content(connection)
+
+
+def validate_combat_content(connection: sqlite3.Connection) -> None:
+    """Check authoritative profiles, fitting and procurement before publication."""
+    from collections import Counter, defaultdict
+    from decimal import Decimal
+
+    def records(table: str) -> list[dict[str, object]]:
+        cursor = connection.execute(f"SELECT * FROM {identifier(table)}")
+        columns = [column[0] for column in cursor.description]
+        return [dict(zip(columns, row, strict=True)) for row in cursor]
+
+    def indexed(table: str, key: str) -> dict[str, dict[str, object]]:
+        return {row[key]: row for row in records(table)}
+
+    def require(condition: bool, message: str) -> None:
+        if not condition:
+            raise ValueError(message)
+
+    ships = indexed("ship_defs", "ship_id")
+    items = indexed("item_defs", "item_id")
+    modules = indexed("module_defs", "module_id")
+    weapons = indexed("weapon_defs", "module_id")
+    profiles = indexed("weapon_behavior_defs", "module_id")
+    tech = indexed("module_tech_defs", "module_id")
+    drones = indexed("drone_defs", "module_id")
+    slots = {(row["ship_id"], row["slot_type"], row["slot_index"]) for row in records("ship_slot_defs")}
+    capacities = {(row["ship_id"], row["slot_type"]): row["slot_count"] for row in records("ship_slot_capacity")}
+    permissions = {(row["ship_id"], row["family_id"]): row for row in records("ship_weapon_permissions")}
+    require(set(profiles) == set(weapons), "Weapon behavior profile closure incomplete")
+    require(set(drones) == {mid for mid, row in profiles.items() if row["fire_mode"] == "drone"},
+            "Drone definition/profile closure incomplete")
+    for (ship_id, family), permission in permissions.items():
+        require(permission["max_installed"] <= capacities[(ship_id, "weapon")],
+                f"Weapon permission exceeds physical slots: {ship_id}/{family}")
+    families: dict[str, list[str]] = defaultdict(list)
+    for module_id, profile in profiles.items():
+        require(modules[module_id]["slot_type"] == "weapon", f"Weapon in non-weapon slot: {module_id}")
+        expected_mode = "ray" if profile["family_id"] == "thermal" else "drone" if profile["family_id"] == "drone" else "projectile"
+        require(profile["fire_mode"] == expected_mode, f"Weapon delivery mode mismatch: {module_id}")
+        weapon = weapons[module_id]
+        require((weapon["projectile_speed_mps"] is not None and weapon["projectile_speed_mps"] > 0) if expected_mode == "projectile" else weapon["projectile_speed_mps"] is None,
+                f"Weapon speed/delivery mode mismatch: {module_id}")
+        compatible = [ship_id for ship_id in ships if (ship_id, profile["family_id"]) in permissions and
+                      profile["size_class"] <= permissions[(ship_id, profile["family_id"])]["max_size"]]
+        require(bool(compatible), f"No compatible hull for weapon: {module_id}")
+        require(any(modules[module_id]["power_pu"] <= ships[ship_id]["power_capacity"] and
+                    modules[module_id]["cpu_cu"] <= ships[ship_id]["cpu_capacity"] and
+                    items[module_id]["unit_mass_kg"] <= ships[ship_id]["max_installed_mass_kg"] for ship_id in compatible),
+                f"Compatible hulls cannot afford weapon installation: {module_id}")
+        families[module_id.rsplit("_", 1)[0]].append(module_id)
+        if expected_mode == "drone":
+            drone = drones[module_id]
+            require(drone["attack_range_m"] < modules[module_id]["range_m"] and
+                    drone["return_radius_m"] < drone["attack_range_m"], f"Invalid drone engagement geometry: {module_id}")
+            require(drone["sortie_timeout_s"] > 2 * modules[module_id]["range_m"] / drone["speed_mps"],
+                    f"Drone cannot return within sortie timeout: {module_id}")
+    for family, members in families.items():
+        ordered = sorted(members, key=lambda mid: tech[mid]["tech_level"])
+        require([tech[mid]["tech_level"] for mid in ordered] == [1, 2, 3], f"Weapon generation closure incomplete: {family}")
+        require(len({(profiles[mid]["family_id"], profiles[mid]["size_class"]) for mid in members}) == 1,
+                f"Weapon generation changes family or mount size: {family}")
+        for previous, current in zip(ordered, ordered[1:]):
+            require(weapons[current]["raw_damage"] / modules[current]["cycle_s"] >
+                    weapons[previous]["raw_damage"] / modules[previous]["cycle_s"] and
+                    modules[current]["range_m"] > modules[previous]["range_m"] and
+                    items[current]["base_ask_credit"] > items[previous]["base_ask_credit"],
+                    f"Weapon generation fails damage/range/cost progression: {family}")
+    for loadout in records("ship_loadout_defs"):
+        ship = ships[loadout["ship_id"]]
+        fitted = [row for row in records("ship_loadout_items") if row["loadout_id"] == loadout["loadout_id"]]
+        counts = Counter(row["module_id"] for row in fitted)
+        family_counts: Counter[str] = Counter()
+        for row in fitted:
+            module_id = row["module_id"]
+            require((ship["ship_id"], row["slot_type"], row["slot_index"]) in slots and
+                    row["slot_type"] == modules[module_id]["slot_type"], f"Invalid default slot: {loadout['loadout_id']}")
+            maximum = modules[module_id]["max_per_ship"]
+            require(maximum is None or counts[module_id] <= maximum, f"Default module count exceeded: {module_id}")
+            if module_id in profiles:
+                profile = profiles[module_id]
+                permission = permissions.get((ship["ship_id"], profile["family_id"]))
+                require(permission is not None and profile["size_class"] <= permission["max_size"],
+                        f"Default weapon incompatible: {loadout['loadout_id']}/{module_id}")
+                family_counts[profile["family_id"]] += 1
+        for family, count in family_counts.items():
+            require(count <= permissions[(ship["ship_id"], family)]["max_installed"], f"Default family count exceeded: {loadout['loadout_id']}/{family}")
+        for field, capacity in (("power_pu", "power_capacity"), ("cpu_cu", "cpu_capacity")):
+            require(sum(modules[row["module_id"]][field] for row in fitted) <= ship[capacity], f"Default fitting budget exceeded: {loadout['loadout_id']}/{field}")
+        require(sum(items[row["module_id"]]["unit_mass_kg"] for row in fitted) <= ship["max_installed_mass_kg"],
+                f"Default installation mass exceeded: {loadout['loadout_id']}")
+    require(set(indexed("system_lighting_defs", "system_id")) == set(indexed("system_defs", "system_id")),
+            "System lighting closure incomplete")
+    # Optimistic fractional procurement includes the best station discount and
+    # best existing industry facility. Integer batches and rounding cost more.
+    dec = lambda value: Decimal(str(value))
+    rules = {row["parameter_id"]: row["value_integer"] if row["value_integer"] is not None else row["value_real"] for row in records("rule_parameters")}
+    buy = (1 - dec(rules["max_buy_discount_ratio"])) * (1 + dec(rules["trade_fee_ratio"]))
+    sell = (1 + dec(rules["max_sell_bonus_ratio"])) * (1 - dec(rules["trade_fee_ratio"]))
+    facility = max((dec(row["effect_multiplier"]) for row in records("base_module_defs") if row["service_kind"] == "industry"), default=Decimal(1))
+    recipes = indexed("recipe_defs", "recipe_id")
+    inputs: dict[str, dict[str, int]] = defaultdict(dict)
+    by_output: dict[str, list[dict[str, object]]] = defaultdict(list)
+    for row in records("recipe_inputs"):
+        inputs[row["recipe_id"]][row["item_id"]] = row["quantity"]
+    for recipe in recipes.values():
+        require(bool(inputs[recipe["recipe_id"]]), f"Recipe lacks real material inputs: {recipe['recipe_id']}")
+        by_output[recipe["output_item_id"]].append(recipe)
+    minimum: dict[str, Decimal] = {}
+    visiting: set[str] = set()
+    def cost(item_id: str) -> Decimal:
+        if item_id in minimum:
+            return minimum[item_id]
+        require(item_id not in visiting, f"Recipe dependency cycle: {item_id}")
+        visiting.add(item_id)
+        candidates = [dec(items[item_id]["base_ask_credit"]) * buy]
+        for recipe in by_output[item_id]:
+            candidates.append((dec(recipe["service_fee_credit"]) / facility +
+                               sum((cost(mid) * quantity for mid, quantity in inputs[recipe["recipe_id"]].items()), Decimal(0))) / recipe["output_quantity"])
+        minimum[item_id] = min(candidates)
+        visiting.remove(item_id)
+        return minimum[item_id]
+    stocked = {row["item_id"] for row in records("station_stock_defs") if row["allow_buy"] and row["target_units"] > 0}
+    for item_id, item in items.items():
+        require(dec(item["base_bid_credit"]) * sell < cost(item_id), f"Recursive manufacture/sale arbitrage: {item_id}")
+    salvage = indexed("module_salvage_recipe_defs", "module_id")
+    recycle: dict[str, dict[str, int]] = defaultdict(dict)
+    for row in records("recycle_outputs"):
+        recycle[row["source_item_id"]][row["output_item_id"]] = row["quantity"]
+    require(set(salvage) == set(modules), "Module recycling provenance closure incomplete")
+    for module_id, origin in salvage.items():
+        expected = {mid: math.floor(quantity * rules["recycle_input_return_ratio"]) for mid, quantity in inputs[origin["recipe_id"]].items()}
+        require(recycle[module_id] == {mid: quantity for mid, quantity in expected.items() if quantity > 0},
+                f"Module recycling differs from frozen input provenance: {module_id}")
+        returned = sum((cost(mid) * quantity for mid, quantity in recycle[module_id].items()), Decimal(0))
+        require(returned <= cost(module_id) + dec(rules["recycle_service_fee_credit"]), f"Recycling procurement arbitrage: {module_id}")
+    for module_id in weapons:
+        require(module_id in stocked and bool(by_output[module_id]), f"Weapon lacks procurement/manufacture route: {module_id}")
 
 
 def build_catalog(output: Path = DEFAULT_OUTPUT) -> dict[str, object]:

@@ -15,6 +15,7 @@ var voices: Array[Node] = []
 var loops: Dictionary = {}
 var beam_clock: float = 0.0
 var gates: Array[Node3D] = []
+var effects_paused: bool = false
 
 func _exit_tree() -> void:
 	_prune_nodes(voices)
@@ -44,13 +45,23 @@ func setup(sector: XJSector, business: RefCounted, definitions: XJCatalog, effec
 			gates.append(gate)
 
 func set_paused(stopped: bool) -> void:
+	effects_paused = stopped
 	_prune_nodes(gates)
+	_prune_nodes(effects)
 	_prune_nodes(voices)
 	for gate: Node3D in gates:
 		if is_instance_valid(gate): gate.process_mode = Node.PROCESS_MODE_DISABLED if stopped else Node.PROCESS_MODE_INHERIT
+	for effect: Node3D in effects:
+		_pause_particles(effect, stopped)
 	for voice in voices:
 		if is_instance_valid(voice) and voice.get("bus") != "UI":
 			voice.set("stream_paused", stopped)
+
+func _pause_particles(node: Node, stopped: bool) -> void:
+	# GPU simulation is driven by RenderingServer, independently of the
+	# effect Node's visual clock. Freeze both clocks when menus pause combat.
+	if node is GPUParticles3D: (node as GPUParticles3D).speed_scale = 0.0 if stopped else 1.0
+	for child: Node in node.get_children(): _pause_particles(child, stopped)
 
 func consume(delta: float) -> void:
 	if gameplay == null:
@@ -65,6 +76,13 @@ func consume(delta: float) -> void:
 				if equipment != null:
 					var weapon: Dictionary = catalog.one("weapon_defs", "module_id", equipment.module_def_id)
 					_play("weapon_" + str(weapon.get("damage_type", "kinetic")), point)
+					var slot := world.state.find("container_state", "container_id", equipment.slot_container_id) as Dtos.ContainerStateDto
+					if slot != null and source != null:
+						var muzzle := source.get_node_or_null("Hardpoints/weapon_%d/muzzle" % slot.slot_index) as Node3D
+						var family: String = str(weapon.get("damage_type", "kinetic"))
+						if catalog.table_names.has("weapon_behavior_defs"):
+							family = str(catalog.one("weapon_behavior_defs", "module_id", equipment.module_def_id).get("family_id", family))
+						if muzzle != null and family != "drone": _add(Effects.muzzle(muzzle.global_position, family, config))
 			Types.EventKind.SHIP_DESTROYED:
 				var radius := _radius(source)
 				_add(Effects.explosion(point, radius * float(config.fx_explosion_radius_ship_multiplier), Color("ffc078"), config))
@@ -110,10 +128,16 @@ func _prune_nodes(nodes: Array) -> void:
 	for index: int in range(nodes.size() - 1, -1, -1):
 		if not is_instance_valid(nodes[index]): nodes.remove_at(index)
 
-func hit(target_id: String, shielded: bool, point: Vector3) -> void:
+func hit(target_id: String, shielded: bool, point: Vector3, damage: Vector3 = Vector3.ZERO, normal: Vector3 = Vector3.ZERO) -> void:
 	var node := _node(target_id)
 	if node == null:
 		return
+	var color: Color = Color("facb8e")
+	if damage.z > maxf(damage.x, damage.y): color = Color("aa91eb")
+	elif damage.y > damage.x: color = Color("ffad79")
+	var owner_pose: Transform3D = node.get_global_transform_interpolated()
+	var local_contact: Vector3 = owner_pose.affine_inverse() * point
+	var contact_normal: Vector3 = normal if not normal.is_zero_approx() else owner_pose.basis * local_contact.normalized()
 	if shielded:
 		_prune_nodes(effects)
 		var count: int = 0
@@ -122,13 +146,26 @@ func hit(target_id: String, shielded: bool, point: Vector3) -> void:
 				count += 1
 		if count >= int(config.fx_shield_hits_per_ship_max):
 			return
-		var pulse := Effects.shield(_radius(node), Color("77d8ff"), config)
+		var half_extents: Vector3 = _half_extents(node)
+		var sphere_direction: Vector3 = local_contact / half_extents
+		var pulse := Effects.shield_contact(half_extents, sphere_direction, Color("77b6e3"), config)
 		pulse.set_meta("shield_entity", target_id)
-		pulse.position = node.global_position
+		pulse.set_meta("hit_kind", "shield")
+		pulse.set("follow_target", weakref(node))
+		pulse.transform = owner_pose
 		_add(pulse)
 		_play("shield_hit", point)
 	else:
+		var flash := Effects.impact(point, color, config, contact_normal)
+		flash.set_meta("hit_entity", target_id)
+		flash.set_meta("hit_kind", "armor")
+		_add(flash)
 		_play("armor_hit", point)
+
+func impact(point: Vector3, color: Color, normal: Vector3 = Vector3.UP) -> void:
+	var flash := Effects.impact(point, color, config, normal)
+	flash.set_meta("hit_kind", "environment")
+	_add(flash)
 
 func ui_result(success: bool) -> void:
 	_play("ui_confirm" if success else "ui_error", Vector3.ZERO, "UI")
@@ -145,6 +182,7 @@ func _add(node: Node3D) -> void:
 		node.free()
 		return
 	add_child(node)
+	_pause_particles(node, effects_paused)
 	effects.append(node)
 
 func _particles(node: Node) -> int:
@@ -168,6 +206,12 @@ func _radius(node: Node3D) -> float:
 	if shape != null and shape.shape is BoxShape3D:
 		return (shape.shape as BoxShape3D).size.length() * 0.5
 	return 1.0
+
+func _half_extents(node: Node3D) -> Vector3:
+	var shape := node.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if shape != null and shape.shape is BoxShape3D:
+		return (shape.shape as BoxShape3D).size * 0.5
+	return Vector3.ONE
 
 func _play(sound_id: String, point: Vector3, bus: String = "SFX", loop_id: String = "") -> void:
 	_prune_nodes(voices)

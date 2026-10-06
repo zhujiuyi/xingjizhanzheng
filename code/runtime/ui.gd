@@ -840,7 +840,9 @@ func _fitting() -> void:
 			_command(entry.actions, "关闭设备" if equipped.enabled else "启用设备", "set_module_enabled", equipped.item_instance_id, "off" if equipped.enabled else "on")
 		else:
 			empty_slots.append({"type": slot_type, "index": container.slot_index, "title": slot_name})
-			_asset_row(list, container.container_id, "generic", slot_type, slot_name, "空挂点；在下方设备列表选择适配模块安装。", "槽", "1", "—", "—", "未安装")
+			var slot_description: String = "空挂点；在下方设备列表选择适配模块安装。"
+			if slot_type == "weapon": slot_description += "\n" + _ship_weapon_description(state.ship().ship_def_id)
+			_asset_row(list, container.container_id, "generic", slot_type, slot_name, slot_description, "槽", "1", "—", "—", "未安装")
 	list.call("add_section", "本地可安装设备")
 	var available: int = 0
 	for item: Dtos.ItemInstanceStateDto in state.rows("item_instance_state"):
@@ -852,12 +854,13 @@ func _fitting() -> void:
 			if str(module.slot_type) == str(empty.type): compatible.append(empty)
 		available += 1
 		var reason: String = _fitting_reason(item, metrics)
-		if compatible.is_empty(): reason = "没有同类空挂点"
+		if reason.is_empty() and compatible.is_empty(): reason = "没有同类空挂点"
 		var container: Dtos.ContainerStateDto = state.find("container_state", "container_id", item.container_id)
 		var entry: Dictionary = _asset_row(list, item.item_instance_id, "item", item.item_def_id, _item_name(item.item_def_id), _item_description(item.item_def_id) + "\n耐久 %.0f · 品质 %.2f" % [item.durability, item.quality_multiplier], "件", "1", "—", "—", reason if not reason.is_empty() else _container_name(container) + "\n可安装")
 		for empty: Dictionary in compatible:
 			var install: Button = _command(entry.actions, "安装至 " + str(empty.title), "fit_module", item.item_instance_id, "%s:%d" % [str(empty.type), int(empty.index)])
 			install.disabled = not reason.is_empty()
+			install.tooltip_text = reason if not reason.is_empty() else "安装到 %s；舰种、口径、预算与科技在提交时再次校验。" % str(empty.title)
 	if available == 0: _text("本地没有可安装设备；可在市场购买或工业制造。", 14)
 
 func _market() -> void:
@@ -936,7 +939,7 @@ func _industry() -> void:
 		if item.container_id != _warehouse_id() or item.policy_id != "normal_owned": continue
 		var fee: int = int(catalog.rule("recycle_service_fee_credit"))
 		var reason: String = _recycle_reason(item)
-		var entry: Dictionary = _asset_row(list, item.item_instance_id, "item", item.item_def_id, "拆解 · " + _item_name(item.item_def_id), _item_description(item.item_def_id) + "\n按冻结材料来源回收；拆解后设备消失。", "件", "1", str(fee), str(fee), reason if not reason.is_empty() else "可拆解")
+		var entry: Dictionary = _asset_row(list, item.item_instance_id, "item", item.item_def_id, "拆解 · " + _item_name(item.item_def_id), _item_description(item.item_def_id) + "\n" + _recycle_source_description(item), "件", "1", str(fee), str(fee), reason if not reason.is_empty() else "可拆解")
 		_register_business_row(entry, "拆解设备", "recycle", item.item_instance_id, {"kind": "recycle", "id": item.item_def_id, "fixed": 1, "service": "recycle"})
 	_update_quotes()
 
@@ -1656,16 +1659,62 @@ func _item_description(id: String) -> String:
 	var module: Dictionary = _one("module_defs", "module_id", id)
 	if not module.is_empty():
 		description += "\n供能 %.0f · 算力 %.0f" % [float(module.power_pu), float(module.cpu_cu)]
-		if float(module.range_m) > 0: description += " · 作用距离 %.0f m" % float(module.range_m)
-		if float(module.cycle_s) > 0: description += " · 周期 %.1f s" % float(module.cycle_s)
+		var weapon: Dictionary = _one("weapon_defs", "module_id", id)
+		if not weapon.is_empty():
+			description += _weapon_description(id, module, weapon)
+		else:
+			if float(module.range_m) > 0: description += " · 作用距离 %.0f m" % float(module.range_m)
+			if float(module.cycle_s) > 0: description += " · 周期 %.2f s" % float(module.cycle_s)
+		var tech: Dictionary = _one("module_tech_defs", "module_id", id)
+		if not tech.is_empty(): description += "\n科技 %s · %s（%s）" % [str(tech.tech_level), _unlock_name(str(tech.required_unlock_id)), "已解锁" if _unlocked(str(tech.required_unlock_id)) else "未解锁"]
 	return description
+
+func _weapon_family_name(family: String) -> String:
+	return str({"kinetic": "动能炮", "thermal": "热束", "pulse": "脉冲弹", "drone": "攻击无人机"}.get(family, "武器"))
+
+func _weapon_size_name(size: int) -> String:
+	return str({1: "轻型", 2: "中型", 3: "重型"}.get(size, "未定义口径"))
+
+func _weapon_description(id: String, module: Dictionary, weapon: Dictionary) -> String:
+	var profile: Dictionary = _one("weapon_behavior_defs", "module_id", id) if catalog.table_names.has("weapon_behavior_defs") else {}
+	var is_drone: bool = str(profile.get("fire_mode", "")) == "drone"
+	var result: String = ""
+	if not profile.is_empty(): result += "\n%s · %s" % [_weapon_family_name(str(profile.family_id)), _weapon_size_name(int(profile.size_class))]
+	var damage: float = float(weapon.raw_damage)
+	var cycle: float = float(module.cycle_s)
+	result += "\n%s %.2f · 周期 %.2f s · %s %.2f" % ["单次集群总伤害" if is_drone else "单发原始伤害", damage, cycle, "理论 DPS 上界" if is_drone else "理论 DPS", damage / cycle if cycle > 0 else 0.0]
+	result += "\n%s %.0f m" % ["控制范围" if is_drone else "射程", float(module.range_m)]
+	if is_drone:
+		var drone: Dictionary = _one("drone_defs", "module_id", id) if catalog.table_names.has("drone_defs") else {}
+		if not drone.is_empty():
+			result += " · 无人机 %d 架\n巡航 %.0f m/s · 攻击距离 %.0f m · 弹速 %.0f m/s" % [int(drone.drone_count), float(drone.speed_mps), float(drone.attack_range_m), float(drone.projectile_speed_mps)]
+		result += "\n每次付费出击，每架攻击一次后回收；回收与冷却结束后再出击。"
+	elif weapon.projectile_speed_mps == null:
+		result += " · 瞬时射线"
+	else:
+		result += " · 弹速 %.0f m/s" % float(weapon.projectile_speed_mps)
+	result += "\n每周期能量 %.2f EU · 热量 %.2f HU" % [float(module.energy_eu), float(module.heat_hu)]
+	result += " · 弹药 %s ×%d" % [_item_name(str(weapon.ammo_item_id)), int(weapon.ammo_per_cycle)] if weapon.ammo_item_id != null else " · 无弹药消耗"
+	result += "\n理论值不计命中、供能、散热" + ("与无人机往返耗时。" if is_drone else "。")
+	return result
+
+func _ship_weapon_description(id: String) -> String:
+	if not catalog.table_names.has("ship_weapon_permissions"): return "配装资格按此存档的原有槽位与预算校验。"
+	var allowed: Array[String] = []
+	var drone_allowed: bool = false
+	for permission: Dictionary in _defs("ship_weapon_permissions"):
+		if str(permission.ship_id) != id: continue
+		var family: String = str(permission.family_id)
+		allowed.append("%s≤%s，最多 %d 件" % [_weapon_family_name(family), _weapon_size_name(int(permission.max_size)), int(permission.max_installed)])
+		drone_allowed = drone_allowed or family == "drone"
+	return "武器挂载：" + "；".join(allowed) + ("。" if drone_allowed else "；不支持攻击无人机机库。")
 
 func _ship_description(id: String) -> String:
 	var definition: Dictionary = _one("ship_defs", "ship_id", id)
 	if definition.is_empty(): return "舰体定义未提供"
 	var role: Dictionary = _one("ship_role_defs", "ship_id", id)
 	var faction: String = str(_one("faction_defs", "faction_id", str(role.get("faction_id", ""))).get("display_name", ""))
-	return (faction + " · " if not faction.is_empty() else "") + "舰体基准：速度 %.0f m/s · 货舱 %d L · 矿舱 %d L\n护盾 %.0f · 装甲 %.0f · 结构 %.0f" % [float(definition.max_speed_mps), int(definition.cargo_l), int(definition.mineral_cargo_l), float(definition.shield_max), float(definition.armor_max), float(definition.hull_max)]
+	return (faction + " · " if not faction.is_empty() else "") + "舰体基准：速度 %.0f m/s · 货舱 %d L · 矿舱 %d L\n护盾 %.0f · 装甲 %.0f · 结构 %.0f\n%s" % [float(definition.max_speed_mps), int(definition.cargo_l), int(definition.mineral_cargo_l), float(definition.shield_max), float(definition.armor_max), float(definition.hull_max), _ship_weapon_description(id)]
 
 func _service_reason(service: String) -> String:
 	for definition: Dictionary in _defs("station_service_defs"):
@@ -1710,6 +1759,9 @@ func _fitting_reason(item: Dtos.ItemInstanceStateDto, metrics: Dictionary) -> St
 	if not tech.is_empty() and not _unlocked(str(tech.required_unlock_id)): return "需解锁 " + _unlock_name(str(tech.required_unlock_id))
 	var module: Dictionary = _one("module_full_defs", "module_id", item.item_def_id)
 	if module.is_empty(): return "缺少模块定义"
+	if str(module.slot_type) == "weapon" and gameplay.has_method("weapon_fit_reason"):
+		var weapon_reason: String = str(gameplay.call("weapon_fit_reason", state.ship(), item.item_def_id))
+		if not weapon_reason.is_empty(): return weapon_reason
 	if float(metrics.power_used) + float(module.power_pu) > float(metrics.power_capacity) or float(metrics.cpu_used) + float(module.cpu_cu) > float(metrics.cpu_capacity) or float(metrics.installed_mass_kg) + float(module.mass_kg) > float(metrics.max_installed_mass_kg): return "供能、算力或安装质量超限"
 	var equipped: Array = gameplay.call("equipped", state.ship())
 	var same: int = 0
@@ -1732,14 +1784,19 @@ func _recycle_reason(item: Dtos.ItemInstanceStateDto) -> String:
 	if not bool(_one("asset_policy_defs", "policy_id", item.policy_id).get("may_recycle", false)): return "受保护设备不可拆解"
 	if state.find("equipment_state", "item_instance_id", item.item_instance_id) != null: return "先卸下设备"
 	if state.player().credit < int(catalog.rule("recycle_service_fee_credit")): return "信用点不足"
-	if item.origin_kind == Types.ItemOrigin.MANUFACTURE:
-		for ledger: RefCounted in state.rows("manufacture_input_state"):
-			if ledger.item_instance_id == item.item_instance_id: return ""
-		return "缺少合法材料追溯账本"
+	for ledger: RefCounted in state.rows("manufacture_input_state"):
+		if ledger.item_instance_id == item.item_instance_id: return ""
+	if item.origin_kind == Types.ItemOrigin.MANUFACTURE: return "缺少合法材料追溯账本"
 	if item.salvage_recipe_id.is_empty(): return "设备没有冻结拆解来源"
 	for ingredient: Dictionary in _defs("recipe_inputs"):
 		if str(ingredient.recipe_id) == item.salvage_recipe_id: return ""
 	return "缺少合法材料追溯账本"
+
+func _recycle_source_description(item: Dtos.ItemInstanceStateDto) -> String:
+	for ledger: RefCounted in state.rows("manufacture_input_state"):
+		if ledger.item_instance_id == item.item_instance_id:
+			return "按此设备保存的" + ("实际制造投入" if item.origin_kind == Types.ItemOrigin.MANUFACTURE else "历史标准投入") + "返料，逐项向下取整；拆解后设备消失。"
+	return "缺少实际制造投入，不能拆解。" if item.origin_kind == Types.ItemOrigin.MANUFACTURE else "按当前世界冻结的标准配方返料，逐项向下取整；拆解后设备消失。"
 
 func _mission_list_description(definition: Dictionary, current: Dtos.MissionStateDto) -> String:
 	var description: String = "接取 " + _station_name(str(definition.accept_station_id)) + " · 交付 " + _station_name(str(definition.turnin_station_id))
@@ -1857,7 +1914,7 @@ func _local_container(id: String) -> bool:
 
 func _defs(table: String) -> Array[Dictionary]:
 	if not definition_cache.has(table):
-		definition_cache[table] = catalog.rows(table) if catalog != null else []
+		definition_cache[table] = catalog.rows(table) if catalog != null and (catalog.table_names.has(table) or catalog.view_sql.has(table)) else []
 	return definition_cache[table]
 
 func _one(table: String, key: String, value: String) -> Dictionary:

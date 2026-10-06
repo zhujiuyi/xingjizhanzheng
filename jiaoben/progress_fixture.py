@@ -22,11 +22,18 @@ sys.path.insert(0, str(ROOT / "jiaoben"))
 import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
-MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql")
-FORMAT_VERSION = 6
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_5.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_5"
-RULE_CODE_VERSION = "singleplayer_full_v1"
+MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql")
+FORMAT_VERSION = 7
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_6.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_6"
+REVIEWED_ADAPTERS = {
+    "frozen_catalog_v0_3": PROGRESS_DIR / "catalog_adapter_v0_3.sql",
+    "frozen_catalog_v0_4": PROGRESS_DIR / "catalog_adapter_v0_4.sql",
+    "frozen_catalog_v0_4_r2": PROGRESS_DIR / "catalog_adapter_v0_4_r2.sql",
+    "frozen_catalog_v0_5": PROGRESS_DIR / "catalog_adapter_v0_5.sql",
+    "frozen_catalog_v0_6": ADAPTER,
+}
+RULE_CODE_VERSION = "singleplayer_combat_v2"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
 STATE_TABLES = (
@@ -108,9 +115,14 @@ def rows(connection, table, where="", parameters=()):
     return [dict(zip(names, row, strict=True)) for row in cursor]
 
 
-def adapter_connection():
+def adapter_connection(version=None):
+    # Select only checked-in reviewed DDL. The current override supports the
+    # compatibility-tuple fault fixtures without accepting save-provided SQL.
+    path = ADAPTER if version in (None, ADAPTER_VERSION) else REVIEWED_ADAPTERS.get(version)
+    if path is None:
+        raise ValueError("Unsupported frozen adapter")
     connection = connect()
-    connection.executescript(ADAPTER.read_text(encoding="utf-8"))
+    connection.executescript(path.read_text(encoding="utf-8"))
     return connection
 
 
@@ -148,9 +160,9 @@ def adapter_hash(connection):
 
 def verify_frozen_content(connection, content_id):
     meta = connection.execute("SELECT content_hash,frozen_adapter_version FROM content_snapshot WHERE content_snapshot_id=?", (content_id,)).fetchone()
-    if not meta or meta[1] != ADAPTER_VERSION:
+    if not meta or (meta[1] != ADAPTER_VERSION and meta[1] not in REVIEWED_ADAPTERS):
         raise ValueError("Unsupported frozen adapter")
-    adapter = adapter_connection()
+    adapter = adapter_connection(meta[1])
     try:
         names = [r[0] for r in adapter.execute("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")]
         manifest = {r["table_name"]: r for r in rows(connection, "content_table_manifest", "content_snapshot_id=?", (content_id,))}

@@ -264,6 +264,7 @@ func fit(item_id: String, _quantity_index: int, target_slot: String) -> bool:
 	if item == null or not accessible(item.container_id) or g.state.find("equipment_state","item_instance_id",item_id) != null: return g.fail("模块不可安装")
 	if item.policy_id == "normal_owned" and g.state.ship().policy_id != "normal_owned": return g.fail("保障或借船仅使用保护设备；普通自有设备请安装到自有舰船")
 	var mod: Dictionary = g.definition("module_full_defs", "module_id", item.item_def_id)
+	if mod.is_empty(): return g.fail("该物品不是可安装模块")
 	var tech: Dictionary = g.definition("module_tech_defs","module_id",item.item_def_id)
 	if not tech.is_empty() and not g.unlocked(tech.required_unlock_id): return g.fail("设备科技尚未解锁")
 	var parts: PackedStringArray = target_slot.split(":")
@@ -271,6 +272,8 @@ func fit(item_id: String, _quantity_index: int, target_slot: String) -> bool:
 	var kind: String = parts[0] if parts.size()>0 and not parts[0].is_empty() else str(mod.slot_type)
 	var c: D.ContainerStateDto = slot(g.state.ship(),kind,index)
 	if c == null or kind != mod.slot_type: return g.fail("槽位类型或位置不匹配")
+	var compatible: String = g.weapon_fit_reason(g.state.ship(), item.item_def_id)
+	if not compatible.is_empty(): return g.fail(compatible)
 	for e in g.state.rows("equipment_state"):
 		if e.slot_container_id == c.container_id: return g.fail("槽位已占用")
 	if item.policy_id != "normal_owned" and g.state.ship().policy_id == "normal_owned": return g.fail("绑定设备不能安装到普通舰船")

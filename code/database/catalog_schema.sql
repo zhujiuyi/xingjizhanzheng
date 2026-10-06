@@ -751,3 +751,42 @@ CREATE TABLE npc_salvage_defs (
     npc_def_id TEXT PRIMARY KEY REFERENCES npc_defs(npc_id),
     package_def_id TEXT NOT NULL REFERENCES salvage_package_defs(package_def_id)
 ) STRICT;
+
+-- Reviewed combat profiles and per-hull permissions. Geometry assets carry no
+-- second copy of weapon range, damage, compatibility or drone movement values.
+CREATE TABLE weapon_behavior_defs (
+    module_id TEXT PRIMARY KEY REFERENCES weapon_defs(module_id),
+    family_id TEXT NOT NULL CHECK (family_id IN ('kinetic','thermal','pulse','drone')),
+    size_class INTEGER NOT NULL CHECK (size_class BETWEEN 1 AND 3),
+    fire_mode TEXT NOT NULL CHECK (fire_mode IN ('ray','projectile','drone')),
+    fire_cone_half_angle_rad REAL NOT NULL CHECK (fire_cone_half_angle_rad > 0 AND fire_cone_half_angle_rad <= 3.141592653589793)
+) STRICT;
+CREATE TABLE ship_weapon_permissions (
+    ship_id TEXT NOT NULL REFERENCES ship_defs(ship_id),
+    family_id TEXT NOT NULL CHECK (family_id IN ('kinetic','thermal','pulse','drone')),
+    max_size INTEGER NOT NULL CHECK (max_size BETWEEN 1 AND 3),
+    max_installed INTEGER NOT NULL CHECK (max_installed > 0),
+    PRIMARY KEY (ship_id,family_id)
+) STRICT;
+CREATE TABLE drone_defs (
+    module_id TEXT PRIMARY KEY REFERENCES weapon_defs(module_id),
+    drone_count INTEGER NOT NULL CHECK (drone_count BETWEEN 1 AND 3),
+    speed_mps REAL NOT NULL CHECK (speed_mps > 0),
+    acceleration_mps2 REAL NOT NULL CHECK (acceleration_mps2 > 0),
+    turn_rad_s REAL NOT NULL CHECK (turn_rad_s > 0),
+    attack_range_m REAL NOT NULL CHECK (attack_range_m > 0),
+    projectile_speed_mps REAL NOT NULL CHECK (projectile_speed_mps > 0),
+    sortie_timeout_s REAL NOT NULL CHECK (sortie_timeout_s > 0),
+    return_radius_m REAL NOT NULL CHECK (return_radius_m > 0)
+) STRICT;
+CREATE TABLE system_lighting_defs (
+    system_id TEXT PRIMARY KEY REFERENCES system_defs(system_id),
+    star_x_m REAL NOT NULL, star_y_m REAL NOT NULL, star_z_m REAL NOT NULL,
+    light_r REAL NOT NULL CHECK (light_r BETWEEN 0 AND 1),
+    light_g REAL NOT NULL CHECK (light_g BETWEEN 0 AND 1),
+    light_b REAL NOT NULL CHECK (light_b BETWEEN 0 AND 1),
+    energy REAL NOT NULL CHECK (energy > 0),
+    ambient_energy REAL NOT NULL CHECK (ambient_energy >= 0 AND ambient_energy < energy),
+    shadow_distance_m REAL NOT NULL CHECK (shadow_distance_m > 0),
+    CHECK (star_x_m*star_x_m + star_y_m*star_y_m + star_z_m*star_z_m > 0)
+) STRICT;

@@ -31,7 +31,7 @@ func _initialize() -> void:
 			check(store.open(), "release reopen physical progress")
 			var loaded = store.resume()
 			check(loaded != null and loaded.world_id == world and loaded.player().credit == expected_credit, "release resume restores durable endpoint " + store.last_error)
-			check(store._asset_version == "art-full-v1", "release canonical formal asset version")
+			check(store._asset_version == "art-full-v2", "release canonical formal asset version")
 	store.close()
 	print("STORE_RELEASE_RESULT ", "PASS" if failures.is_empty() else "FAIL", " checks=", checks, " failures=", failures.size())
 	quit(0 if failures.is_empty() else 1)

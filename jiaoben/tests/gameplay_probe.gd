@@ -14,6 +14,39 @@ func action(g:Gameplay,name:String,target:String="",quantity:int=1,extra:String=
 	var r:D.ActionResultDto=g.act(name,target,quantity,extra)
 	if r.phase!=T.ActionPhase.APPLIED:print("REJECT ",name," ",r.display_reason_key)
 	return r.phase==T.ActionPhase.APPLIED
+func manufacture_tier_fixture(g:Gameplay,recipe_id:String,label:String)->D.ItemInstanceStateDto:
+	# Acquire the published recipe through real local purchases, then verify the
+	# service fee, consumed assets, output and per-instance materials ledger.
+	var warehouse:String=g.inventory.warehouse(g.station())
+	var inputs:Dictionary={}
+	for row:Dictionary in g.catalog.rows("recipe_inputs"):
+		if row.recipe_id!=recipe_id:continue
+		inputs[row.item_id]=int(row.quantity)
+		expect(action(g,"buy_item",str(row.item_id),int(row.quantity)),label+" purchase exact recipe input "+str(row.item_id))
+	var before:Dictionary={}
+	for item_id:String in inputs:before[item_id]=g.inventory.count(warehouse,item_id,true)
+	var recipe:Dictionary=g.catalog.one("recipe_defs","recipe_id",recipe_id)
+	var output_before:int=g.inventory.count(warehouse,str(recipe.output_item_id),true)
+	var old_ids:Array[String]=[]
+	for item:D.ItemInstanceStateDto in g.state.rows("item_instance_state"):old_ids.append(item.item_instance_id)
+	var credit_before:int=g.state.player().credit
+	var fee:int=g.economy.quote_manufacture(recipe_id)
+	var made:bool=action(g,"manufacture",recipe_id,1)
+	expect(made,label+" chain produces normal module with actual ledger")
+	if not made:return null
+	expect(g.state.player().credit==credit_before-fee,label+" manufacture charges its actual quoted service fee")
+	for item_id:String in inputs:expect(g.inventory.count(warehouse,item_id,true)==int(before[item_id])-int(inputs[item_id]),label+" consumes exact ordinary input "+item_id)
+	expect(g.inventory.count(warehouse,str(recipe.output_item_id),true)==output_before+int(recipe.output_quantity),label+" creates the exact configured module quantity")
+	var produced:D.ItemInstanceStateDto
+	for item:D.ItemInstanceStateDto in g.state.rows("item_instance_state"):
+		if not old_ids.has(item.item_instance_id) and item.item_def_id==str(recipe.output_item_id):produced=item;break
+	expect(produced!=null and produced.has_manufacture_batch_id,label+" provenance recorded on the new actual instance")
+	if produced==null:return null
+	var ledger:Dictionary={}
+	for row:D.ManufactureInputStateDto in g.state.rows("manufacture_input_state"):
+		if row.item_instance_id==produced.item_instance_id:ledger[row.input_item_id]=row.input_quantity
+	expect(ledger==inputs,label+" persistent materials ledger records the exact consumed recipe")
+	return produced
 func _initialize()->void:
 	var dbpath:String=ProjectSettings.globalize_path("res://../jiaoben/tmp/gameplay-progress.db")
 	DirAccess.remove_absolute(dbpath)
@@ -166,18 +199,13 @@ func _initialize()->void:
 				expect(action(g,"build_base",base_id),"build "+base_id)
 				expect(not action(g,"build_base",base_id),"duplicate facility blocked")
 			expect(g.economy.base_factor("industry")==1.02,"bounded industrial service improvement")
-			action(g,"buy_item","module_kinetic_needle_i",1);action(g,"buy_item","component_relic",3);action(g,"buy_item","material_dense_alloy",2)
-			expect(action(g,"manufacture","recipe_module_kinetic_needle_ii",1),"II chain produces normal module with actual ledger")
-			var module_ii:D.ItemInstanceStateDto=null
-			for item in s.rows("item_instance_state"):
-				if item.item_def_id=="module_kinetic_needle_ii":module_ii=item
+			var module_ii:D.ItemInstanceStateDto=manufacture_tier_fixture(g,"recipe_module_kinetic_needle_ii","II")
 			expect(module_ii!=null and module_ii.has_manufacture_batch_id,"II provenance recorded")
-			expect(action(g,"recycle",module_ii.item_instance_id),"manufactured II real input recycle")
+			if module_ii!=null:expect(action(g,"recycle",module_ii.item_instance_id),"manufactured II real input recycle")
 		if region=="silent":
 			action(g,"buy_item","component_relic_logic",10)
 			expect(action(g,"research","research_tech_iii"),"research III final story and relic samples")
-			action(g,"buy_item","module_kinetic_needle_ii",1);action(g,"buy_item","component_relic_logic",2);action(g,"buy_item","material_dense_alloy",5)
-			expect(action(g,"manufacture","recipe_module_kinetic_needle_iii",1),"III production")
+			expect(manufacture_tier_fixture(g,"recipe_module_kinetic_needle_iii","III")!=null,"III production")
 	expect(s.rows("base_module_state").size()==4,"all four bases in typed persistent state")
 	expect(store.save(s,"manual",2),"all stories/research/bases/industrial provenance durable: "+store.last_error)
 	var hole:D.GateStateDto=s.find("gate_state","connection_id","conn_wandering_mirror_mist")

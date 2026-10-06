@@ -48,6 +48,15 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
+	for v18_contract: Dictionary in [
+		{"flag": "--xj-verify-combat-v18", "file": "combat_v18.gd", "prefix": "combat-v18", "env": "XJ_COMBAT_V18", "meta": "xj_combat_v18_diagnostic"},
+		{"flag": "--xj-verify-lighting-v18", "file": "lighting_effects_v18.gd", "prefix": "lighting-effects-v18", "env": "XJ_LIGHTING_V18", "meta": "xj_lighting_v18_diagnostic"},
+		{"flag": "--xj-verify-weapon-ui-v18", "file": "weapon_ui_v18.gd", "prefix": "weapon-ui-v18", "env": "XJ_WEAPON_UI_V18", "meta": "xj_weapon_ui_v18_diagnostic"},
+		{"flag": "--xj-verify-upgrade-v18", "file": "combat_upgrade_v18.gd", "prefix": "combat-upgrade-v18", "env": "XJ_UPGRADE_V18", "meta": "xj_upgrade_v18_diagnostic"},
+	]:
+		if arguments.has(str(v18_contract.flag)) and not get_tree().has_meta(str(v18_contract.meta)):
+			_start_v18_diagnostic(v18_contract)
+			return
 	if arguments.has("--xj-verify-encounters") and not get_tree().has_meta("xj_encounter_diagnostic"):
 		_start_encounter_diagnostic()
 		return
@@ -124,6 +133,34 @@ func _ready() -> void:
 		var diagnostic := preload("res://runtime/presentation_diagnostic.gd")
 		var verified: bool = await diagnostic.run(self, progress_database_path.get_base_dir())
 		get_tree().quit(0 if verified else 1)
+
+func _start_v18_diagnostic(contract: Dictionary) -> void:
+	# Explicit release acceptance hands off before opening any progress database.
+	# res:// remains the executable's exported PCK; no source project is mounted.
+	var script_path: String = OS.get_environment(str(contract.env) + "_SCRIPT").replace("\\", "/")
+	var directory: String = OS.get_environment(str(contract.env) + "_DIRECTORY").replace("\\", "/")
+	var temporary: String = script_path.get_base_dir().get_base_dir().path_join("tmp/" + str(contract.prefix))
+	var uuid := RegEx.new()
+	uuid.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+	if not script_path.is_absolute_path() or script_path.contains("..") or not script_path.ends_with("/jiaoben/tests/" + str(contract.file)) or not FileAccess.file_exists(script_path) or not directory.is_absolute_path() or directory.contains("..") or directory.get_base_dir() != temporary or uuid.search(directory.get_file()) == null or FileAccess.file_exists(directory.path_join("progress.db")):
+		push_error("V18 diagnostic requires its fixed test Node and a fresh scoped UUID directory: " + str(contract.prefix))
+		get_tree().quit(2)
+		return
+	var source: Script = load(script_path)
+	if source == null or not source.can_instantiate():
+		push_error("V18 diagnostic test script cannot be loaded: " + str(contract.file))
+		get_tree().quit(2)
+		return
+	var diagnostic: Node = source.new() as Node
+	if diagnostic == null:
+		push_error("V18 diagnostic requires a test Node: " + str(contract.file))
+		get_tree().quit(2)
+		return
+	get_tree().set_meta(str(contract.meta), true)
+	set_process(false)
+	set_physics_process(false)
+	get_tree().root.add_child.call_deferred(diagnostic)
+	queue_free()
 
 func _start_encounter_diagnostic() -> void:
 	# Release templates do not implement the editor's --script option. Explicit
@@ -252,6 +289,8 @@ func _process(delta: float) -> void:
 			ui.set_operation_status("save", "保存仍在等待：继续航行、取消保存，或在暂停菜单放弃未保存进度退出", true)
 	if world != null:
 		var stopped := _paused() or busy
+		world.projectiles.set_paused(stopped)
+		world.projectiles.process_mode = Node.PROCESS_MODE_DISABLED if stopped else Node.PROCESS_MODE_INHERIT
 		if presentation != null:
 			presentation.process_mode = Node.PROCESS_MODE_DISABLED if stopped else Node.PROCESS_MODE_INHERIT
 			presentation.set_paused(stopped)
@@ -523,7 +562,7 @@ func _fire_weapons(automatic: bool = false, target_override: String = "") -> voi
 	var selected_target: String = target_override if not target_override.is_empty() else ui.target_id
 	if world.targets.has(selected_target):
 		target_node = world.targets[selected_target].node
-	for equipment: Dtos.EquipmentStateDto in state.rows("equipment_state"):
+	for equipment: Dtos.EquipmentStateDto in gameplay.call("equipped", state.ship()):
 		var slot := state.find("container_state", "container_id", equipment.slot_container_id) as Dtos.ContainerStateDto
 		if slot == null or slot.ship_instance_id != state.ship().ship_instance_id or slot.slot_type != Types.SlotType.WEAPON:
 			continue
@@ -531,17 +570,23 @@ func _fire_weapons(automatic: bool = false, target_override: String = "") -> voi
 			continue
 		if not equipment.enabled:
 			continue
+		var profile: Dictionary = gameplay.call("weapon_profile", equipment.module_def_id)
+		if profile.is_empty(): continue
+		var drone: bool = str(profile.fire_mode) == "drone"
+		if drone and (world.projectiles.module_busy(equipment.item_instance_id) or not _enemy_target_valid(selected_target)): continue
+		var cone: float = float(profile.fire_cone_half_angle_rad)
 		var origin := world.flight.muzzle(slot.slot_index)
 		var direction := -origin.basis.z
-		if automatic:
+		if automatic or drone:
 			if not is_instance_valid(target_node): continue
 			var definition: Dictionary = store.catalog.one("module_defs", "module_id", equipment.module_def_id)
-			if origin.origin.distance_to(target_node.global_position) > float(definition.get("range_m", 0.0)): continue
-			if direction.angle_to(origin.origin.direction_to(target_node.global_position)) > float(store.catalog.rule("player_weapon_fire_cone_half_angle_rad")): continue
+			var range_origin: Vector3 = world.flight.global_position if drone else origin.origin
+			if range_origin.distance_to(target_node.global_position) > float(definition.get("range_m", 0.0)): continue
+			if direction.angle_to(origin.origin.direction_to(target_node.global_position)) > cone: continue
 			if not world.line_of_sight(origin.origin, target_node.global_position, world.flight.get_rid(), selected_target): continue
 		if is_instance_valid(target_node):
 			var target_direction := origin.origin.direction_to(target_node.global_position)
-			if direction.angle_to(target_direction) <= float(store.catalog.rule("player_weapon_fire_cone_half_angle_rad")):
+			if direction.angle_to(target_direction) <= cone:
 				direction = target_direction
 		var cycle: Dictionary = gameplay.call("consume_weapon_cycle", equipment.item_instance_id)
 		if cycle.is_empty():
@@ -551,19 +596,22 @@ func _fire_weapons(automatic: bool = false, target_override: String = "") -> voi
 				weapon_errors[equipment.item_instance_id] = reason
 			continue
 		weapon_errors.erase(equipment.item_instance_id)
-		world.projectiles.fire(state.ship().ship_instance_id, world.flight.get_rid(), origin.origin, direction, float(cycle.speed) if cycle.get("speed") != null else 0.0, float(cycle.get("range", 0.0)), cycle.get("damage_vector", Vector3.ZERO))
+		world.projectiles.fire(state.ship().ship_instance_id, world.flight.get_rid(), origin.origin, direction, float(cycle.speed) if cycle.get("speed") != null else 0.0, float(cycle.get("range", 0.0)), cycle.get("damage_vector", Vector3.ZERO), cycle.profile, equipment.item_instance_id, selected_target)
 
 func _weapon_hit(target_id: String, damage: Vector3, point: Vector3, owner_id: String) -> void:
 	if target_id == state.ship().ship_instance_id and owner_id != target_id:
-		if presentation != null: presentation.hit(target_id, state.ship().shield > 0.0, point)
+		if presentation != null: presentation.hit(target_id, state.ship().shield > 0.0, point, damage)
 		pending_damage[target_id] = (pending_damage.get(target_id, Vector3.ZERO) as Vector3) + damage
 	elif owner_id == state.ship().ship_instance_id and state.find("npc_state", "npc_instance_id", target_id) != null:
 		var npc := state.find("npc_state", "npc_instance_id", target_id) as Dtos.NpcStateDto
-		if presentation != null: presentation.hit(target_id, npc.shield > 0.0, point)
+		if presentation != null: presentation.hit(target_id, npc.shield > 0.0, point, damage)
 		pending_damage[target_id] = (pending_damage.get(target_id, Vector3.ZERO) as Vector3) + damage
 	# point is a render position, never a persistence identity.
 	if point.is_finite():
 		pass
+
+func _surface_impact(point: Vector3, color: Color, normal: Vector3) -> void:
+	if presentation != null: presentation.impact(point, color, normal)
 
 func _flush_damage() -> void:
 	for id in pending_damage:
@@ -755,6 +803,10 @@ func _business_action(action: String, target: String, quantity: int, extra: Stri
 			ui.notify(str(quote.reason), true)
 			return
 	if action in ["dock", "request_rescue", "undock", "switch_ship"]:
+		if world.projectiles.has_pending() or not pending_damage.is_empty():
+			world.projectiles.recall_drones()
+			ui.notify("等待在途攻击结束、无人机回收后再停靠或切换舰船。", true)
+			return
 		_reset_combat_automation()
 		if local_navigation != null and local_navigation.active(): local_navigation.cancel()
 	var previous_ship := state.ship().ship_instance_id
@@ -935,6 +987,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	world.add_child(presentation)
 	presentation.setup(world, gameplay, store.catalog, float(preferences.get("vfx_intensity", 1.0)))
 	world.projectiles.hit.connect(_weapon_hit)
+	world.projectiles.surface_impact.connect(_surface_impact)
 	gameplay.call("set_spatial_validator", _spatial_valid)
 	travel = XJTravel.new()
 	travel.setup(state, store, _prepare_travel, _record_arrival, _travel_stable)
@@ -990,7 +1043,7 @@ func _spatial_valid(from: Vector3, to: Vector3, target: String) -> bool:
 	return world.line_of_sight(from, to, world.flight.get_rid(), target)
 
 func _travel_stable() -> bool:
-	return world.projectiles.active.is_empty() and bool(gameplay.call("save_eligible"))
+	return not world.projectiles.has_pending() and pending_damage.is_empty() and bool(gameplay.call("save_eligible"))
 
 func navigation_context(target_id: String) -> Dictionary:
 	var result: Dictionary = local_navigation.inspect(target_id) if local_navigation != null else {"reason": "导航设备未就绪"}
@@ -1131,8 +1184,6 @@ func _tick_auto_fire() -> void:
 	var node: Node3D = world.targets[auto_fire_target].node
 	var offset: Vector3 = node.global_position - world.flight.global_position
 	if offset.length_squared() <= 0.0: return
-	if (-world.flight.global_basis.z).angle_to(offset.normalized()) > float(store.catalog.rule("player_weapon_fire_cone_half_angle_rad")): return
-	if not world.line_of_sight(world.flight.global_position, node.global_position, world.flight.get_rid(), auto_fire_target): return
 	_fire_weapons(true, auto_fire_target)
 
 func _auto_fire_status(target_id: String) -> String:
@@ -1140,8 +1191,6 @@ func _auto_fire_status(target_id: String) -> String:
 	var target: Node3D = world.targets[target_id].node
 	var offset: Vector3 = target.global_position - world.flight.global_position
 	if offset.is_zero_approx(): return "自动开火待机：目标重合"
-	if (-world.flight.global_basis.z).angle_to(offset.normalized()) > float(store.catalog.rule("player_weapon_fire_cone_half_angle_rad")): return "自动开火待机：请转向目标"
-	if not world.line_of_sight(world.flight.global_position, target.global_position, world.flight.get_rid(), target_id): return "自动开火待机：视线受阻"
 	var ship: RefCounted = state.ship()
 	if ship.overheated: return "自动开火待机：等待散热"
 	var reason: String = "武器未就绪"
@@ -1150,10 +1199,14 @@ func _auto_fire_status(target_id: String) -> String:
 		if definition.get("slot_type", "") != "weapon" or not equipment.enabled: continue
 		var item: RefCounted = state.find("item_instance_state", "item_instance_id", equipment.item_instance_id)
 		if item == null or item.durability <= 0.0: continue
+		var profile: Dictionary = gameplay.call("weapon_profile", equipment.module_def_id)
+		if profile.is_empty(): continue
+		if str(profile.fire_mode) == "drone" and world.projectiles.module_busy(equipment.item_instance_id): reason = "无人机出击或回收中"; continue
 		var slot: RefCounted = state.find("container_state", "container_id", equipment.slot_container_id)
 		var muzzle: Transform3D = world.flight.muzzle(slot.slot_index)
-		if muzzle.origin.distance_to(target.global_position) > float(definition.range_m): reason = "超出武器射程"; continue
-		if (-muzzle.basis.z).angle_to(muzzle.origin.direction_to(target.global_position)) > float(store.catalog.rule("player_weapon_fire_cone_half_angle_rad")): reason = "目标不在射界"; continue
+		var range_origin: Vector3 = world.flight.global_position if str(profile.fire_mode) == "drone" else muzzle.origin
+		if range_origin.distance_to(target.global_position) > float(definition.range_m): reason = "超出武器射程"; continue
+		if (-muzzle.basis.z).angle_to(muzzle.origin.direction_to(target.global_position)) > float(profile.fire_cone_half_angle_rad): reason = "目标不在射界"; continue
 		if not world.line_of_sight(muzzle.origin, target.global_position, world.flight.get_rid(), target_id): reason = "挂点视线受阻"; continue
 		if equipment.cooldown_remaining_s > 0.0: reason = "武器循环中"; continue
 		var weapon: Dictionary = store.catalog.one("weapon_defs", "module_id", equipment.module_def_id)
@@ -1196,7 +1249,9 @@ func _save_block_reason() -> String:
 	if state != null and state.ship().status == Types.ShipStatus.DESTROYED: return "舰船已毁，先申请救援"
 	if travel != null and travel.active(): return "虫洞传送"
 	if local_navigation != null and local_navigation.active(): return "自动导航"
-	if world != null and not world.projectiles.active.is_empty(): return "在途弹丸"
+	if world != null and not world.projectiles.drones.is_empty(): return "无人机出击或回收"
+	if world != null and world.projectiles.has_pending(): return "在途弹丸"
+	if not pending_damage.is_empty(): return "待结算命中"
 	if gameplay != null and not bool(gameplay.call("save_eligible")): return "交战或设备周期"
 	return ""
 
@@ -1208,6 +1263,7 @@ func _request_save(kind: String, index: int, after: String = "") -> void:
 		return
 	if not after.is_empty():
 		_reset_combat_automation()
+		world.projectiles.recall_drones()
 		_release_controls()
 		# An explicit exit stops new firing cycles and navigation before saving.
 		if local_navigation != null and local_navigation.active(): local_navigation.cancel()

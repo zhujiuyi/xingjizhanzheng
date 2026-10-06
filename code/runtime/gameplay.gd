@@ -236,8 +236,11 @@ func equipped(ship: D.ShipStateDto) -> Array:
 		var cb: RefCounted = state.find("container_state", "container_id", b.slot_container_id)
 		var pa: Dictionary = definition("module_activation_priority", "module_id", a.module_def_id)
 		var pb: Dictionary = definition("module_activation_priority", "module_id", b.module_def_id)
-		var va: int = int(pa.priority); var vb: int = int(pb.priority)
-		return va < vb if va != vb else (ca.slot_index < cb.slot_index if ca.slot_index != cb.slot_index else a.item_instance_id < b.item_instance_id))
+		# Passive modules legally have no activation record. Keep them behind
+		# activated modules without inventing a numeric priority in old catalogs.
+		if pa.is_empty() != pb.is_empty(): return not pa.is_empty()
+		if not pa.is_empty() and int(pa.priority) != int(pb.priority): return int(pa.priority) < int(pb.priority)
+		return ca.slot_index < cb.slot_index if ca.slot_index != cb.slot_index else a.item_instance_id < b.item_instance_id)
 	return result
 
 func metrics(ship: D.ShipStateDto) -> Dictionary:
@@ -314,6 +317,40 @@ func pay_cycle(equipment: D.EquipmentStateDto) -> bool:
 	equipment.cycle_paid = mod.cycle_s > 0
 	return true
 
+func weapon_profile(module_id: String) -> Dictionary:
+	var weapon: Dictionary = definition("weapon_defs", "module_id", module_id)
+	if weapon.is_empty(): return {}
+	if catalog.table_names.has("weapon_behavior_defs"):
+		var profile: Dictionary = definition("weapon_behavior_defs", "module_id", module_id).duplicate(true)
+		if profile.is_empty(): return {}
+		profile["projectile_speed_mps"] = 0.0 if weapon.projectile_speed_mps == null else float(weapon.projectile_speed_mps)
+		if profile.fire_mode == "drone" and catalog.table_names.has("drone_defs"):
+			profile["drone"] = definition("drone_defs", "module_id", module_id).duplicate(true)
+		return profile
+	# Historical frozen catalogs retain their own physical speed and firing cone.
+	return {"module_id": module_id, "family_id": weapon.damage_type, "size_class": 1, "fire_mode": "ray" if weapon.projectile_speed_mps == null else "projectile", "projectile_speed_mps": 0.0 if weapon.projectile_speed_mps == null else float(weapon.projectile_speed_mps), "fire_cone_half_angle_rad": rule("player_weapon_fire_cone_half_angle_rad")}
+
+func weapon_fit_reason(ship: D.ShipStateDto, module_id: String, ignore_item_id: String = "") -> String:
+	if not catalog.table_names.has("ship_weapon_permissions"): return ""
+	var weapon: Dictionary = definition("weapon_defs", "module_id", module_id)
+	if weapon.is_empty(): return ""
+	var profile: Dictionary = weapon_profile(module_id)
+	if profile.is_empty(): return "缺少武器行为定义"
+	var permission: Dictionary = {}
+	for row in rows("ship_weapon_permissions"):
+		if row.ship_id == ship.ship_def_id and row.family_id == profile.family_id:
+			permission = row
+			break
+	if permission.is_empty(): return "此舰种不支持该武器家族"
+	if int(profile.size_class) > int(permission.max_size): return "武器尺寸超过此舰种挂载上限"
+	var installed: int = 0
+	for equipment in equipped(ship):
+		if equipment.item_instance_id == ignore_item_id: continue
+		var other: Dictionary = weapon_profile(equipment.module_def_id)
+		if not other.is_empty() and other.family_id == profile.family_id: installed += 1
+	if installed >= int(permission.max_installed): return "此舰种该武器家族挂载数量已满"
+	return ""
+
 func consume_weapon_cycle(item_id: String) -> Dictionary:
 	last_error = ""
 	var e: D.EquipmentStateDto = state.find("equipment_state", "item_instance_id", item_id)
@@ -321,6 +358,10 @@ func consume_weapon_cycle(item_id: String) -> Dictionary:
 	var weapon: Dictionary = definition("weapon_defs", "module_id", e.module_def_id)
 	var mod: Dictionary = definition("module_defs", "module_id", e.module_def_id)
 	if weapon.is_empty(): return {}
+	var compatible: String = weapon_fit_reason(state.ship(), e.module_def_id, item_id)
+	if not compatible.is_empty(): fail(compatible); return {}
+	var profile: Dictionary = weapon_profile(e.module_def_id)
+	if profile.is_empty(): fail("缺少武器行为定义"); return {}
 	var hold: String = inventory.hold(state.ship(), T.ContainerKind.CARGO)
 	if weapon.ammo_item_id != null and inventory.count(hold, weapon.ammo_item_id, false) < weapon.ammo_per_cycle:
 		fail("弹药不足"); return {}
@@ -330,7 +371,7 @@ func consume_weapon_cycle(item_id: String) -> Dictionary:
 	var item: RefCounted = state.find("item_instance_state", "item_instance_id", item_id)
 	var raw: Vector3 = Vector3.ZERO; raw[damage_index(weapon.damage_type)] = weapon.raw_damage * item.quality_multiplier
 	event(T.EventKind.WEAPON_FIRED, state.ship().ship_instance_id, "", item_id)
-	return {"damage_vector":raw,"speed":weapon.projectile_speed_mps,"range":mod.range_m,"cycle":mod.cycle_s,"damage_type":weapon.damage_type}
+	return {"damage_vector":raw,"speed":profile.projectile_speed_mps,"range":mod.range_m,"cycle":mod.cycle_s,"damage_type":weapon.damage_type,"module_id":e.module_def_id,"profile":profile}
 
 func mark_hostile_attempt() -> void:
 	# A paid shot or an actual NPC fire attempt starts combat even when it misses.
