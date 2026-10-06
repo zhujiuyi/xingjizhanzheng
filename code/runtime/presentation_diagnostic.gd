@@ -2,6 +2,7 @@ extends RefCounted
 ## Fixed opt-in release health endpoint, confined by Main to a fresh tmp database.
 ## No arbitrary script, source path, command or production save can be supplied.
 const Types = preload("res://contracts/contract_types.gd")
+const Space = preload("res://runtime/space_coordinates.gd")
 
 static func run(host: Node, output_dir: String) -> bool:
 	var evidence := {"checks": 0, "failures": 0}
@@ -148,6 +149,9 @@ static func run(host: Node, output_dir: String) -> bool:
 	var station: Node3D = host.world.targets[station_id].node
 	host.set_process(false)
 	host.set_physics_process(false)
+	var station_anchor: String = str(host.world.targets[station_id].anchor_id)
+	var station_fixture_bound: bool = _fixture_anchor_site(host, station_anchor)
+	station = host.world.targets[station_id].node
 	host.world.flight.global_position = station.global_position + host.world.flight.global_basis.z * (float(host.store.catalog.rule("dock_radius_m")) * 0.8)
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
@@ -160,7 +164,7 @@ static func run(host: Node, output_dir: String) -> bool:
 	host.camera.step(1.0)
 	host.ui.tick(1.0)
 	var geometry: Dictionary = nav.target_geometry()
-	_check(evidence, not geometry.is_empty() and geometry.end.distance_to(host.camera.camera.unproject_position(station.global_position)) < 0.01, "packed selected line reaches actual station projection")
+	_check(evidence, station_fixture_bound and host.world.target_is_local(station_id) and not geometry.is_empty() and geometry.end.distance_to(host.camera.camera.unproject_position(station.global_position)) < 0.01, "packed selected line reaches actual station projection in its declared local site")
 	_check(evidence, nav.target_caption.is_visible_in_tree() and nav.target_caption.text.contains(str(host.world.targets[station_id].title)) and nav.target_caption.get_theme_constant("outline_size") == 0 and nav.target_caption.get_theme_color("font_shadow_color").a == 0.0 and nav.target_caption.position == nav.target_caption.position.round(), "packed selected caption is a single crisp pixel-aligned label without shadow")
 	_check(evidence, not nav.marker_geometry().any(func(marker: Dictionary): return marker.id == station_id) and station.get_node("VisualRoot").find_children("Model", "Node3D", false, false).size() == 1, "packed selected target excludes secondary markers and keeps one model")
 	_check(evidence, host.ui.interaction_button.visible and not host.ui.interaction_button.disabled and host.ui.interaction_button.text.contains("[F]"), "packed station approach presents usable F control")
@@ -170,11 +174,18 @@ static func run(host: Node, output_dir: String) -> bool:
 	_check(evidence, host.ui.interaction_button.disabled and host.ui.interaction_label.text.contains("制动"), "packed over-speed approach gives braking reason")
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
-	_check(evidence, host.local_navigation.rules.loaded and host.local_navigation.rules.VERSION == "local-navigation-v1", "packed local-navigation rules load the versioned SQLite extension")
+	_check(evidence, host.local_navigation.rules.loaded and host.local_navigation.rules.version == 2 and host.local_navigation.rules.path == "res://data/local_navigation_v2.db", "packed local-navigation rules load the actual version2 SQLite extension")
 	# Retain every child collider in the real World3D while explicitly driving
 	# Main at physical boundaries; disabling its inherited process mode removes
 	# bodies from the physics space and would invalidate the safety evidence.
-	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, station.global_position + Vector3(0, 600, 4000))
+	# Use a formal remote resource site for the departure. Four kilometres in
+	# the station's own site must correctly fail the 150-kilometre warp gate.
+	var origin_location: Dictionary = host.store.catalog.one("resource_node_locations", "node_id", "node_anchor_special")
+	var origin_anchor: Dictionary = host.store.catalog.one("anchor_defs", "anchor_id", str(origin_location.anchor_id))
+	var origin_fixture_bound: bool = _fixture_anchor_site(host, str(origin_anchor.anchor_id))
+	var origin_site: String = Space.current_site(host.state)
+	var origin_pose := Vector3(float(origin_anchor.x_m), float(origin_anchor.y_m), float(origin_anchor.z_m)) + Vector3(0, 600, 4000)
+	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, origin_pose)
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
 	host.world.flight.get_global_transform_interpolated()
@@ -183,7 +194,8 @@ static func run(host: Node, output_dir: String) -> bool:
 	var snapshots_before: int = host.store._records("SELECT count(*) AS n FROM save_snapshot")[0].n
 	var begun: bool = host._navigation_command("warp", station_id)
 	var snapshots_after: int = host.store._records("SELECT count(*) AS n FROM save_snapshot")[0].n
-	_check(evidence, begun and host.local_navigation.phase == "warmup" and origin.is_equal_approx(host.world.flight.global_position) and snapshots_after == snapshots_before + 1, "packed warp durably saves its origin before charge or movement")
+	var committed_origin_context: Array[Dictionary] = host.store._records("SELECT site_id FROM spatial_state WHERE snapshot_id=? AND entity_kind='ship' AND entity_id=?", [host.state.snapshot.meta.snapshot_id, host.state.ship().ship_instance_id])
+	_check(evidence, origin_fixture_bound and origin_site == Space.site_for_anchor(host.store.catalog, str(origin_anchor.anchor_id)) and not host.world.target_is_local(station_id) and begun and host.local_navigation.phase == "warmup" and host.local_navigation.path_length_m >= host.local_navigation.rules.value("min_warp_distance_m") and origin.is_equal_approx(host.world.flight.global_position) and snapshots_after == snapshots_before + 1 and committed_origin_context.size() == 1 and str(committed_origin_context[0].site_id) == origin_site, "packed warp durably saves its exact declared remote origin before charge or movement")
 	var ordinary := InputEventMouseMotion.new()
 	ordinary.position = Vector2(700, 400)
 	ordinary.relative = Vector2(40, 20)
@@ -242,11 +254,12 @@ static func run(host: Node, output_dir: String) -> bool:
 		steps += 1
 	for frame: int in range(3): await host.get_tree().process_frame
 	while host.busy: await host.get_tree().process_frame
-	host.warp_visual.update_navigation("idle", 0.0, 1.0, false)
+	host.warp_visual.update_navigation("idle", float(host.warp_visual.config.warp_fx_fade_out_s), float(host.preferences.get("vfx_intensity", 1.0)), false)
 	host.camera.snapped = false
 	host.camera.step(1.0)
 	host.ui.tick(1.0)
-	_check(evidence, steps < 2400 and host.local_navigation.phase == "arrived" and host.state.ship().status == Types.ShipStatus.FLYING and absf(host.world.flight.global_position.distance_to(station.global_position) - 500.0) <= 0.01 and host.world.flight.velocity.is_zero_approx(), "packed local warp reaches the safe station exterior and stops without docking")
+	var committed_arrival_context: Array[Dictionary] = host.store._records("SELECT site_id FROM spatial_state WHERE snapshot_id=? AND entity_kind='ship' AND entity_id=?", [host.state.snapshot.meta.snapshot_id, host.state.ship().ship_instance_id])
+	_check(evidence, steps < 2400 and host.local_navigation.phase == "arrived" and host.state.ship().status == Types.ShipStatus.FLYING and host.world.target_is_local(station_id) and Space.current_site(host.state) == Space.site_for_anchor(host.store.catalog, station_anchor) and committed_arrival_context.size() == 1 and str(committed_arrival_context[0].site_id) == Space.current_site(host.state) and absf(host.world.flight.global_position.distance_to(station.global_position) - 500.0) <= 0.01 and host.world.flight.velocity.is_zero_approx(), "packed local warp durably reaches the exact station site and safe 500-metre exterior without docking")
 	await host.get_tree().physics_frame
 	var station_screen: Vector2 = host.camera.camera.unproject_position(station.global_position)
 	_check(evidence, not host.camera.camera.is_position_behind(station.global_position) and host._world_target_at(station_screen) == station_id, "packed station model can be selected by its real physical ray hit")
@@ -283,7 +296,8 @@ static func _star_chart_durable_state(host: Node) -> Dictionary:
 		"slots": host.store._records("SELECT * FROM save_slot ORDER BY slot_id"),
 		"sessions": host.store._records("SELECT * FROM runtime_session ORDER BY world_id"),
 		"players": host.store._records("SELECT * FROM player_state ORDER BY snapshot_id,player_id"),
-		"ships": host.store._records("SELECT * FROM ship_state ORDER BY snapshot_id,ship_instance_id")}
+		"ships": host.store._records("SELECT * FROM ship_state ORDER BY snapshot_id,ship_instance_id"),
+		"spatial": host.store._records("SELECT * FROM spatial_state ORDER BY snapshot_id,entity_kind,entity_id")}
 
 static func _star_chart_checks(host: Node, evidence: Dictionary) -> void:
 	# Freeze Main's simulation callbacks, retaining real GUI/render callbacks and
@@ -310,6 +324,7 @@ static func _star_chart_checks(host: Node, evidence: Dictionary) -> void:
 	var original_view: Dictionary = chart.call("export_view")
 	var initial_player: Dictionary = host.store._codec.encode_row("player_state", host.state.player())
 	var initial_ship: Dictionary = host.store._codec.encode_row("ship_state", host.state.ship())
+	var initial_site: String = Space.current_site(host.state)
 	var initial_meta: Dictionary = host.store._codec.encode_row("save_snapshot", host.state.snapshot.meta)
 	var initial_pose: Transform3D = host.world.flight.global_transform
 	var origin: String = host.state.current_sector()
@@ -426,7 +441,7 @@ static func _star_chart_checks(host: Node, evidence: Dictionary) -> void:
 	chart.call("fit_all")
 	host.ui.page_scroll.ensure_control_visible(canvas)
 	for frame: int in range(3): await host.get_tree().process_frame
-	_check(evidence, host.state.current_sector() == origin and host.ui.target_id == initial_target and host.store._codec.encode_row("player_state", host.state.player()) == initial_player and host.store._codec.encode_row("ship_state", host.state.ship()) == initial_ship and host.store._codec.encode_row("save_snapshot", host.state.snapshot.meta) == initial_meta and host.world.flight.global_transform.is_equal_approx(initial_pose), "packed star chart view operations preserve the player's actual sector, target, ship, funds, pose and simulation snapshot")
+	_check(evidence, host.state.current_sector() == origin and Space.current_site(host.state) == initial_site and host.ui.target_id == initial_target and host.store._codec.encode_row("player_state", host.state.player()) == initial_player and host.store._codec.encode_row("ship_state", host.state.ship()) == initial_ship and host.store._codec.encode_row("save_snapshot", host.state.snapshot.meta) == initial_meta and host.world.flight.global_transform.is_equal_approx(initial_pose), "packed star chart view operations preserve the player's actual sector, site, target, ship, funds, pose and simulation snapshot")
 	_check(evidence, _star_chart_durable_state(host) == initial_durable, "packed star chart view operations leave all SQLite snapshots, slots, sessions and persisted player and ship rows unchanged")
 	host.set_process(process_enabled)
 	host.set_physics_process(physics_enabled)
@@ -689,6 +704,7 @@ static func _mineral_checks(host: Node, evidence: Dictionary, output_dir: String
 	miner.has_station_id = false
 	miner.station_id = ""
 	miner.sector_id = definition.sector_id
+	var mineral_fixture_bound: bool = Space.assign(host.state, "ship", miner.ship_instance_id, Space.site_for_anchor(host.store.catalog, str(location.anchor_id)))
 	host.gameplay.call("grant_unlock", location.required_unlock_id)
 	host.state.find("sector_state", "sector_id", definition.sector_id).visited = true
 	var range_m := 0.0
@@ -705,7 +721,7 @@ static func _mineral_checks(host: Node, evidence: Dictionary, output_dir: String
 	miner.quat_x = facing.x; miner.quat_y = facing.y; miner.quat_z = facing.z; miner.quat_w = facing.w
 	for container: RefCounted in host.state.rows("container_state"):
 		if container.ship_instance_id == miner.ship_instance_id: container.sector_id = miner.sector_id
-	var staged: bool = host._stage_candidate(host.state, host.store.catalog)
+	var staged: bool = mineral_fixture_bound and host._stage_candidate(host.state, host.store.catalog)
 	_check(evidence, staged, "packed mineral fixture stages a legal miner and real resource sector")
 	if not staged: return
 	host._activate(host.state)
@@ -861,6 +877,7 @@ static func _manual_turn_camera_checks(host: Node, evidence: Dictionary, output_
 	# Main input and Flight/Camera components without advancing business time.
 	var body: XJFlight = host.world.flight
 	var original_pose: Transform3D = body.global_transform
+	var original_site: String = Space.current_site(host.state)
 	var original_velocity: Vector3 = body.velocity
 	var original_spin := Vector3(body.record.angular_x, body.record.angular_y, body.record.angular_z)
 	var original_intent = body.intent
@@ -882,8 +899,9 @@ static func _manual_turn_camera_checks(host: Node, evidence: Dictionary, output_
 	host.set_physics_process(false)
 	var station: StaticBody3D = host.world.targets.get("station_anchor_port", {}).get("node")
 	var gate: StaticBody3D = null
+	var gate_id: String = ""
 	for entry: Dictionary in host.world.targets.values():
-		if str(entry.kind) == "gate": gate = entry.node; break
+		if str(entry.kind) == "gate": gate = entry.node; gate_id = str(entry.id); break
 	var step_s: float = 1.0 / float(host.store.catalog.rule("simulation_hz"))
 	var budget: float = float(body.metrics.turn_radps) * step_s
 	var old_bank := Transform3D(Basis.from_euler(Vector3(0.65, -0.4, 0.9)), original_pose.origin + Vector3(0, 2200, 8000))
@@ -922,14 +940,19 @@ static func _manual_turn_camera_checks(host: Node, evidence: Dictionary, output_
 	_check(evidence, combined_response, "packed W plus A/D retains manual steering and accelerates along the actual visible three-dimensional view")
 	var station_collision: CollisionShape3D = station.get_node_or_null("CollisionShape3D") if station != null else null
 	var gate_collision: CollisionShape3D = gate.get_node_or_null("FrameCollision_0") if gate != null else null
-	_check(evidence, station_collision != null and gate_collision != null and (station.collision_layer & 64) != 0 and (gate.collision_layer & 64) != 0, "packed station and wormhole expose their actual solid camera-obstacle geometry")
-	for item: Dictionary in [{"name": "station", "collider": station_collision, "target": "station_anchor_port"}, {"name": "wormhole", "collider": gate_collision, "target": ""}]:
+	var station_anchor: String = str(host.world.targets.get("station_anchor_port", {}).get("anchor_id", ""))
+	var gate_anchor: String = str(host.world.targets.get(gate_id, {}).get("anchor_id", ""))
+	var station_solid: bool = _fixture_anchor_site(host, station_anchor) and is_instance_valid(station) and (station.collision_layer & 64) != 0
+	var gate_solid: bool = _fixture_anchor_site(host, gate_anchor) and is_instance_valid(gate) and (gate.collision_layer & 64) != 0
+	_check(evidence, station_collision != null and gate_collision != null and station_solid and gate_solid, "packed station and wormhole expose actual solid camera-obstacle geometry in their declared sites")
+	for item: Dictionary in [{"name": "station", "collider": station_collision, "anchor": station_anchor, "target": "station_anchor_port"}, {"name": "wormhole", "collider": gate_collision, "anchor": gate_anchor, "target": ""}]:
 		await _near_camera_case(host, evidence, output_dir, item)
 	for action: String in old_actions:
 		Input.action_release(action)
 		if float(old_actions[action]) > 0.0: Input.action_press(action, float(old_actions[action]))
 	body.global_transform = original_pose
 	body.velocity = original_velocity
+	var restored_site: bool = _fixture_site(host, original_site)
 	body.intent = original_intent
 	body.cruising = original_cruising
 	body.write_back(original_spin)
@@ -945,11 +968,12 @@ static func _manual_turn_camera_checks(host: Node, evidence: Dictionary, output_
 	if DisplayServer.get_name() != "headless": host.get_viewport().warp_mouse(original_pointer)
 	host.set_process(original_process)
 	host.set_physics_process(original_physics)
-	_check(evidence, body.global_transform.is_equal_approx(original_pose) and body.velocity.is_equal_approx(original_velocity) and body.intent == original_intent and host.camera.mode == original_mode and host.state.player().camera_mode == original_player_mode and host.camera.orbit.is_equal_approx(original_orbit) and is_equal_approx(host.camera.zoom, original_zoom) and not host.observing and not host.pointer_drag_pressed, "packed control diagnostic restores the original physical state and view without residual input")
+	_check(evidence, restored_site and Space.current_site(host.state) == original_site and body.global_transform.is_equal_approx(original_pose) and body.velocity.is_equal_approx(original_velocity) and body.intent == original_intent and host.camera.mode == original_mode and host.state.player().camera_mode == original_player_mode and host.camera.orbit.is_equal_approx(original_orbit) and is_equal_approx(host.camera.zoom, original_zoom) and not host.observing and not host.pointer_drag_pressed, "packed control diagnostic restores the original site, physical state and view without residual input")
 
 static func _near_camera_case(host: Node, evidence: Dictionary, output_dir: String, item: Dictionary) -> void:
+	var fixture_bound: bool = _fixture_anchor_site(host, str(item.anchor))
 	var collider: CollisionShape3D = item.collider
-	if collider == null or not collider.shape is BoxShape3D:
+	if not fixture_bound or collider == null or not collider.shape is BoxShape3D:
 		_check(evidence, false, "packed near-" + str(item.name) + " sphere endpoints remain safe")
 		_check(evidence, false, "packed near-" + str(item.name) + " camera movement sweeps remain safe")
 		_check(evidence, false, "packed near-" + str(item.name) + " left observation visibly responds and releases cleanly")
@@ -1018,6 +1042,17 @@ static func _near_camera_case(host: Node, evidence: Dictionary, output_dir: Stri
 	_check(evidence, paths_safe, "packed near-" + str(item.name) + " every rendered camera move has a clear swept-sphere path")
 	_check(evidence, not held.is_equal_approx(initial_orbit) and host.camera.orbit.is_equal_approx(held) and turns > 0.002 and maximum_turn < 0.8 and not host.observing and not host.camera.observing and not host.pointer_drag_pressed and not host.pointer_pick_pending and body.global_transform.is_equal_approx(pose) and body.velocity == Vector3.ZERO and not host.local_navigation.active(), "packed near-" + str(item.name) + " actual left drag visibly rotates without reversal, ship movement or a release click")
 	if str(item.name) == "station": await _capture(host, output_dir, "camera-near-station")
+
+static func _fixture_anchor_site(host: Node, anchor_id: String) -> bool:
+	return _fixture_site(host, Space.site_for_anchor(host.store.catalog, anchor_id))
+
+static func _fixture_site(host: Node, site_id: String) -> bool:
+	# Fixed diagnostic fixtures explicitly know their station/resource/gate.
+	# They never infer a location from encoded xyz or touch personal progress.
+	if not Space.supported(host.store.catalog): return true
+	if not Space.assign(host.state, "ship", host.state.ship().ship_instance_id, site_id): return false
+	host.world.refresh_site()
+	return host.world.sync_entities()
 
 static func _control_focus_boundary(host: Node, label: String) -> void:
 	if DisplayServer.get_name() != "headless":

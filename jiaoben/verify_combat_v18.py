@@ -20,6 +20,8 @@ CASES = {
     "spatial-business": ("spatial_business_v20.gd", "XJ_SPATIAL_BUSINESS_V20", "spatial-business-v20", "SPATIAL_BUSINESS_V20", "--xj-verify-spatial-business-v20"),
     "space-upgrade": ("space_upgrade_v20.gd", "XJ_SPACE_UPGRADE_V20", "space-upgrade-v20", "SPACE_UPGRADE_V20", "--xj-verify-space-upgrade-v20"),
     "spatial-navigation": ("spatial_navigation_v20.gd", "XJ_SPATIAL_NAVIGATION_V20", "spatial-navigation-v20", "SPATIAL_NAVIGATION_V20", "--xj-verify-spatial-navigation-v20"),
+    "base-store": ("runtime/data/diagnostic.gd", "XJ_BASE_STORE_V20", "release-health-v20", "STORE_RELEASE", "--xj-verify-store"),
+    "base-presentation": ("runtime/presentation_diagnostic.gd", "XJ_BASE_PRESENTATION_V20", "release-presentation-v20", "PRESENTATION_CLIENT", "--xj-verify-presentation"),
 }
 DIAGNOSTIC = re.compile(r"^(?:\s*(?:SCRIPT ERROR|ERROR|WARNING):|.*[Ll]eak(?:ed|ing)?\b|.*Resource still in use)", re.M)
 
@@ -62,11 +64,15 @@ def run_suite():
         script, prefix, folder, marker, flag = CASES[name]
         directory = ROOT / "jiaoben/tmp" / folder / str(uuid.uuid4())
         directory.mkdir(parents=True)
-        test = ROOT / "jiaoben/tests" / script
+        builtin = name in ("base-store", "base-presentation")
+        test = ROOT / ("code" if builtin else "jiaoben/tests") / script
         env = os.environ.copy()
         env.pop("XJ_TEST_DATABASE", None)
-        env[prefix + "_SCRIPT"] = test.as_posix()
-        env[prefix + "_DIRECTORY"] = directory.as_posix()
+        if builtin:
+            env["XJ_TEST_DATABASE"] = (directory / "progress.db").as_posix()
+        else:
+            env[prefix + "_SCRIPT"] = test.as_posix()
+            env[prefix + "_DIRECTORY"] = directory.as_posix()
         if name == "upgrade":
             assert args.legacy and args.legacy.is_file(), "Pass --legacy pointing to a closed test-owned format6 fixture"
             legacy = args.legacy.resolve()
@@ -76,10 +82,12 @@ def run_suite():
         output = ROOT / f"jiaoben/logs/{stem}.log"
         engine_log = ROOT / f"jiaoben/logs/{stem}-engine.log"
         command = [str(binary), "--audio-driver", "WASAPI", "--log-file", engine_log.as_posix()]
-        if not args.native:
+        if not args.native or name == "base-store":
             command += ["--headless"]
         if args.executable:
             command += ["--", flag if flag.startswith("--") else f"--xj-verify-{flag}-v18"]
+        elif builtin:
+            command += ["--path", (ROOT / "code").as_posix(), "--", flag]
         else:
             launcher = directory / "launcher.gd"
             launcher.write_text("extends SceneTree\nfunc _initialize() -> void:\n\tcall_deferred(\"_start\")\n"
@@ -92,7 +100,7 @@ def run_suite():
         started = time.monotonic()
         with output.open("wb") as stream:
             process = subprocess.Popen(command, cwd=ROOT, env=env, stdout=stream, stderr=subprocess.STDOUT)
-            if args.native:
+            if args.native and name != "base-store":
                 activate(process)
             try:
                 code = process.wait(timeout=600)
@@ -117,6 +125,10 @@ def run_suite():
             failures = raw_summary.get("failures", [])
             record["summary"] = {**raw_summary, "result": "PASS" if failures == [] else "FAIL",
                                  "failures": len(failures), "failure_labels": failures}
+        elif builtin:
+            endpoint = re.search(rf"^{marker}_RESULT (PASS|FAIL) checks=(\d+) failures=(\d+)", text, re.M)
+            if endpoint:
+                record["summary"] = {"result": endpoint[1], "checks": int(endpoint[2]), "failures": int(endpoint[3])}
         records.append(record)
         report_path.write_text(json.dumps({"mode": mode, "identity": identity, "cases": records}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
         assert code == 0 and engine_log.exists(), f"{name} process failed: {output}"
@@ -125,6 +137,9 @@ def run_suite():
         if "summary" in record:
             assert record["summary"]["result"] == "PASS" and record["summary"]["failures"] == 0
         assert all(path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n" for path in captures)
+        if builtin:
+            assert record["summary"]["checks"] >= (6 if name == "base-store" else 110)
+            assert len(captures) == (0 if name == "base-store" else 17)
         print(f"PASS {mode} {name}: {len(captures)} screenshots; {record['seconds']} s", flush=True)
     print(f"V18_ACCEPTANCE PASS {report_path}", flush=True)
 

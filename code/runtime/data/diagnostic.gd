@@ -21,7 +21,7 @@ static func run(test_path: String, upgrade: bool = false) -> bool:
 	_check(evidence, store.open(), "release Store.open and every original asset hash " + store.last_error)
 	if int(evidence.failures) == 0:
 		if upgrade:
-			_check(evidence, store._records("SELECT format_version FROM database_meta")[0].format_version == 5, "release old database upgrade reaches format5")
+			_check(evidence, store._records("SELECT format_version FROM database_meta")[0].format_version == 8, "release old database upgrade reaches format8")
 		var state: XJRuntimeState = store.new_world("独立客户端验收", 42)
 		_check(evidence, state != null, "release relational initial snapshot " + store.last_error)
 		if state != null:
