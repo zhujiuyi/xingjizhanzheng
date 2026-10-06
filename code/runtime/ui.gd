@@ -614,19 +614,8 @@ func _station() -> void:
 	var services: VBoxContainer = VBoxContainer.new()
 	services.add_theme_constant_override("separation", 8)
 	station_services.add_child(services)
-	var service_heading: HBoxContainer = HBoxContainer.new()
-	service_heading.add_theme_constant_override("separation", 7)
-	services.add_child(service_heading)
-	var heading_icon: TextureRect = TextureRect.new()
-	heading_icon.name = "PageHeadingIcon"
-	heading_icon.texture = ServiceNavigation.icon("station")
-	heading_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	heading_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	heading_icon.custom_minimum_size = Vector2(20, 20)
-	heading_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	service_heading.add_child(heading_icon)
-	var heading: Label = _text_to(service_heading, ServiceNavigation.label("station"), 14)
-	heading.name = "PageHeading"
+	var heading: Label = _text_to(services, "服务导航", 14)
+	heading.name = "StationNavigationHeading"
 	heading.add_theme_color_override("font_color", UISkin.ICE)
 	var service_scroll: ScrollContainer = ScrollContainer.new()
 	service_scroll.name = "StationServiceScroll"
@@ -1559,7 +1548,7 @@ func _mission_location_text(info: Dictionary) -> String:
 	if not bool(info.get("local", false)):
 		result += "\n下一航点 · " + str(info.get("waypoint_title", "查看星图航路"))
 	elif not str(info.get("required_page", "")).is_empty():
-		result += "\n站内操作 · " + ServiceNavigation.label(str(info.required_page), "空间站服务")
+		result += "\n站内操作 · " + ServiceNavigation.label(str(info.required_page), "空间站")
 	if not str(info.get("route_reason", "")).is_empty(): result += "\n" + str(info.route_reason)
 	return result
 
@@ -2905,10 +2894,20 @@ func _service_button_style(button: Button, active: bool) -> void:
 	button.add_theme_font_size_override("font_size", 11 if small else 13)
 	button.add_theme_color_override("font_color", UISkin.AMBER if active else UISkin.TEXT)
 	button.add_theme_color_override("icon_normal_color", UISkin.AMBER if active else Color.WHITE)
+	for color_key: String in ["font_hover_color", "font_pressed_color", "font_focus_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color"]:
+		button.add_theme_color_override(color_key, UISkin.AMBER if active else Color.WHITE)
 	button.add_theme_stylebox_override("normal", UISkin.hud_button(active))
-	button.add_theme_stylebox_override("hover", UISkin.hud_button(true))
-	button.add_theme_stylebox_override("pressed", UISkin.hud_button(true))
+	var hover: StyleBoxFlat = UISkin.hud_button(active)
+	if not active:
+		hover.bg_color = Color(0.06, 0.075, 0.085, 0.6)
+		hover.border_color = Color(0.31, 0.36, 0.39, 0.7)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", hover)
 	button.add_theme_stylebox_override("disabled", UISkin.hud_button())
+	# The amber fill identifies the current page; keyboard focus is a thin outline.
+	var keyboard_focus: StyleBoxFlat = UISkin.flat(Color.TRANSPARENT, Color("56717d"), 0)
+	keyboard_focus.draw_center = false
+	button.add_theme_stylebox_override("focus", keyboard_focus)
 
 func _primary(button: Button) -> void:
 	button.add_theme_stylebox_override("normal", UISkin.button_style(Color("e2b46d")))
@@ -2999,5 +2998,13 @@ func _focus_page() -> void:
 		if entry is Button and not entry.disabled:
 			entry.grab_focus()
 			return
-	if not default.is_empty(): default[0].grab_focus()
-	elif not entries.is_empty(): entries[0].grab_focus()
+	if not default.is_empty():
+		default[0].grab_focus()
+		return
+	# A page whose business actions are all disabled still focuses its own
+	# navigation row, rather than the first unrelated row in the sidebar.
+	for entry: Control in entries:
+		if str(entry.get_meta("service_surface", "")) == "sidebar" and str(entry.get_meta("service_page_id", "")) == page:
+			entry.grab_focus()
+			return
+	if not entries.is_empty(): entries[0].grab_focus()

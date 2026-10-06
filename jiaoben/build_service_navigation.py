@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CODE = ROOT / "code"
 REGISTRY = CODE / "runtime/ui/service_navigation.gd"
 ICON_DIR = CODE / "assets/interface_v3/services"
-MANIFEST = CODE / "assets/service_navigation_v1/manifest.json"
+MANIFEST = CODE / "assets/service_navigation_v2/manifest.json"
 SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 SVG_ELEMENTS = {"svg", "g", "path", "circle", "ellipse", "rect", "line", "polyline", "polygon"}
 SVG_ATTRIBUTES = {
@@ -102,7 +102,7 @@ def manifest_bytes() -> bytes:
     })
     manifest = {
         "format_version": 1,
-        "asset_version": "service-navigation-v1",
+        "asset_version": "service-navigation-v2",
         "scope": "Presentation-only compact function navigation; frozen assets, SQL, catalog and player state unchanged.",
         "authoring_script": "jiaoben/build_service_navigation.py",
         "svg_contract": {"size_px": [24, 24], "utf8_without_bom": True, "line_endings": "LF", "static_geometry_only": True, "external_references": False},
@@ -120,7 +120,7 @@ def build(check: bool = False, report: Path | None = None) -> dict:
     if changed and not check:
         MANIFEST.parent.mkdir(parents=True, exist_ok=True)
         MANIFEST.write_bytes(expected)
-    result = {"status": "PASS", "asset_version": "service-navigation-v1", "resources": 13, "svg_icons": 12,
+    result = {"status": "PASS", "asset_version": "service-navigation-v2", "resources": 13, "svg_icons": 12,
               "manifest_changed": changed, "manifest_sha256": digest(expected),
               "registry_sha256": digest(REGISTRY.read_bytes()), "utf8_lf": True, "svg_static_xml_24x24": True,
               "verification_scope": "Static source validation; Godot import/render and actual-PCK verification are separate."}

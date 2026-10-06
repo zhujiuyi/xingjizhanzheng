@@ -1,6 +1,6 @@
 # 测试与辅助文件
 
-v0.15.2空间站图标菜单专项：`verify_combat_v18.py --only service-navigation --native` 执行 `tests/service_navigation_v22.gd`，检查机库/侧栏/下拉/标题同名同序同图标、六种尺寸与缩放、真实GUI点击和Tab、观察舰船、独立出港、飞行停靠权限，以及状态/保存端点/偏好无隐藏修改。实际包使用 `--executable <Windows EXE>`，通过固定 `--xj-verify-service-navigation-v22` 入口加载相同Node，保留真实PCK资源。fresh UUID库和图在tmp，严格双日志与摘要在logs；必须退出0、断言完整、10张原生图且无引擎错误/警告/泄漏。`build_service_navigation.py` 生成独立展示资源清单，保留全部旧发布清单。详见[48](../doc/48-空间站图标菜单与名称统一.md)。
+v0.15.3空间站图标菜单专项：`verify_combat_v18.py --only service-navigation --native` 执行 `tests/service_navigation_v22.gd`，检查机库/侧栏/下拉/标题同名同序同图标、六种尺寸与缩放、真实GUI点击和Tab、观察舰船、独立出港、飞行停靠权限，以及状态/保存端点/偏好无隐藏修改。另核“服务导航”标题去重、初始工业页焦点、Tab与悬停不产生第二选中、Enter回机库。实际包使用 `--executable <Windows EXE>`，通过固定 `--xj-verify-service-navigation-v22` 入口加载相同Node，保留真实PCK资源。fresh UUID库和图在tmp，严格双日志与摘要在logs；必须退出0、断言完整、11张原生图且无引擎错误/警告/泄漏。`build_service_navigation.py` 生成独立展示资源清单，保留全部旧发布清单。详见[48](../doc/48-空间站图标菜单与名称统一.md)。
 
 v0.14.1任务按钮与显示专项：`verify_combat_v18.py --only mission-display`执行`tests/mission_display_v19.gd`，加`--native`验证真实窗口的五种尺寸/100%与200%缩放、最大化/独占全屏、caption完整宽度、任务所有筛选/分页/滚动访问、长中文/多操作/tooltip、真实接取/放弃/重接和SQLite重开。`--executable <Windows EXE>`使用固定`--xj-verify-mission-display-v19`入口在真实PCK内运行同一Node；临时库与图位于fresh UUID的mission-display-v19子目录。基线`XJ_MISSION_DISPLAY_V19_BASELINE=1`只输出REPRODUCED，不可记录为正常验收PASS。输出窗口observations记录实际native/逻辑尺寸及等比final transform四边，截图尺寸必须对应整个客户区并核左右/上下覆盖。个人存档不参与。
 

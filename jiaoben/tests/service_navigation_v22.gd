@@ -6,8 +6,9 @@ const Navigation = preload("res://runtime/ui/service_navigation.gd")
 const Codec = preload("res://runtime/data/codec.gd")
 const State = preload("res://runtime/state.gd")
 const Types = preload("res://contracts/contract_types.gd")
+const UISkin = preload("res://runtime/ui_theme.gd")
 const IDS: Array[String] = ["station", "ships", "warehouse", "fitting", "market", "industry", "salvage", "missions", "research", "map", "pause"]
-const LABELS: Array[String] = ["空间站服务", "舰队与借船", "仓库与货舱", "舰船配装", "站点市场", "工业与回收", "打捞鉴定", "任务与合同", "科技与设施", "星域航路", "暂停与存读档"]
+const LABELS: Array[String] = ["空间站", "舰队与借船", "仓库与货舱", "舰船配装", "站点市场", "工业与回收", "打捞鉴定", "任务与合同", "科技与设施", "星域航路", "暂停与存读档"]
 const SIZES: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1440, 900), Vector2i(3440, 1370)]
 var host: Main
 var directory: String = ""
@@ -268,6 +269,13 @@ func layout_matrix() -> void:
 			await frames(4)
 			var label: String = "%dx%d-%d" % [size.x, size.y, int(scale * 100)]
 			identity(rows(host.ui.station_services, "hangar"), IDS, "hangar/" + label)
+			var heading: Label = host.ui.station_services.find_child("StationNavigationHeading", true, false)
+			check(heading != null and heading.text == "服务导航" and host.ui.station_services.find_child("PageHeading", true, false) == null and host.ui.station_services.find_child("PageHeadingIcon", true, false) == null, "landing has one navigation heading instead of duplicate station title and icon " + label)
+			var station_captions: int = 0
+			for node: Node in descendants(host.ui.station_services):
+				if node is Button and node.text == "空间站": station_captions += 1
+				if node is Label and node.text in ["空间站", "空间站服务"]: station_captions += 1
+			check(station_captions == 1, "station caption appears only on its page row " + label)
 			var bounds: Rect2 = Rect2(Vector2.ZERO, host.ui.root.size).grow(1.5)
 			check(bounds.encloses(host.ui.station_services.get_global_rect()) and not host.ui.station_services.get_global_rect().has_point(host.ui.root.size * 0.5), "functional menu fits and leaves 3D ship center open " + label)
 			var details_expected: bool = host.ui.root.size.x >= 950.0 and host.ui.root.size.y >= 560.0
@@ -314,6 +322,64 @@ func dropdown_navigation() -> void:
 	check(host.ui.page == "warehouse", "actual dropdown keyboard selection reaches production page")
 	panel_identity("warehouse", IDS)
 
+func only_industry_active() -> bool:
+	var active: Array[String] = []
+	var valid: bool = true
+	for button: Button in rows(host.ui.sidebar, "sidebar"):
+		var id: String = str(button.get_meta("service_page_id", ""))
+		var font_color: Color = button.get_theme_color("font_color")
+		var icon_color: Color = button.get_theme_color("icon_normal_color")
+		if font_color == UISkin.AMBER: active.append(id)
+		valid = valid and font_color == (UISkin.AMBER if id == "industry" else UISkin.TEXT) and icon_color == (UISkin.AMBER if id == "industry" else Color.WHITE)
+		for color_key: String in ["font_hover_color", "font_pressed_color", "font_focus_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color"]:
+			valid = valid and button.get_theme_color(color_key) == (UISkin.AMBER if id == "industry" else Color.WHITE)
+	return valid and active == ["industry"]
+
+func industry_focus_regression() -> void:
+	var industry: Button = row(host.ui.sidebar, "sidebar", "industry")
+	var station: Button = row(host.ui.sidebar, "sidebar", "station")
+	if not check(industry != null and station != null and industry.is_visible_in_tree() and station.is_visible_in_tree(), "initial industry exposes current and station navigation controls"): return
+	var enabled_body: int = 0
+	for node: Node in descendants(host.ui.body):
+		if node is Button and node.is_visible_in_tree() and not node.disabled and node.focus_mode != Control.FOCUS_NONE: enabled_body += 1
+	check(enabled_body == 0, "fresh industry fixture has no eligible business button for default focus")
+	check(root.gui_get_focus_owner() == industry, "real industry entry defaults focus to current page instead of station")
+	check(only_industry_active(), "current industry alone has selected amber text and symbol")
+	var normal: StyleBoxFlat = industry.get_theme_stylebox("normal") as StyleBoxFlat
+	var focus: StyleBoxFlat = station.get_theme_stylebox("focus") as StyleBoxFlat
+	var current_focus: StyleBoxFlat = industry.get_theme_stylebox("focus") as StyleBoxFlat
+	var thin: bool = focus != null and current_focus != null and not focus.draw_center and focus.bg_color.a <= 0.001 and focus.border_color != UISkin.AMBER and focus.border_color == current_focus.border_color
+	if focus != null:
+		for side: Side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]: thin = thin and focus.get_border_width(side) == 1
+	check(thin, "keyboard focus is a separate thin neutral outline without selected fill")
+	await capture("service-industry-focus")
+	var before: String = authority()
+	var count: int = events.size()
+	var reached: bool = false
+	for step: int in range(IDS.size() + 4):
+		await key(KEY_TAB)
+		if root.gui_get_focus_owner() == station: reached = true; break
+	check(reached and complete(station), "real Tab reaches fully visible station while industry stays open")
+	check(host.ui.page == "industry" and only_industry_active(), "station keyboard focus does not create a second active page")
+	var center: Vector2 = station.get_global_rect().get_center()
+	host.get_viewport().warp_mouse(center)
+	var motion := InputEventMouseMotion.new()
+	motion.position = center; motion.global_position = center
+	host.get_viewport().push_input(motion, true)
+	await frames(3)
+	var hovered: Control = host.get_viewport().gui_get_hovered_control()
+	check(hovered != null and (hovered == station or station.is_ancestor_of(hovered)), "actual pointer hovers inactive station row")
+	var hover: StyleBoxFlat = station.get_theme_stylebox("hover") as StyleBoxFlat
+	var pressed: StyleBoxFlat = station.get_theme_stylebox("pressed") as StyleBoxFlat
+	check(normal != null and hover != null and pressed != null and hover.bg_color != normal.bg_color and pressed.bg_color != normal.bg_color and only_industry_active(), "inactive hover and pressed feedback cannot imitate selected industry fill")
+	observations.append({"kind": "industry-focus", "page": host.ui.page, "default_focus": "industry", "tab_focus": str(root.gui_get_focus_owner().get_path()) if root.gui_get_focus_owner() != null else "", "body_eligible_buttons": enabled_body, "only_industry_active": only_industry_active(), "focus_border": str(focus.border_color) if focus != null else "missing", "pointer_hover": str(hovered.get_path()) if hovered != null else "none"})
+	check(authority() == before and events.size() == count, "industry Tab and hover leave economy typed state SQL endpoints and preferences unchanged")
+	if reached:
+		await key(KEY_ENTER)
+		await settle()
+		check(host.ui.page == "station" and host.ui.station_layer.visible and not host.ui.panel.visible, "real focused station Enter returns to hangar")
+		check(authority() == before and events.size() == count, "keyboard station navigation changes no economy save pointers or requested business actions")
+
 func navigation_and_observation() -> void:
 	root.size = Vector2i(1440, 900)
 	root.content_scale_factor = 1.0
@@ -326,6 +392,7 @@ func navigation_and_observation() -> void:
 		await click(row(host.ui.station_services, "hangar", id), "hangar destination " + id)
 		check(host.ui.page == id, "real hangar row reaches declared page " + id)
 		if id != "station": panel_identity(id, IDS)
+		if id == "industry": await industry_focus_regression()
 		if id in ["missions", "market"]: await capture("service-" + id)
 	await show("missions")
 	await frames(4)

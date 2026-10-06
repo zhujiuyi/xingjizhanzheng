@@ -147,7 +147,7 @@ def run_suite():
             assert summary["native"] == args.native and summary["checks"] >= 120
             assert Path(summary["directory"]).resolve() == directory.resolve()
             assert Path(summary["database_path"]).resolve() == (directory / "progress.db").resolve()
-            assert (directory / "progress.db").is_file() and len(captures) == (10 if args.native else 0)
+            assert (directory / "progress.db").is_file() and len(captures) == (11 if args.native else 0)
             windows = [item for item in summary["observations"] if item["kind"] == "window"]
             assert {item["label"] for item in windows} == {
                 f"{width}x{height}-{scale}" for width, height in ((1280, 720), (1440, 900), (3440, 1370)) for scale in (100, 200)

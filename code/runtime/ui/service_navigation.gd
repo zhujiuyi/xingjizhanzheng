@@ -3,7 +3,7 @@ extends RefCounted
 ## Presentation registry shared by hangar, service sidebar, selector and headings.
 ## These captions and icons do not grant business permissions or store game data.
 const PAGES: Array[Dictionary] = [
-	{"id": "station", "label": "空间站服务", "icon": "res://assets/interface_v3/services/station.svg"},
+	{"id": "station", "label": "空间站", "icon": "res://assets/interface_v3/services/station.svg"},
 	{"id": "ships", "label": "舰队与借船", "icon": "res://assets/interface_v3/services/ships.svg"},
 	{"id": "warehouse", "label": "仓库与货舱", "icon": "res://assets/interface_v3/services/warehouse.svg"},
 	{"id": "fitting", "label": "舰船配装", "icon": "res://assets/interface_v3/services/fitting.svg"},
