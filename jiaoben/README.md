@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+v0.14.1任务按钮与显示专项：`verify_combat_v18.py --only mission-display`执行`tests/mission_display_v19.gd`，加`--native`验证真实窗口的五种尺寸/100%与200%缩放、最大化/独占全屏、caption完整宽度、任务所有筛选/分页/滚动访问、长中文/多操作/tooltip、真实接取/放弃/重接和SQLite重开。`--executable <Windows EXE>`使用固定`--xj-verify-mission-display-v19`入口在真实PCK内运行同一Node；临时库与图位于fresh UUID的mission-display-v19子目录。基线`XJ_MISSION_DISPLAY_V19_BASELINE=1`只输出REPRODUCED，不可记录为正常验收PASS。输出窗口observations记录实际native/逻辑尺寸及等比final transform四边，截图尺寸必须对应整个客户区并核左右/上下覆盖。个人存档不参与。
+
 v0.14.0光影/武器/无人机专项：`verify_combat_v18.py`在Windows串行加载四个固定测试Node，源码薄SceneTree启动器和实际PCK使用相同断言。`--native --only combat lighting weapon-ui`验证真实Vulkan/WASAPI画面与业务；`--only upgrade --legacy <已关闭的本项目tmp旧测试库>`验证format6→7、内容分支、回滚、旧档/投入/品质兼容。使用`--executable <实际Windows EXE>`时不传源码工程路径，仅由显式受限`--xj-verify-*-v18`入口读固定外部测试Node。测试库与截图为fresh UUID的tmp子目录，输出/引擎日志和脚本/图片摘要在logs；执行时持有共用feature-audit锁，不与其他引擎检查或导入并行。必须满足退出0、完整结果及双日志诊断0，不能仅看断言PASS或PNG存在。光影专项另核实际舰体/特效像素显隐和姿态亮度差；测试位置、资产/解锁授予不是自然通关或性能基准。
 
 `tests/input_startup.gd`直接调用真实Main的初始化前输入回调，覆盖四类未注册事件、正常Ctrl释放、Ctrl按下及无关键释放；不启动服务或打开个人存档。执行`sh jiaoben/run_godot.sh --headless --path code --script ../jiaoben/tests/input_startup.gd`时，须同时满足`INPUT_STARTUP_RESULT PASS checks=10 failures=0`、退出0及输出/独立引擎日志无错误、警告或泄漏。旧源码会输出PASS但仍产生四条缺失fire动作错误，不能只看断言摘要。

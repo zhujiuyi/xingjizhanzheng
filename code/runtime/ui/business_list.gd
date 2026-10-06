@@ -211,11 +211,13 @@ func _prepare_action(node: Node) -> void:
 	if not node is Button: return
 	var button: Button = node
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	# Shrink-to-content actions must measure the complete caption, not a
+	# zero-width wrapped label that turns the whole mission row into a column.
+	button.autowrap_mode = TextServer.AUTOWRAP_OFF
 	button.custom_minimum_size.x = 0
 	button.custom_minimum_size.y = maxf(button.custom_minimum_size.y, 34)
 	if inline_quantities:
 		button.custom_minimum_size.y = 32
-		button.autowrap_mode = TextServer.AUTOWRAP_OFF
 	button.add_theme_font_size_override("font_size", 13)
 	button.add_theme_stylebox_override("normal", UISkin.hud_button())
 	button.add_theme_stylebox_override("hover", UISkin.hud_button(true))

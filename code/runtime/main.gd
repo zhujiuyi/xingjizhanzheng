@@ -53,6 +53,7 @@ func _ready() -> void:
 		{"flag": "--xj-verify-lighting-v18", "file": "lighting_effects_v18.gd", "prefix": "lighting-effects-v18", "env": "XJ_LIGHTING_V18", "meta": "xj_lighting_v18_diagnostic"},
 		{"flag": "--xj-verify-weapon-ui-v18", "file": "weapon_ui_v18.gd", "prefix": "weapon-ui-v18", "env": "XJ_WEAPON_UI_V18", "meta": "xj_weapon_ui_v18_diagnostic"},
 		{"flag": "--xj-verify-upgrade-v18", "file": "combat_upgrade_v18.gd", "prefix": "combat-upgrade-v18", "env": "XJ_UPGRADE_V18", "meta": "xj_upgrade_v18_diagnostic"},
+		{"flag": "--xj-verify-mission-display-v19", "file": "mission_display_v19.gd", "prefix": "mission-display-v19", "env": "XJ_MISSION_DISPLAY_V19", "meta": "xj_mission_display_v19_diagnostic"},
 	]:
 		if arguments.has(str(v18_contract.flag)) and not get_tree().has_meta(str(v18_contract.meta)):
 			_start_v18_diagnostic(v18_contract)

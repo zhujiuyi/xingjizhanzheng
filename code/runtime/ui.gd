@@ -527,6 +527,7 @@ func _build_panel(title: String, description: String) -> void:
 		var location: Label = _text_to(sidebar, _station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), 12)
 		location.add_theme_color_override("font_color", UISkin.MUTED)
 	else: sidebar.hide()
+	if sidebar.visible: sidebar.visible = not _service_sidebar_compact()
 	var layout: VBoxContainer = VBoxContainer.new()
 	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	layout.add_theme_constant_override("separation", 14)
@@ -546,7 +547,7 @@ func _build_panel(title: String, description: String) -> void:
 		for index: int in range(selector.item_count):
 			if selector.get_item_metadata(index) == page: selector.select(index)
 		selector.item_selected.connect(func(index: int): show_page(str(selector.get_item_metadata(index))))
-		selector.visible = root.size.x < 950
+		selector.visible = _service_sidebar_compact()
 		header.add_child(selector)
 	if page != "title":
 		var close: Button = _button(header, "返回" if page == "settings" else "返回机库" if state != null and state.player().has_docked_station_id else "返回航行", _back)
@@ -2035,13 +2036,23 @@ func _update_hud_visibility() -> void:
 	if is_instance_valid(station_layer): station_layer.visible = page == "station" and state != null
 	_responsive_title()
 
+func _service_sidebar_compact() -> bool:
+	if root.size.x < 950: return true
+	if not is_instance_valid(sidebar): return false
+	var top: float = 22.0
+	if is_instance_valid(operation_bar) and operation_bar.visible:
+		top = maxf(top, operation_bar.position.y + operation_bar.size.y + 8.0)
+	# Wide high-DPI windows can be logically short. Keep the complete page
+	# inside the viewport and use its existing selector when navigation cannot fit.
+	return root.size.y - top - 52.0 < sidebar.get_combined_minimum_size().y
+
 func _responsive() -> void:
 	if not is_instance_valid(root): return
 	_resize_map_canvas()
 	var compact: bool = root.size.x < 950
 	# Hide tall navigation before resizing; its previous minimum otherwise
 	# clamps the panel and leaves stale offsets after a page/scale change.
-	if is_instance_valid(sidebar): sidebar.visible = state != null and page not in ["title", "settings"] and not compact
+	if is_instance_valid(sidebar): sidebar.visible = state != null and page not in ["title", "settings"] and not _service_sidebar_compact()
 	var safe: float = 14.0 if compact else 22.0
 	var sidebar_width: float = 206.0 if compact else 300.0
 	var left_width: float = 180.0 if compact else 316.0
@@ -2207,7 +2218,7 @@ func _responsive() -> void:
 		if page == "title": _responsive_title()
 	if is_instance_valid(panel):
 		var selector: OptionButton = panel.find_child("PageSelector", true, false)
-		if selector != null: selector.visible = compact
+		if selector != null: selector.visible = _service_sidebar_compact()
 	if is_instance_valid(panel):
 		for grid: Node in panel.find_children("ModuleCards*", "GridContainer", true, false):
 			grid.columns = 2 if root.size.x >= 1200 and page != "title" else 1

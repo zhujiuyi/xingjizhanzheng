@@ -15,6 +15,7 @@ CASES = {
     "lighting": ("lighting_effects_v18.gd", "XJ_LIGHTING_V18", "lighting-effects-v18", "LIGHTING_EFFECTS_V18", "lighting"),
     "weapon-ui": ("weapon_ui_v18.gd", "XJ_WEAPON_UI_V18", "weapon-ui-v18", "WEAPON_UI_V18", "weapon-ui"),
     "upgrade": ("combat_upgrade_v18.gd", "XJ_UPGRADE_V18", "combat-upgrade-v18", "COMBAT_UPGRADE_V18", "upgrade"),
+    "mission-display": ("mission_display_v19.gd", "XJ_MISSION_DISPLAY_V19", "mission-display-v19", "MISSION_DISPLAY_V19", "--xj-verify-mission-display-v19"),
 }
 DIAGNOSTIC = re.compile(r"^(?:\s*(?:SCRIPT ERROR|ERROR|WARNING):|.*[Ll]eak(?:ed|ing)?\b|.*Resource still in use)", re.M)
 
@@ -38,7 +39,7 @@ def activate(process):
 def run_suite():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--native", action="store_true")
-    parser.add_argument("--only", nargs="+", choices=CASES, default=list(CASES))
+    parser.add_argument("--only", nargs="+", choices=CASES, default=["combat", "lighting", "weapon-ui", "upgrade"])
     parser.add_argument("--executable", type=Path, help="Actual Windows release EXE, without a source project path")
     parser.add_argument("--engine", type=Path, default=Path("D:/DevTools/Godot/4.7.2/Godot_v4.7.2-stable_win64.exe"))
     parser.add_argument("--legacy", type=Path, help="Closed format6 test database under jiaoben/tmp; never personal data")
@@ -74,7 +75,7 @@ def run_suite():
         if not args.native:
             command += ["--headless"]
         if args.executable:
-            command += ["--", f"--xj-verify-{flag}-v18"]
+            command += ["--", flag if flag.startswith("--") else f"--xj-verify-{flag}-v18"]
         else:
             launcher = directory / "launcher.gd"
             launcher.write_text("extends SceneTree\nfunc _initialize() -> void:\n\tcall_deferred(\"_start\")\n"
