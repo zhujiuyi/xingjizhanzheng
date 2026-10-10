@@ -328,7 +328,7 @@ func _refresh_rows() -> void:
 		name_label.max_lines_visible = 2 if _compact else 1
 		name_label.clip_text = not _compact
 		button.custom_minimum_size.y = (54 if _compact else 44) if resource else (34 if _compact else 24)
-		button.get_child(0).get_node("Name").add_theme_color_override("font_color", UISkin.AMBER if id == selected_id else UISkin.TEXT)
+		button.get_child(0).get_node("Name").add_theme_color_override("font_color", UISkin.AMBER if id == selected_id else Color("7fcca4") if bool(record.get("friendly", false)) else UISkin.TEXT)
 		button.get_child(0).get_node("Type").text = str(record.get("type_title", ""))
 		button.add_theme_stylebox_override("normal", UISkin.hud_button(id == selected_id))
 		target_list.move_child(button, filtered_ids.size() - 1)

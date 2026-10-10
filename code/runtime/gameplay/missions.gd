@@ -302,7 +302,8 @@ func _sector_title(sector_id: String) -> String:
 func chain(kind: String) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for def: Dictionary in g.rows("mission_defs"):
-		if str(def.mission_kind) == kind: result.append(def)
+		var civilization: bool = g.catalog.table_names.has("civilization_join_missions") and not g.definition("civilization_join_missions", "mission_id", def.mission_id).is_empty()
+		if (kind == "civilization" and civilization) or (str(def.mission_kind) == kind and not civilization): result.append(def)
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var depth_a: int = _chain_depth(str(a.mission_id), {})
 		var depth_b: int = _chain_depth(str(b.mission_id), {})

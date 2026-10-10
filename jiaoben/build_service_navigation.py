@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CODE = ROOT / "code"
 REGISTRY = CODE / "runtime/ui/service_navigation.gd"
 ICON_DIR = CODE / "assets/interface_v3/services"
-MANIFEST = CODE / "assets/service_navigation_v2/manifest.json"
+MANIFEST = CODE / "assets/service_navigation_v3/manifest.json"
 SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 SVG_ELEMENTS = {"svg", "g", "path", "circle", "ellipse", "rect", "line", "polyline", "polygon"}
 SVG_ATTRIBUTES = {
@@ -75,11 +75,11 @@ def manifest_bytes() -> bytes:
         source,
     )
     observe = re.findall(r'^const OBSERVE_ICON: String = "(res://assets/interface_v3/services/[a-z_]+\.svg)"$', source, re.MULTILINE)
-    if len(records) != 11 or len({record[0] for record in records}) != 11 or len(observe) != 1:
-        raise ValueError("Registry must define eleven unique pages and one ship observation icon")
+    if len(records) != 12 or len({record[0] for record in records}) != 12 or len(observe) != 1:
+        raise ValueError("Registry must define twelve unique pages and one ship observation icon")
     paths = [record[2] for record in records] + observe
-    if len(set(paths)) != 12 or set(paths) != {"res://" + path.relative_to(CODE).as_posix() for path in ICON_DIR.glob("*.svg")}:
-        raise ValueError("Registry references must match the exact set of twelve service SVGs")
+    if len(set(paths)) != 13 or set(paths) != {"res://" + path.relative_to(CODE).as_posix() for path in ICON_DIR.glob("*.svg")}:
+        raise ValueError("Registry references must match the exact set of thirteen service SVGs")
     resources = []
     for index, resource_path in enumerate(paths):
         path = CODE / resource_path.removeprefix("res://")
@@ -102,7 +102,7 @@ def manifest_bytes() -> bytes:
     })
     manifest = {
         "format_version": 1,
-        "asset_version": "service-navigation-v2",
+        "asset_version": "service-navigation-v3",
         "scope": "Presentation-only compact function navigation; frozen assets, SQL, catalog and player state unchanged.",
         "authoring_script": "jiaoben/build_service_navigation.py",
         "svg_contract": {"size_px": [24, 24], "utf8_without_bom": True, "line_endings": "LF", "static_geometry_only": True, "external_references": False},
@@ -120,7 +120,7 @@ def build(check: bool = False, report: Path | None = None) -> dict:
     if changed and not check:
         MANIFEST.parent.mkdir(parents=True, exist_ok=True)
         MANIFEST.write_bytes(expected)
-    result = {"status": "PASS", "asset_version": "service-navigation-v2", "resources": 13, "svg_icons": 12,
+    result = {"status": "PASS", "asset_version": "service-navigation-v3", "resources": 14, "svg_icons": 13,
               "manifest_changed": changed, "manifest_sha256": digest(expected),
               "registry_sha256": digest(REGISTRY.read_bytes()), "utf8_lf": True, "svg_static_xml_24x24": True,
               "verification_scope": "Static source validation; Godot import/render and actual-PCK verification are separate."}
@@ -139,4 +139,4 @@ if __name__ == "__main__":
         result = build(arguments.check, arguments.report)
     except (OSError, UnicodeError, ValueError, ET.ParseError) as error:
         parser.exit(1, f"SERVICE_NAVIGATION_ASSETS FAIL: {error}\n")
-    print(f"SERVICE_NAVIGATION_ASSETS PASS resources=13 svg_icons=12 changed={str(result['manifest_changed']).lower()} sha256={result['manifest_sha256']}")
+    print(f"SERVICE_NAVIGATION_ASSETS PASS resources=14 svg_icons=13 changed={str(result['manifest_changed']).lower()} sha256={result['manifest_sha256']}")

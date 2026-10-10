@@ -7,8 +7,8 @@ const Codec = preload("res://runtime/data/codec.gd")
 const State = preload("res://runtime/state.gd")
 const Types = preload("res://contracts/contract_types.gd")
 const UISkin = preload("res://runtime/ui_theme.gd")
-const IDS: Array[String] = ["station", "ships", "warehouse", "fitting", "market", "industry", "salvage", "missions", "research", "map", "pause"]
-const LABELS: Array[String] = ["空间站", "舰队与借船", "仓库与货舱", "舰船配装", "站点市场", "工业与回收", "打捞鉴定", "任务与合同", "科技与设施", "星域航路", "暂停与存读档"]
+const IDS: Array[String] = ["station", "ships", "warehouse", "fitting", "market", "industry", "salvage", "missions", "civilizations", "research", "map", "pause"]
+const LABELS: Array[String] = ["空间站", "舰队与借船", "仓库与货舱", "舰船配装", "站点市场", "工业与回收", "打捞鉴定", "任务与合同", "文明与声望", "科技与设施", "星域航路", "暂停与存读档"]
 const SIZES: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1440, 900), Vector2i(3440, 1370)]
 var host: Main
 var directory: String = ""

@@ -36,10 +36,13 @@ func simulate(delta: float) -> void:
 	var turn: float = float(metrics.turn_radps)
 	var requested_spin := (Vector3(intent.pitch_request, intent.yaw_request, -intent.roll_request) * turn).limit_length(turn)
 	var before: Quaternion = quaternion.normalized()
-	var requested_angle: float = requested_spin.length() * delta
+	var spin_length: float = requested_spin.length()
+	# Near-perfect automatic alignment can produce subnormal float axes. Ignore
+	# that numerical noise before constructing an axis-angle quaternion.
+	var requested_angle: float = spin_length * delta if spin_length > 0.00000001 else 0.0
 	var directed: Quaternion = before
 	if requested_angle > 0.0:
-		directed = (before * Quaternion(requested_spin.normalized(), requested_angle)).normalized()
+		directed = (before * Quaternion(requested_spin / spin_length, requested_angle)).normalized()
 	# Attitude input owns its share of the catalog budget before stabilization.
 	# Combining a small heading change with a large old roll and limiting that
 	# combined target made A/D spend nearly all of its first ticks on recovery.

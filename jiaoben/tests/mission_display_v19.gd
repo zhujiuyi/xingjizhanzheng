@@ -5,7 +5,7 @@ const Main = preload("res://runtime/main.gd")
 const D = preload("res://contracts/contract_dtos.gd")
 const T = preload("res://contracts/contract_types.gd")
 const Codec = preload("res://runtime/data/codec.gd")
-const MISSION_TYPES: Array[String] = ["all", "tutorial", "story", "contract"]
+const MISSION_TYPES: Array[String] = ["all", "tutorial", "story", "civilization", "contract"]
 const MISSION_STATUSES: Array[String] = ["all", "active", "available", "completed"]
 const MISSION_LOCATIONS: Array[String] = ["local", "all"]
 const SIZES: Array[Vector2i] = [Vector2i(1440, 900), Vector2i(1280, 720), Vector2i(1920, 1080), Vector2i(2560, 1080), Vector2i(3440, 1370)]
@@ -249,7 +249,10 @@ func expected_filter_ids(kind: String, status: String, location: String) -> Arra
 		var completed: bool = false
 		for attempt: D.MissionStateDto in host.state.rows("mission_state"):
 			if attempt.mission_def_id == id and attempt.reward_claimed: completed = true
-		if kind != "all" and str(definition.mission_kind) != kind: continue
+		var category: String = str(definition.mission_kind)
+		for admission: Dictionary in host.store.catalog.rows("civilization_join_missions"):
+			if str(admission.mission_id) == id: category = "civilization"; break
+		if kind != "all" and category != kind: continue
 		if status == "active" and not active: continue
 		if status == "available" and not host.ui._mission_reason(definition, current).is_empty(): continue
 		if status == "completed" and (active or not completed): continue
@@ -316,6 +319,10 @@ func filter_and_recommendation_gui() -> void:
 	var clear: Button
 	for button: Button in buttons_below(host.ui.body):
 		if bool(button.get_meta("mission_clear_filters", false)): clear = button
+	if not is_instance_valid(clear) or clear.disabled:
+		var controls: Array[String] = []
+		for button: Button in buttons_below(host.ui.body): controls.append(button.text + ":" + str(button.disabled) + ":" + str(button.get_meta("mission_clear_filters", false)))
+		print("MISSION_EMPTY_STATE_DIAGNOSTIC ", JSON.stringify({"type": host.ui.mission_filter, "status": host.ui.mission_status_filter, "location": host.ui.mission_location_filter, "filtered": host.ui._filtered_mission_definitions().size(), "buttons": controls}))
 	if not await actual_click(clear, "clear all three filters from empty state", 0): return
 	check(host.ui.mission_filter == "all" and host.ui.mission_status_filter == "all" and host.ui.mission_location_filter == "all" and host.ui._filtered_mission_definitions().size() == host.store.catalog.rows("mission_defs").size(), "empty-state action restores the complete formal catalog")
 	await show_filters("contract", "available", "local")
@@ -499,6 +506,12 @@ func _run() -> void:
 	await command("new_world", "任务按钮与宽屏独立验收")
 	if not check(host.state != null, "fresh world has real typed state"): await finish(); return
 	print("MISSION_DISPLAY_V19_FIXTURE fresh-production-main scoped-sqlite no-personal-save no-granted-unlocks no-balance-edit long-content-presentation-only")
+	if not OS.get_environment("XJ_MISSION_FILTER_GUI_ONLY").is_empty():
+		print("MISSION_DISPLAY_V19_FILTER_ONLY")
+		if OS.get_environment("XJ_MISSION_FILTER_GUI_ONLY") == "after_catalog": await filters_and_pages("filter-reproduction-catalog", true)
+		await filter_and_recommendation_gui()
+		await finish()
+		return
 	if baseline:
 		await show("story")
 		for row: Dictionary in mission_rows(): await row_geometry(row, "baseline-story/" + str(row.id))

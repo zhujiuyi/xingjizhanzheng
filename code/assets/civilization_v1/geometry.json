@@ -1,0 +1,841 @@
+{
+  "cruiser_council_sentinel": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      10.2,
+      0.0
+    ],
+    "collision_box_m": [
+      60.0,
+      34.0,
+      115.0
+    ],
+    "faction_style": "council",
+    "front_camera_m": [
+      0.0,
+      10.2,
+      -64.4
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -14.4,
+        -8.16,
+        17.25
+      ],
+      "structure_1": [
+        0.0,
+        -8.16,
+        17.25
+      ],
+      "structure_2": [
+        14.4,
+        -8.16,
+        17.25
+      ],
+      "utility_0": [
+        -17.28,
+        10.2,
+        10.35
+      ],
+      "utility_1": [
+        -8.64,
+        10.2,
+        10.35
+      ],
+      "utility_2": [
+        0.0,
+        10.2,
+        10.35
+      ],
+      "utility_3": [
+        8.64,
+        10.2,
+        10.35
+      ],
+      "utility_4": [
+        17.28,
+        10.2,
+        10.35
+      ],
+      "weapon_0": [
+        -14.4,
+        7.48,
+        -44.85
+      ],
+      "weapon_1": [
+        0.0,
+        7.48,
+        -44.85
+      ],
+      "weapon_2": [
+        14.4,
+        7.48,
+        -44.85
+      ],
+      "work_0": [
+        -10.8,
+        -5.1,
+        -32.2
+      ],
+      "work_1": [
+        10.8,
+        -5.1,
+        -32.2
+      ]
+    },
+    "height_m": 34.0,
+    "length_m": 115.0,
+    "width_m": 60.0,
+    "wrapper_path": "res://assets/ships/cruiser_horizon.tscn"
+  },
+  "support_council_choir": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      8.4,
+      0.0
+    ],
+    "collision_box_m": [
+      65.0,
+      28.0,
+      90.0
+    ],
+    "faction_style": "council",
+    "front_camera_m": [
+      0.0,
+      8.4,
+      -50.4
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -15.6,
+        -6.72,
+        13.5
+      ],
+      "structure_1": [
+        0.0,
+        -6.72,
+        13.5
+      ],
+      "structure_2": [
+        15.6,
+        -6.72,
+        13.5
+      ],
+      "utility_0": [
+        -18.72,
+        8.4,
+        8.1
+      ],
+      "utility_1": [
+        -9.36,
+        8.4,
+        8.1
+      ],
+      "utility_2": [
+        0.0,
+        8.4,
+        8.1
+      ],
+      "utility_3": [
+        9.36,
+        8.4,
+        8.1
+      ],
+      "utility_4": [
+        18.72,
+        8.4,
+        8.1
+      ],
+      "weapon_0": [
+        -11.7,
+        6.16,
+        -35.1
+      ],
+      "weapon_1": [
+        11.7,
+        6.16,
+        -35.1
+      ],
+      "work_0": [
+        -15.6,
+        -4.2,
+        -25.2
+      ],
+      "work_1": [
+        0.0,
+        -4.2,
+        -25.2
+      ],
+      "work_2": [
+        15.6,
+        -4.2,
+        -25.2
+      ]
+    },
+    "height_m": 28.0,
+    "length_m": 90.0,
+    "width_m": 65.0,
+    "wrapper_path": "res://assets/ships/support_weaver.tscn"
+  },
+  "battleship_council_aegis": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      19.5,
+      0.0
+    ],
+    "collision_box_m": [
+      110.0,
+      65.0,
+      220.0
+    ],
+    "faction_style": "deepforge",
+    "front_camera_m": [
+      0.0,
+      19.5,
+      -123.2
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -29.7,
+        -15.6,
+        33.0
+      ],
+      "structure_1": [
+        -9.9,
+        -15.6,
+        33.0
+      ],
+      "structure_2": [
+        9.9,
+        -15.6,
+        33.0
+      ],
+      "structure_3": [
+        29.7,
+        -15.6,
+        33.0
+      ],
+      "utility_0": [
+        -33.0,
+        19.5,
+        19.8
+      ],
+      "utility_1": [
+        -19.8,
+        19.5,
+        19.8
+      ],
+      "utility_2": [
+        -6.6,
+        19.5,
+        19.8
+      ],
+      "utility_3": [
+        6.6,
+        19.5,
+        19.8
+      ],
+      "utility_4": [
+        19.8,
+        19.5,
+        19.8
+      ],
+      "utility_5": [
+        33.0,
+        19.5,
+        19.8
+      ],
+      "weapon_0": [
+        -33.0,
+        14.3,
+        -85.8
+      ],
+      "weapon_1": [
+        -19.8,
+        14.3,
+        -85.8
+      ],
+      "weapon_2": [
+        -6.6,
+        14.3,
+        -85.8
+      ],
+      "weapon_3": [
+        6.6,
+        14.3,
+        -85.8
+      ],
+      "weapon_4": [
+        19.8,
+        14.3,
+        -85.8
+      ],
+      "weapon_5": [
+        33.0,
+        14.3,
+        -85.8
+      ],
+      "work_0": [
+        0.0,
+        -9.75,
+        -61.6
+      ]
+    },
+    "height_m": 65.0,
+    "length_m": 220.0,
+    "width_m": 110.0,
+    "wrapper_path": "res://assets/ships/battleship_bastion.tscn"
+  },
+  "destroyer_forge_hammer": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      5.4,
+      0.0
+    ],
+    "collision_box_m": [
+      30.0,
+      18.0,
+      70.0
+    ],
+    "faction_style": "deepforge",
+    "front_camera_m": [
+      0.0,
+      5.4,
+      -39.2
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -5.4,
+        -4.32,
+        10.5
+      ],
+      "structure_1": [
+        5.4,
+        -4.32,
+        10.5
+      ],
+      "utility_0": [
+        -8.1,
+        5.4,
+        6.3
+      ],
+      "utility_1": [
+        -2.7,
+        5.4,
+        6.3
+      ],
+      "utility_2": [
+        2.7,
+        5.4,
+        6.3
+      ],
+      "utility_3": [
+        8.1,
+        5.4,
+        6.3
+      ],
+      "weapon_0": [
+        -7.2,
+        3.96,
+        -27.3
+      ],
+      "weapon_1": [
+        0.0,
+        3.96,
+        -27.3
+      ],
+      "weapon_2": [
+        7.2,
+        3.96,
+        -27.3
+      ]
+    },
+    "height_m": 18.0,
+    "length_m": 70.0,
+    "width_m": 30.0,
+    "wrapper_path": "res://assets/ships/destroyer_raptor.tscn"
+  },
+  "cruiser_forge_citadel": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      10.2,
+      0.0
+    ],
+    "collision_box_m": [
+      60.0,
+      34.0,
+      115.0
+    ],
+    "faction_style": "council",
+    "front_camera_m": [
+      0.0,
+      10.2,
+      -64.4
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -14.4,
+        -8.16,
+        17.25
+      ],
+      "structure_1": [
+        0.0,
+        -8.16,
+        17.25
+      ],
+      "structure_2": [
+        14.4,
+        -8.16,
+        17.25
+      ],
+      "utility_0": [
+        -17.28,
+        10.2,
+        10.35
+      ],
+      "utility_1": [
+        -8.64,
+        10.2,
+        10.35
+      ],
+      "utility_2": [
+        0.0,
+        10.2,
+        10.35
+      ],
+      "utility_3": [
+        8.64,
+        10.2,
+        10.35
+      ],
+      "utility_4": [
+        17.28,
+        10.2,
+        10.35
+      ],
+      "weapon_0": [
+        -14.4,
+        7.48,
+        -44.85
+      ],
+      "weapon_1": [
+        0.0,
+        7.48,
+        -44.85
+      ],
+      "weapon_2": [
+        14.4,
+        7.48,
+        -44.85
+      ],
+      "work_0": [
+        -10.8,
+        -5.1,
+        -32.2
+      ],
+      "work_1": [
+        10.8,
+        -5.1,
+        -32.2
+      ]
+    },
+    "height_m": 34.0,
+    "length_m": 115.0,
+    "width_m": 60.0,
+    "wrapper_path": "res://assets/ships/cruiser_horizon.tscn"
+  },
+  "battleship_forge_ironwall": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      19.5,
+      0.0
+    ],
+    "collision_box_m": [
+      110.0,
+      65.0,
+      220.0
+    ],
+    "faction_style": "deepforge",
+    "front_camera_m": [
+      0.0,
+      19.5,
+      -123.2
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -29.7,
+        -15.6,
+        33.0
+      ],
+      "structure_1": [
+        -9.9,
+        -15.6,
+        33.0
+      ],
+      "structure_2": [
+        9.9,
+        -15.6,
+        33.0
+      ],
+      "structure_3": [
+        29.7,
+        -15.6,
+        33.0
+      ],
+      "utility_0": [
+        -33.0,
+        19.5,
+        19.8
+      ],
+      "utility_1": [
+        -19.8,
+        19.5,
+        19.8
+      ],
+      "utility_2": [
+        -6.6,
+        19.5,
+        19.8
+      ],
+      "utility_3": [
+        6.6,
+        19.5,
+        19.8
+      ],
+      "utility_4": [
+        19.8,
+        19.5,
+        19.8
+      ],
+      "utility_5": [
+        33.0,
+        19.5,
+        19.8
+      ],
+      "weapon_0": [
+        -33.0,
+        14.3,
+        -85.8
+      ],
+      "weapon_1": [
+        -19.8,
+        14.3,
+        -85.8
+      ],
+      "weapon_2": [
+        -6.6,
+        14.3,
+        -85.8
+      ],
+      "weapon_3": [
+        6.6,
+        14.3,
+        -85.8
+      ],
+      "weapon_4": [
+        19.8,
+        14.3,
+        -85.8
+      ],
+      "weapon_5": [
+        33.0,
+        14.3,
+        -85.8
+      ],
+      "work_0": [
+        0.0,
+        -9.75,
+        -61.6
+      ]
+    },
+    "height_m": 65.0,
+    "length_m": 220.0,
+    "width_m": 110.0,
+    "wrapper_path": "res://assets/ships/battleship_bastion.tscn"
+  },
+  "destroyer_roaming_spear": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      5.4,
+      0.0
+    ],
+    "collision_box_m": [
+      30.0,
+      18.0,
+      70.0
+    ],
+    "faction_style": "deepforge",
+    "front_camera_m": [
+      0.0,
+      5.4,
+      -39.2
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -5.4,
+        -4.32,
+        10.5
+      ],
+      "structure_1": [
+        5.4,
+        -4.32,
+        10.5
+      ],
+      "utility_0": [
+        -8.1,
+        5.4,
+        6.3
+      ],
+      "utility_1": [
+        -2.7,
+        5.4,
+        6.3
+      ],
+      "utility_2": [
+        2.7,
+        5.4,
+        6.3
+      ],
+      "utility_3": [
+        8.1,
+        5.4,
+        6.3
+      ],
+      "weapon_0": [
+        -7.2,
+        3.96,
+        -27.3
+      ],
+      "weapon_1": [
+        0.0,
+        3.96,
+        -27.3
+      ],
+      "weapon_2": [
+        7.2,
+        3.96,
+        -27.3
+      ]
+    },
+    "height_m": 18.0,
+    "length_m": 70.0,
+    "width_m": 30.0,
+    "wrapper_path": "res://assets/ships/destroyer_raptor.tscn"
+  },
+  "cruiser_roaming_kite": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      10.2,
+      0.0
+    ],
+    "collision_box_m": [
+      60.0,
+      34.0,
+      115.0
+    ],
+    "faction_style": "council",
+    "front_camera_m": [
+      0.0,
+      10.2,
+      -64.4
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -14.4,
+        -8.16,
+        17.25
+      ],
+      "structure_1": [
+        0.0,
+        -8.16,
+        17.25
+      ],
+      "structure_2": [
+        14.4,
+        -8.16,
+        17.25
+      ],
+      "utility_0": [
+        -17.28,
+        10.2,
+        10.35
+      ],
+      "utility_1": [
+        -8.64,
+        10.2,
+        10.35
+      ],
+      "utility_2": [
+        0.0,
+        10.2,
+        10.35
+      ],
+      "utility_3": [
+        8.64,
+        10.2,
+        10.35
+      ],
+      "utility_4": [
+        17.28,
+        10.2,
+        10.35
+      ],
+      "weapon_0": [
+        -14.4,
+        7.48,
+        -44.85
+      ],
+      "weapon_1": [
+        0.0,
+        7.48,
+        -44.85
+      ],
+      "weapon_2": [
+        14.4,
+        7.48,
+        -44.85
+      ],
+      "work_0": [
+        -10.8,
+        -5.1,
+        -32.2
+      ],
+      "work_1": [
+        10.8,
+        -5.1,
+        -32.2
+      ]
+    },
+    "height_m": 34.0,
+    "length_m": 115.0,
+    "width_m": 60.0,
+    "wrapper_path": "res://assets/ships/cruiser_horizon.tscn"
+  },
+  "battleship_roaming_tempest": {
+    "asset_version": "art-full-v1",
+    "axis": "Y_up_negative_Z_front",
+    "camera_target_m": [
+      0.0,
+      19.5,
+      0.0
+    ],
+    "collision_box_m": [
+      110.0,
+      65.0,
+      220.0
+    ],
+    "faction_style": "deepforge",
+    "front_camera_m": [
+      0.0,
+      19.5,
+      -123.2
+    ],
+    "hardpoints": {
+      "structure_0": [
+        -29.7,
+        -15.6,
+        33.0
+      ],
+      "structure_1": [
+        -9.9,
+        -15.6,
+        33.0
+      ],
+      "structure_2": [
+        9.9,
+        -15.6,
+        33.0
+      ],
+      "structure_3": [
+        29.7,
+        -15.6,
+        33.0
+      ],
+      "utility_0": [
+        -33.0,
+        19.5,
+        19.8
+      ],
+      "utility_1": [
+        -19.8,
+        19.5,
+        19.8
+      ],
+      "utility_2": [
+        -6.6,
+        19.5,
+        19.8
+      ],
+      "utility_3": [
+        6.6,
+        19.5,
+        19.8
+      ],
+      "utility_4": [
+        19.8,
+        19.5,
+        19.8
+      ],
+      "utility_5": [
+        33.0,
+        19.5,
+        19.8
+      ],
+      "weapon_0": [
+        -33.0,
+        14.3,
+        -85.8
+      ],
+      "weapon_1": [
+        -19.8,
+        14.3,
+        -85.8
+      ],
+      "weapon_2": [
+        -6.6,
+        14.3,
+        -85.8
+      ],
+      "weapon_3": [
+        6.6,
+        14.3,
+        -85.8
+      ],
+      "weapon_4": [
+        19.8,
+        14.3,
+        -85.8
+      ],
+      "weapon_5": [
+        33.0,
+        14.3,
+        -85.8
+      ],
+      "work_0": [
+        0.0,
+        -9.75,
+        -61.6
+      ]
+    },
+    "height_m": 65.0,
+    "length_m": 220.0,
+    "width_m": 110.0,
+    "wrapper_path": "res://assets/ships/battleship_bastion.tscn"
+  }
+}

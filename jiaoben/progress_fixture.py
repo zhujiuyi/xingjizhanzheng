@@ -22,19 +22,20 @@ sys.path.insert(0, str(ROOT / "jiaoben"))
 import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
-MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql")
-FORMAT_VERSION = 8
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_7.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_7"
+MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql")
+FORMAT_VERSION = 9
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_8.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_8"
 REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_3": PROGRESS_DIR / "catalog_adapter_v0_3.sql",
     "frozen_catalog_v0_4": PROGRESS_DIR / "catalog_adapter_v0_4.sql",
     "frozen_catalog_v0_4_r2": PROGRESS_DIR / "catalog_adapter_v0_4_r2.sql",
     "frozen_catalog_v0_5": PROGRESS_DIR / "catalog_adapter_v0_5.sql",
     "frozen_catalog_v0_6": PROGRESS_DIR / "catalog_adapter_v0_6.sql",
-    "frozen_catalog_v0_7": ADAPTER,
+    "frozen_catalog_v0_7": PROGRESS_DIR / "catalog_adapter_v0_7.sql",
+    "frozen_catalog_v0_8": ADAPTER,
 }
-RULE_CODE_VERSION = "singleplayer_space_v3"
+RULE_CODE_VERSION = "singleplayer_civilizations_v1"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
 STATE_TABLES = (
@@ -47,6 +48,7 @@ STATE_TABLES = (
     "ship_gate_cooldown_state", "sector_state", "station_economy_state", "shop_stock_state",
     "shop_ship_stock_state", "npc_state", "production_state", "rng_state", "action_receipt_state", "transfer_state", "base_module_state",
     "encounter_state", "salvage_package_state", "spatial_state",
+    "civilization_state", "territory_state", "war_campaign_state", "war_fleet_state",
 )
 
 
@@ -340,6 +342,10 @@ def initial_state(connection, snapshot, world, content):
         insert(connection, "shop_ship_stock_state", {**ctx, "station_id": definition["station_id"], "ship_def_id": definition["ship_id"], "quantity": definition["initial_units"], "ask_credit": ship["base_ask_credit"], "bid_credit": ship["base_bid_credit"], "refresh_remaining_s": stations[definition["station_id"]]["stock_refresh_s"]})
     for station in stations.values():
         insert(connection, "station_economy_state", {**ctx, "station_id": station["station_id"], "buyback_remaining_credit": station["buyback_budget_credit"], "refresh_remaining_s": station["stock_refresh_s"]})
+    if frozen("civilization_defs"):
+        insert(connection, "civilization_state", {**ctx, "player_id": player_id, "faction_id": None, "joined_tick": 0, "switch_cooldown_remaining_s": 0.0})
+        for policy in frozen("sector_sovereignty_defs"):
+            insert(connection, "territory_state", {**ctx, "sector_id": policy["sector_id"], "faction_id": policy["initial_faction_id"], "captured_tick": 0})
     # PCG32 standard initialization (doc21 §3.1): two discarded steps, no
     # gameplay draws. 54 and the multiplier are fixed algorithm constants.
     seed = connection.execute("SELECT seed FROM world WHERE world_id=?", (world,)).fetchone()[0]

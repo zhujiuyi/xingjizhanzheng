@@ -13,9 +13,9 @@ class FullSingleplayerContentTests(unittest.TestCase):
  def tearDownClass(cls):cls.db.close();cls.balance.connection.close()
  def rows(self,t):return [dict(r) for r in self.db.execute('SELECT * FROM '+t)]
  def test_full_finite_scope(self):
-  self.assertEqual(len(self.rows('system_defs')),10);self.assertEqual(len(self.rows('ship_defs')),9);self.assertEqual(len(self.rows('module_defs')),39)
-  self.assertEqual(len(self.rows('hull_recipe_defs')),9);self.assertEqual(len(self.rows('research_defs')),4);self.assertEqual(len(self.rows('base_module_defs')),4)
-  self.assertEqual(len(self.rows('mission_defs')),40)
+  self.assertEqual(len(self.rows('system_defs')),54);self.assertEqual(len(self.rows('ship_defs')),18);self.assertEqual(len(self.rows('module_defs')),39)
+  self.assertEqual(len(self.rows('hull_recipe_defs')),18);self.assertEqual(len(self.rows('research_defs')),13);self.assertEqual(len(self.rows('base_module_defs')),4)
+  self.assertEqual(len(self.rows('mission_defs')),52)
  def test_class_roles_and_different_budgets(self):
   roles={r['class_id'] for r in self.rows('ship_role_defs')};self.assertEqual(len(roles),9)
   ships={r['ship_id']:r for r in self.rows('ship_defs')}
@@ -28,7 +28,7 @@ class FullSingleplayerContentTests(unittest.TestCase):
   self.assertEqual(len(families),13);self.assertTrue(all(x=={1,2,3} for x in families.values()))
   self.assertEqual({r['module_id'] for r in self.rows('module_salvage_recipe_defs')},{r['module_id'] for r in self.rows('module_defs')})
  def test_fixed_network_connects_all_systems_without_optional_hole(self):
-  links=self.rows('connection_defs');fixed=[r for r in links if r['gate_class_id']!='gate_wandering_candidate'];self.assertEqual(len(fixed),12)
+  links=self.rows('connection_defs');fixed=[r for r in links if r['gate_class_id']!='gate_wandering_candidate'];self.assertEqual(len(fixed),72)
   reached={'sector_anchor'}
   while True:
    old=set(reached)

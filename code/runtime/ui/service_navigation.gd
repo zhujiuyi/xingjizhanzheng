@@ -11,6 +11,7 @@ const PAGES: Array[Dictionary] = [
 	{"id": "industry", "label": "工业与回收", "icon": "res://assets/interface_v3/services/industry.svg"},
 	{"id": "salvage", "label": "打捞鉴定", "icon": "res://assets/interface_v3/services/salvage.svg"},
 	{"id": "missions", "label": "任务与合同", "icon": "res://assets/interface_v3/services/missions.svg"},
+	{"id": "civilizations", "label": "文明与声望", "icon": "res://assets/interface_v3/services/civilizations.svg"},
 	{"id": "research", "label": "科技与设施", "icon": "res://assets/interface_v3/services/research.svg"},
 	{"id": "map", "label": "星域航路", "icon": "res://assets/interface_v3/services/map.svg"},
 	{"id": "pause", "label": "暂停与存读档", "icon": "res://assets/interface_v3/services/pause.svg"},

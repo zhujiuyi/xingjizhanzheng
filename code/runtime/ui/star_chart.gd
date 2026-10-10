@@ -16,6 +16,7 @@ var information: Label
 var resource_information: Label
 var search_box: LineEdit
 var risk_filter: OptionButton
+var sovereignty_filter: OptionButton
 var navigator: OptionButton
 var result_count: Label
 var zoom_readout: Label
@@ -23,6 +24,7 @@ var _resource_nodes: Array[Dictionary] = []
 var _selected_route: Array[String] = []
 var _filter_text: String = ""
 var _risk_id: String = ""
+var _sovereignty_id: String = ""
 var _route_mass: float = 0.0
 var _pending_camera: Dictionary = {}
 var _navigation_signature: String = ""
@@ -76,6 +78,13 @@ class ChartDrawing extends Control:
 			queue_redraw()
 			return
 		var ids: Array[String] = chart._sorted_ids()
+		var fixed_layout: bool = true
+		for id: String in ids:
+			if not chart.sectors[id].has("chart_point"): fixed_layout = false; break
+		if fixed_layout:
+			for id: String in ids: world_points[id] = chart.sectors[id].chart_point
+			fit_all()
+			return
 		# Display coordinates derive from stable IDs and real fixed connections.
 		# They are neither physical distances nor a second catalog of game values.
 		for index: int in range(ids.size()):
@@ -220,11 +229,16 @@ class ChartDrawing extends Control:
 			var current: bool = chart.state != null and id == chart.state.current_sector()
 			var context: bool = selected or current or chart._selected_route.has(id)
 			var opacity: float = 1.0 if chart.matches_filter(id) or context else 0.2
-			var color: Color = Color(chart._risk_color(str(chart.sectors[id].risk_zone_id)), opacity)
+			var color: Color = Color(chart._sovereignty_color(id), opacity)
 			var radius: float = 5.5 if world_points.size() <= 40 or zoom > fit_zoom * 1.3 else 3.6
 			draw_circle(point, radius * 3.0, Color(color, 0.07 * opacity))
 			draw_circle(point, radius * 1.8, Color(color, 0.13 * opacity))
 			draw_circle(point, radius, color)
+			if bool(chart.sectors[id].get("contested", false)):
+				var edge: float = radius + 5.0
+				draw_polyline(PackedVector2Array([point + Vector2(0, -edge), point + Vector2(edge, 0), point + Vector2(0, edge), point + Vector2(-edge, 0), point + Vector2(0, -edge)]), UISkin.AMBER, 1.5, true)
+			if chart.catalog.table_names.has("civilization_defs"):
+				draw_arc(point, radius + 2.0, 0, TAU, 24, Color(chart._risk_color(str(chart.sectors[id].risk_zone_id)), opacity), 1.0, true)
 			draw_circle(point + Vector2(-1.2, -1.2), maxf(radius * 0.32, 1.0), Color(UISkin.TEXT, opacity))
 			if selected:
 				draw_arc(point, radius + 7.0, 0, TAU, 48, UISkin.AMBER, 1.8, true)
@@ -311,6 +325,7 @@ class ChartDrawing extends Control:
 		if chart.state != null and id == chart.state.current_sector(): return 1
 		if id == _hovered: return 2
 		if chart._selected_route.has(id): return 3
+		if bool(chart.sectors[id].get("capital", false)): return 3
 		return 4
 
 	func _draw_coordinates() -> void:
@@ -429,6 +444,12 @@ func _ready() -> void:
 	for title: String in ["全部安全区", "高安全区", "中安全区", "低安全区"]: risk_filter.add_item(title)
 	risk_filter.item_selected.connect(_risk_changed)
 	find_row.add_child(risk_filter)
+	sovereignty_filter = OptionButton.new()
+	sovereignty_filter.name = "SovereigntyFilter"
+	sovereignty_filter.custom_minimum_size.x = 112
+	sovereignty_filter.add_theme_font_size_override("font_size", 12)
+	sovereignty_filter.item_selected.connect(_sovereignty_changed)
+	find_row.add_child(sovereignty_filter)
 	navigator = OptionButton.new()
 	navigator.name = "SectorNavigator"
 	navigator.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -502,6 +523,22 @@ func configure(definitions: XJCatalog, runtime: XJRuntimeState, gameplay: RefCou
 	for row: Dictionary in catalog.rows("sector_defs"):
 		var system: Dictionary = catalog.one("system_defs", "system_id", row.system_id)
 		sectors[str(row.sector_id)] = {"title": str(system.get("display_name", row.sector_id)), "risk_zone_id": str(row.risk_zone_id), "system_id": str(row.system_id)}
+		if catalog.table_names.has("sector_sovereignty_defs"):
+			var policy: Dictionary = catalog.one("sector_sovereignty_defs", "sector_id", row.sector_id)
+			if not policy.is_empty(): sectors[str(row.sector_id)]["chart_point"] = Vector2(float(policy.chart_x), float(policy.chart_y))
+			sectors[str(row.sector_id)]["capital"] = not catalog.one("civilization_defs", "capital_sector_id", row.sector_id).is_empty()
+	_refresh_sovereignty()
+	if is_instance_valid(sovereignty_filter):
+		sovereignty_filter.clear()
+		sovereignty_filter.visible = catalog.table_names.has("civilization_defs")
+		sovereignty_filter.add_item("全部主权"); sovereignty_filter.set_item_metadata(0, "")
+		if sovereignty_filter.visible:
+			sovereignty_filter.add_item("中立星系"); sovereignty_filter.set_item_metadata(1, "neutral")
+			for faction: Dictionary in catalog.rows("civilization_defs"):
+				sovereignty_filter.add_item(str(catalog.one("faction_defs", "faction_id", faction.faction_id).display_name))
+				sovereignty_filter.set_item_metadata(sovereignty_filter.item_count - 1, str(faction.faction_id))
+			var legend: Label = find_child("ChartLegend", true, false)
+			if legend != null: legend.text = "星点颜色：议会蓝 / 深铸铜 / 同盟绿 / 中立灰；外圈表示安全区。\n文明核心优先标注；主权筛选可查看文明领土和中立星系。\n实线为已开放航路，虚线为受限航路；滚轮缩放、左拖平移。"
 	var endpoints_by_connection: Dictionary = {}
 	for endpoint: Dictionary in catalog.rows("gate_endpoint_defs"):
 		var identity: String = str(endpoint.connection_id)
@@ -560,7 +597,38 @@ func _sorted_ids() -> Array[String]:
 func matches_filter(id: String) -> bool:
 	if not sectors.has(id): return false
 	var row: Dictionary = sectors[id]
-	return (_risk_id.is_empty() or str(row.risk_zone_id) == _risk_id) and (_filter_text.is_empty() or str(row.title).to_lower().contains(_filter_text) or id.to_lower().contains(_filter_text))
+	var owner: String = str(row.get("owner_id", ""))
+	var sovereignty_matches: bool = _sovereignty_id.is_empty() or (_sovereignty_id == "neutral" and owner.is_empty()) or _sovereignty_id == owner
+	return sovereignty_matches and (_risk_id.is_empty() or str(row.risk_zone_id) == _risk_id) and (_filter_text.is_empty() or str(row.title).to_lower().contains(_filter_text) or id.to_lower().contains(_filter_text))
+
+func _refresh_sovereignty() -> bool:
+	if catalog == null or state == null or not catalog.table_names.has("civilization_defs"): return false
+	var changed: bool = false
+	var contested: Dictionary = {}
+	for war: RefCounted in state.rows("war_campaign_state"):
+		if war.status in ["assembling", "fighting", "occupying"]:
+			var definition: Dictionary = catalog.one("civilization_war_defs", "war_id", war.war_id)
+			if not definition.is_empty(): contested[str(definition.target_sector_id)] = true
+	for id: String in sectors:
+		var control: RefCounted = state.find("territory_state", "sector_id", id)
+		var owner: String = str(control.faction_id) if control != null and control.has_faction_id else ""
+		if sectors[id].get("owner_id", "unset") != owner:
+			sectors[id]["owner_id"] = owner
+			changed = true
+		if bool(sectors[id].get("contested", false)) != contested.has(id):
+			sectors[id]["contested"] = contested.has(id)
+			changed = true
+	return changed
+
+func _sovereignty_changed(index: int) -> void:
+	_sovereignty_id = str(sovereignty_filter.get_item_metadata(index))
+	_update_navigator()
+	if is_instance_valid(diagram): diagram.queue_redraw()
+
+func _sovereignty_color(id: String) -> Color:
+	if not catalog.table_names.has("civilization_defs"): return _risk_color(str(sectors[id].risk_zone_id))
+	var faction: Dictionary = catalog.one("civilization_defs", "faction_id", str(sectors[id].get("owner_id", "")))
+	return Color(str(faction.color_hex)) if not faction.is_empty() else Color("929ba2")
 
 func _search_changed(text: String) -> void:
 	_filter_text = text.strip_edges().to_lower()
@@ -694,10 +762,22 @@ func _update_information() -> void:
 			route_text = ("可规划航路：" if bool(status.open) else "拓扑航路（当前受限）：") + " → ".join(names)
 			var blocked: Array = status.blocked
 			if not blocked.is_empty(): route_text += "\n" + "；".join(blocked)
-	information.text = "%s  ·  %s  ·  NPC 等级 %d–%d\n势力：%s  /  空间站：%s\n资源：%s\n%s\n星图只提供情报；距离、费用、电容、冷却及交战条件在实际虫洞入口再次校验。" % [row.title, risk.get("display_name", "未知安全区"), int(risk.get("npc_level_min", 0)), int(risk.get("npc_level_max", 0)), "、".join(factions) if not factions.is_empty() else "未记录", "、".join(station_names) if not station_names.is_empty() else "未记录", "、".join(resources) if not resources.is_empty() else "未记录", route_text]
+	var sovereignty: String = "、".join(factions) if not factions.is_empty() else "未记录"
+	if catalog.table_names.has("civilization_defs"):
+		var owner: String = str(row.get("owner_id", ""))
+		var policy: Dictionary = catalog.one("sector_sovereignty_defs", "sector_id", selected_sector)
+		sovereignty = str(catalog.one("faction_defs", "faction_id", owner).get("display_name", owner)) if not owner.is_empty() else "中立（可争夺）" if bool(policy.get("conquerable", false)) else "中立（受保护航路）"
+		if bool(row.get("capital", false)): sovereignty += " · 文明核心"
+		if bool(row.get("contested", false)): sovereignty += " · 战争争夺中"
+	information.text = "%s  ·  %s  ·  NPC 等级 %d–%d\n主权势力：%s  /  空间站：%s\n站点经营者：%s\n资源：%s\n%s\n星图只提供情报；距离、费用、电容、冷却及交战条件在实际虫洞入口再次校验。" % [row.title, risk.get("display_name", "未知安全区"), int(risk.get("npc_level_min", 0)), int(risk.get("npc_level_max", 0)), sovereignty, "、".join(station_names) if not station_names.is_empty() else "未记录", "、".join(factions), "、".join(resources) if not resources.is_empty() else "未记录", route_text]
 	refresh_resource_status()
 
 func refresh_resource_status(total_mass_kg: float = -1.0) -> void:
+	if _refresh_sovereignty():
+		_update_navigator()
+		_update_information()
+		if is_instance_valid(diagram): diagram.queue_redraw()
+		return
 	if not is_instance_valid(resource_information) or state == null or catalog == null: return
 	if _refresh_navigation_intelligence(total_mass_kg): return
 	var visit: RefCounted = state.find("sector_state", "sector_id", selected_sector)
@@ -821,7 +901,7 @@ func _route(origin: String, destination: String) -> Array[String]:
 
 func export_view() -> Dictionary:
 	if not is_instance_valid(diagram): return {}
-	return {"selected_sector": selected_sector, "search": search_box.text, "risk_index": risk_filter.selected, "zoom": diagram.zoom, "relative_zoom": diagram.zoom / maxf(diagram.fit_zoom, 0.001), "world_center": diagram.screen_to_world(diagram.size * 0.5)}
+	return {"selected_sector": selected_sector, "search": search_box.text, "risk_index": risk_filter.selected, "sovereignty": _sovereignty_id, "zoom": diagram.zoom, "relative_zoom": diagram.zoom / maxf(diagram.fit_zoom, 0.001), "world_center": diagram.screen_to_world(diagram.size * 0.5)}
 
 func restore_view(view: Dictionary) -> void:
 	if view.is_empty() or not is_instance_valid(diagram): return
@@ -829,6 +909,12 @@ func restore_view(view: Dictionary) -> void:
 	_search_changed(search_box.text)
 	risk_filter.select(clampi(int(view.get("risk_index", 0)), 0, 3))
 	_risk_changed(risk_filter.selected)
+	if is_instance_valid(sovereignty_filter):
+		for index: int in range(sovereignty_filter.item_count):
+			if str(sovereignty_filter.get_item_metadata(index)) == str(view.get("sovereignty", "")):
+				sovereignty_filter.select(index)
+				_sovereignty_changed(index)
+				break
 	var id: String = str(view.get("selected_sector", ""))
 	if sectors.has(id): select_sector(id)
 	_pending_camera = view.duplicate(true)

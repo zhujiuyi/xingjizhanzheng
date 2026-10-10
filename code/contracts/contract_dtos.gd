@@ -662,6 +662,42 @@ class SpatialStateDto extends RefCounted:
 	var site_id: String = ""
 
 ## 完整世界快照：所有已初始化星区状态都在数组中，不限当前已加载星区。
+class CivilizationStateDto extends RefCounted:
+	var player_id: String = ""
+	var has_faction_id: bool = false
+	var faction_id: String = ""
+	var joined_tick: int = 0
+	var switch_cooldown_remaining_s: float = 0.0
+
+class CivilizationRequestDto extends RefCounted:
+	var action: String = ""
+	var target_id: String = ""
+	var quantity: int = 1
+	var extra: String = ""
+
+class TerritoryStateDto extends RefCounted:
+	var sector_id: String = ""
+	var has_faction_id: bool = false
+	var faction_id: String = ""
+	var captured_tick: int = 0
+
+class WarCampaignStateDto extends RefCounted:
+	var war_id: String = ""
+	var player_id: String = ""
+	var status: String = "assembling"
+	var fleet_order: String = "advance"
+	var focus_target_id: String = ""
+	var capture_remaining_s: float = 0.0
+	var attempt: int = 1
+	var started_tick: int = 0
+	var finished_tick: int = 0
+	var rewards_claimed: bool = false
+
+class WarFleetStateDto extends RefCounted:
+	var npc_instance_id: String = ""
+	var war_id: String = ""
+	var side: String = "ally"
+
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
 	var content: ContentRefDto = ContentRefDto.new()
@@ -700,6 +736,10 @@ class WorldSnapshotDto extends RefCounted:
 	var encounter_state_rows: Array[EncounterStateDto] = []
 	var salvage_package_state_rows: Array[SalvagePackageStateDto] = []
 	var spatial_state_rows: Array[SpatialStateDto] = []
+	var civilization_state_rows: Array[CivilizationStateDto] = []
+	var territory_state_rows: Array[TerritoryStateDto] = []
+	var war_campaign_state_rows: Array[WarCampaignStateDto] = []
+	var war_fleet_state_rows: Array[WarFleetStateDto] = []
 
 ## 表现派生值不是另一份定义：每次由 frozen catalog + 当前状态计算。
 class ShipMetricsViewDto extends RefCounted:

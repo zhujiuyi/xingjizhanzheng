@@ -11,6 +11,9 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "civilization-world": ("civilization_world_v24.gd", "XJ_CIVILIZATION_WORLD_V24", "civilization-world-v24", "CIVILIZATION_WORLD_V24", "--xj-verify-civilization-world-v24"),
+    "civilization-upgrade": ("civilization_upgrade_v24.gd", "XJ_CIVILIZATION_UPGRADE_V24", "civilization-upgrade-v24", "CIVILIZATION_UPGRADE_V24", "--xj-verify-civilization-upgrade-v24"),
+    "civilizations": ("civilizations_v24.gd", "XJ_CIVILIZATIONS_V24", "civilizations-v24", "CIVILIZATIONS_V24", "--xj-verify-civilizations-v24"),
     "combat": ("combat_v18.gd", "XJ_COMBAT_V18", "combat-v18", "COMBAT_V18", "combat"),
     "lighting": ("lighting_effects_v18.gd", "XJ_LIGHTING_V18", "lighting-effects-v18", "LIGHTING_EFFECTS_V18", "lighting"),
     "weapon-ui": ("weapon_ui_v18.gd", "XJ_WEAPON_UI_V18", "weapon-ui-v18", "WEAPON_UI_V18", "weapon-ui"),
@@ -75,11 +78,11 @@ def run_suite():
         else:
             env[prefix + "_SCRIPT"] = test.as_posix()
             env[prefix + "_DIRECTORY"] = directory.as_posix()
-        if name == "upgrade":
+        if name in ("upgrade", "civilization-upgrade"):
             assert args.legacy and args.legacy.is_file(), "Pass --legacy pointing to a closed test-owned format6 fixture"
             legacy = args.legacy.resolve()
             assert legacy.is_relative_to(ROOT / "jiaoben/tmp")
-            env["XJ_UPGRADE_V18_LEGACY_SOURCE"] = legacy.as_posix()
+            env[prefix + "_LEGACY_SOURCE"] = legacy.as_posix()
         stem = f"v18-{mode}-{name}-{run_id}"
         output = ROOT / f"jiaoben/logs/{stem}.log"
         engine_log = ROOT / f"jiaoben/logs/{stem}-engine.log"
@@ -142,6 +145,12 @@ def run_suite():
         if builtin:
             assert record["summary"]["checks"] >= (6 if name == "base-store" else 110)
             assert len(captures) == (0 if name == "base-store" else 17)
+        if name in ("civilizations", "civilization-upgrade"):
+            assert record["summary"]["checks"] >= (200 if name == "civilizations" else 25) and len(captures) == 0
+        if name == "civilization-world":
+            assert args.native and record["summary"]["checks"] >= 90 and len(captures) == 12
+            battle = [entry for entry in record["summary"]["observations"] if entry["kind"] == "battle"]
+            assert len(battle) == 1 and battle[0]["status"] == "won" and battle[0]["ally_impacts"] > 0 and battle[0]["seconds"] >= 30
         if name == "service-navigation":
             summary = record["summary"]
             assert summary["native"] == args.native and summary["checks"] >= 120
@@ -152,7 +161,7 @@ def run_suite():
             assert {item["label"] for item in windows} == {
                 f"{width}x{height}-{scale}" for width, height in ((1280, 720), (1440, 900), (3440, 1370)) for scale in (100, 200)
             }
-            assert len(windows) == 6 and len([item for item in summary["observations"] if item["kind"] == "row"]) == 66
+            assert len(windows) == 6 and len([item for item in summary["observations"] if item["kind"] == "row"]) == 72
         print(f"PASS {mode} {name}: {len(captures)} screenshots; {record['seconds']} s", flush=True)
     print(f"V18_ACCEPTANCE PASS {report_path}", flush=True)
 

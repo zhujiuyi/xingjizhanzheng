@@ -67,6 +67,10 @@ func create(catalog: XJCatalog, seed_value: int) -> State:
 		_add("gate_state", {"connection_id": connection.connection_id, "enabled": 1, "remaining_mass_budget_kg": gate.total_mass_budget_kg, "lifetime_remaining_s": gate.lifetime_s})
 	for sector in catalog.rows("sector_defs"):
 		_add("sector_state", {"sector_id": sector.sector_id, "visited": 1 if sector.sector_id == station.sector_id else 0})
+	if catalog.table_names.has("civilization_defs"):
+		_add("civilization_state", {"player_id": player_id, "faction_id": null})
+		for policy: Dictionary in catalog.rows("sector_sovereignty_defs"):
+			_add("territory_state", {"sector_id": policy.sector_id, "faction_id": policy.initial_faction_id})
 	if catalog.table_names.has("encounter_defs"):
 		for encounter in catalog.rows("encounter_defs"):
 			_add("encounter_state", {"encounter_id": encounter.encounter_id})

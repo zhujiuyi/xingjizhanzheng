@@ -39,11 +39,11 @@ class CombatCatalogTests(unittest.TestCase):
     def test_version_and_content_closure(self):
         meta = self.rows("catalog_meta")[0]
         self.assertEqual((meta["schema_version"], meta["content_version"], meta["ruleset_version"]),
-                         (6, "v0.7-space", "singleplayer_space_v3"))
+                         (7, "v0.8-civilizations", "singleplayer_civilizations_v1"))
         self.assertEqual(len(self.rows("module_defs")), 39)
         self.assertEqual(len(self.rows("weapon_defs")), 18)
         self.assertEqual(len(self.rows("drone_defs")), 3)
-        self.assertEqual(len(self.rows("system_lighting_defs")), 10)
+        self.assertEqual(len(self.rows("system_lighting_defs")), 54)
         self.assertEqual(set(builder.CONTENT_COLUMNS), set(builder.CONTENT_TABLES))
         self.assertEqual(builder.logical_content_hash(self.catalog.connection), meta["content_hash"])
 
@@ -51,6 +51,9 @@ class CombatCatalogTests(unittest.TestCase):
         roles = self.catalog.index("ship_role_defs", "ship_id")
         profiles = self.catalog.index("weapon_behavior_defs", "module_id")
         permissions = {(r["ship_id"], r["family_id"]): r for r in self.rows("ship_weapon_permissions")}
+        exclusive = {row['ship_id'] for row in self.rows('civilization_hull_defs')}
+        roles = {id_: role for id_, role in roles.items() if id_ not in exclusive}
+        self.assertEqual(len(roles), 9)
         medium = {"destroyer", "cruiser", "battleship"}
         drone_hulls = {"cruiser", "battleship", "support"}
         for ship_id, role in roles.items():
@@ -68,7 +71,7 @@ class CombatCatalogTests(unittest.TestCase):
                         expected = True
                     self.assertEqual(actual, expected)
         self.assertTrue(all(r["max_installed"] == 1 for r in permissions.values()
-                            if r["family_id"] in {"thermal", "pulse", "drone"}))
+                            if r["family_id"] in {"thermal", "pulse", "drone"} and r['ship_id'] not in exclusive))
 
     def test_default_batteries_express_hull_roles(self):
         expected = {

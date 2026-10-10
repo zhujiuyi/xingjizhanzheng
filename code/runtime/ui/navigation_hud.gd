@@ -43,7 +43,7 @@ class Radar extends Control:
 		for contact: Dictionary in host.contacts:
 			var point: Vector2 = host.radar_point(contact, size)
 			var color: Color = host.contact_color(str(contact.kind))
-			if contact.kind in ["npc", "ship"]:
+			if contact.kind in ["npc", "ship", "ally"]:
 				draw_colored_polygon(PackedVector2Array([point + Vector2(0, -4), point + Vector2(-4, 4), point + Vector2(4, 4)]), color)
 			elif contact.kind == "planet":
 				draw_arc(point, 4, 0, TAU, 18, color, 1.5, true)
@@ -190,7 +190,7 @@ func refresh() -> void:
 		var bearing: bool = bool(target.get("navigation_only", false)) or not _target_is_local(id)
 		var relative: Vector3 = render_ship.basis.inverse() * _target_direction(id, node) if bearing else render_ship.basis.inverse() * (_render_target_position(node, id) - render_ship.origin)
 		if not bearing and distance > minf(radius_m(), sensor_limit): continue
-		contacts.append({"id": id, "title": str(target.title), "kind": str(target.kind), "relative": relative, "height_m": float(relative.y) * distance if bearing else float(relative.y), "distance_m": distance, "bearing": bearing})
+		contacts.append({"id": id, "title": str(target.title), "kind": "ally" if bool(target.get("friendly", false)) else str(target.kind), "relative": relative, "height_m": float(relative.y) * distance if bearing else float(relative.y), "distance_m": distance, "bearing": bearing})
 	if is_instance_valid(range_label): range_label.text = ("雷达 " if size.x < 950 else "局部态势 · ") + XJSpaceUnits.distance(radius_m())
 	if is_instance_valid(radar): radar.queue_redraw()
 	_update_selection()
@@ -227,6 +227,7 @@ func radar_point(contact: Dictionary, canvas_size: Vector2) -> Vector2:
 	return center + planar / maxf(radius_m(), 1.0) * radius
 
 func contact_color(kind: String) -> Color:
+	if kind == "ally": return Color("7fcca4")
 	if kind == "npc": return Color("ee816e")
 	if kind == "planet": return UISkin.AMBER
 	if kind == "gate": return Color("b7c9e8")
@@ -258,7 +259,7 @@ func target_geometry() -> Dictionary:
 		var half := size * 0.5 - Vector2(40, 40)
 		var factor: float = minf(half.x / maxf(absf(direction.x), 0.001), half.y / maxf(absf(direction.y), 0.001))
 		point = size * 0.5 + direction * factor
-	return {"start": from, "end": point, "on_screen": on_screen, "behind": behind, "kind": str(entry.kind), "title": str(entry.title), "distance_m": _target_distance(selected_id, node), "bearing": bool(entry.get("navigation_only", false)) or not _target_is_local(selected_id), "navigation_only": bool(entry.get("navigation_only", false))}
+	return {"start": from, "end": point, "on_screen": on_screen, "behind": behind, "kind": "ally" if bool(entry.get("friendly", false)) else str(entry.kind), "title": str(entry.title), "distance_m": _target_distance(selected_id, node), "bearing": bool(entry.get("navigation_only", false)) or not _target_is_local(selected_id), "navigation_only": bool(entry.get("navigation_only", false))}
 
 func _update_selection() -> void:
 	if not is_instance_valid(selection_frame): return
@@ -304,7 +305,7 @@ func marker_geometry() -> Array[Dictionary]:
 		var render_target_position: Vector3 = _render_target_position(node, id)
 		if (rig.camera.global_transform.affine_inverse() * render_target_position).z >= -0.001: continue
 		var point: Vector2 = rig.camera.unproject_position(render_target_position)
-		if Rect2(Vector2.ZERO, size).has_point(point): markers.append({"id": id, "point": point, "color": contact_color(str(entry.kind)), "bearing": bearing})
+		if Rect2(Vector2.ZERO, size).has_point(point): markers.append({"id": id, "point": point, "color": contact_color("ally" if bool(entry.get("friendly", false)) else str(entry.kind)), "bearing": bearing})
 	return markers
 
 func caption_rect(title: String, finish: Vector2) -> Rect2:

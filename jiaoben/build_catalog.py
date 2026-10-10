@@ -10,12 +10,15 @@ from pathlib import Path
 import sqlite3
 import struct
 import tempfile
+from civilization_catalog import COLUMNS as CIVILIZATION_COLUMNS, TABLES as CIVILIZATION_TABLES, validate as validate_civilizations
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "code/data/catalog.db"
 SCHEMA = ROOT / "code/database/catalog_schema.sql"
 SEED = ROOT / "code/database/catalog_seed.sql"
 SPACE = ROOT / "code/database/space_v7.sql"
+CIVILIZATION_SCHEMA = ROOT / "code/database/civilization_schema.sql"
+CIVILIZATION_SEED = ROOT / "code/database/civilization_seed.sql"
 HASH_ALGORITHM = "catalog_hash_v1"
 CONTENT_VIEWS = ("effective_connection_defs", "module_full_defs", "npc_full_defs", "mission_summary_defs")
 # Explicit table registry; column order and PK order come from the reviewed DDL.
@@ -219,6 +222,10 @@ CONTENT_COLUMNS = {
     'tutorial_step_defs': 'step_id:TEXT:1|stage_code:TEXT:0|step_order:INTEGER:0|prerequisite_step_id:TEXT:0|action_kind:TEXT:0|reward_credit:INTEGER:0|required_item_id:TEXT:0|required_quantity:INTEGER:0|target_npc_id:TEXT:0',
     'weapon_defs': 'module_id:TEXT:1|damage_type:TEXT:0|raw_damage:REAL:0|projectile_speed_mps:REAL:0|ammo_item_id:TEXT:0|ammo_per_cycle:INTEGER:0',
 }
+
+
+CONTENT_TABLES += CIVILIZATION_TABLES
+CONTENT_COLUMNS.update(CIVILIZATION_COLUMNS)
 
 
 def identifier(name: str) -> str:
@@ -493,6 +500,7 @@ def validate_content_graph(connection: sqlite3.Connection) -> None:
     require(completed == set(missions), f"Mission prerequisite/unlock cycle or unreachable target: {set(missions) - completed}")
     validate_combat_content(connection)
     validate_space_content(connection)
+    validate_civilizations(connection)
 
 
 def validate_space_content(connection: sqlite3.Connection) -> None:
@@ -707,7 +715,7 @@ def build_catalog(output: Path = DEFAULT_OUTPUT) -> dict[str, object]:
         connection.execute("PRAGMA journal_mode=DELETE")
         connection.execute("PRAGMA synchronous=EXTRA")
         # One explicit transaction: schema, seed, checks and logical hash.
-        source = "BEGIN IMMEDIATE;\n" + SCHEMA.read_text(encoding="utf-8") + "\n" + SEED.read_text(encoding="utf-8") + "\n" + SPACE.read_text(encoding="utf-8")
+        source = "BEGIN IMMEDIATE;\n" + "\n".join(path.read_text(encoding="utf-8") for path in (SCHEMA, SEED, SPACE, CIVILIZATION_SCHEMA, CIVILIZATION_SEED))
         connection.executescript(source)
         validate_database(connection)
         content_hash = logical_content_hash(connection)

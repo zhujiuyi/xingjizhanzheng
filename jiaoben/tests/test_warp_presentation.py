@@ -79,7 +79,8 @@ class WarpPresentation(unittest.TestCase):
             "code/assets/legacy_art_full_v1/manifest.json",
         ):
             with self.subTest(path=path):
-                self.assertEqual((ROOT / path).read_bytes(), baseline_bytes(path), path)
+                current = ROOT / ('code/data/catalog_space_v7.db' if path == 'code/data/catalog.db' else path)
+                self.assertEqual(current.read_bytes(), baseline_bytes(path), path)
 
     def test_published_catalog_navigation_and_progress_sql_are_byte_preserved(self):
         paths = [path for path in baseline_paths("code/database") if path.endswith(".sql")]
@@ -92,10 +93,10 @@ class WarpPresentation(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path):
                 self.assertEqual((ROOT / path).read_bytes(), baseline_bytes(path), path)
-        # This fix adds presentation SQL only: no migration, frozen adapter,
-        # balancing catalogue, or prior navigation rule is quietly replaced.
+        # Civilization data is an explicit additive extension. All earlier
+        # migration, adapter and navigation source bytes remain protected.
         actual = {path.relative_to(ROOT).as_posix() for path in (CODE / "database").rglob("*.sql")}
-        self.assertEqual(actual, set(paths) | {"code/database/warp_presentation_v3.sql"})
+        self.assertEqual(actual, set(paths) | {"code/database/warp_presentation_v3.sql", "code/database/civilization_schema.sql", "code/database/civilization_seed.sql", "code/database/progress/012_civilizations.sql", "code/database/progress/catalog_adapter_v0_8.sql"})
 
     def test_independent_presentation_database_identity_and_integrity(self):
         self.assertEqual(self.db.execute("PRAGMA integrity_check").fetchall(), [("ok",)])

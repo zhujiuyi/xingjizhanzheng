@@ -1,0 +1,130 @@
+{
+  "format_version": 1,
+  "asset_version": "service-navigation-v3",
+  "scope": "Presentation-only compact function navigation; frozen assets, SQL, catalog and player state unchanged.",
+  "authoring_script": "jiaoben/build_service_navigation.py",
+  "svg_contract": {
+    "size_px": [
+      24,
+      24
+    ],
+    "utf8_without_bom": true,
+    "line_endings": "LF",
+    "static_geometry_only": true,
+    "external_references": false
+  },
+  "resources": [
+    {
+      "asset_id": "service_station_icon",
+      "resource_path": "res://assets/interface_v3/services/station.svg",
+      "sha256": "cf5a8f6e575aba652e2609d9a9382c3e3bbb29f929f85bacf6b24b027ad4159b",
+      "size_bytes": 307,
+      "role": "function_navigation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_ships_icon",
+      "resource_path": "res://assets/interface_v3/services/ships.svg",
+      "sha256": "fa75c94242e16ee73288f194860945fb809aa375664afc511e5989bb031947df",
+      "size_bytes": 303,
+      "role": "function_navigation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_warehouse_icon",
+      "resource_path": "res://assets/interface_v3/services/warehouse.svg",
+      "sha256": "a467e4f4aa95e756b458516bf4e4d0dbd8c1a560725a38c6eb9a730f7a6d39db",
+      "size_bytes": 290,
+      "role": "function_navigation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_fitting_icon",
+      "resource_path": "res://assets/interface_v3/services/fitting.svg",
+      "sha256": "738243210384b6cbb7a7c714e14f3a3d2e56bd94c5888c2c8b79006eec748dae",
+      "size_bytes": 339,
+      "role": "function_navigation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_market_icon",
+      "resource_path": "res://assets/interface_v3/services/market.svg",
+      "sha256": "933e0c24f78f1dd6f93dda712a6798d78751d2e6d4871579a623d2b18e8781dc",
+      "size_bytes": 328,
+      "role": "function_navigation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_industry_icon",
+      "resource_path": "res://assets/interface_v3/services/industry.svg",
+      "sha256": "d036bc68ce3103eeeafcf97b752fba6ed49c31e35021817610a22286e91581a3",
+      "size_bytes": 311,
+      "role": "function_navigation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_salvage_icon",
+      "resource_path": "res://assets/interface_v3/services/salvage.svg",
+      "sha256": "41868674fc66a6974912a56beb43f89fd95f1a1528693278c3ee7dd398856cbe",
+      "size_bytes": 322,
+      "role": "function_navigation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_missions_icon",
+      "resource_path": "res://assets/interface_v3/services/missions.svg",
+      "sha256": "9bda9fb94daa49c50636d38002b3e23f411827f5749504286f468eed4c51135b",
+      "size_bytes": 288,
+      "role": "function_navigation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_civilizations_icon",
+      "resource_path": "res://assets/interface_v3/services/civilizations.svg",
+      "sha256": "2768d036091c1243de3c4db508e94ba10f93c6ffd3ff815870846c1ebad0845e",
+      "size_bytes": 285,
+      "role": "function_navigation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_research_icon",
+      "resource_path": "res://assets/interface_v3/services/research.svg",
+      "sha256": "19134157527e6324c3dad05483f84bf447eb0ab20278433456096df8458654a9",
+      "size_bytes": 420,
+      "role": "function_navigation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_map_icon",
+      "resource_path": "res://assets/interface_v3/services/map.svg",
+      "sha256": "dcc38e0ef6a5db5b9f0346fec22f384744238618c41ae71ac16fb49015951519",
+      "size_bytes": 376,
+      "role": "function_navigation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_pause_icon",
+      "resource_path": "res://assets/interface_v3/services/pause.svg",
+      "sha256": "ece83137d4a3c6e58897d034d73d875b9c18aafc0cbb1521a17ca5b1a237272f",
+      "size_bytes": 283,
+      "role": "function_navigation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_observe_ship_icon",
+      "resource_path": "res://assets/interface_v3/services/observe.svg",
+      "sha256": "decfbdabc54fae5fbc61194238ad79babbce451f2b1fa1ad0f88a40df69f36b0",
+      "size_bytes": 298,
+      "role": "hangar_observation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "service_navigation_registry",
+      "resource_path": "res://runtime/ui/service_navigation.gd",
+      "sha256": "8e4bca36e2ee4b1ec269ae37f14c1f2e20460743f79ba6bef88ef6aa5c2f1878",
+      "size_bytes": 2519,
+      "role": "shared_order_captions_and_icons",
+      "source": "Project-authored presentation registry; no gameplay or persistent state."
+    }
+  ]
+}

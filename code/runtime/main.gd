@@ -23,6 +23,7 @@ var observing: bool = false
 var fire_held: bool = false
 var last_destroyed_ship: String = ""
 var pending_damage: Dictionary = {}
+var player_damage_targets: Dictionary = {}
 var deferred_save: Dictionary = {}
 var autosave_elapsed: float = 0.0
 var auto_slot: int = 0
@@ -50,6 +51,9 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag": "--xj-verify-civilization-world-v24", "file": "civilization_world_v24.gd", "prefix": "civilization-world-v24", "env": "XJ_CIVILIZATION_WORLD_V24", "meta": "xj_civilization_world_v24_diagnostic"},
+		{"flag": "--xj-verify-civilization-upgrade-v24", "file": "civilization_upgrade_v24.gd", "prefix": "civilization-upgrade-v24", "env": "XJ_CIVILIZATION_UPGRADE_V24", "meta": "xj_civilization_upgrade_v24_diagnostic"},
+		{"flag": "--xj-verify-civilizations-v24", "file": "civilizations_v24.gd", "prefix": "civilizations-v24", "env": "XJ_CIVILIZATIONS_V24", "meta": "xj_civilizations_v24_diagnostic"},
 		{"flag": "--xj-verify-combat-v18", "file": "combat_v18.gd", "prefix": "combat-v18", "env": "XJ_COMBAT_V18", "meta": "xj_combat_v18_diagnostic"},
 		{"flag": "--xj-verify-lighting-v18", "file": "lighting_effects_v18.gd", "prefix": "lighting-effects-v18", "env": "XJ_LIGHTING_V18", "meta": "xj_lighting_v18_diagnostic"},
 		{"flag": "--xj-verify-weapon-ui-v18", "file": "weapon_ui_v18.gd", "prefix": "weapon-ui-v18", "env": "XJ_WEAPON_UI_V18", "meta": "xj_weapon_ui_v18_diagnostic"},
@@ -123,7 +127,7 @@ func _ready() -> void:
 	_apply_preferences()
 	# Prepare every presentation dependency before publishing a new/load world.
 	# It is a hidden exhibition; gameplay state and catalog balance are untouched.
-	hangar = XJStationHangar.new()
+	hangar = preload("res://runtime/civilization_hangar.gd").new()
 	hangar.name = "StationExhibition"
 	hangar.configure("shuttle_swift", store.catalog)
 	add_child(hangar)
@@ -618,10 +622,12 @@ func _fire_weapons(automatic: bool = false, target_override: String = "") -> voi
 		world.projectiles.fire(state.ship().ship_instance_id, world.flight.get_rid(), origin.origin, direction, float(cycle.speed) if cycle.get("speed") != null else 0.0, float(cycle.get("range", 0.0)), cycle.get("damage_vector", Vector3.ZERO), cycle.profile, equipment.item_instance_id, selected_target)
 
 func _weapon_hit(target_id: String, damage: Vector3, point: Vector3, owner_id: String) -> void:
+	if not gameplay.civilizations.hostile_to(owner_id, target_id): return
+	if owner_id == state.ship().ship_instance_id: player_damage_targets[target_id] = true
 	if target_id == state.ship().ship_instance_id and owner_id != target_id:
 		if presentation != null: presentation.hit(target_id, state.ship().shield > 0.0, point, damage)
 		pending_damage[target_id] = (pending_damage.get(target_id, Vector3.ZERO) as Vector3) + damage
-	elif owner_id == state.ship().ship_instance_id and state.find("npc_state", "npc_instance_id", target_id) != null:
+	elif (owner_id == state.ship().ship_instance_id or gameplay.civilizations.fleet_member(owner_id) != null) and state.find("npc_state", "npc_instance_id", target_id) != null:
 		var npc := state.find("npc_state", "npc_instance_id", target_id) as Dtos.NpcStateDto
 		if presentation != null: presentation.hit(target_id, npc.shield > 0.0, point, damage)
 		pending_damage[target_id] = (pending_damage.get(target_id, Vector3.ZERO) as Vector3) + damage
@@ -639,9 +645,11 @@ func _flush_damage() -> void:
 			gameplay.call("damage_ship", raw)
 		else:
 			gameplay.call("damage_npc", id, raw)
-			gameplay.call("record_event", "weapon_hit", id, 1)
-			ui.notify("命中敌舰 · %.0f" % (raw.x + raw.y + raw.z))
+			if player_damage_targets.has(id):
+				gameplay.call("record_event", "weapon_hit", id, 1)
+				ui.notify("命中敌舰 · %.0f" % (raw.x + raw.y + raw.z))
 	pending_damage.clear()
+	player_damage_targets.clear()
 
 func interaction_context(target_id: String = "") -> Dictionary:
 	var context = preload("res://runtime/interaction_context.gd")
@@ -686,6 +694,8 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		if action == "set_combat_option": _sync_combat_automation()
 		return
 	match action:
+		"civilization_map", "war_navigate":
+			_civilization_navigation(action, target)
 		"set_combat_option":
 			if combat_automation != null and _keyboard_control_allowed() and not travel.active() and not local_navigation.warp_active() and not _paused():
 				combat_automation.set_option(target, extra == "on")
@@ -1027,6 +1037,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	else: ui.notify(visual_rules.last_error, true)
 	ui.slots = store.list_slots()
 	ui.bind(state, store.catalog, gameplay, world, camera)
+	gameplay.civilizations.status_changed.connect(_civilization_status)
 	combat_automation = CombatAutomation.new()
 	combat_automation.changed.connect(_sync_combat_automation)
 	combat_automation.acquired.connect(_combat_acquired)
@@ -1036,9 +1047,38 @@ func _activate(candidate: XJRuntimeState) -> void:
 	brake_hold.clear()
 	pending_damage.clear()
 	autosave_elapsed = 0.0
+	player_damage_targets.clear()
 	_release_controls()
 	_center_steering()
 	_sync_presentation_stage()
+
+func _civilization_status(message: String) -> void:
+	ui.notify(message)
+	if ui.page in ["civilizations", "map"]: ui.refresh_page.call_deferred()
+
+func _civilization_navigation(action: String, faction: String) -> void:
+	if state == null or not gameplay.civilizations.supported(): return
+	var destination: String = ""
+	if action == "civilization_map":
+		destination = str(store.catalog.one("civilization_defs", "faction_id", faction).get("capital_sector_id", ""))
+	else:
+		var war: RefCounted = gameplay.civilizations.active_war()
+		if war == null: return
+		var definition: Dictionary = store.catalog.one("civilization_war_defs", "war_id", war.war_id)
+		destination = str(definition.target_sector_id)
+		if destination == state.current_sector() and state.ship().status == Types.ShipStatus.FLYING:
+			var encounter: Dictionary = store.catalog.one("encounter_defs", "anchor_id", definition.capture_anchor_id)
+			var target: String = "encounter:" + str(encounter.get("encounter_id", ""))
+			if world.targets.has(target):
+				ui.show_page("")
+				ui._select_target(target)
+				ui.notify("战区已定位 · 跃迁或接近目标后率领舰队清场。")
+				return
+	if destination.is_empty(): return
+	ui.show_page("map")
+	if is_instance_valid(ui.resource_chart):
+		ui.resource_chart.call("select_sector", destination)
+		ui.resource_chart.call("focus_selected")
 
 func _discard_staged() -> void:
 	if is_instance_valid(staged_world):
@@ -1186,6 +1226,7 @@ func _reset_combat_automation(release_motion: bool = true) -> void:
 
 func _enemy_target_valid(target_id: String) -> bool:
 	if state == null or world == null or gameplay == null or state.ship().status != Types.ShipStatus.FLYING: return false
+	if gameplay.civilizations.friendly(target_id): return false
 	if travel != null and travel.active(): return false
 	if local_navigation != null and local_navigation.warp_active(): return false
 	if not world.targets.has(target_id): return false

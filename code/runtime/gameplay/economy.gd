@@ -71,6 +71,8 @@ func sell_item(entity_id: String, quantity: int) -> bool:
 
 func buy_ship(ship_id: String) -> bool:
 	if not g.allowed_service("ship_purchase"):return false
+	var civilization_reason: String = g.civilizations.hull_reason(ship_id)
+	if not civilization_reason.is_empty(): return g.fail(civilization_reason)
 	var stock: D.ShopShipStockStateDto = _ship_stock(ship_id)
 	var role: Dictionary = g.definition("ship_role_defs","ship_id",ship_id)
 	if stock==null or stock.quantity<=0 or (not role.is_empty() and not g.unlocked(role.required_unlock_id)):return g.fail("舰体未开放或暂无库存")
@@ -123,6 +125,8 @@ func manufacture(recipe_id: String, batches: int) -> bool:
 	if not g.allowed_service("manufacture"):return false
 	var hull: Dictionary = g.definition("hull_recipe_defs","hull_recipe_id",recipe_id)
 	if not hull.is_empty():
+		var civilization_reason: String = g.civilizations.hull_reason(hull.ship_id)
+		if not civilization_reason.is_empty(): return g.fail(civilization_reason)
 		if not g.unlocked(hull.required_unlock_id):return g.fail("舰体蓝图未掌握")
 		if _ship_stock(hull.ship_id)==null:return g.fail("本站没有此舰体规格的船坞")
 		var inputs: Dictionary = _inputs("hull_recipe_inputs","hull_recipe_id",recipe_id,batches)
@@ -190,6 +194,8 @@ func repair(_target: String) -> bool:
 
 func research(research_id: String) -> bool:
 	if not g.allowed_service("manufacture"):return false
+	var civilization_reason: String = g.civilizations.research_reason(research_id)
+	if not civilization_reason.is_empty(): return g.fail(civilization_reason)
 	var def: Dictionary = g.definition("research_defs","research_id",research_id)
 	if def.is_empty() or g.unlocked(def.reward_unlock_id):return g.fail("研究不存在或已完成")
 	if g.definition("station_defs","station_id",g.station()).faction_id!=def.station_faction_id:return g.fail("需到对应势力研究设施")

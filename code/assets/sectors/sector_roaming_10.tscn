@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[node name="SectorVisualRoot" type="Node3D"]
+metadata/asset_id = "scene_sector_roaming_10"
+metadata/sector_id = "sector_roaming_10"
+metadata/asset_version = "civilization-v1"

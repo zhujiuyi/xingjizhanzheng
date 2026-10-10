@@ -3,10 +3,11 @@ extends Node3D
 ## Scene is a projection of typed state; no node is persisted.
 const Types = preload("res://contracts/contract_types.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
-const Factory = preload("res://runtime/visuals/industrial_visual_factory.gd")
+const Factory = preload("res://runtime/visuals/civilization_visual_factory.gd")
 const StationVisual = preload("res://runtime/visuals/station_visual_adapter.gd")
 const Celestials = preload("res://runtime/celestial_backdrop.gd")
 const Space = preload("res://runtime/space_coordinates.gd")
+const WarFleetPilot = preload("res://runtime/war_fleet_pilot.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
 var gameplay: RefCounted
@@ -156,6 +157,7 @@ func rebuild_player() -> bool:
 	replacement.visual.set_meta("visual_asset_version", source.get_meta("visual_asset_version", ""))
 	source.free()
 	replacement.bind(row, catalog)
+	replacement.metrics = gameplay.call("metrics", row)
 	XJSurfaceStyle.apply_ship(replacement.visual)
 	if is_instance_valid(flight):
 		# A deferred deletion must not leave the previous hull in the rendered
@@ -199,7 +201,8 @@ func sync_entities() -> bool:
 		if not npcs.has(row.npc_instance_id):
 			var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", row.spawn_id)
 			var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)
-			var body: CharacterBody3D = factory.enemy_scene(str(definition.archetype_id))
+			var escort_hull: String = gameplay.civilizations.escort_hull(row.npc_instance_id)
+			var body: CharacterBody3D = factory.scene(escort_hull) if not escort_hull.is_empty() else factory.enemy_scene(str(definition.archetype_id))
 			if body == null:
 				last_error = "敌舰表现资源不可用：" + str(definition.archetype_id)
 				return false
@@ -214,6 +217,9 @@ func sync_entities() -> bool:
 			body.quaternion = Quaternion(row.quat_x, row.quat_y, row.quat_z, row.quat_w).normalized()
 			npcs[row.npc_instance_id] = body
 			_target(row.npc_instance_id, "%s · Lv.%d" % [definition.display_name, definition.level], "npc", body, spawn.anchor_id)
+			targets[row.npc_instance_id]["friendly"] = gameplay.civilizations.friendly(row.npc_instance_id)
+			if bool(targets[row.npc_instance_id].friendly): targets[row.npc_instance_id].title = "友军 · " + str(catalog.one("ship_defs", "ship_id", escort_hull).display_name)
+			elif gameplay.civilizations.fleet_member(row.npc_instance_id) != null: targets[row.npc_instance_id].title = "中立守军 · Lv.%d" % int(definition.level)
 		var group_id: String = gameplay.get("encounters").group_for_spawn(row.spawn_id)
 		targets[row.npc_instance_id]["group_target_id"] = "group:" + group_id if not group_id.is_empty() else "encounter:" + row.spawn_id if row.has_mission_instance_id else ""
 	for id: String in targets.keys():
@@ -279,6 +285,7 @@ func simulate_npcs(delta: float) -> void:
 		if row == null or not row.alive:
 			continue
 		var body: CharacterBody3D = npcs[id]
+		if WarFleetPilot.step(self, row, body, delta): continue
 		var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", row.spawn_id)
 		var behavior: Dictionary = catalog.one("npc_behavior_defs", "behavior_id", spawn.behavior_id)
 		var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)

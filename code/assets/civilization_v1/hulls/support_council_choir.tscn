@@ -1,0 +1,35 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/ship_v3/support_weaver.glb" id="base"]
+
+[sub_resource type="StandardMaterial3D" id="paint"]
+resource_name = "civilization_paint"
+albedo_color = Color(0.458824, 0.741176, 0.909804, 1)
+metallic = 0.58
+roughness = 0.68
+
+[sub_resource type="BoxMesh" id="wing"]
+material = SubResource("paint")
+size = Vector3(5.2, 11.76, 21.6)
+
+[sub_resource type="BoxMesh" id="stripe"]
+material = SubResource("paint")
+size = Vector3(5.85, 1.54, 34.2)
+
+[node name="CivilizationHull" type="Node3D"]
+metadata/visual_asset_version = "civilization-v1"
+metadata/ship_def_id = "support_council_choir"
+
+[node name="Platform" parent="." instance=ExtResource("base")]
+
+[node name="PortFitting" type="MeshInstance3D" parent="."]
+position = Vector3(-25.35, 2.8, -9)
+mesh = SubResource("wing")
+
+[node name="StarboardFitting" type="MeshInstance3D" parent="."]
+position = Vector3(25.35, 2.8, -9)
+mesh = SubResource("wing")
+
+[node name="CivilizationStripe" type="MeshInstance3D" parent="."]
+position = Vector3(0, 8.4, -7.2)
+mesh = SubResource("stripe")

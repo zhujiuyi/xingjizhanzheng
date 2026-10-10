@@ -17,6 +17,7 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 			if codec.encode_row(table, row).is_empty(): return _fail(codec.last_error)
 	if not _validate_encounters(state, catalog): return false
 	if not _validate_space(state, catalog): return false
+	if not _validate_civilizations(state, catalog): return false
 	for ship in state.rows("ship_state"):
 		var norm: float = ship.quat_x * ship.quat_x + ship.quat_y * ship.quat_y + ship.quat_z * ship.quat_z + ship.quat_w * ship.quat_w
 		if abs(norm - 1.0) >= 0.00001: return _fail("Invalid normalized ship quaternion")
@@ -100,6 +101,68 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 			var capacity: int = definition.cargo_l if container.kind == Types.ContainerKind.CARGO else definition.mineral_cargo_l
 			if volume > capacity: return _fail("Cargo volume exceeded")
 		if payload > definition.max_payload_mass_kg + 0.0000001: return _fail("Shared payload mass exceeded")
+	return true
+
+func _validate_civilizations(state: State, catalog: XJCatalog) -> bool:
+	if not catalog.table_names.has("civilization_defs"):
+		for table: String in ["civilization_state", "territory_state", "war_campaign_state", "war_fleet_state"]:
+			if not state.rows(table).is_empty(): return _fail("Civilization state references legacy rules")
+		return true
+	if state.rows("civilization_state").size() != 1: return _fail("Exactly one civilization identity required")
+	var identity: RefCounted = state.rows("civilization_state")[0]
+	if identity.player_id != state.player().player_id or identity.switch_cooldown_remaining_s < 0: return _fail("Invalid civilization identity")
+	if identity.has_faction_id and catalog.one("civilization_defs", "faction_id", identity.faction_id).is_empty(): return _fail("Unknown allegiance")
+	var controls: Dictionary = {}
+	for row: RefCounted in state.rows("territory_state"):
+		var policy: Dictionary = catalog.one("sector_sovereignty_defs", "sector_id", row.sector_id)
+		if policy.is_empty() or controls.has(row.sector_id): return _fail("Unknown or duplicate territory")
+		var owner: Variant = row.faction_id if row.has_faction_id else null
+		if not bool(policy.conquerable) and owner != policy.initial_faction_id: return _fail("Protected territory ownership changed")
+		if row.has_faction_id and catalog.one("civilization_defs", "faction_id", row.faction_id).is_empty(): return _fail("Unknown territory owner")
+		controls[row.sector_id] = owner
+	if controls.size() != catalog.rows("sector_sovereignty_defs").size(): return _fail("Incomplete territory coverage")
+	var wars: Dictionary = {}
+	var active: int = 0
+	for war: RefCounted in state.rows("war_campaign_state"):
+		var definition: Dictionary = catalog.one("civilization_war_defs", "war_id", war.war_id)
+		if definition.is_empty() or wars.has(war.war_id) or war.player_id != state.player().player_id: return _fail("Invalid war campaign identity")
+		wars[war.war_id] = war
+		if war.status not in ["assembling", "fighting", "occupying", "won", "failed", "cancelled"] or war.fleet_order not in ["advance", "focus", "regroup"]: return _fail("Invalid war phase or order")
+		if war.capture_remaining_s < 0 or war.capture_remaining_s > float(definition.capture_duration_s) or war.attempt < 1: return _fail("Invalid war capture clock")
+		if bool(war.rewards_claimed) != (war.status == "won"): return _fail("War reward receipt mismatch")
+		if war.status == "won" and controls[definition.target_sector_id] != definition.faction_id: return _fail("War victory missing territory")
+		if war.status in ["assembling", "fighting", "occupying"]:
+			active += 1
+			if not identity.has_faction_id or identity.faction_id != definition.faction_id or controls[definition.target_sector_id] != null: return _fail("Active war has wrong allegiance or occupied target")
+			var reputation: RefCounted = state.find("reputation_state", "faction_id", definition.faction_id)
+			for rank: Dictionary in catalog.rows("civilization_rank_defs"):
+				if rank.faction_id == definition.faction_id and int(rank.rank_level) == int(definition.required_rank) and (reputation == null or reputation.reputation < int(rank.required_reputation)): return _fail("War requires its frozen reputation rank")
+	if active > 1: return _fail("Multiple simultaneous war campaigns")
+	var members: Dictionary = {}
+	var seen: Dictionary = {}
+	for fleet: RefCounted in state.rows("war_fleet_state"):
+		var npc: RefCounted = state.find("npc_state", "npc_instance_id", fleet.npc_instance_id)
+		if npc == null or seen.has(fleet.npc_instance_id) or not wars.has(fleet.war_id): return _fail("Orphan or duplicate war fleet member")
+		seen[fleet.npc_instance_id] = true
+		var definition: Dictionary = catalog.one("civilization_war_members", "spawn_id", npc.spawn_id)
+		if definition.is_empty() or definition.war_id != fleet.war_id or definition.side != fleet.side: return _fail("War fleet member identity mismatch")
+		var ids: Array = members.get(fleet.war_id, [])
+		if ids.has(npc.spawn_id): return _fail("Duplicate war spawn")
+		ids.append(npc.spawn_id); members[fleet.war_id] = ids
+	for war_id: String in wars:
+		if wars[war_id].status not in ["assembling", "fighting", "occupying"]: continue
+		var expected: int = 0
+		for member: Dictionary in catalog.rows("civilization_war_members"):
+			if member.war_id == war_id: expected += 1
+		if members.get(war_id, []).size() != expected: return _fail("Incomplete active war fleet")
+	for sector_id: String in controls:
+		var policy: Dictionary = catalog.one("sector_sovereignty_defs", "sector_id", sector_id)
+		if policy.initial_faction_id != null or controls[sector_id] == null: continue
+		var proved: bool = false
+		for war_id: String in wars:
+			var definition: Dictionary = catalog.one("civilization_war_defs", "war_id", war_id)
+			if wars[war_id].status == "won" and definition.target_sector_id == sector_id and definition.faction_id == controls[sector_id]: proved = true
+		if not proved: return _fail("Territory capture lacks a completed war")
 	return true
 
 func _validate_space(state: State, catalog: XJCatalog) -> bool:

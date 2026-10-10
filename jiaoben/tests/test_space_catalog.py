@@ -54,7 +54,7 @@ class SpaceCatalog(unittest.TestCase):
     def test_reviewed_metadata_and_content_identity(self):
         row = self.rows("catalog_meta")[0]
         self.assertEqual((row["schema_version"], row["content_version"], row["ruleset_version"]),
-                         (6, "v0.7-space", "singleplayer_space_v3"))
+                         (7, "v0.8-civilizations", "singleplayer_civilizations_v1"))
         self.assertEqual(builder.logical_content_hash(self.db), row["content_hash"])
         source = self.copy()
         try:
@@ -66,13 +66,19 @@ class SpaceCatalog(unittest.TestCase):
         self.assertEqual(set(self.anchors), set(self.mapping))
         self.assertEqual(len(self.mapping), self.db.execute("SELECT count(*) FROM anchor_site_defs").fetchone()[0])
         old = {row["anchor_id"]: dict(row) for row in self.baseline.execute("SELECT * FROM anchor_defs")}
-        self.assertEqual(old, self.anchors)
+        self.assertEqual(old, {key: self.anchors[key] for key in old})
 
     def test_local_mechanics_have_not_been_scaled_with_astronomical_distances(self):
         for table in ("module_defs", "npc_behavior_defs", "npc_archetype_defs", "drone_defs", "rule_parameters", "camera_profile_defs"):
             before = [tuple(row) for row in self.baseline.execute(f'SELECT * FROM "{table}" ORDER BY 1')]
             after = [tuple(row) for row in self.db.execute(f'SELECT * FROM "{table}" ORDER BY 1')]
-            self.assertEqual(before, after, table)
+            # New civilization definitions extend the catalogue; every prior
+            # record retains exactly the old local physical/gameplay values.
+            columns = self.baseline.execute(f'PRAGMA table_info("{table}")').fetchall()
+            keys = [index for index, column in enumerate(columns) if column['pk']]
+            old_ids = {tuple(row[index] for index in keys) for row in before}
+            retained = [row for row in after if tuple(row[index] for index in keys) in old_ids]
+            self.assertEqual(before, retained, table)
 
     def test_site_reference_sector_and_radius_are_closed(self):
         self.assertEqual(set(self.mapping.values()), set(self.sites))
@@ -145,14 +151,15 @@ class SpaceCatalog(unittest.TestCase):
         try:
             old = {row[0] for row in source.execute("SELECT celestial_id FROM celestial_visual_defs")}
             new = {body["celestial_id"] for body in self.rows("celestial_defs") if body["celestial_kind"] == "planet"}
-            self.assertEqual(old, new)
+            self.assertTrue(old <= new)
+            self.assertEqual(len(new), 54)
         finally:
             source.close()
 
     def test_reviewed_adapter_has_exact_schema_and_logical_identity(self):
         source = sqlite3.connect(":memory:")
         try:
-            source.executescript((ROOT / "code/database/progress/catalog_adapter_v0_7.sql").read_text(encoding="utf-8"))
+            source.executescript((ROOT / "code/database/progress/catalog_adapter_v0_8.sql").read_text(encoding="utf-8"))
             for table in builder.CONTENT_TABLES:
                 expected = self.db.execute(f'PRAGMA table_info("{table}")').fetchall()
                 actual = source.execute(f'PRAGMA table_info("{table}")').fetchall()

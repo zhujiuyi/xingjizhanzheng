@@ -12,6 +12,9 @@ static func asset_path(kind:String,id:String)->String:
 	var canonical:String=_canonical_kind(kind)
 	var key:String=canonical+":"+id
 	if _paths.has(key):return str(_paths[key])
+	if canonical == "ship":
+		var variant: String = "res://assets/civilization_v1/portraits/" + id + ".png"
+		if ResourceLoader.exists(variant): return variant
 	# The generic ship mark is explicitly unidentified; it is not a fake hull.
 	var fallback:String=canonical if canonical in ["ship","item","research","facility","mission","blueprint"] else "item"
 	return ASSET_ROOT+"generic/"+fallback+".svg"
@@ -49,3 +52,11 @@ static func _initialize()->void:
 		var path:String=str(value.get("resource_path",""))
 		if not kind.is_empty() and not id.is_empty() and path.begins_with(ASSET_ROOT):
 			_paths[kind+":"+id]=path
+	var extension: String = "res://assets/civilization_v1/manifest.json"
+	if FileAccess.file_exists(extension):
+		var content: Variant = JSON.parse_string(FileAccess.get_file_as_string(extension))
+		if content is Dictionary:
+			for entry: Dictionary in content.get("entries", []):
+				var path: String = str(entry.get("resource_path", ""))
+				if path.begins_with("res://assets/civilization_v1/") or path.begins_with(ASSET_ROOT):
+					_paths[str(entry.kind) + ":" + str(entry.id)] = path

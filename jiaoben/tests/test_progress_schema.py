@@ -21,10 +21,10 @@ class ProgressTests(unittest.TestCase):
     def setUp(self):
         self.source = sqlite3.connect((ROOT / "code/data/catalog.db").as_uri() + "?mode=ro", uri=True)
         self.db = p.connect()
-        p.apply_migrations(self.db)
-        self.initial, self.content = p.new_world(self.db, self.source)
         self.addCleanup(self.source.close)
         self.addCleanup(self.db.close)
+        p.apply_migrations(self.db)
+        self.initial, self.content = p.new_world(self.db, self.source)
 
     def candidate(self, name="candidate", sequence=2):
         self.db.execute("BEGIN IMMEDIATE")
@@ -321,7 +321,7 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual(database.execute("SELECT display_name FROM profile").fetchall(), [("保留六版资料",)])
         self.assertEqual(database.execute("PRAGMA user_version").fetchone(), (6,))
         # Applying 010 by itself still produces its historical format7. The
-        # current retry then adds 011 and must reach format8 without rewriting
+        # current retry then adds 011/012 and must reach format9 without rewriting
         # the older migration's SQL, recorded checksum or result.
         with mock.patch.object(p, "MIGRATIONS", p.MIGRATIONS[:10]), mock.patch.object(p, "FORMAT_VERSION", 7):
             p.apply_migrations(database)
@@ -329,7 +329,7 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual(database.execute("PRAGMA user_version").fetchone(), (7,))
         self.assertEqual(database.execute("SELECT count(*) FROM sqlite_schema WHERE name='spatial_state'").fetchone(), (0,))
         p.apply_migrations(database)
-        self.assertEqual(database.execute("SELECT format_version FROM database_meta").fetchone(), (8,))
+        self.assertEqual(database.execute("SELECT format_version FROM database_meta").fetchone(), (9,))
         self.assertEqual(database.execute("SELECT * FROM migration_history ORDER BY migration_id").fetchall()[:9], history)
         self.assertEqual(database.execute("SELECT count(*) FROM sqlite_schema WHERE name='frozen_drone_defs'").fetchone(), (1,))
         self.assertEqual(database.execute("PRAGMA foreign_key_check").fetchall(), [])
@@ -348,7 +348,7 @@ class ProgressTests(unittest.TestCase):
         names = [row[0] for row in legacy.execute("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")]
         self.assertEqual(metadata["schema_version"], 4)
         self.assertEqual(len(names), 89)
-        self.assertEqual(len(build_catalog.CONTENT_TABLES), 96)
+        self.assertEqual(len(build_catalog.CONTENT_TABLES), 105)
         self.db.execute("BEGIN IMMEDIATE")
         self.db.execute("PRAGMA defer_foreign_keys=ON")
         cid = "historical-adapter-content"

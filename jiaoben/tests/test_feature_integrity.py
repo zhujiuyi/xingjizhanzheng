@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 import sqlite3
 import unittest
 from pathlib import Path
@@ -239,6 +240,8 @@ class FeatureIntegrityTests(unittest.TestCase):
     def test_business_portraits_cover_catalogue_identifiers(self) -> None:
         manifest = json.loads((CODE / "assets/business_v11/manifest.json").read_text(encoding="utf-8"))
         mappings = {(row["kind"], row["id"]) for row in manifest["entries"]}
+        extension = json.loads((CODE / "assets/civilization_v1/manifest.json").read_text(encoding="utf-8"))
+        mappings.update((row['kind'], row['id']) for row in extension['entries'])
         for table, column, kind in (
             ("ship_defs", "ship_id", "ship"), ("item_defs", "item_id", "item"),
             ("mission_defs", "mission_id", "mission"), ("research_defs", "research_id", "research"),
@@ -265,7 +268,14 @@ class FeatureIntegrityTests(unittest.TestCase):
                         self.assertEqual(resource.suffix, ".txt", "V1 bytes are inert archives")
                         self.assertNotIn(resource.relative_to(CODE).as_posix(), self.runtime)
                     self.assertTrue(resource.is_file())
-                    self.assertEqual(hashlib.sha256(resource.read_bytes()).hexdigest(), asset["sha256"])
+                    archived = {'service-navigation-v1': 'f69e046f0f5a27a58957cd05eeb49607a47bfe98',
+                                'service-navigation-v2': 'a11278a1ae881744d999fd81e6a44b7d79a8aeb0'}
+                    version = data.get('asset_version')
+                    if version in archived and resource_path == 'res://runtime/ui/service_navigation.gd':
+                        raw = subprocess.check_output(['git', 'show', archived[version] + ':code/runtime/ui/service_navigation.gd'], cwd=ROOT)
+                    else:
+                        raw = resource.read_bytes()
+                    self.assertEqual(hashlib.sha256(raw).hexdigest(), asset["sha256"])
                     checked += 1
         self.assertGreater(checked, 100)
 

@@ -1,5 +1,5 @@
 extends SceneTree
-## Production Flight, actual nine catalog ships, explicit attitude stimuli.
+## Production Flight, all eighteen catalog ships, explicit attitude stimuli.
 ## No player progress, alternate balance values, or visual-camera claims.
 const Flight = preload("res://runtime/flight.gd")
 const Catalog = preload("res://runtime/data/catalog.gd")
@@ -45,7 +45,7 @@ func _run() -> void:
 	check(catalog.open(), "actual read-only catalog opens " + catalog.last_error)
 	if not failures.is_empty(): catalog.close(); quit(1); return
 	var ships: Array[Dictionary] = catalog.rows("ship_defs")
-	check(ships.size() == 9, "all current nine catalog ship types are covered")
+	check(ships.size() == 18, "all current eighteen catalog ship types are covered")
 	var poses: Array[Basis] = [Basis.IDENTITY, Basis.from_euler(Vector3(0.65, -0.4, 1.0)), Basis.from_euler(Vector3(-0.65, 0.4, -1.0)), Basis(Vector3.RIGHT, PI * 0.5), Basis(Vector3.RIGHT, -PI * 0.5 + 0.00001)]
 	for pose_index: int in range(poses.size()):
 		for world_rotation: Vector3 in [Vector3.UP, Vector3.DOWN, Vector3.RIGHT, Vector3.FORWARD, Vector3(0.25, -0.4, 0.35), poses[pose_index].y]:
@@ -143,3 +143,7 @@ func recovery_checks(flight: Flight, ship_id: String) -> void:
 	before = flight.quaternion
 	flight.simulate(0.0); flight.simulate(-0.1); flight.simulate(NAN)
 	check(flight.quaternion.is_equal_approx(before), "invalid time never rotates the physical ship " + ship_id)
+	flight.clear_intent()
+	flight.intent.yaw_request = 1e-24
+	flight.simulate(delta)
+	check(finite_pose(flight.basis) and flight.quaternion.is_equal_approx(before), "subnormal automatic alignment input cannot create an invalid quaternion axis " + ship_id)

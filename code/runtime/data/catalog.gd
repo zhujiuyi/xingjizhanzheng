@@ -5,6 +5,7 @@ extends RefCounted
 var last_error: String = ""
 var _db: Object
 var _cache: Dictionary = {}
+var _indexes: Dictionary = {}
 var table_names: Array[String] = []
 var column_info: Dictionary = {}
 var view_sql: Dictionary = {}
@@ -13,6 +14,7 @@ const ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_4_r2.sq
 const ENCOUNTER_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_5.sql"
 const COMBAT_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_6.sql"
 const SPACE_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_7.sql"
+const CIVILIZATION_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_8.sql"
 var adapter_path: String = ADAPTER_PATH
 
 func open(path: String = "res://data/catalog.db") -> bool:
@@ -30,6 +32,7 @@ func open(path: String = "res://data/catalog.db") -> bool:
 		return false
 	if not refresh(): return false
 	if int(rows("catalog_meta")[0].schema_version) <= 2: adapter_path = "res://database/progress/catalog_adapter_v0_3.sql"
+	elif table_names.has("civilization_defs"): adapter_path = CIVILIZATION_ADAPTER_PATH
 	elif table_names.has("site_defs"): adapter_path = SPACE_ADAPTER_PATH
 	elif table_names.has("weapon_behavior_defs"): adapter_path = COMBAT_ADAPTER_PATH
 	elif table_names.has("encounter_defs"): adapter_path = ENCOUNTER_ADAPTER_PATH
@@ -39,6 +42,7 @@ func open(path: String = "res://data/catalog.db") -> bool:
 
 func refresh() -> bool:
 	_cache.clear()
+	_indexes.clear()
 	table_names.clear()
 	column_info.clear()
 	view_sql.clear()
@@ -82,9 +86,25 @@ func rows(table: String) -> Array[Dictionary]:
 	return result
 
 func one(table: String, key: String, value: Variant) -> Dictionary:
-	for row in rows(table):
-		if row.get(key) == value:
-			return row
+	if not _cache.has(table):
+		last_error = "Unknown definition table: " + table
+		return {}
+	# Definitions are immutable after refresh. Copy only the matching record,
+	# rather than duplicating thousands of anchors for every frame's lookup.
+	if value is String or value is StringName:
+		var index_id: String = table + ":" + key
+		if not _indexes.has(index_id):
+			var index: Dictionary = {}
+			for row: Dictionary in _cache[table]:
+				var candidate: Variant = row.get(key)
+				if candidate is String or candidate is StringName:
+					if not index.has(str(candidate)): index[str(candidate)] = row
+			_indexes[index_id] = index
+		var found: Variant = _indexes[index_id].get(str(value))
+		return found.duplicate(true) if found is Dictionary else {}
+	# Preserve Variant equality for numeric/null/non-string lookups.
+	for row: Dictionary in _cache[table]:
+		if row.get(key) == value: return row.duplicate(true)
 	return {}
 
 func rule(parameter_id: String) -> Variant:
@@ -99,6 +119,7 @@ func close() -> void:
 		_db.close_db()
 		_db = null
 	_cache.clear()
+	_indexes.clear()
 
 func _query(sql: String, bindings: Array = []) -> bool:
 	if not _db.query_with_bindings(sql, bindings):

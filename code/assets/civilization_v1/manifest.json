@@ -1,0 +1,508 @@
+{
+  "format_version": 1,
+  "asset_version": "civilization-v1",
+  "entries": [
+    {
+      "kind": "ship",
+      "id": "cruiser_council_sentinel",
+      "resource_path": "res://assets/civilization_v1/portraits/cruiser_council_sentinel.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_cruiser_council_sentinel",
+      "resource_path": "res://assets/civilization_v1/portraits/cruiser_council_sentinel.png"
+    },
+    {
+      "kind": "research",
+      "id": "research_cruiser_council_sentinel",
+      "resource_path": "res://assets/business_v11/generic/research.svg"
+    },
+    {
+      "kind": "ship",
+      "id": "support_council_choir",
+      "resource_path": "res://assets/civilization_v1/portraits/support_council_choir.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_support_council_choir",
+      "resource_path": "res://assets/civilization_v1/portraits/support_council_choir.png"
+    },
+    {
+      "kind": "research",
+      "id": "research_support_council_choir",
+      "resource_path": "res://assets/business_v11/generic/research.svg"
+    },
+    {
+      "kind": "ship",
+      "id": "battleship_council_aegis",
+      "resource_path": "res://assets/civilization_v1/portraits/battleship_council_aegis.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_battleship_council_aegis",
+      "resource_path": "res://assets/civilization_v1/portraits/battleship_council_aegis.png"
+    },
+    {
+      "kind": "research",
+      "id": "research_battleship_council_aegis",
+      "resource_path": "res://assets/business_v11/generic/research.svg"
+    },
+    {
+      "kind": "ship",
+      "id": "destroyer_forge_hammer",
+      "resource_path": "res://assets/civilization_v1/portraits/destroyer_forge_hammer.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_destroyer_forge_hammer",
+      "resource_path": "res://assets/civilization_v1/portraits/destroyer_forge_hammer.png"
+    },
+    {
+      "kind": "research",
+      "id": "research_destroyer_forge_hammer",
+      "resource_path": "res://assets/business_v11/generic/research.svg"
+    },
+    {
+      "kind": "ship",
+      "id": "cruiser_forge_citadel",
+      "resource_path": "res://assets/civilization_v1/portraits/cruiser_forge_citadel.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_cruiser_forge_citadel",
+      "resource_path": "res://assets/civilization_v1/portraits/cruiser_forge_citadel.png"
+    },
+    {
+      "kind": "research",
+      "id": "research_cruiser_forge_citadel",
+      "resource_path": "res://assets/business_v11/generic/research.svg"
+    },
+    {
+      "kind": "ship",
+      "id": "battleship_forge_ironwall",
+      "resource_path": "res://assets/civilization_v1/portraits/battleship_forge_ironwall.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_battleship_forge_ironwall",
+      "resource_path": "res://assets/civilization_v1/portraits/battleship_forge_ironwall.png"
+    },
+    {
+      "kind": "research",
+      "id": "research_battleship_forge_ironwall",
+      "resource_path": "res://assets/business_v11/generic/research.svg"
+    },
+    {
+      "kind": "ship",
+      "id": "destroyer_roaming_spear",
+      "resource_path": "res://assets/civilization_v1/portraits/destroyer_roaming_spear.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_destroyer_roaming_spear",
+      "resource_path": "res://assets/civilization_v1/portraits/destroyer_roaming_spear.png"
+    },
+    {
+      "kind": "research",
+      "id": "research_destroyer_roaming_spear",
+      "resource_path": "res://assets/business_v11/generic/research.svg"
+    },
+    {
+      "kind": "ship",
+      "id": "cruiser_roaming_kite",
+      "resource_path": "res://assets/civilization_v1/portraits/cruiser_roaming_kite.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_cruiser_roaming_kite",
+      "resource_path": "res://assets/civilization_v1/portraits/cruiser_roaming_kite.png"
+    },
+    {
+      "kind": "research",
+      "id": "research_cruiser_roaming_kite",
+      "resource_path": "res://assets/business_v11/generic/research.svg"
+    },
+    {
+      "kind": "ship",
+      "id": "battleship_roaming_tempest",
+      "resource_path": "res://assets/civilization_v1/portraits/battleship_roaming_tempest.png"
+    },
+    {
+      "kind": "blueprint",
+      "id": "hull_recipe_battleship_roaming_tempest",
+      "resource_path": "res://assets/civilization_v1/portraits/battleship_roaming_tempest.png"
+    },
+    {
+      "kind": "research",
+      "id": "research_battleship_roaming_tempest",
+      "resource_path": "res://assets/business_v11/generic/research.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "civ_join_council_1",
+      "resource_path": "res://assets/business_v11/generic/mission.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "civ_join_council_2",
+      "resource_path": "res://assets/business_v11/generic/mission.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "civ_join_council_3",
+      "resource_path": "res://assets/business_v11/generic/mission.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "civ_join_forge_1",
+      "resource_path": "res://assets/business_v11/generic/mission.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "civ_join_forge_2",
+      "resource_path": "res://assets/business_v11/generic/mission.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "civ_join_forge_3",
+      "resource_path": "res://assets/business_v11/generic/mission.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "civ_join_roaming_1",
+      "resource_path": "res://assets/business_v11/generic/mission.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "civ_join_roaming_2",
+      "resource_path": "res://assets/business_v11/generic/mission.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "civ_join_roaming_3",
+      "resource_path": "res://assets/business_v11/generic/mission.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "civ_patrol_council",
+      "resource_path": "res://assets/business_v11/generic/mission.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "civ_patrol_forge",
+      "resource_path": "res://assets/business_v11/generic/mission.svg"
+    },
+    {
+      "kind": "mission",
+      "id": "civ_patrol_roaming",
+      "resource_path": "res://assets/business_v11/generic/mission.svg"
+    }
+  ],
+  "scope": "Original faction fittings, nine distinct hull appearances, inherited collision contracts and 44 sector roots. Gameplay values remain in SQLite.",
+  "resources": [
+    {
+      "resource_path": "res://assets/civilization_v1/geometry.json",
+      "sha256": "48cbfb22b7587a332c5c9867fc57662077c5a66dd205561f60017b4fa9aef881"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/hulls/battleship_council_aegis.tscn",
+      "sha256": "a96eb60edd4d696fa5f63ea88f54e720c674729ec2447dd184bccf35094105c3"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/hulls/battleship_forge_ironwall.tscn",
+      "sha256": "9813137660c7cbed952c0486c5ddc3eb558d243513b6acfa208564ce98da7bd2"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/hulls/battleship_roaming_tempest.tscn",
+      "sha256": "ea1ffee3bf3e9c2be97d310bf57004f349fb543af90b5ce8c96f890cf2324773"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/hulls/cruiser_council_sentinel.tscn",
+      "sha256": "86120ba8937ef29febc630b25101548ee8cf7eca17da53cc6276af5e3611bd4f"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/hulls/cruiser_forge_citadel.tscn",
+      "sha256": "5e9268435c3dfe093078fd9d08234a5f7f34e22db6372d43f1bebe724b3ad168"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/hulls/cruiser_roaming_kite.tscn",
+      "sha256": "5a9df608255055ba4884fba58bcf093b505da65e1faa227af7280c2cc4c5d2e8"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/hulls/destroyer_forge_hammer.tscn",
+      "sha256": "8ef886551291e044218c862e6ef498ba648bd4689dea1399f6eba06757f22683"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/hulls/destroyer_roaming_spear.tscn",
+      "sha256": "d40604b5624ff0a876f4345113e0c4641b560a7a021171fc6dd3986bf075a3af"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/hulls/support_council_choir.tscn",
+      "sha256": "79b6aa9478ebcee616f07f660b02b786b2314d874c5f740d6ee5db32ad5bd4bd"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/portraits/battleship_council_aegis.png",
+      "sha256": "09d2df58a90f75e935c7a3c2806344c094fe94dc573f42d9b00772ff43b002d8"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/portraits/battleship_forge_ironwall.png",
+      "sha256": "b1023ec625cd4819c27cb5ffadbe97de419ba0b0001f142f091d94a3b605b53d"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/portraits/battleship_roaming_tempest.png",
+      "sha256": "9953e11cc4e2737b0c5225159ac821fb25d6e199e0633d669c5a34f8bc7edbc4"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/portraits/cruiser_council_sentinel.png",
+      "sha256": "1f89c26ea529b973db0ad96515d7e0658f6b1cb61ac301d6b8766d066915321a"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/portraits/cruiser_forge_citadel.png",
+      "sha256": "3e23b575264a27362a5fe3cc4a771f857ce4ef13b6736a2e4ec8dd545e77f662"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/portraits/cruiser_roaming_kite.png",
+      "sha256": "93c6d80cf0675c85b9c56d517fdd662cfcfb0abfe50f3362297ddc4b7c848a9a"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/portraits/destroyer_forge_hammer.png",
+      "sha256": "9ce6e2b26040d85c700e240622470da8c9e2090a024866876df8e30a7b2231af"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/portraits/destroyer_roaming_spear.png",
+      "sha256": "fd8817941de67381ead29741b603be67c7c8ab07ca3d486676cbe055a7c1ea99"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/portraits/support_council_choir.png",
+      "sha256": "47d12e345be93a976526e265e3b346cf23c10fdeabefb91c1c92474da7776754"
+    },
+    {
+      "resource_path": "res://assets/civilization_v1/visuals.json",
+      "sha256": "0f3b3c1f37d45423468007a3461457be271ffca334102ab54397676bd03dd4d9"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_council_01.tscn",
+      "sha256": "f5cfa1dd55af98e9c4e03de78d68ac425b294be1985d0ca646ee7da8df48f246"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_council_02.tscn",
+      "sha256": "84be1a420c6effd67dfba94bdd200a6b5e644d94bfbab612038798dc4855710d"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_council_03.tscn",
+      "sha256": "3d42a342cf6786866213988652eb60dc7d036802e035d7d72bade623eead5c07"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_council_04.tscn",
+      "sha256": "093526fd98fa3cb126553959650c3985d6622abbd738946bd8ed3c9632a0ae63"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_council_05.tscn",
+      "sha256": "456465012534edc21ce12444618ff4db80c14ed1bfddb3f40f81e65d1ea5bd18"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_council_06.tscn",
+      "sha256": "97e7d8b082e292471acafe37bcd7f3c0d750e4b7933c8ef0969804d10de6ce6c"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_council_07.tscn",
+      "sha256": "693eb1c4c0ed53dd82891bea77d0c91821579f53a400d102a6b7e33424640c3c"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_council_08.tscn",
+      "sha256": "5825b4773c28a0e398946323c064f6aa03b588d648c510bff621a2460cb8616b"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_council_09.tscn",
+      "sha256": "d89a357828474276f3bf8a9e4e8e578bcd95de351d6e38ef83abb09b72b78be3"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_council_10.tscn",
+      "sha256": "59c7d91edda20fea562efd45fbe2eea5d0f292ce1bcb0eb3e5fcc094c7a1931f"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_council_11.tscn",
+      "sha256": "035a2b9902baf5e67dada04710ba48d2dde7cbb0fc8112f5fe00e134d1625ce7"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_council_12.tscn",
+      "sha256": "2ca2409267d5314e63c668a93d271d9c14d096974b8a47c24b067b490c9c2fc2"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_forge_01.tscn",
+      "sha256": "bba05448f0d8a3d638af7c36b6a4a218e7cfb470cab7d9794e7e3daca0010a96"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_forge_02.tscn",
+      "sha256": "fb668d3dbcc8c933dab31439958cf1728f37e1a21b43205fc561bf5228ce4a9a"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_forge_03.tscn",
+      "sha256": "f150ca8516d834f6eea08973bf359cdfc73d807abee83e9841be2bfe055d9d8e"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_forge_04.tscn",
+      "sha256": "33ee96570bb4dde91c2f9b6d446db5fe6caea4a723ebe97a42cc14fa444114c1"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_forge_05.tscn",
+      "sha256": "05be139817259afe63c885ed6624cb1ceef9ad038cd4f2a4b27df85843469d46"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_forge_06.tscn",
+      "sha256": "2aa39a6564ac59556c2e0003c79cb086a5f262c05a0ccd707f563f1a2dfab903"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_forge_07.tscn",
+      "sha256": "263f28092e19e5c58dd2a376535a94268487be51dc9596e47dae9aa6f5c61f6e"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_forge_08.tscn",
+      "sha256": "eba60227ef5c4c80833beb4dff545a80fc70a51446ef5dfe13dd7d53f038ed24"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_forge_09.tscn",
+      "sha256": "6637827853b880a2d3da888f6533500b7acde5f4848339d8a0e68c64135c37f0"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_forge_10.tscn",
+      "sha256": "353c3114e26c026bd360c4e2ed9e369dfd8eae1db7773ed534e9e6ec002dd173"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_forge_11.tscn",
+      "sha256": "a42714a4f6de84976f6a876642c6847e46c956bb8aa18c864a6422382f0d0223"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_forge_12.tscn",
+      "sha256": "be79a2bdf0e7a7f8dc734950708cb2582de0486b1ce38faa911c4df213a4fc87"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_frontier_01.tscn",
+      "sha256": "fe7ad2afae4ad903753a7bc915f32c6eb2e27a4368f763094f25815d90816dae"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_frontier_02.tscn",
+      "sha256": "d9f001a261dd6cd607fd54e5391223915aa97c4eb97ecdd5152a858b58d1964b"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_frontier_03.tscn",
+      "sha256": "8a0aa409a4e5f5fdee6263085d3a0d85d9063704f7294a9bf23eb591d0096cfd"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_frontier_04.tscn",
+      "sha256": "1818f5c82109891c019100a73da49be061f585aee4130cf710daabd1326096b8"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_frontier_05.tscn",
+      "sha256": "3698747e19f8ad9396ff07905bc05aa8ce79eba1caa46139f932f3c5da690bcb"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_frontier_06.tscn",
+      "sha256": "dc13fd5f897c7985eccc93ce927c4c840108fddebadc0c3660c1f6e2465535b5"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_frontier_07.tscn",
+      "sha256": "f082919d2bb96b3a4b30f5c83bdbad2cd2d1536bed85652ee69d609cc5363e05"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_frontier_08.tscn",
+      "sha256": "19892fbf1c6d8f91784ccbbf9a968ca4bbedf795beb7db38e9161e4f05f5fa32"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_roaming_01.tscn",
+      "sha256": "fa588575b3eabef600a16840bc7d09329591efa88fede7622bb69f29d3b2e7bd"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_roaming_02.tscn",
+      "sha256": "1982e75d562a7c6bf5beaa004a328cfe8d96946c08657bcaa60a4924df7270fa"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_roaming_03.tscn",
+      "sha256": "0403bc07623e4dabed327ae9ff7776ec9f0a1ecf1f9231fa8b48dfe418049c92"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_roaming_04.tscn",
+      "sha256": "44f0badb75ff931985bf31ac1580ca989db6e8fe11da9d327f5d0202698e4a58"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_roaming_05.tscn",
+      "sha256": "5e4df3fcda29503b7a95b34c2005f6772c6c5c420f0de6728ee00d0861cdc91f"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_roaming_06.tscn",
+      "sha256": "982d1364005e951f162572a9ba9fc24491219fb97c2f5f21621058bee6526fd8"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_roaming_07.tscn",
+      "sha256": "cc0db8e300bead8b023d1982fcdcade5a9f31acb29065fea40e00cf215e5d612"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_roaming_08.tscn",
+      "sha256": "e344d0896796fe73b0b5e8a8d0980346526c9c0d3f26457d87a822d41c8d22bf"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_roaming_09.tscn",
+      "sha256": "3a23144c805bd5d868799c1a365114982de0e1a977a1bef72b6c1f513025d0fd"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_roaming_10.tscn",
+      "sha256": "2b7bca1b360fa9ac59e0280b5624b54263e7492b3a422607ef37642a814ff52e"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_roaming_11.tscn",
+      "sha256": "7482bec5486213cc65bff2a5b95b4e42cc5ffd6b9205ab04fde657a78a555bba"
+    },
+    {
+      "resource_path": "res://assets/sectors/sector_roaming_12.tscn",
+      "sha256": "e7b6f2a399fb575dbb5a65070290c1d99bee49667edf6c6b7c78271f32e21b82"
+    },
+    {
+      "resource_path": "res://assets/ships/battleship_council_aegis.tscn",
+      "sha256": "c5c686f0716c4440e1f957aeed793b49d6bf67401efbfb7b8b3ed0364ca08408"
+    },
+    {
+      "resource_path": "res://assets/ships/battleship_forge_ironwall.tscn",
+      "sha256": "c9ce969e0f04366978c1885e773abb517a2b1f24cf3146e23397acf3f11f7155"
+    },
+    {
+      "resource_path": "res://assets/ships/battleship_roaming_tempest.tscn",
+      "sha256": "750820ead502202d683fe10af0bd03a804e07c5295e31884f0c6cb6f8440994b"
+    },
+    {
+      "resource_path": "res://assets/ships/cruiser_council_sentinel.tscn",
+      "sha256": "2cbe26a8471f7d566431df2e1b373f45d5fa7e38e1f4669aa8617206ff5361fc"
+    },
+    {
+      "resource_path": "res://assets/ships/cruiser_forge_citadel.tscn",
+      "sha256": "d0f28b8e340050b247a45effef882a1f45d1c40f990427b0fdab78b42c88924d"
+    },
+    {
+      "resource_path": "res://assets/ships/cruiser_roaming_kite.tscn",
+      "sha256": "d86e31da582db08fca73fca3ab7e29a20665d693e88ccde6310acf8a5f8deb02"
+    },
+    {
+      "resource_path": "res://assets/ships/destroyer_forge_hammer.tscn",
+      "sha256": "91ea2b9a4ae66a9d3257d84735578eec02d21049b8957c88d1ccc107711e6351"
+    },
+    {
+      "resource_path": "res://assets/ships/destroyer_roaming_spear.tscn",
+      "sha256": "557dded314a8c7d193a711a45e70ff54145c47b6b26122e25a7c152ffc8a5109"
+    },
+    {
+      "resource_path": "res://assets/ships/support_council_choir.tscn",
+      "sha256": "64947a101cf6895af4daf21e9fd51f2084855b575cde664932284401e41a7f60"
+    },
+    {
+      "resource_path": "res://data/catalog_space_v7.db",
+      "sha256": "af5bc7f28047bb23d3de98ecf4ec04aca8bf28c0bb3467eeda25244dfcb51683"
+    },
+    {
+      "resource_path": "res://runtime/visuals/civilization_visual_factory.gd",
+      "sha256": "cf8385af95514da6b59f1011381e2671072b776a9317b63cea21775cd64ef51f"
+    },
+    {
+      "resource_path": "res://runtime/civilization_hangar.gd",
+      "sha256": "1e14c9ed71da22793b1ea95010b16d5f067649acec150970ab921fa93ba20927"
+    }
+  ]
+}

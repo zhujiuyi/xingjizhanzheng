@@ -80,7 +80,7 @@ func _run() -> void:
 func _fitting_checks() -> void:
 	var inventory: RefCounted = host.gameplay.inventory
 	var warehouse: String = inventory.warehouse("station_anchor_port")
-	var allowed_drone: Array[String] = ["cruiser_horizon", "battleship_bastion", "support_weaver"]
+	var allowed_drone: Array[String] = ["cruiser_horizon", "battleship_bastion", "support_weaver", "cruiser_council_sentinel", "support_council_choir", "battleship_council_aegis", "cruiser_forge_citadel", "battleship_forge_ironwall", "cruiser_roaming_kite", "battleship_roaming_tempest"]
 	for row: Dictionary in host.store.catalog.rows("ship_defs"):
 		var ship: D.ShipStateDto = inventory.create_ship(str(row.ship_id), "station_anchor_port")
 		var switched: D.ActionResultDto = host.gameplay.act("switch_ship", ship.ship_instance_id)
@@ -95,9 +95,9 @@ func _fitting_checks() -> void:
 			check(host.gameplay.act("unfit_module", drone).phase == T.ActionPhase.APPLIED, "allowed drone unfit preserves the original item " + str(row.ship_id))
 		else:
 			check(host.state.find("item_instance_state", "item_instance_id", drone).container_id == before and host.state.find("equipment_state", "item_instance_id", drone) == null, "rejected drone fitting leaves assets untouched " + str(row.ship_id))
-		var medium_allowed: bool = str(row.ship_id) in ["destroyer_raptor", "cruiser_horizon", "battleship_bastion"]
+		var medium_allowed: bool = str(row.ship_id) in ["destroyer_raptor", "cruiser_horizon", "battleship_bastion", "destroyer_forge_hammer", "cruiser_forge_citadel", "battleship_forge_ironwall", "destroyer_roaming_spear", "battleship_roaming_tempest"]
 		check(host.gameplay.weapon_fit_reason(ship, "module_kinetic_lance_i").is_empty() == medium_allowed, "medium rail permissions distinguish hull classes " + str(row.ship_id))
-		check(host.gameplay.weapon_fit_reason(ship, "module_kinetic_siege_i").is_empty() == (str(row.ship_id) == "battleship_bastion"), "heavy rail permission is battleship-only " + str(row.ship_id))
+		check(host.gameplay.weapon_fit_reason(ship, "module_kinetic_siege_i").is_empty() == (str(row.ship_id) in ["battleship_bastion", "cruiser_forge_citadel", "battleship_forge_ironwall"]), "heavy rail permission follows the authored heavy-gun platforms " + str(row.ship_id))
 	var support: D.ShipStateDto = inventory.create_ship("support_weaver", "station_anchor_port")
 	host.gameplay.act("switch_ship", support.ship_instance_id)
 	var first: Array = inventory.grant(warehouse, "module_drone_swarm_i", 1)

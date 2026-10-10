@@ -214,15 +214,15 @@ class ContentTests(unittest.TestCase):
         builder.validate_database(db)
         self.assertEqual(set(builder.CONTENT_COLUMNS), set(builder.CONTENT_TABLES))
         metadata = self.c.rows("catalog_meta")[0]
-        self.assertEqual(metadata["content_version"], "v0.7-space")
-        self.assertEqual(metadata["ruleset_version"], "singleplayer_space_v3")
+        self.assertEqual(metadata["content_version"], "v0.8-civilizations")
+        self.assertEqual(metadata["ruleset_version"], "singleplayer_civilizations_v1")
         self.assertEqual(metadata["schema_version"], self.c.db.execute("PRAGMA user_version").fetchone()[0])
         self.assertEqual(metadata["content_hash"], builder.logical_content_hash(db))
         self.assertEqual(len(builder.content_views(db)), 4)
 
-    def test_ten_runtime_sectors_and_closed_location_refs(self):
+    def test_fifty_four_runtime_sectors_and_closed_location_refs(self):
         runtime = self.c.index("sector_runtime_defs", "sector_id")
-        self.assertEqual(len(runtime), 10)
+        self.assertEqual(len(runtime), 54)
         self.assertTrue({"sector_anchor", "sector_echo"} <= set(runtime))
         self.assertTrue(all(row["enabled"] and row["stage_code"] in {"B", "C", "D"} for row in runtime.values()))
         self.assertEqual(set(self.c.index("resource_node_defs", "node_id")), set(self.c.index("resource_node_locations", "node_id")))

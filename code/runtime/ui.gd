@@ -14,6 +14,10 @@ const BusinessList = preload("res://runtime/ui/business_list.gd")
 const WarehousePanel = preload("res://runtime/ui/warehouse_panel.gd")
 const ItemPortraits = preload("res://runtime/ui/item_portraits.gd")
 const ServiceNavigation = preload("res://runtime/ui/service_navigation.gd")
+const CivilizationPanel = preload("res://runtime/ui/civilization_panel.gd")
+var civilization_selected_faction: String = ""
+var civilization_panel: RefCounted
+var war_navigation_row: HFlowContainer
 var state: XJRuntimeState
 var catalog: XJCatalog
 var gameplay: RefCounted
@@ -224,6 +228,22 @@ func _ready() -> void:
 		# A focused HUD button must still leave W/S and other flight controls usable.
 		action_button.focus_mode = Control.FOCUS_NONE
 	mission_navigation_row.hide()
+	war_navigation_row = HFlowContainer.new()
+	war_navigation_row.name = "WarNavigationActions"
+	war_navigation_row.add_theme_constant_override("h_separation", 4)
+	war_navigation_row.add_theme_constant_override("v_separation", 3)
+	hud_left.add_child(war_navigation_row)
+	for order: String in ["route", "advance", "focus", "panel"]:
+		var title: String = {"route": "战区航路", "advance": "舰队推进", "focus": "集火目标", "panel": "舰队指挥"}[order]
+		var button: Button = _button(war_navigation_row, title, func():
+			if order == "panel": show_page("civilizations")
+			elif order == "route": requested.emit("war_navigate", "", 1, "")
+			else: requested.emit("fleet_command", order, 1, target_id if order == "focus" else ""))
+		button.custom_minimum_size = Vector2(76, 24)
+		button.add_theme_font_size_override("font_size", 11)
+		button.add_theme_stylebox_override("normal", UISkin.hud_button())
+		button.focus_mode = Control.FOCUS_NONE
+	war_navigation_row.hide()
 	work_box = VBoxContainer.new()
 	work_box.add_theme_constant_override("separation", 5)
 	hud_left.add_child(work_box)
@@ -395,6 +415,9 @@ func show_page(next_page: String) -> void:
 		"salvage": _salvage()
 		"missions": _missions()
 		"research": _research()
+		"civilizations":
+			civilization_panel = CivilizationPanel.new()
+			civilization_panel.build(self)
 		"map": _map()
 		"pause": _pause()
 	_animate_panel()
@@ -409,6 +432,7 @@ func notify(message: String, is_error: bool = false) -> void:
 	message_age = 0.0
 
 func tick(delta: float) -> void:
+	if page == "civilizations" and civilization_panel != null: civilization_panel.tick()
 	message_age += delta
 	if message_age > 12.0 and not toast.text.is_empty():
 		toast.text = ""
@@ -488,6 +512,7 @@ func select_next() -> void:
 
 func _build_panel(title: String, description: String) -> void:
 	business_generation += 1
+	civilization_panel = null
 	business_list_view = null
 	for child: Node in panel.get_children():
 		panel.remove_child(child)
@@ -969,7 +994,7 @@ func _industry() -> void:
 func _missions() -> void:
 	_text("本页不暂停飞行。目标按顺序完成；舰船损失保留当前任务，交付需要指定实物。", 14)
 	_campaign_summary()
-	_mission_filter_group("type", "类型", ["all", "tutorial", "story", "contract"], {"all": "全部类型", "tutorial": "新手教学", "story": "主线剧情", "contract": "地区合同"}, mission_filter)
+	_mission_filter_group("type", "类型", ["all", "tutorial", "story", "civilization", "contract"], {"all": "全部类型", "tutorial": "新手教学", "story": "主线剧情", "civilization": "文明入籍", "contract": "地区合同"}, mission_filter)
 	_mission_filter_group("status", "状态", ["all", "active", "available", "completed"], {"all": "全部状态", "active": "进行中", "available": "可接取", "completed": "已完成"}, mission_status_filter)
 	_mission_filter_group("location", "地点", ["local", "all"], {"local": "本站" if state.player().has_docked_station_id else "本星系", "all": "所有地点"}, mission_location_filter)
 	var filtered: Array[Dictionary] = _filtered_mission_definitions()
@@ -1085,7 +1110,7 @@ func _filtered_mission_definitions() -> Array[Dictionary]:
 		if mission_status_filter == "available" and not _mission_reason(definition, current).is_empty(): continue
 		if mission_status_filter == "active" and not active: continue
 		if mission_status_filter == "completed" and (active or not _mission_completed(str(definition.mission_id))): continue
-		if mission_filter in ["tutorial", "story", "contract"] and str(definition.mission_kind) != mission_filter: continue
+		if mission_filter in ["tutorial", "story", "civilization", "contract"] and _mission_display_kind(definition) != mission_filter: continue
 		filtered.append(definition)
 	filtered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if mission_filter in ["tutorial", "story"]: return _mission_chain_index(a) < _mission_chain_index(b)
@@ -1098,7 +1123,7 @@ func show_mission(mission_id: String) -> void:
 	var definition: Dictionary = _one("mission_defs", "mission_id", mission_id)
 	if definition.is_empty(): notify("未找到此任务的冻结定义。", true); return
 	mission_focus_id = mission_id
-	mission_filter = str(definition.mission_kind)
+	mission_filter = _mission_display_kind(definition)
 	mission_status_filter = "all"
 	mission_location_filter = "all"
 	var index: int = 0
@@ -1126,7 +1151,12 @@ func _mission_chain_index(definition: Dictionary) -> int:
 		index += 1
 	return index
 
+func _mission_display_kind(definition: Dictionary) -> String:
+	if catalog.table_names.has("civilization_join_missions") and not _one("civilization_join_missions", "mission_id", str(definition.mission_id)).is_empty(): return "civilization"
+	return str(definition.mission_kind)
+
 func _mission_category_title(definition: Dictionary) -> String:
+	if _mission_display_kind(definition) == "civilization": return "文明入籍"
 	var kind: String = str(definition.get("mission_kind", ""))
 	var title: String = str({"tutorial": "新手教学", "story": "主线剧情", "contract": "地区合同"}.get(kind, "任务"))
 	if kind in ["tutorial", "story"]: title += " %d" % (_mission_chain_index(definition) + 1)
@@ -1194,6 +1224,8 @@ func _research() -> void:
 		if not done and definition.get("verification_mission_id") != null and not _mission_completed(str(definition.verification_mission_id)): reason = "需先完成 " + _mission_name(str(definition.verification_mission_id))
 		if not done and reason.is_empty(): reason = _materials_reason("research_inputs", "research_id", str(definition.research_id), 1)
 		if not done and state.player().credit < int(definition.required_credit): reason = "信用点不足"
+		var civilization_reason: String = gameplay.civilizations.research_reason(str(definition.research_id))
+		if not done and not civilization_reason.is_empty(): reason = civilization_reason
 		var description: String = "解锁 " + _unlock_name(str(definition.reward_unlock_id)) + " · 需声望 %d\n" % int(definition.required_reputation) + _inputs_text("research_inputs", "research_id", str(definition.research_id))
 		for prerequisite: Dictionary in _defs("research_prerequisites"):
 			if str(prerequisite.research_id) == str(definition.research_id): description += "\n前置科技 · " + _unlock_name(str(prerequisite.unlock_id)) + ("（已解锁）" if _unlocked(str(prerequisite.unlock_id)) else "（未解锁）")
@@ -1462,6 +1494,8 @@ func _refresh_targets() -> void:
 			var npc: Dtos.NpcStateDto = state.find("npc_state", "npc_instance_id", str(entry.id))
 			if npc != null and not npc.alive: continue
 		var record: Dictionary = {"id": str(entry.id), "title": _target_title(entry), "kind": kind, "type_title": _target_type(kind), "distance_m": distance, "navigation_only": bool(entry.get("navigation_only", false)), "remote_site": not sector.target_is_local(str(entry.id)), "known": kind != "npc"}
+		record["friendly"] = bool(entry.get("friendly", false))
+		if record.friendly: record.type_title = "友军"
 		if kind == "resource":
 			var resource_info: Dictionary = ResourceStatus.inspect(state, catalog, str(entry.id))
 			record["resource_info"] = resource_info
@@ -1492,6 +1526,7 @@ func _selected_details() -> Dictionary:
 	var node: Variant = entry.get("node")
 	if not is_instance_valid(node) or not node is Node3D: return {}
 	var details: Dictionary = {"id": target_id, "title": _target_title(entry), "kind": str(entry.kind), "type_title": _target_type(str(entry.kind)), "distance_m": sector.target_distance(target_id), "navigation_only": bool(entry.get("navigation_only", false)), "remote_site": not sector.target_is_local(target_id)}
+	if bool(entry.get("friendly", false)): details.type_title = "友军"
 	if str(entry.kind) == "resource": details["resource_info"] = ResourceStatus.inspect(state, catalog, target_id)
 	if str(entry.kind) == "encounter":
 		details["encounter_info"] = _encounter_summary(entry)
@@ -1523,6 +1558,11 @@ func _draw_markers() -> void:
 	# selected ring here created concentric outlines over the actual model.
 
 func _objective_text() -> String:
+	var war: RefCounted = gameplay.civilizations.active_war()
+	if war != null:
+		var definition: Dictionary = _one("civilization_war_defs", "war_id", war.war_id)
+		var phase: String = str({"assembling": "前往战区会合", "fighting": "清除全部敌舰", "occupying": "占领剩余 %.1f 秒" % war.capture_remaining_s}.get(war.status, war.status))
+		return "文明战争 · " + _sector_name(str(definition.target_sector_id)) + "\n" + phase + "\n友军 %d / 3 · 战役守军 %d / 4" % [gameplay.civilizations.living_fleet(war, "ally").size(), gameplay.civilizations.living_fleet(war, "defender").size()]
 	for mission: Dtos.MissionStateDto in state.rows("mission_state"):
 		if mission.status not in ["active", "ready"]: continue
 		var definition: Dictionary = _one("mission_defs", "mission_id", mission.mission_def_id)
@@ -1554,6 +1594,11 @@ func _mission_location_text(info: Dictionary) -> String:
 
 func _update_mission_guidance() -> void:
 	if not is_instance_valid(mission_navigation_row) or gameplay == null: return
+	var war: RefCounted = gameplay.civilizations.active_war()
+	war_navigation_row.visible = war != null
+	if war != null:
+		mission_navigation_row.hide()
+		return
 	var current: Dtos.MissionStateDto = gameplay.get("missions").call("active")
 	var has_mission: bool = current != null
 	mission_navigation_row.visible = root.size.x >= 950 or work_mode.is_empty()
@@ -2043,6 +2088,9 @@ func _build_names() -> void:
 	for row: Dictionary in _defs("sector_defs"): friendly_names[str(row.sector_id)] = _sector_name(str(row.sector_id))
 
 func _friendly(message: String) -> String:
+	var civilization_actions: Dictionary = {"join_civilization": "效忠身份已更新", "donate_civilization": "材料已捐献，文明声望已增加", "start_war": "远征委托已受领，友军已在战区集结", "fleet_command": "舰队指令已下达"}
+	for action: String in civilization_actions:
+		if message == "操作完成：" + action: return civilization_actions[action]
 	if message.begins_with("操作完成："):
 		return str(ACTION_NAMES.get(message.trim_prefix("操作完成："), "操作完成"))
 	var result: String = message.replace("COMMIT", "进度写入").replace("正在向 SQLite 提交世界快照", "正在保存完整航行进度").replace("manual", "手动").replace("quick", "快速").replace("auto", "自动")
@@ -2597,6 +2645,10 @@ func _update_quote(row: Dictionary, quantity_override: int = -1) -> void:
 			var item: Dtos.ItemInstanceStateDto = state.find("item_instance_state", "item_instance_id", str(row.target))
 			reason = "设备已不存在" if item == null else "先将设备卸到本站仓库" if item.container_id != _warehouse_id() else _recycle_reason(item)
 			prefix = "固定拆解一件"
+	var civilization_ship: String = str(row.id) if row.action == "buy_ship" else str(row.get("output_id", "")) if row.action == "manufacture" and str(row.get("inputs_table", "")) == "hull_recipe_inputs" else ""
+	if not civilization_ship.is_empty():
+		var civilization_reason: String = gameplay.civilizations.hull_reason(civilization_ship)
+		if not civilization_reason.is_empty(): reason = civilization_reason
 	if not selling and state.player().credit < price: reason = "信用点不足"
 	if quantity <= 0: reason = "请输入 1–%d 的整数" % int(catalog.rule("business_quantity_limit"))
 	row.label.text = str(price) if quantity > 0 else "—"
@@ -2989,6 +3041,11 @@ func _focus_page() -> void:
 				_focus_mission_action(entry)
 				return
 	var default: Array[Control] = _focus_controls(body)
+	if page == "civilizations":
+		var selected_civilization: Button = body.find_child("CivilizationSelect_" + civilization_selected_faction, true, false)
+		if selected_civilization != null:
+			selected_civilization.grab_focus()
+			return
 	if page == "map" and is_instance_valid(resource_chart):
 		var canvas: Control = resource_chart.get("diagram")
 		if is_instance_valid(canvas):

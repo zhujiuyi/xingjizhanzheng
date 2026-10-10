@@ -1,5 +1,9 @@
 # 测试与辅助文件
 
+v0.16.0文明扩展：`build_civilization_content.py`从旧正式SQL生成独立文明扩展，`build_catalog.py`校验105表并构建只读目录，`store_generate_civilizations.py`追加012格式9迁移和v0.8冻结适配器，旧SQL不重写。`art/build_civilization_assets.py`生成新舰外观、碰撞包装、星系根与独立清单，`art/bake_civilization_portraits.gd`用真实Godot模型渲染缩略图。
+
+`verify_combat_v18.py --only civilizations`检查真实入籍、捐献、爵位、专属采购/制造/研究、切换保留资产、战役状态与SQLite重开。`--only civilization-world --native`用真实Main/GUI/Renderer验证星图筛选、文明界面、原生捐献、专属模型、友军识别、实际舰队开火与伤害及占领；资格和装配物资为明确测试前提，战斗不跳过真实模拟。`prepare_civilization_upgrade_v24.py --legacy-executable <旧客户端EXE>`创建真实format8旧档夹具，`--only civilization-upgrade --legacy <其progress.db>`验证备份、迁移/内容分支失败回滚、资产与RNG保留、旧手动档及升级幂等。所有游戏检查串行持有同一审计锁，fresh UUID tmp，个人档不参与；必须退出0且完整结果及双日志无错误/警告/泄漏，实际包追加`--executable <EXE>`复验。
+
 v0.15.3空间站图标菜单专项：`verify_combat_v18.py --only service-navigation --native` 执行 `tests/service_navigation_v22.gd`，检查机库/侧栏/下拉/标题同名同序同图标、六种尺寸与缩放、真实GUI点击和Tab、观察舰船、独立出港、飞行停靠权限，以及状态/保存端点/偏好无隐藏修改。另核“服务导航”标题去重、初始工业页焦点、Tab与悬停不产生第二选中、Enter回机库。实际包使用 `--executable <Windows EXE>`，通过固定 `--xj-verify-service-navigation-v22` 入口加载相同Node，保留真实PCK资源。fresh UUID库和图在tmp，严格双日志与摘要在logs；必须退出0、断言完整、11张原生图且无引擎错误/警告/泄漏。`build_service_navigation.py` 生成独立展示资源清单，保留全部旧发布清单。详见[48](../doc/48-空间站图标菜单与名称统一.md)。
 
 v0.14.1任务按钮与显示专项：`verify_combat_v18.py --only mission-display`执行`tests/mission_display_v19.gd`，加`--native`验证真实窗口的五种尺寸/100%与200%缩放、最大化/独占全屏、caption完整宽度、任务所有筛选/分页/滚动访问、长中文/多操作/tooltip、真实接取/放弃/重接和SQLite重开。`--executable <Windows EXE>`使用固定`--xj-verify-mission-display-v19`入口在真实PCK内运行同一Node；临时库与图位于fresh UUID的mission-display-v19子目录。基线`XJ_MISSION_DISPLAY_V19_BASELINE=1`只输出REPRODUCED，不可记录为正常验收PASS。输出窗口observations记录实际native/逻辑尺寸及等比final transform四边，截图尺寸必须对应整个客户区并核左右/上下覆盖。个人存档不参与。

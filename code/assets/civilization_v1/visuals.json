@@ -1,0 +1,56 @@
+{
+  "cruiser_council_sentinel": {
+    "base_ship_id": "cruiser_horizon",
+    "color_hex": "75bde8",
+    "model_path": "res://assets/civilization_v1/hulls/cruiser_council_sentinel.tscn",
+    "portrait_path": "res://assets/civilization_v1/portraits/cruiser_council_sentinel.png"
+  },
+  "support_council_choir": {
+    "base_ship_id": "support_weaver",
+    "color_hex": "75bde8",
+    "model_path": "res://assets/civilization_v1/hulls/support_council_choir.tscn",
+    "portrait_path": "res://assets/civilization_v1/portraits/support_council_choir.png"
+  },
+  "battleship_council_aegis": {
+    "base_ship_id": "battleship_bastion",
+    "color_hex": "75bde8",
+    "model_path": "res://assets/civilization_v1/hulls/battleship_council_aegis.tscn",
+    "portrait_path": "res://assets/civilization_v1/portraits/battleship_council_aegis.png"
+  },
+  "destroyer_forge_hammer": {
+    "base_ship_id": "destroyer_raptor",
+    "color_hex": "d39a64",
+    "model_path": "res://assets/civilization_v1/hulls/destroyer_forge_hammer.tscn",
+    "portrait_path": "res://assets/civilization_v1/portraits/destroyer_forge_hammer.png"
+  },
+  "cruiser_forge_citadel": {
+    "base_ship_id": "cruiser_horizon",
+    "color_hex": "d39a64",
+    "model_path": "res://assets/civilization_v1/hulls/cruiser_forge_citadel.tscn",
+    "portrait_path": "res://assets/civilization_v1/portraits/cruiser_forge_citadel.png"
+  },
+  "battleship_forge_ironwall": {
+    "base_ship_id": "battleship_bastion",
+    "color_hex": "d39a64",
+    "model_path": "res://assets/civilization_v1/hulls/battleship_forge_ironwall.tscn",
+    "portrait_path": "res://assets/civilization_v1/portraits/battleship_forge_ironwall.png"
+  },
+  "destroyer_roaming_spear": {
+    "base_ship_id": "destroyer_raptor",
+    "color_hex": "7fcca4",
+    "model_path": "res://assets/civilization_v1/hulls/destroyer_roaming_spear.tscn",
+    "portrait_path": "res://assets/civilization_v1/portraits/destroyer_roaming_spear.png"
+  },
+  "cruiser_roaming_kite": {
+    "base_ship_id": "cruiser_horizon",
+    "color_hex": "7fcca4",
+    "model_path": "res://assets/civilization_v1/hulls/cruiser_roaming_kite.tscn",
+    "portrait_path": "res://assets/civilization_v1/portraits/cruiser_roaming_kite.png"
+  },
+  "battleship_roaming_tempest": {
+    "base_ship_id": "battleship_bastion",
+    "color_hex": "7fcca4",
+    "model_path": "res://assets/civilization_v1/hulls/battleship_roaming_tempest.tscn",
+    "portrait_path": "res://assets/civilization_v1/portraits/battleship_roaming_tempest.png"
+  }
+}
