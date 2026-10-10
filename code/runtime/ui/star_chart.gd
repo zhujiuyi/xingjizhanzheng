@@ -770,6 +770,9 @@ func _update_information() -> void:
 		if bool(row.get("capital", false)): sovereignty += " · 文明核心"
 		if bool(row.get("contested", false)): sovereignty += " · 战争争夺中"
 	information.text = "%s  ·  %s  ·  NPC 等级 %d–%d\n主权势力：%s  /  空间站：%s\n站点经营者：%s\n资源：%s\n%s\n星图只提供情报；距离、费用、电容、冷却及交战条件在实际虫洞入口再次校验。" % [row.title, risk.get("display_name", "未知安全区"), int(risk.get("npc_level_min", 0)), int(risk.get("npc_level_max", 0)), sovereignty, "、".join(station_names) if not station_names.is_empty() else "未记录", "、".join(factions), "、".join(resources) if not resources.is_empty() else "未记录", route_text]
+	if catalog.table_names.has("sector_activity_defs"):
+		var activity: Dictionary = catalog.one("sector_activity_defs", "sector_id", selected_sector)
+		information.text += "\n定位：%s · %s\n活动：%s" % [str(activity.get("logistics_role", "")), str(activity.get("resource_role", "")), str(activity.get("event_hint", ""))]
 	refresh_resource_status()
 
 func refresh_resource_status(total_mass_kg: float = -1.0) -> void:

@@ -9,10 +9,10 @@ const Initial = preload("res://runtime/data/initial_state.gd")
 const Validation = preload("res://runtime/data/validation.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
 const Types = preload("res://contracts/contract_types.gd")
-const MIGRATIONS: Array[String] = ["001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql"]
+const MIGRATIONS: Array[String] = ["001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql"]
 const RULE_CODE_VERSION: String = "singleplayer_full_v1"
 const ADAPTER_VERSION: String = "frozen_catalog_v0_4_r2"
-const ADAPTERS: Dictionary = {"frozen_catalog_v0_3": "res://database/progress/catalog_adapter_v0_3.sql", "frozen_catalog_v0_4": "res://database/progress/catalog_adapter_v0_4.sql", "frozen_catalog_v0_4_r2": "res://database/progress/catalog_adapter_v0_4_r2.sql", "frozen_catalog_v0_5": "res://database/progress/catalog_adapter_v0_5.sql", "frozen_catalog_v0_6": "res://database/progress/catalog_adapter_v0_6.sql", "frozen_catalog_v0_7": "res://database/progress/catalog_adapter_v0_7.sql", "frozen_catalog_v0_8": "res://database/progress/catalog_adapter_v0_8.sql", "frozen_catalog_v0_9": "res://database/progress/catalog_adapter_v0_9.sql"}
+const ADAPTERS: Dictionary = {"frozen_catalog_v0_3": "res://database/progress/catalog_adapter_v0_3.sql", "frozen_catalog_v0_4": "res://database/progress/catalog_adapter_v0_4.sql", "frozen_catalog_v0_4_r2": "res://database/progress/catalog_adapter_v0_4_r2.sql", "frozen_catalog_v0_5": "res://database/progress/catalog_adapter_v0_5.sql", "frozen_catalog_v0_6": "res://database/progress/catalog_adapter_v0_6.sql", "frozen_catalog_v0_7": "res://database/progress/catalog_adapter_v0_7.sql", "frozen_catalog_v0_8": "res://database/progress/catalog_adapter_v0_8.sql", "frozen_catalog_v0_9": "res://database/progress/catalog_adapter_v0_9.sql", "frozen_catalog_v0_10": "res://database/progress/catalog_adapter_v0_10.sql"}
 const ASSET_PATH: String = "res://assets/manifest.json"
 const ASSET_MANIFESTS: Dictionary = {"art-full-v2": ASSET_PATH, "art-full-v1": "res://assets/legacy_art_full_v1/manifest.json", "placeholder-b-v1": "res://assets/placeholders/manifest.json"}
 const LEGACY_VISUAL_BYTES: Dictionary = {"res://runtime/visuals/visual_effects.gd": "res://assets/legacy_art_full_v1/visual_effects.gd.txt", "res://runtime/visuals/visual_effect_node.gd": "res://assets/legacy_art_full_v1/visual_effect_node.gd.txt"}
@@ -240,8 +240,12 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 	var spatial_upgrade: bool = _source.table_names.has("site_defs")
 	var civilization_upgrade: bool = _source.table_names.has("civilization_defs")
 	var industry_upgrade: bool = _source.table_names.has("industry_balance_defs")
+	var resource_upgrade: bool = _source.table_names.has("resource_grade_defs")
 	var rebalance: bool = _source.table_names.has("weapon_behavior_defs") and int(catalog.rows("catalog_meta")[0].schema_version) < 5
-	if industry_upgrade:
+	if resource_upgrade:
+		if catalog.content_hash == _source.content_hash: return state
+		if not _reviewed_resource_upgrade(catalog, _source): return null
+	elif industry_upgrade:
 		if catalog.content_hash == _source.content_hash: return state
 		if not _reviewed_industry_upgrade(catalog, _source): return null
 	elif civilization_upgrade:
@@ -318,12 +322,40 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 		staging_catalog = null; frozen.close(); _rollback("CONTENT_UPGRADE_STAGING_FAILED"); return null
 	var selection: Array[Dictionary] = _records("SELECT generation FROM save_slot WHERE slot_id=?", [_slot_id(state.world_id, "auto", 0)])
 	var generation: int = 0 if selection.is_empty() else int(selection[0].generation)
-	if not _write_snapshot(candidate) or not _insert("snapshot_lineage", {"child_snapshot_id": candidate.snapshot.meta.snapshot_id, "parent_snapshot_id": source_snapshot}) or not _insert("content_upgrade_record", {"world_id": state.world_id, "source_snapshot_id": source_snapshot, "upgraded_snapshot_id": candidate.snapshot.meta.snapshot_id, "old_content_id": old_content, "new_content_id": content_id, "upgrade_kind": "industry_v1" if industry_upgrade else "civilizations_v1" if civilization_upgrade else "strategic_space_v1" if spatial_upgrade else "combat_rebalance_v1" if rebalance else "additive_encounters_v1", "created_utc": _utc()}) or not _publish(candidate, "auto", 0, generation) or not _checkpoint("content_upgrade") or not _q("COMMIT"):
+	if not _write_snapshot(candidate) or not _insert("snapshot_lineage", {"child_snapshot_id": candidate.snapshot.meta.snapshot_id, "parent_snapshot_id": source_snapshot}) or not _insert("content_upgrade_record", {"world_id": state.world_id, "source_snapshot_id": source_snapshot, "upgraded_snapshot_id": candidate.snapshot.meta.snapshot_id, "old_content_id": old_content, "new_content_id": content_id, "upgrade_kind": "resource_intel_v1" if resource_upgrade else "industry_v1" if industry_upgrade else "civilizations_v1" if civilization_upgrade else "strategic_space_v1" if spatial_upgrade else "combat_rebalance_v1" if rebalance else "additive_encounters_v1", "created_utc": _utc()}) or not _publish(candidate, "auto", 0, generation) or not _checkpoint("content_upgrade") or not _q("COMMIT"):
 		staging_catalog = null; frozen.close(); _rollback("CONTENT_UPGRADE_FAILED: " + last_error); return null
 	if catalog != _source: catalog.close()
 	catalog = frozen; staging_catalog = null; active_state = candidate
 	_end_operation(true)
 	return candidate
+
+func _reviewed_resource_upgrade(previous: Catalog, next: Catalog) -> bool:
+	var after: Dictionary = next.rows("catalog_meta")[0]
+	if int(after.schema_version) != 9 or after.content_version != "v0.10-resource-intel" or after.ruleset_version != "singleplayer_resource_intel_v1" or previous.rows("catalog_meta")[0].pack_id != after.pack_id: return _fail("Unreviewed resource-intelligence upgrade")
+	var baseline: Catalog = previous
+	var bridge: Catalog = null
+	if int(previous.rows("catalog_meta")[0].schema_version) < 8:
+		bridge = Catalog.new()
+		if not bridge.open("res://data/catalog_industry_v9.db") or not bridge.verify_reviewed() or bridge.content_hash != "c4556c55c79de72dc0e461a2484f71df9250963bea68b516d36ddc6267979852" or not _reviewed_industry_upgrade(previous, bridge):
+			bridge.close(); return _fail("Resource intelligence requires the reviewed industrial upgrade bridge")
+		baseline = bridge
+	var ok: bool = _same_prior_definitions(baseline, next)
+	if bridge != null: bridge.close()
+	return ok
+
+func _same_prior_definitions(previous: Catalog, next: Catalog) -> bool:
+	for table: String in previous.table_names:
+		if table == "catalog_meta": continue
+		if not next.table_names.has(table) or Catalog.schema_signature(previous.column_info[table], table) != Catalog.schema_signature(next.column_info[table], table) or previous.rows(table).size() != next.rows(table).size(): return _fail("Reviewed upgrade changes prior definition: " + table)
+		var keys: Array[String] = []
+		for column: Dictionary in previous.column_info[table]:
+			if int(column.pk) > 0: keys.append(str(column.name))
+		var index: Dictionary = {}
+		for row: Dictionary in next.rows(table): index[_content_key(row, keys)] = row
+		for row: Dictionary in previous.rows(table):
+			var key: String = _content_key(row, keys)
+			if not index.has(key) or index[key] != row: return _fail("Reviewed upgrade changes prior row: " + table)
+	return true if previous.view_sql == next.view_sql else _fail("Reviewed upgrade changes derived views")
 
 func _reviewed_industry_upgrade(previous: Catalog, next: Catalog) -> bool:
 	var after: Dictionary = next.rows("catalog_meta")[0]
@@ -692,7 +724,7 @@ func _migrate() -> bool:
 	var existing: Array[Dictionary] = _records("SELECT name FROM sqlite_schema WHERE type='table'")
 	if not existing.is_empty():
 		var meta: Array[Dictionary] = _records("SELECT application_id,format_version FROM database_meta")
-		if meta.is_empty() or meta[0].application_id != "xingjizhanjian" or meta[0].format_version not in [1,2,3,4,5,6,7,8,9,10]: return _fail("Unsupported progress format; preserved")
+		if meta.is_empty() or meta[0].application_id != "xingjizhanjian" or meta[0].format_version not in [1,2,3,4,5,6,7,8,9,10,11]: return _fail("Unsupported progress format; preserved")
 		var applied_count: int = int(meta[0].format_version) + 3
 		if int(_records("SELECT count(*) AS n FROM migration_history")[0].n) != applied_count: return _fail("Migration history/format mismatch; preserved")
 		for name in MIGRATIONS.slice(0, applied_count):
@@ -710,7 +742,7 @@ func _migrate() -> bool:
 	for name in MIGRATIONS:
 		var source_path: String = "res://database/progress/" + name
 		if not _q(FileAccess.get_file_as_string(source_path)) or not _insert("migration_history", {"migration_id": name, "sql_sha256": FileAccess.get_sha256(source_path), "applied_utc": _utc()}) or not _checkpoint("migration:" + name): return _rollback("Migration interrupted: " + name)
-	return _q("PRAGMA user_version=10; COMMIT;")
+	return _q("PRAGMA user_version=11; COMMIT;")
 
 func _freeze() -> String:
 	var hash_value: String = _source.logical_hash()
@@ -917,6 +949,7 @@ static func _utc() -> String:
 	return Time.get_datetime_string_from_system(true) + "Z"
 
 static func _rule_version(definitions: Catalog) -> String:
+	if definitions.table_names.has("resource_grade_defs"): return "singleplayer_resource_intel_v1"
 	if definitions.table_names.has("industry_balance_defs"): return "singleplayer_industry_v1"
 	if definitions.table_names.has("civilization_defs"): return "singleplayer_civilizations_v1"
 	if definitions.table_names.has("site_defs"): return "singleplayer_space_v3"
@@ -924,6 +957,7 @@ static func _rule_version(definitions: Catalog) -> String:
 	return "singleplayer_b_v1" if int(definitions.rows("catalog_meta")[0].schema_version) <= 2 else RULE_CODE_VERSION
 
 static func _adapter_version(definitions: Catalog) -> String:
+	if definitions.table_names.has("resource_grade_defs"): return "frozen_catalog_v0_10"
 	if definitions.table_names.has("industry_balance_defs"): return "frozen_catalog_v0_9"
 	if definitions.table_names.has("civilization_defs"): return "frozen_catalog_v0_8"
 	if definitions.table_names.has("site_defs"): return "frozen_catalog_v0_7"

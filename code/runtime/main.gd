@@ -14,6 +14,7 @@ var camera: XJCameraRig
 var ui: XJUI
 var travel: XJTravel
 var local_navigation: XJLocalNavigation
+var source_goal: Dictionary = {}
 var auto_fire_target: String = ""
 var combat_automation: RefCounted
 var navigation_generation: int = 0
@@ -51,6 +52,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag": "--xj-verify-resource-intel-world-v26", "file": "resource_intel_world_v26.gd", "prefix": "resource-intel-world-v26", "env": "XJ_RESOURCE_INTEL_WORLD_V26", "meta": "xj_resource_intel_world_v26_diagnostic"},
+		{"flag": "--xj-verify-resource-intel-v26", "file": "resource_intel_v26.gd", "prefix": "resource-intel-v26", "env": "XJ_RESOURCE_INTEL_V26", "meta": "xj_resource_intel_v26_diagnostic"},
 		{"flag": "--xj-verify-industry-v25", "file": "industry_v25.gd", "prefix": "industry-v25", "env": "XJ_INDUSTRY_V25", "meta": "xj_industry_v25_diagnostic"},
 		{"flag": "--xj-verify-industry-world-v25", "file": "industry_world_v25.gd", "prefix": "industry-world-v25", "env": "XJ_INDUSTRY_WORLD_V25", "meta": "xj_industry_world_v25_diagnostic"},
 		{"flag": "--xj-verify-civilization-world-v24", "file": "civilization_world_v24.gd", "prefix": "civilization-world-v24", "env": "XJ_CIVILIZATION_WORLD_V24", "meta": "xj_civilization_world_v24_diagnostic"},
@@ -346,6 +349,7 @@ func _physics_process(delta: float) -> void:
 		camera.bind(world.flight, store.catalog, state.player().camera_mode)
 	gameplay.call("begin_step", delta)
 	world.flight.metrics = gameplay.call("metrics", ship)
+	if _manual_navigation_override(): source_goal.clear()
 	if _manual_navigation_override() and combat_automation != null:
 		combat_automation.relinquish_motion()
 	if combat_automation != null and not _exit_save_pending() and not travel.active() and not local_navigation.warp_active():
@@ -696,6 +700,8 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		if action == "set_combat_option": _sync_combat_automation()
 		return
 	match action:
+		"source_map", "source_travel":
+			_source_navigation(action, target, extra)
 		"civilization_map", "war_navigate":
 			_civilization_navigation(action, target)
 		"set_combat_option":
@@ -703,10 +709,13 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 				combat_automation.set_option(target, extra == "on")
 			_sync_combat_automation()
 		"mission_locate", "mission_travel", "mission_station":
+			source_goal.clear()
 			_mission_navigation(action, target)
 		"nav_warp", "nav_approach", "nav_orbit", "nav_dock":
+			source_goal.clear()
 			_navigation_command(action.trim_prefix("nav_"), target)
 		"nav_stop":
+			source_goal.clear()
 			if combat_automation != null: combat_automation.relinquish_motion()
 			if local_navigation != null: local_navigation.stop()
 			_center_steering()
@@ -740,6 +749,7 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			camera.step(0.0)
 			ui.update_camera_status()
 		"new_world":
+			source_goal.clear()
 			if not services_ready:
 				ui.notify("存档服务未就绪，无法新建远征。", true)
 				return
@@ -760,6 +770,7 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			_sync_combat_automation()
 			ui.set_operation_status("idle", "")
 		"load":
+			source_goal.clear()
 			busy = true
 			_sync_combat_automation()
 			ui.set_operation_status("load", "正在验证存档并准备星系")
@@ -969,10 +980,33 @@ func _mission_navigation(action: String, mission_id: String, announce: bool = tr
 			elif announce: ui.show_mission(str(info.mission_id))
 		if announce: ui.notify("任务地点：" + str(info.target_title) + "；出港后可按“前往”导航。")
 		return
+	_navigate_guidance(info, action == "mission_travel", announce)
+
+func _source_navigation(action: String, key: String, item_id: String) -> void:
+	if state == null or gameplay == null or busy or travel.active(): return
+	var info: Dictionary = gameplay.resource_intel.guidance(key, item_id)
+	if info.is_empty(): ui.notify("物资来源已失效，请重新查询。", true); return
+	if action == "source_map":
+		ui.show_page("map")
+		if is_instance_valid(ui.resource_chart): ui.resource_chart.select_sector(info.sector_id)
+		return
+	if state.ship().status != Types.ShipStatus.FLYING:
+		ui.notify("请先出港，再从星图的物资来源继续导航。", true); return
+	if not str(info.route_reason).is_empty(): ui.notify(str(info.route_reason), true); return
+	source_goal = {"world": state.world_id, "key": key, "item": item_id}
+	_navigate_guidance(info, true, true, true)
+
+func _source_after_arrival() -> void:
+	await get_tree().process_frame
+	if not source_goal.is_empty() and state != null and source_goal.world == state.world_id and not busy:
+		_source_navigation("source_travel", source_goal.key, source_goal.item)
+
+func _navigate_guidance(info: Dictionary, do_travel: bool, announce: bool, approach_destination: bool = false) -> void:
 	world.sync_entities()
 	var id: String = str(info.get("waypoint_id", ""))
 	if id.is_empty() or not world.targets.has(id):
-		if announce: ui.notify(str(info.get("route_reason", "目的地暂不可达；请查看任务前置条件。")), true)
+		var reason: String = str(info.get("route_reason", ""))
+		if announce: ui.notify(reason if not reason.is_empty() else "目的地暂不可达，请重新查看地点与航路条件。", true)
 		return
 	ui.show_page("")
 	ui._select_target(id)
@@ -984,9 +1018,9 @@ func _mission_navigation(action: String, mission_id: String, announce: bool = tr
 			camera.orbit = Vector2.ZERO
 			camera.observation_basis = Basis.looking_at(direction, Vector3.UP if absf(direction.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT)
 	if announce: ui.notify("已定位：" + str(info.waypoint_title) + (" · " + str(info.route_reason) if not str(info.route_reason).is_empty() else ""))
-	if action == "mission_travel":
+	if do_travel:
 		var context: Dictionary = navigation_context(id)
-		_navigation_command("warp" if bool(context.get("warp_ready", false)) else "approach", id)
+		_navigation_command("approach" if approach_destination else "warp" if bool(context.get("warp_ready", false)) else "approach", id)
 
 func _prepare_travel(candidate: XJRuntimeState) -> bool:
 	return _stage_candidate(candidate, store.catalog)
@@ -1000,6 +1034,7 @@ func _record_arrival(candidate: XJRuntimeState, connection_id: String) -> void:
 		business.call("dispose")
 
 func _activate(candidate: XJRuntimeState) -> void:
+	if not source_goal.is_empty() and source_goal.world != candidate.world_id: source_goal.clear()
 	# All fallible construction happened in staging before the durable boundary.
 	if is_instance_valid(warp_visual): warp_visual.unbind()
 	if world != null:
@@ -1103,6 +1138,7 @@ func _travel_changed(next_phase: int, message: String) -> void:
 		_activate(destination)
 		presentation.jump(false)
 		ui.notify(message)
+		if not source_goal.is_empty(): _source_after_arrival.call_deferred()
 	elif next_phase == Types.TravelPhase.FAILED:
 		_discard_staged()
 

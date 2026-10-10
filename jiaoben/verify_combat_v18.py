@@ -11,6 +11,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "resource-intel-world": ("resource_intel_world_v26.gd", "XJ_RESOURCE_INTEL_WORLD_V26", "resource-intel-world-v26", "RESOURCE_INTEL_WORLD_V26", "--xj-verify-resource-intel-world-v26"),
+    "resource-intel": ("resource_intel_v26.gd", "XJ_RESOURCE_INTEL_V26", "resource-intel-v26", "RESOURCE_INTEL_V26", "--xj-verify-resource-intel-v26"),
     "row-quantity": ("row_quantity_v17.gd", "XJ_ROW_QUANTITY_V17", "row-quantity-v17", "ROW_QUANTITY_V17", "--xj-verify-row-quantities"),
     "industry": ("industry_v25.gd", "XJ_INDUSTRY_V25", "industry-v25", "INDUSTRY", "--xj-verify-industry-v25"),
     "industry-world": ("industry_world_v25.gd", "XJ_INDUSTRY_WORLD_V25", "industry-world-v25", "INDUSTRY_WORLD_V25", "--xj-verify-industry-world-v25"),
@@ -159,6 +161,12 @@ def run_suite():
             assert record["summary"]["native_helper_sha256"] == sha(ROOT / "jiaoben/tests/civilization_world_v24.gd")
         if name == "industry":
             assert record["summary"]["checks"] >= 80 and len(captures) == 0
+        if name == "resource-intel":
+            assert record["summary"]["checks"] >= 190 and len(captures) == 0
+            if os.environ.get("XJ_RESOURCE_INTEL_LEGACY_DATABASE"):
+                assert record["summary"]["legacy_checked"] and record["summary"]["checks"] >= 200
+        if name == "resource-intel-world":
+            assert args.native and record["summary"]["checks"] >= 56 and len(captures) == 6
         if name == "row-quantity":
             summary = record["summary"]
             assert summary["checks"] >= 5000 and summary["gui_transactions"] >= 16

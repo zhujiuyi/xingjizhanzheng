@@ -227,7 +227,7 @@ func _mining_tick(delta:float)->void:
 		# This head completed its paid cycle before it leaves the active map. In
 		# particular, the final unit must not retain an unfinished saved operation.
 		e.active_remaining_s=0.0;e.cycle_paid=false
-		var amount:int=int(floor(mining.base_yield_units*g.definition("ship_defs","ship_id",g.state.ship().ship_def_id).mining_multiplier))
+		var amount:int=XJResourceStatus.yield_per_cycle(g.catalog,mining_target,g.state.ship().ship_def_id,e.module_def_id)
 		var limits:Dictionary=_output_limit(def.item_id,mini(amount,available_resource_units(mining_target)))
 		if limits.count<=0:
 			g.status_text="采矿结束：货舱已满或借船配额不足";stop_mining();return

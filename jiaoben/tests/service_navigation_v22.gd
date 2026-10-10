@@ -116,14 +116,14 @@ func click(control: Control, label: String, request_count: int = 0) -> bool:
 	await settle()
 	return check(events.size() == before + request_count, "GUI intent count %d " % request_count + label)
 
-func key(code: Key, viewport: Viewport = null) -> void:
+func key(code: Key, viewport: Viewport = null, reverse: bool = false) -> void:
 	var target: Viewport = root if viewport == null else viewport
 	for pressed: bool in [true, false]:
 		# Selecting a page frees the old selector and popup on key-down.
 		# Deliver key-up to the surviving window, as native dispatch does.
 		if not is_instance_valid(target): target = root
 		var input := InputEventKey.new()
-		input.keycode = code; input.physical_keycode = code; input.pressed = pressed
+		input.keycode = code; input.physical_keycode = code; input.pressed = pressed; input.shift_pressed = reverse
 		if target is PopupMenu:
 			# PopupMenu handles keyboard navigation in Window's input callback,
 			# before Viewport.push_input. Inject through the real window dispatcher;
@@ -342,8 +342,12 @@ func industry_focus_regression() -> void:
 	var enabled_body: int = 0
 	for node: Node in descendants(host.ui.body):
 		if node is Button and node.is_visible_in_tree() and not node.disabled and node.focus_mode != Control.FOCUS_NONE: enabled_body += 1
-	check(enabled_body == 0, "fresh industry fixture has no eligible business button for default focus")
-	check(root.gui_get_focus_owner() == industry, "real industry entry defaults focus to current page instead of station")
+	var enabled_manufacture: int = 0
+	for quote: Dictionary in host.ui.quotes:
+		if quote.action == "manufacture" and not quote.button.disabled: enabled_manufacture += 1
+	check(enabled_manufacture == 0, "fresh industry still cannot manufacture without its actual prerequisites")
+	var initial_focus: Control = root.gui_get_focus_owner()
+	check(initial_focus != station and (initial_focus == industry if enabled_body == 0 else host.ui.body.is_ancestor_of(initial_focus)), "industry focuses an available body function or its own page without selecting station")
 	check(only_industry_active(), "current industry alone has selected amber text and symbol")
 	var normal: StyleBoxFlat = industry.get_theme_stylebox("normal") as StyleBoxFlat
 	var focus: StyleBoxFlat = station.get_theme_stylebox("focus") as StyleBoxFlat
@@ -356,10 +360,10 @@ func industry_focus_regression() -> void:
 	var before: String = authority()
 	var count: int = events.size()
 	var reached: bool = false
-	for step: int in range(IDS.size() + 4):
-		await key(KEY_TAB)
+	for step: int in range(IDS.size() + 8):
+		await key(KEY_TAB, null, true)
 		if root.gui_get_focus_owner() == station: reached = true; break
-	check(reached and complete(station), "real Tab reaches fully visible station while industry stays open")
+	check(reached and complete(station), "real reverse Tab reaches fully visible station while industry stays open")
 	check(host.ui.page == "industry" and only_industry_active(), "station keyboard focus does not create a second active page")
 	var center: Vector2 = station.get_global_rect().get_center()
 	host.get_viewport().warp_mouse(center)

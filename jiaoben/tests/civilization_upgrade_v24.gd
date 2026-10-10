@@ -49,7 +49,7 @@ func _run() -> void:
 	check(FileAccess.file_exists(directory.path_join("migration-format8-backup.db")), "closed validated format8 backup exists before migration")
 	store.close(); store = FaultStore.new(path)
 	if not check(store.open(), "retry upgrades format8 to format9 " + store.last_error): _finish(); return
-	check(int(store._records("SELECT format_version FROM database_meta", [])[0].format_version) == 10, "actual SQLite format10 is installed")
+	check(int(store._records("SELECT format_version FROM database_meta", [])[0].format_version) == 11, "actual SQLite format11 is installed")
 	var old: XJRuntimeState = store.resume()
 	if not check(old != null, "old frozen world loads after format migration " + store.last_error): _finish(); return
 	check(store.catalog.rows("sector_defs").size() == 10 and old.rows("civilization_state").is_empty(), "schema migration does not silently replace the old world rules")

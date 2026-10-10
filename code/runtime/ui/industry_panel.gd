@@ -69,6 +69,9 @@ func _build() -> void:
 			var deliver: Button = u._button(actions, "交付材料", func(): _deliver_request(str(row.demand_id), amount, generation))
 			deliver.name = "DemandDeliver_" + str(row.demand_id)
 			rows.append({"demand": row, "label": status, "amount": amount, "deliver": deliver})
+			var source_item: String = row.item_id
+			u._button(actions, "物资来源", func():
+				if _current(): u.open_sources(source_item))
 			amount.value_changed.connect(func(_value: float): _update())
 			amount.get_line_edit().text_changed.connect(func(_text: String): _update())
 		if rows.is_empty(): _label(self, "本站暂无工业材料需求。")

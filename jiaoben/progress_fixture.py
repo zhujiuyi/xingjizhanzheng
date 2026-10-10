@@ -22,10 +22,10 @@ sys.path.insert(0, str(ROOT / "jiaoben"))
 import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
-MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql")
-FORMAT_VERSION = 10
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_9.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_9"
+MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql")
+FORMAT_VERSION = 11
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_10.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_10"
 REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_3": PROGRESS_DIR / "catalog_adapter_v0_3.sql",
     "frozen_catalog_v0_4": PROGRESS_DIR / "catalog_adapter_v0_4.sql",
@@ -34,9 +34,10 @@ REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_6": PROGRESS_DIR / "catalog_adapter_v0_6.sql",
     "frozen_catalog_v0_7": PROGRESS_DIR / "catalog_adapter_v0_7.sql",
     "frozen_catalog_v0_8": PROGRESS_DIR / "catalog_adapter_v0_8.sql",
-    "frozen_catalog_v0_9": ADAPTER,
+    "frozen_catalog_v0_9": PROGRESS_DIR / "catalog_adapter_v0_9.sql",
+    "frozen_catalog_v0_10": ADAPTER,
 }
-RULE_CODE_VERSION = "singleplayer_industry_v1"
+RULE_CODE_VERSION = "singleplayer_resource_intel_v1"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
 STATE_TABLES = (

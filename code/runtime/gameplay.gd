@@ -10,6 +10,7 @@ const Work = preload("res://runtime/gameplay/work.gd")
 const Encounters = preload("res://runtime/gameplay/encounters.gd")
 const Civilizations = preload("res://runtime/gameplay/civilizations.gd")
 const Industry = preload("res://runtime/gameplay/industry.gd")
+const ResourceIntel = preload("res://runtime/gameplay/resource_intel.gd")
 const Space = preload("res://runtime/space_coordinates.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
@@ -20,6 +21,7 @@ var work: RefCounted
 var encounters: RefCounted
 var civilizations: RefCounted
 var industry: RefCounted
+var resource_intel: RefCounted
 var events: Array[D.EventDto] = []
 var pending_autosave_request_id: String = ""
 var status_text: String = ""
@@ -53,6 +55,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog) -> void:
 	encounters = Encounters.new(self)
 	civilizations = Civilizations.new(self)
 	industry = Industry.new(self)
+	resource_intel = ResourceIntel.new(self)
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
 	for ship: D.ShipStateDto in state.rows("ship_state"):
@@ -672,9 +675,9 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel]:
 		if service != null: service.g = null
-	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null
+	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null
 	pending_autosave_request_id=""; events.clear(); _pending_repairs.clear(); _definition_cache.clear(); _index_cache.clear(); _rules.clear()
 	_active_action = null; _active_payload = null; state = null; catalog = null; spatial_validator = Callable()
 

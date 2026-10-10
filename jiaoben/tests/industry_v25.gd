@@ -90,6 +90,9 @@ func _run() -> void:
 	g.industry.tick(first.duration_s * 0.5)
 	check(first.remaining_s > 0 and first.remaining_s < first.duration_s, "world time advances partial production")
 	check(store.save(state, "manual", 0), "save running job and regional timers: " + store.last_error)
+	if OS.get_environment("XJ_INDUSTRY_FIXTURE_ONLY") == "1":
+		print("INDUSTRY_FIXTURE_READY ", JSON.stringify({"database": store.path, "format": store._records("SELECT format_version FROM database_meta")[0].format_version, "content_hash": store.catalog.content_hash, "jobs": g.industry.jobs().size()}))
+		g.dispose(); store.close(); quit(0); return
 	var slot: String = ""
 	for row: Dictionary in store.list_slots():
 		if row.slot_kind == "manual" and int(row.slot_index) == 0: slot = row.slot_id
@@ -240,7 +243,7 @@ func _real_legacy_upgrade() -> void:
 	faulty.failure = ""
 	if not check(store.open(), "retry migrates actual format9 database to format10: " + store.last_error): return
 	check(FileAccess.file_exists(directory.path_join("migration-format9-backup.db")), "format upgrade creates a closed old-format backup")
-	check(int(store._records("SELECT format_version FROM database_meta")[0].format_version) == 10, "actual legacy database reaches format10")
+	check(int(store._records("SELECT format_version FROM database_meta")[0].format_version) == 11, "actual legacy database reaches current format11")
 	var slot: Dictionary
 	for entry: Dictionary in store.list_slots():
 		if entry.slot_kind == "manual": slot = entry; break

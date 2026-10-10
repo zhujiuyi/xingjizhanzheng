@@ -12,6 +12,7 @@ import struct
 import tempfile
 from civilization_catalog import COLUMNS as CIVILIZATION_COLUMNS, TABLES as CIVILIZATION_TABLES, validate as validate_civilizations
 from industry_catalog import COLUMNS as INDUSTRY_COLUMNS, TABLES as INDUSTRY_TABLES, validate as validate_industry
+from resource_intel_catalog import COLUMNS as RESOURCE_INTEL_COLUMNS, TABLES as RESOURCE_INTEL_TABLES, validate as validate_resource_intel
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "code/data/catalog.db"
@@ -22,6 +23,8 @@ CIVILIZATION_SCHEMA = ROOT / "code/database/civilization_schema.sql"
 CIVILIZATION_SEED = ROOT / "code/database/civilization_seed.sql"
 INDUSTRY_SCHEMA = ROOT / "code/database/industry_schema.sql"
 INDUSTRY_SEED = ROOT / "code/database/industry_seed.sql"
+RESOURCE_INTEL_SCHEMA = ROOT / "code/database/resource_intel_schema.sql"
+RESOURCE_INTEL_SEED = ROOT / "code/database/resource_intel_seed.sql"
 HASH_ALGORITHM = "catalog_hash_v1"
 CONTENT_VIEWS = ("effective_connection_defs", "module_full_defs", "npc_full_defs", "mission_summary_defs")
 # Explicit table registry; column order and PK order come from the reviewed DDL.
@@ -231,6 +234,8 @@ CONTENT_TABLES += CIVILIZATION_TABLES
 CONTENT_COLUMNS.update(CIVILIZATION_COLUMNS)
 CONTENT_TABLES += INDUSTRY_TABLES
 CONTENT_COLUMNS.update(INDUSTRY_COLUMNS)
+CONTENT_TABLES += RESOURCE_INTEL_TABLES
+CONTENT_COLUMNS.update(RESOURCE_INTEL_COLUMNS)
 
 
 def identifier(name: str) -> str:
@@ -507,6 +512,7 @@ def validate_content_graph(connection: sqlite3.Connection) -> None:
     validate_space_content(connection)
     validate_civilizations(connection)
     validate_industry(connection)
+    validate_resource_intel(connection)
 
 
 def validate_space_content(connection: sqlite3.Connection) -> None:
@@ -721,7 +727,7 @@ def build_catalog(output: Path = DEFAULT_OUTPUT) -> dict[str, object]:
         connection.execute("PRAGMA journal_mode=DELETE")
         connection.execute("PRAGMA synchronous=EXTRA")
         # One explicit transaction: schema, seed, checks and logical hash.
-        source = "BEGIN IMMEDIATE;\n" + "\n".join(path.read_text(encoding="utf-8") for path in (SCHEMA, SEED, SPACE, CIVILIZATION_SCHEMA, CIVILIZATION_SEED, INDUSTRY_SCHEMA, INDUSTRY_SEED))
+        source = "BEGIN IMMEDIATE;\n" + "\n".join(path.read_text(encoding="utf-8") for path in (SCHEMA, SEED, SPACE, CIVILIZATION_SCHEMA, CIVILIZATION_SEED, INDUSTRY_SCHEMA, INDUSTRY_SEED, RESOURCE_INTEL_SCHEMA, RESOURCE_INTEL_SEED))
         connection.executescript(source)
         validate_database(connection)
         content_hash = logical_content_hash(connection)

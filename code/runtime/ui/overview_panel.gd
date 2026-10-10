@@ -187,6 +187,11 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 		var info: Dictionary = details.get("resource_info", {})
 		resource_label.text = ResourceStatus.summary(info)
 		resource_label.tooltip_text = resource_label.text + "\n本星系矿点可远距离读取；采矿仍需满足距离、设备和权限。再生按世界时间推进，暂停与退出不推进。"
+		var forecast: Dictionary = details.get("resource_forecast", {})
+		if float(forecast.get("rate_per_min", 0.0)) > 0:
+			resource_label.text += "\n理论 %.1f 单位/分 · 下一舱可采 %d · 约 %.0f 秒" % [forecast.rate_per_min, int(forecast.room_units), ceil(float(forecast.fill_seconds))]
+			resource_label.tooltip_text += "\n理论效率共用实际矿头公式；电容、热量、距离、视线和有限矿量可能降低实际效率。"
+		elif not str(forecast.get("reason", "")).is_empty(): resource_label.text += "\n" + str(forecast.reason)
 		resource_bar.visible = bool(info.get("available", false)) and int(info.get("capacity_units", 0)) > 0
 		resource_fraction.visible = resource_bar.visible
 		if resource_bar.visible:

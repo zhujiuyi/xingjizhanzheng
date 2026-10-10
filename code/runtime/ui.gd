@@ -17,6 +17,11 @@ const ServiceNavigation = preload("res://runtime/ui/service_navigation.gd")
 const CivilizationPanel = preload("res://runtime/ui/civilization_panel.gd")
 var civilization_selected_faction: String = ""
 var civilization_panel: RefCounted
+var source_item_id: String = ""
+var source_search: String = ""
+var source_filter: String = "全部"
+var source_page: int = 0
+var sources_return_page: String = "map"
 var war_navigation_row: HFlowContainer
 var state: XJRuntimeState
 var catalog: XJCatalog
@@ -401,12 +406,15 @@ func show_page(next_page: String) -> void:
 		_station()
 		_responsive()
 		return
-	_build_panel(ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
+	_build_panel("物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
 	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
 		_text("此服务需要停靠空间站。使用星图找到站点，进入停靠范围并减速后按 F。")
 		_focus_page.call_deferred()
 		return
 	match next_page:
+		"sources":
+			var sources: VBoxContainer = preload("res://runtime/ui/resource_sources.gd").new()
+			body.add_child(sources); sources.setup(self)
 		"ships": _ships()
 		"warehouse": _warehouse()
 		"fitting": _fitting()
@@ -570,7 +578,7 @@ func _build_panel(title: String, description: String) -> void:
 	if state != null and page not in ["title", "settings"]:
 		var heading_icon: TextureRect = TextureRect.new()
 		heading_icon.name = "PageHeadingIcon"
-		heading_icon.texture = ServiceNavigation.icon(page)
+		heading_icon.texture = ServiceNavigation.icon(_service_context_page())
 		heading_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		heading_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		heading_icon.custom_minimum_size = Vector2(26, 26)
@@ -592,9 +600,9 @@ func _build_panel(title: String, description: String) -> void:
 			selector.add_icon_item(ServiceNavigation.icon(str(record.id)), str(record.label))
 			selector.set_item_metadata(selector.item_count - 1, str(record.id))
 		for index: int in range(selector.item_count):
-			if selector.get_item_metadata(index) == page: selector.select(index)
+			if selector.get_item_metadata(index) == _service_context_page(): selector.select(index)
 		selector.item_selected.connect(func(index: int): show_page(str(selector.get_item_metadata(index))))
-		selector.tooltip_text = "切换服务 · " + ServiceNavigation.label(page)
+		selector.tooltip_text = "切换服务 · " + ServiceNavigation.label(_service_context_page())
 		selector.visible = _service_sidebar_compact()
 		header.add_child(selector)
 	if page != "title":
@@ -979,6 +987,7 @@ func _industry() -> void:
 		var item_id: String = str(recipe.get("output_item_id", ""))
 		var entry: Dictionary = _asset_row(list, str(access.recipe_id), "item", item_id, "制造 / 提炼 · " + _item_name(item_id), _item_description(item_id), "批", "1", "—", "—", "材料来自本站仓库")
 		_register_business_row(entry, "提交订单" if gameplay.industry.supported() else "生产", "manufacture", str(access.recipe_id), {"kind": "recipe", "id": str(access.recipe_id), "unlock": str(access.required_unlock_id), "service": "manufacture", "inputs_table": "recipe_inputs", "inputs_key": "recipe_id", "output_id": item_id, "output_quantity": int(recipe.get("output_quantity", 1)), "status_prefix": "材料来自本站仓库"})
+		_source_button(entry.actions, str(access.recipe_id))
 	list.call("add_section", "船坞制造")
 	for recipe: Dictionary in _defs("hull_recipe_defs"):
 		var local_yard: bool = false
@@ -987,6 +996,7 @@ func _industry() -> void:
 		if not local_yard: continue
 		var entry: Dictionary = _asset_row(list, str(recipe.hull_recipe_id), "ship", str(recipe.ship_id), "船坞 · " + _ship_name(str(recipe.ship_id)), _ship_description(str(recipe.ship_id)), "批", "1", "—", "—", "本站船坞")
 		_register_business_row(entry, "制造舰体", "manufacture", str(recipe.hull_recipe_id), {"kind": "recipe", "id": str(recipe.hull_recipe_id), "unlock": str(recipe.required_unlock_id), "service": "manufacture", "inputs_table": "hull_recipe_inputs", "inputs_key": "hull_recipe_id", "output_id": str(recipe.ship_id), "output_quantity": 1, "status_prefix": "本站船坞"})
+		_source_button(entry.actions, str(recipe.hull_recipe_id))
 	list.call("add_section", "设备拆解 · 普通本地资产")
 	for item: Dtos.ItemInstanceStateDto in state.rows("item_instance_state"):
 		if item.container_id != _warehouse_id() or item.policy_id != "normal_owned": continue
@@ -995,6 +1005,31 @@ func _industry() -> void:
 		var entry: Dictionary = _asset_row(list, item.item_instance_id, "item", item.item_def_id, "拆解 · " + _item_name(item.item_def_id), _item_description(item.item_def_id) + "\n" + _recycle_source_description(item), "件", "1", str(fee), str(fee), reason if not reason.is_empty() else "可拆解")
 		_register_business_row(entry, "拆解设备", "recycle", item.item_instance_id, {"kind": "recycle", "id": item.item_def_id, "fixed": 1, "service": "recycle"})
 	_update_quotes()
+
+func _service_context_page() -> String:
+	if page != "sources": return page
+	return sources_return_page if sources_return_page in ["industry", "market", "map"] else "map"
+
+func open_sources(item_id: String = "") -> void:
+	if state == null: return
+	sources_return_page = page if page != "sources" else sources_return_page
+	if not item_id.is_empty(): source_item_id = item_id
+	source_search = ""; source_page = 0; source_filter = "全部"
+	show_page("sources")
+
+func _source_button(parent: Node, blueprint_id: String) -> void:
+	var quote: Dictionary = quotes[-1]
+	var button: Button = _button(parent, "材料来源", func():
+		if not _business_context_valid(quote): return
+		var inputs: Array = gameplay.resource_intel.ingredients(blueprint_id)
+		if inputs.is_empty(): return
+		var selected: String = str(inputs[0].item_id)
+		var batches: int = maxi(1, _business_row_quantity(quote))
+		for input: Dictionary in inputs:
+			if gameplay.inventory.count(_warehouse_id(), input.item_id, true) < int(input.quantity) * batches: selected = input.item_id; break
+		open_sources(selected))
+	button.name = "RecipeSources_" + blueprint_id
+	button.tooltip_text = "查询本行缺料的采集、采购、加工和打捞地点及实际航路，不消耗任何物资。"
 
 func _missions() -> void:
 	_text("本页不暂停飞行。目标按顺序完成；舰船损失保留当前任务，交付需要指定实物。", 14)
@@ -1268,6 +1303,8 @@ func _research() -> void:
 
 func _map() -> void:
 	_text("选择星系查看情报；拖动视图、滚轮缩放。定位后，前往虫洞并减速按 F 穿越。", 14)
+	var sources: Button = _button(body, "查询物资来源", func(): open_sources())
+	sources.name = "MapResourceSources"
 	var identity: String = state.world_id + ":" + catalog.content_hash
 	if map_view_identity != identity: map_view_state.clear()
 	map_view_identity = identity
@@ -1532,7 +1569,9 @@ func _selected_details() -> Dictionary:
 	if not is_instance_valid(node) or not node is Node3D: return {}
 	var details: Dictionary = {"id": target_id, "title": _target_title(entry), "kind": str(entry.kind), "type_title": _target_type(str(entry.kind)), "distance_m": sector.target_distance(target_id), "navigation_only": bool(entry.get("navigation_only", false)), "remote_site": not sector.target_is_local(target_id)}
 	if bool(entry.get("friendly", false)): details.type_title = "友军"
-	if str(entry.kind) == "resource": details["resource_info"] = ResourceStatus.inspect(state, catalog, target_id)
+	if str(entry.kind) == "resource":
+		details["resource_info"] = ResourceStatus.inspect(state, catalog, target_id)
+		details["resource_forecast"] = gameplay.resource_intel.forecast(target_id)
 	if str(entry.kind) == "encounter":
 		details["encounter_info"] = _encounter_summary(entry)
 		details["type_title"] = _encounter_summary(entry)
@@ -2383,7 +2422,7 @@ func _responsive() -> void:
 		if is_instance_valid(sidebar):
 			for service_button: Button in sidebar.find_children("Service*", "Button", true, false):
 				if service_button.has_meta("service_page_id"):
-					_service_button_style(service_button, str(service_button.get_meta("service_page_id")) == page)
+					_service_button_style(service_button, str(service_button.get_meta("service_page_id")) == _service_context_page())
 	if is_instance_valid(panel):
 		for grid: Node in panel.find_children("ModuleCards*", "GridContainer", true, false):
 			grid.columns = 2 if root.size.x >= 1200 and page != "title" else 1
@@ -2942,7 +2981,7 @@ func _service_button(parent: Node, destination: String, surface: String) -> Butt
 	button.tooltip_text = ServiceNavigation.label(destination)
 	button.set_meta("service_page_id", destination)
 	button.set_meta("service_surface", surface)
-	_service_button_style(button, destination == page)
+	_service_button_style(button, destination == _service_context_page())
 	return button
 
 func _service_button_style(button: Button, active: bool) -> void:
