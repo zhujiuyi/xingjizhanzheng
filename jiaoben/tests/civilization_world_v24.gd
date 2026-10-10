@@ -96,9 +96,17 @@ func choose(option: OptionButton, index: int) -> void:
 	if not await click(option, "open sovereignty filter"): return
 	var popup: PopupMenu = option.get_popup()
 	if not check(popup.visible, "actual sovereignty popup opens"): return
-	for step: int in range(popup.item_count + 1):
+	# Let the native opening mouse motion settle away from menu items before
+	# using the keyboard; a late OS hover must not overwrite the arrow choice.
+	host.get_viewport().warp_mouse(Vector2(4, 4))
+	await get_tree().create_timer(0.12).timeout
+	var deadline: int = Time.get_ticks_msec() + 2000
+	var trace: Array[int] = []
+	while Time.get_ticks_msec() < deadline:
 		if popup.get_focused_item() == index: break
 		await key(KEY_DOWN, popup)
+		trace.append(popup.get_focused_item())
+	print("CIV_NATIVE_DROPDOWN ", JSON.stringify({"index": index, "embedded": popup.is_embedded(), "trace": trace, "focused": popup.get_focused_item()}))
 	check(popup.get_focused_item() == index, "native keyboard selects sovereignty choice")
 	await key(KEY_ENTER, popup)
 
