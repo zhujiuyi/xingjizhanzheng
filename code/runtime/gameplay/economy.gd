@@ -28,8 +28,9 @@ func quote(item_id: String, quantity: int, selling: bool = false) -> int:
 	if stock==null:return 0
 	var faction: String = g.definition("station_defs","station_id",g.station()).faction_id
 	var bonus: float = minf(1.0,maxf(0.0,float(reputation(faction))/g.rule("reputation_discount_full_at")))
-	if selling:return int(floor(stock.bid_credit*quantity*(1+g.rule("max_sell_bonus_ratio")*bonus)*(1-g.rule("trade_fee_ratio"))))
-	return int(ceil(stock.ask_credit*quantity*(1-g.rule("max_buy_discount_ratio")*bonus)*(1+g.rule("trade_fee_ratio"))))
+	var pressure: float = g.industry.price_factor(item_id) if g.industry != null else 1.0
+	if selling:return int(floor(stock.bid_credit*pressure*quantity*(1+g.rule("max_sell_bonus_ratio")*bonus)*(1-g.rule("trade_fee_ratio"))))
+	return int(ceil(stock.ask_credit*pressure*quantity*(1-g.rule("max_buy_discount_ratio")*bonus)*(1+g.rule("trade_fee_ratio"))))
 
 func buy_item(item_id: String, quantity: int, destination: String) -> bool:
 	if not g.allowed_service("trade"):return false
@@ -115,13 +116,14 @@ func _inputs(table: String, key: String, target: String, batches: int) -> Dictio
 func _can_inputs(inputs: Dictionary) -> bool:
 	var source: String = g.inventory.warehouse(g.station())
 	for item_id in inputs:
-		if g.inventory.count(source,item_id,true)<inputs[item_id]:return g.fail("仓库缺少正常来源材料："+str(item_id))
+		if g.inventory.count(source,item_id,true)<inputs[item_id]:return g.fail("仓库缺少正常来源材料："+str(g.definition("item_defs", "item_id", item_id).get("display_name", item_id)))
 	return true
 func _consume_inputs(inputs: Dictionary) -> void:
 	var source: String = g.inventory.warehouse(g.station())
 	for item_id in inputs:g.inventory.consume(source,item_id,inputs[item_id],true)
 
 func manufacture(recipe_id: String, batches: int) -> bool:
+	if g.industry != null and g.industry.supported(): return g.industry.start(recipe_id, batches)
 	if not g.allowed_service("manufacture"):return false
 	var hull: Dictionary = g.definition("hull_recipe_defs","hull_recipe_id",recipe_id)
 	if not hull.is_empty():
@@ -279,4 +281,5 @@ func quote_repair() -> int:
 func quote_manufacture(recipe_id: String, batches: int = 1) -> int:
 	var def: Dictionary = g.definition("recipe_defs","recipe_id",recipe_id)
 	if def.is_empty():def=g.definition("hull_recipe_defs","hull_recipe_id",recipe_id)
-	return int(ceil(def.service_fee_credit*batches/base_factor("industry"))) if not def.is_empty() else 0
+	var discount: float = g.industry.discount(g.station()) if g.industry != null else 1.0
+	return int(ceil(def.service_fee_credit*batches*discount/base_factor("industry"))) if not def.is_empty() else 0

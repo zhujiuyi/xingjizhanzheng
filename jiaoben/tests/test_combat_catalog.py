@@ -39,7 +39,7 @@ class CombatCatalogTests(unittest.TestCase):
     def test_version_and_content_closure(self):
         meta = self.rows("catalog_meta")[0]
         self.assertEqual((meta["schema_version"], meta["content_version"], meta["ruleset_version"]),
-                         (7, "v0.8-civilizations", "singleplayer_civilizations_v1"))
+                         (8, "v0.9-industry", "singleplayer_industry_v1"))
         self.assertEqual(len(self.rows("module_defs")), 39)
         self.assertEqual(len(self.rows("weapon_defs")), 18)
         self.assertEqual(len(self.rows("drone_defs")), 3)

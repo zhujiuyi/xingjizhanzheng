@@ -9,6 +9,7 @@ const Missions = preload("res://runtime/gameplay/missions.gd")
 const Work = preload("res://runtime/gameplay/work.gd")
 const Encounters = preload("res://runtime/gameplay/encounters.gd")
 const Civilizations = preload("res://runtime/gameplay/civilizations.gd")
+const Industry = preload("res://runtime/gameplay/industry.gd")
 const Space = preload("res://runtime/space_coordinates.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
@@ -18,6 +19,7 @@ var missions: RefCounted
 var work: RefCounted
 var encounters: RefCounted
 var civilizations: RefCounted
+var industry: RefCounted
 var events: Array[D.EventDto] = []
 var pending_autosave_request_id: String = ""
 var status_text: String = ""
@@ -50,6 +52,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog) -> void:
 	work = Work.new(self)
 	encounters = Encounters.new(self)
 	civilizations = Civilizations.new(self)
+	industry = Industry.new(self)
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
 	for ship: D.ShipStateDto in state.rows("ship_state"):
@@ -158,6 +161,8 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 	command.action_kind = names.find(action) if names.has(action) else T.ActionKind.MANUFACTURE
 	var civilization_actions: Array[String] = ["join_civilization", "donate_civilization", "start_war", "fleet_command"]
 	if civilization_actions.has(action): command.action_kind = T.ActionKind.JOIN_CIVILIZATION + civilization_actions.find(action)
+	var industry_actions: Array[String] = ["claim_industry", "cancel_industry", "deliver_demand"]
+	if industry_actions.has(action): command.action_kind = T.ActionKind.CLAIM_INDUSTRY + industry_actions.find(action)
 	_active_action = command
 	_active_payload = _request_for(action, target, quantity, extra)
 	var ok: bool = false
@@ -199,6 +204,9 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 			"donate_civilization": ok = civilizations.donate(target, quantity)
 			"start_war": ok = civilizations.start_war(target)
 			"fleet_command": ok = civilizations.command(target, extra)
+			"claim_industry": ok = industry.claim(target)
+			"cancel_industry": ok = industry.cancel(target)
+			"deliver_demand": ok = industry.deliver(target, quantity, extra)
 			"set_module_enabled": ok = _set_enabled(target, extra != "off")
 			"request_engine_cycle": ok = _engine_cycle()
 			_: fail("不支持的动作：" + action)
@@ -483,6 +491,7 @@ func finish_step(delta: float) -> void:
 	work.tick(delta)
 	civilizations.tick(delta)
 	economy.tick(delta)
+	industry.tick(delta)
 	_tick_resources(delta)
 	_sync_spawns(delta)
 	_tick_gate_lifetimes(delta)
@@ -663,9 +672,9 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry]:
 		if service != null: service.g = null
-	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null
+	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null
 	pending_autosave_request_id=""; events.clear(); _pending_repairs.clear(); _definition_cache.clear(); _index_cache.clear(); _rules.clear()
 	_active_action = null; _active_payload = null; state = null; catalog = null; spatial_validator = Callable()
 

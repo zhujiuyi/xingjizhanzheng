@@ -698,6 +698,35 @@ class WarFleetStateDto extends RefCounted:
 	var war_id: String = ""
 	var side: String = "ally"
 
+## 对应 progress.industry_job_state；材料在提交时托管，产物只能在原站领取一次。
+class IndustryJobStateDto extends RefCounted:
+	var job_id: String = ""
+	var player_id: String = ""
+	var station_id: String = ""
+	var blueprint_id: String = ""
+	var batches: int = 0
+	var status: String = "queued"
+	var queue_sequence: int = 0
+	var duration_s: float = 0.0
+	var remaining_s: float = 0.0
+	var paid_credit: int = 0
+	var created_tick: int = 0
+	var finished_tick: int = 0
+
+class IndustryInputStateDto extends RefCounted:
+	var job_id: String = ""
+	var item_id: String = ""
+	var quantity: int = 0
+
+class StationDemandStateDto extends RefCounted:
+	var demand_id: String = ""
+	var generation: int = 1
+	var status: String = "active"
+	var remaining_units: int = 0
+	var phase_remaining_s: float = 0.0
+	var benefit_remaining_s: float = 0.0
+	var completed_cycles: int = 0
+
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
 	var content: ContentRefDto = ContentRefDto.new()
@@ -740,6 +769,9 @@ class WorldSnapshotDto extends RefCounted:
 	var territory_state_rows: Array[TerritoryStateDto] = []
 	var war_campaign_state_rows: Array[WarCampaignStateDto] = []
 	var war_fleet_state_rows: Array[WarFleetStateDto] = []
+	var industry_job_state_rows: Array[IndustryJobStateDto] = []
+	var industry_input_state_rows: Array[IndustryInputStateDto] = []
+	var station_demand_state_rows: Array[StationDemandStateDto] = []
 
 ## 表现派生值不是另一份定义：每次由 frozen catalog + 当前状态计算。
 class ShipMetricsViewDto extends RefCounted:

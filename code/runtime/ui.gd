@@ -959,6 +959,11 @@ func _market() -> void:
 	_update_quotes()
 
 func _industry() -> void:
+	if gameplay.industry.supported():
+		var jobs_panel: VBoxContainer = preload("res://runtime/ui/industry_panel.gd").new()
+		body.add_child(jobs_panel); jobs_panel.setup(self, "jobs")
+		var demand_panel: VBoxContainer = preload("res://runtime/ui/industry_panel.gd").new()
+		body.add_child(demand_panel); demand_panel.setup(self, "demands")
 	var has_manufacture: bool = false
 	for service in _defs("station_service_defs"):
 		if service.station_id == state.player().docked_station_id and service.service_id == "manufacture": has_manufacture = true
@@ -973,7 +978,7 @@ func _industry() -> void:
 		var recipe: Dictionary = _one("recipe_defs", "recipe_id", str(access.recipe_id))
 		var item_id: String = str(recipe.get("output_item_id", ""))
 		var entry: Dictionary = _asset_row(list, str(access.recipe_id), "item", item_id, "制造 / 提炼 · " + _item_name(item_id), _item_description(item_id), "批", "1", "—", "—", "材料来自本站仓库")
-		_register_business_row(entry, "生产", "manufacture", str(access.recipe_id), {"kind": "recipe", "id": str(access.recipe_id), "unlock": str(access.required_unlock_id), "service": "manufacture", "inputs_table": "recipe_inputs", "inputs_key": "recipe_id", "output_id": item_id, "output_quantity": int(recipe.get("output_quantity", 1)), "status_prefix": "材料来自本站仓库"})
+		_register_business_row(entry, "提交订单" if gameplay.industry.supported() else "生产", "manufacture", str(access.recipe_id), {"kind": "recipe", "id": str(access.recipe_id), "unlock": str(access.required_unlock_id), "service": "manufacture", "inputs_table": "recipe_inputs", "inputs_key": "recipe_id", "output_id": item_id, "output_quantity": int(recipe.get("output_quantity", 1)), "status_prefix": "材料来自本站仓库"})
 	list.call("add_section", "船坞制造")
 	for recipe: Dictionary in _defs("hull_recipe_defs"):
 		var local_yard: bool = false
@@ -2092,6 +2097,10 @@ func _friendly(message: String) -> String:
 	for action: String in civilization_actions:
 		if message == "操作完成：" + action: return civilization_actions[action]
 	if message.begins_with("操作完成："):
+		if message == "操作完成：manufacture" and gameplay != null and gameplay.industry.supported(): return "制造订单已提交，完工后请到原站领取"
+		if message == "操作完成：claim_industry": return "制造成品已领取"
+		if message == "操作完成：cancel_industry": return "订单已取消，返还物资已入本站仓库"
+		if message == "操作完成：deliver_demand": return "区域需求交付完成"
 		return str(ACTION_NAMES.get(message.trim_prefix("操作完成："), "操作完成"))
 	var result: String = message.replace("COMMIT", "进度写入").replace("正在向 SQLite 提交世界快照", "正在保存完整航行进度").replace("manual", "手动").replace("quick", "快速").replace("auto", "自动")
 	var identifiers: Array = friendly_names.keys()
@@ -2634,10 +2643,12 @@ func _update_quote(row: Dictionary, quantity_override: int = -1) -> void:
 		"manufacture":
 			if not _unlocked(str(row.get("unlock", ""))): reason = "需解锁 " + _unlock_name(str(row.get("unlock", "")))
 			if reason.is_empty(): reason = _materials_reason(str(row.inputs_table), str(row.inputs_key), str(row.id), maxi(1, quantity))
+			if reason.is_empty() and gameplay.industry.supported(): reason = gameplay.industry.start_reason(str(row.id), maxi(1, quantity))
 			var materials: String = _business_inputs_text(str(row.inputs_table), str(row.inputs_key), str(row.id), maxi(1, quantity))
 			var output: String = "%s × %d %s" % [_item_name(str(row.output_id)), int(row.output_quantity) * maxi(1, quantity), _item_unit(str(row.output_id))]
 			if row.inputs_table == "hull_recipe_inputs": output = "%s × %d 艘裸舰；不含设备与弹药" % [_ship_name(str(row.output_id)), maxi(1, quantity)]
 			var detail: String = str(row.description_base) + "\n本次材料：" + materials + "\n本次产出：" + output
+			if gameplay.industry.supported(): detail += "\n加工用时：%.0f 秒；完工后在本站领取，出航期间继续生产。" % ceil(gameplay.industry.duration(str(row.id), maxi(1, quantity)))
 			row.description_label.text = detail
 			row.name_label.tooltip_text = row.name_label.text + "\n" + detail
 			row.row.tooltip_text = row.name_label.tooltip_text

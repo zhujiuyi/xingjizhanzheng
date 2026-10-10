@@ -94,7 +94,8 @@ func count(id: String, source: String = "") -> int:
 
 func totals() -> Dictionary:
 	var result: Dictionary = {}
-	for table: String in ["player_state", "container_state", "ship_state", "inventory_stack_state", "item_instance_state", "equipment_state", "shop_stock_state", "shop_ship_stock_state", "station_economy_state", "production_state", "manufacture_input_state"]:
+	for table: String in ["player_state", "container_state", "ship_state", "inventory_stack_state", "item_instance_state", "equipment_state", "shop_stock_state", "shop_ship_stock_state", "station_economy_state", "production_state", "manufacture_input_state", "industry_job_state", "industry_input_state", "station_demand_state"]:
+		if not XJRuntimeState.TABLES.has(table): continue
 		var rows: Array[String] = []
 		for record: RefCounted in host.state.rows(table): rows.append(JSON.stringify(Codec.new().encode_row(table, record)))
 		rows.sort(); result[table] = rows
@@ -300,6 +301,13 @@ func manufacture_check(id: String, batches: int, hull: bool = false, dirty: bool
 	var cost: int = int(host.gameplay.get("economy").call("quote_manufacture", id, batches))
 	var before_output: int = host.state.rows("ship_state").size() if hull else count(str(definition.output_item_id))
 	if not await execute(id, batches, "manufacture", dirty): return
+	if host.gameplay.get("industry") != null and host.gameplay.get("industry").supported():
+		var service: RefCounted = host.gameplay.get("industry")
+		var job: RefCounted = service.jobs(station_id)[-1]
+		check((host.state.rows("ship_state").size() if hull else count(str(definition.output_item_id))) == before_output, "queued manufacturing does not create premature output " + id)
+		service.tick(job.duration_s)
+		host.ui.refresh_page(); await frames(4)
+		if not await actual_click(host.ui.body.find_child("IndustryClaim_" + job.job_id, true, false), "claim_industry", job.job_id): return
 	for material: String in inputs: check(count(material) == int(before_inputs[material]) - int(inputs[material]) * batches, "actual manufacturing consumes precise batch input " + id + " " + material)
 	check(host.state.player().credit == credit - cost, "manufacturing pays exact independently rounded batch fee " + id)
 	if hull:
@@ -482,6 +490,9 @@ func station_fixture(destination: String) -> void:
 	host.state.player().has_docked_station_id = false; host.state.player().docked_station_id = ""
 	for container: D.ContainerStateDto in host.state.rows("container_state"):
 		if container.ship_instance_id == ship.ship_instance_id: container.sector_id = ship.sector_id
+	var anchor: Dictionary = host.store.catalog.one("anchor_defs", "anchor_id", station.station_anchor_id)
+	ship.pos_x = anchor.x_m; ship.pos_y = anchor.y_m; ship.pos_z = anchor.z_m
+	check(host.gameplay.assign_anchor_site("ship", ship.ship_instance_id, station.station_anchor_id), "alternate station fixture sets its actual strategic site")
 	if not check(host._stage_candidate(host.state, host.store.catalog), "Main stages alternate formal station fixture"): return
 	host._activate(host.state)
 	var flight: XJFlight = host.world.flight

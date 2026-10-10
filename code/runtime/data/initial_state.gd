@@ -83,6 +83,9 @@ func create(catalog: XJCatalog, seed_value: int) -> State:
 	for source in catalog.rows("station_defs"):
 		_add("station_economy_state", {"station_id": source.station_id, "buyback_remaining_credit": source.buyback_budget_credit, "refresh_remaining_s": source.stock_refresh_s})
 	var rng: Rng = Rng.new()
+	if catalog.table_names.has("station_demand_defs"):
+		for demand: Dictionary in catalog.rows("station_demand_defs"):
+			_add("station_demand_state", {"demand_id": demand.demand_id, "remaining_units": demand.required_units, "phase_remaining_s": demand.duration_s})
 	rng.initialize(seed_value)
 	result.add("rng_state", rng.row)
 	return result

@@ -51,6 +51,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag": "--xj-verify-industry-v25", "file": "industry_v25.gd", "prefix": "industry-v25", "env": "XJ_INDUSTRY_V25", "meta": "xj_industry_v25_diagnostic"},
+		{"flag": "--xj-verify-industry-world-v25", "file": "industry_world_v25.gd", "prefix": "industry-world-v25", "env": "XJ_INDUSTRY_WORLD_V25", "meta": "xj_industry_world_v25_diagnostic"},
 		{"flag": "--xj-verify-civilization-world-v24", "file": "civilization_world_v24.gd", "prefix": "civilization-world-v24", "env": "XJ_CIVILIZATION_WORLD_V24", "meta": "xj_civilization_world_v24_diagnostic"},
 		{"flag": "--xj-verify-civilization-upgrade-v24", "file": "civilization_upgrade_v24.gd", "prefix": "civilization-upgrade-v24", "env": "XJ_CIVILIZATION_UPGRADE_V24", "meta": "xj_civilization_upgrade_v24_diagnostic"},
 		{"flag": "--xj-verify-civilizations-v24", "file": "civilizations_v24.gd", "prefix": "civilizations-v24", "env": "XJ_CIVILIZATIONS_V24", "meta": "xj_civilizations_v24_diagnostic"},

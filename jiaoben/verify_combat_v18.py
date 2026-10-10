@@ -11,6 +11,9 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "row-quantity": ("row_quantity_v17.gd", "XJ_ROW_QUANTITY_V17", "row-quantity-v17", "ROW_QUANTITY_V17", "--xj-verify-row-quantities"),
+    "industry": ("industry_v25.gd", "XJ_INDUSTRY_V25", "industry-v25", "INDUSTRY", "--xj-verify-industry-v25"),
+    "industry-world": ("industry_world_v25.gd", "XJ_INDUSTRY_WORLD_V25", "industry-world-v25", "INDUSTRY_WORLD_V25", "--xj-verify-industry-world-v25"),
     "civilization-world": ("civilization_world_v24.gd", "XJ_CIVILIZATION_WORLD_V24", "civilization-world-v24", "CIVILIZATION_WORLD_V24", "--xj-verify-civilization-world-v24"),
     "civilization-upgrade": ("civilization_upgrade_v24.gd", "XJ_CIVILIZATION_UPGRADE_V24", "civilization-upgrade-v24", "CIVILIZATION_UPGRADE_V24", "--xj-verify-civilization-upgrade-v24"),
     "civilizations": ("civilizations_v24.gd", "XJ_CIVILIZATIONS_V24", "civilizations-v24", "CIVILIZATIONS_V24", "--xj-verify-civilizations-v24"),
@@ -151,6 +154,16 @@ def run_suite():
             assert args.native and record["summary"]["checks"] >= 90 and len(captures) == 12
             battle = [entry for entry in record["summary"]["observations"] if entry["kind"] == "battle"]
             assert len(battle) == 1 and battle[0]["status"] == "won" and battle[0]["ally_impacts"] > 0 and battle[0]["seconds"] >= 30
+        if name == "industry-world":
+            assert args.native and record["summary"]["checks"] >= 35 and len(captures) == 7
+            assert record["summary"]["native_helper_sha256"] == sha(ROOT / "jiaoben/tests/civilization_world_v24.gd")
+        if name == "industry":
+            assert record["summary"]["checks"] >= 80 and len(captures) == 0
+        if name == "row-quantity":
+            summary = record["summary"]
+            assert summary["checks"] >= 5000 and summary["gui_transactions"] >= 16
+            assert summary["invalid_cases"] >= 5 and summary["stale_rejections"] >= 7 and summary["layouts"] == 4 and summary["restarts"] == 1
+            assert len(captures) == (6 if args.native else 0)
         if name == "service-navigation":
             summary = record["summary"]
             assert summary["native"] == args.native and summary["checks"] >= 120

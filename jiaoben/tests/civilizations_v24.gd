@@ -27,6 +27,12 @@ func check(value: bool, label: String) -> bool:
 func action(kind: String, target: String = "", quantity: int = 1, extra: String = "") -> bool:
 	var result: D.ActionResultDto = g.act(kind, target, quantity, extra)
 	if result.phase != T.ActionPhase.APPLIED: print("ACTION_REASON ", kind, " ", g.last_error)
+	if result.phase == T.ActionPhase.APPLIED and kind == "manufacture" and g.get("industry") != null and g.get("industry").supported():
+		var queue: RefCounted = g.get("industry")
+		var job: RefCounted = queue.jobs(g.station())[-1]
+		check(job.status in ["queued", "running"], "authorized hull manufacturing enters paid queue")
+		queue.tick(job.remaining_s)
+		return action("claim_industry", job.job_id)
 	return result.phase == T.ActionPhase.APPLIED
 
 func place(anchor_id: String, station_id: String = "") -> void:
@@ -213,7 +219,7 @@ func _run() -> void:
 	if not directory.is_absolute_path() or not directory.contains("/jiaoben/tmp/civilizations-v24/") or directory.contains("..") or FileAccess.file_exists(directory.path_join("progress.db")):
 		check(false, "fresh scoped test database required"); _finish(); return
 	store = Store.new(directory.path_join("progress.db"))
-	if not check(store.open(), "real format9 store opens " + store.last_error): _finish(); return
+	if not check(store.open(), "current migrated store opens " + store.last_error): _finish(); return
 	state = store.new_world("文明业务独立验收", 7421)
 	if not check(state != null, "real 54-system initial world " + store.last_error): _finish(); return
 	g = Gameplay.new(); g.setup(state, store.catalog)

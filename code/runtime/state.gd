@@ -10,7 +10,8 @@ const TABLES: Array[String] = [
 	"discovery_state", "unlock_state", "reputation_state", "resource_state", "gate_state",
 	"ship_gate_cooldown_state", "sector_state", "station_economy_state", "shop_stock_state",
 	"shop_ship_stock_state", "npc_state", "production_state", "rng_state", "action_receipt_state", "transfer_state", "base_module_state", "encounter_state", "salvage_package_state", "spatial_state",
-	"civilization_state", "territory_state", "war_campaign_state", "war_fleet_state"]
+	"civilization_state", "territory_state", "war_campaign_state", "war_fleet_state",
+	"industry_job_state", "industry_input_state", "station_demand_state"]
 
 var snapshot: Dtos.WorldSnapshotDto = Dtos.WorldSnapshotDto.new()
 var world_id: String = ""
@@ -101,4 +102,7 @@ static func new_row(table: String) -> RefCounted:
 		"territory_state": return Dtos.TerritoryStateDto.new()
 		"war_campaign_state": return Dtos.WarCampaignStateDto.new()
 		"war_fleet_state": return Dtos.WarFleetStateDto.new()
+		"industry_job_state": return Dtos.IndustryJobStateDto.new()
+		"industry_input_state": return Dtos.IndustryInputStateDto.new()
+		"station_demand_state": return Dtos.StationDemandStateDto.new()
 	return null

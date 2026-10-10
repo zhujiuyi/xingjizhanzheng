@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+v0.17.0单机工业：`build_catalog.py`合并独立`industry_schema/seed.sql`，`store_generate_industry.py`仅生成新013迁移与v0.9固定适配器；已发布001–012和旧适配器不可改写。`verify_combat_v18.py --only industry`运行材料托管、队列/领取/取消、需求、保存和升级故障；传`XJ_INDUSTRY_LEGACY_DATABASE`时只复制已关闭的tmp旧库，真实v0.16.0库可由其实际EXE的`--xj-verify-store`创建。`--only industry-world --native`使用真实窗口输入与Main推进，覆盖过期界面、非法数量与三种尺寸；`--only row-quantity --native`保留仓储/经济矩阵，增加真实制造队列与成品领取。三者均支持`--executable <实际EXE>`而不挂源码路径，使用fresh UUID库、独立输出/引擎日志、严格退出/诊断和图摘要。所有测试数据在tmp/logs，不读取个人存档。单机完整目标和阶段边界见[51](../doc/51-单机完善实施与验收矩阵.md)。
+
 v0.16.0文明扩展：`build_civilization_content.py`从旧正式SQL生成独立文明扩展，`build_catalog.py`校验105表并构建只读目录，`store_generate_civilizations.py`追加012格式9迁移和v0.8冻结适配器，旧SQL不重写。`art/build_civilization_assets.py`生成新舰外观、碰撞包装、星系根与独立清单，`art/bake_civilization_portraits.gd`用真实Godot模型渲染缩略图。
 
 `verify_combat_v18.py --only civilizations`检查真实入籍、捐献、爵位、专属采购/制造/研究、切换保留资产、战役状态与SQLite重开。`--only civilization-world --native`用真实Main/GUI/Renderer验证星图筛选、文明界面、原生捐献、专属模型、友军识别、实际舰队开火与伤害及占领；资格和装配物资为明确测试前提，战斗不跳过真实模拟。`prepare_civilization_upgrade_v24.py --legacy-executable <旧客户端EXE>`创建真实format8旧档夹具，`--only civilization-upgrade --legacy <其progress.db>`验证备份、迁移/内容分支失败回滚、资产与RNG保留、旧手动档及升级幂等。所有游戏检查串行持有同一审计锁，fresh UUID tmp，个人档不参与；必须退出0且完整结果及双日志无错误/警告/泄漏，实际包追加`--executable <EXE>`复验。

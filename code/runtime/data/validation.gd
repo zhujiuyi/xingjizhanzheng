@@ -18,6 +18,7 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	if not _validate_encounters(state, catalog): return false
 	if not _validate_space(state, catalog): return false
 	if not _validate_civilizations(state, catalog): return false
+	if not _validate_industry(state, catalog): return false
 	for ship in state.rows("ship_state"):
 		var norm: float = ship.quat_x * ship.quat_x + ship.quat_y * ship.quat_y + ship.quat_z * ship.quat_z + ship.quat_w * ship.quat_w
 		if abs(norm - 1.0) >= 0.00001: return _fail("Invalid normalized ship quaternion")
@@ -101,6 +102,54 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 			var capacity: int = definition.cargo_l if container.kind == Types.ContainerKind.CARGO else definition.mineral_cargo_l
 			if volume > capacity: return _fail("Cargo volume exceeded")
 		if payload > definition.max_payload_mass_kg + 0.0000001: return _fail("Shared payload mass exceeded")
+	return true
+
+func _validate_industry(state: State, catalog: XJCatalog) -> bool:
+	if not catalog.table_names.has("industry_balance_defs"):
+		for table: String in ["industry_job_state", "industry_input_state", "station_demand_state"]:
+			if not state.rows(table).is_empty(): return _fail("Industry state in a legacy world")
+		return true
+	var balance: Dictionary = catalog.rows("industry_balance_defs")[0]
+	var demands: Dictionary = {}
+	for row: RefCounted in state.rows("station_demand_state"):
+		var definition: Dictionary = catalog.one("station_demand_defs", "demand_id", row.demand_id)
+		if definition.is_empty() or demands.has(row.demand_id) or row.generation <= 0 or row.completed_cycles < 0 or row.remaining_units < 0 or row.remaining_units > int(definition.required_units): return _fail("Invalid regional need identity or quantity")
+		if row.status not in ["active", "cooldown"]: return _fail("Invalid regional need phase")
+		var maximum: float = definition.duration_s if row.status == "active" else definition.cooldown_s
+		if not is_finite(row.phase_remaining_s) or row.phase_remaining_s < 0 or row.phase_remaining_s > maximum or not is_finite(row.benefit_remaining_s) or row.benefit_remaining_s < 0 or row.benefit_remaining_s > float(balance.demand_benefit_duration_s): return _fail("Invalid regional need timer")
+		demands[row.demand_id] = true
+	if demands.size() != catalog.rows("station_demand_defs").size(): return _fail("Incomplete regional needs")
+	var inputs: Dictionary = {}
+	for row: RefCounted in state.rows("industry_input_state"):
+		if state.find("industry_job_state", "job_id", row.job_id) == null or row.quantity <= 0: return _fail("Orphan industrial escrow")
+		if not inputs.has(row.job_id): inputs[row.job_id] = {}
+		if inputs[row.job_id].has(row.item_id): return _fail("Duplicate industrial escrow")
+		inputs[row.job_id][row.item_id] = row.quantity
+	var ids: Dictionary = {}
+	var sequences: Dictionary = {}
+	var active: Dictionary = {}
+	var running: Dictionary = {}
+	for job: RefCounted in state.rows("industry_job_state"):
+		var spec: Dictionary = catalog.one("industry_recipe_defs", "blueprint_id", job.blueprint_id)
+		if spec.is_empty() or ids.has(job.job_id) or sequences.has(job.queue_sequence) or job.queue_sequence <= 0 or job.job_id.is_empty() or job.player_id != state.player().player_id or catalog.one("station_defs", "station_id", job.station_id).is_empty(): return _fail("Invalid industrial job identity")
+		ids[job.job_id] = true; sequences[job.queue_sequence] = true
+		if job.status not in ["queued", "running", "ready", "claimed", "cancelled"] or job.batches <= 0 or job.batches > int(balance.max_batches) or job.paid_credit < 0: return _fail("Invalid industrial job state")
+		if not is_finite(job.duration_s) or not is_finite(job.remaining_s) or job.duration_s <= 0 or job.remaining_s < 0 or job.remaining_s > job.duration_s or job.created_tick < 0 or job.created_tick > state.snapshot.meta.simulation_tick or job.finished_tick < 0 or job.finished_tick > state.snapshot.meta.simulation_tick: return _fail("Invalid industrial job duration")
+		if job.status in ["ready", "claimed"] and job.remaining_s != 0: return _fail("Incomplete job marked completed")
+		var expected: Dictionary = {}
+		var table: String = "recipe_inputs" if spec.recipe_id != null else "hull_recipe_inputs"
+		var key: String = "recipe_id" if spec.recipe_id != null else "hull_recipe_id"
+		var id: String = str(spec.recipe_id if spec.recipe_id != null else spec.hull_recipe_id)
+		for row: Dictionary in catalog.rows(table):
+			if row[key] == id: expected[row.item_id] = int(row.quantity) * job.batches
+		if expected != inputs.get(job.job_id, {}): return _fail("Industrial material escrow differs from frozen recipe")
+		if job.status == "claimed" and spec.recipe_id != null:
+			var production: RefCounted = state.find("production_state", "production_id", job.job_id)
+			if production == null or not production.output_claimed or production.recipe_id != spec.recipe_id or production.batches != job.batches or production.station_id != job.station_id: return _fail("Claimed industrial job lacks production receipt")
+		if job.status in ["queued", "running", "ready"]: active[job.station_id] = int(active.get(job.station_id, 0)) + 1
+		if job.status == "running": running[job.station_id] = int(running.get(job.station_id, 0)) + 1
+	for station_id: String in active:
+		if int(active[station_id]) > int(balance.queue_limit) or int(running.get(station_id, 0)) > 1: return _fail("Industrial queue exceeds frozen capacity")
 	return true
 
 func _validate_civilizations(state: State, catalog: XJCatalog) -> bool:
