@@ -53,7 +53,18 @@ def sha(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def activate(process):
+def activate(process, ready_output=None):
+    if ready_output is not None:
+        # The built-in presentation endpoint announces when the real native
+        # window is ready. Activating a transient startup window can report
+        # success while the endpoint still has no focus after initialization.
+        deadline = time.monotonic() + 45
+        marker = "PRESENTATION_NATIVE_FOCUS awaiting active test window"
+        while process.poll() is None and time.monotonic() < deadline:
+            if marker in ready_output.read_text(encoding="utf-8", errors="replace"):
+                print("WINDOW_READY presentation input endpoint", flush=True)
+                break
+            time.sleep(0.1)
     command = (f"$targetProcessId={process.pid}; $deadline=[DateTime]::UtcNow.AddSeconds(15); "
                "do { $target=Get-Process -Id $targetProcessId -ErrorAction SilentlyContinue; "
                "if ($target -and $target.MainWindowHandle -ne 0) { break }; Start-Sleep -Milliseconds 200 "
@@ -123,7 +134,7 @@ def run_suite():
         with output.open("wb") as stream:
             process = subprocess.Popen(command, cwd=ROOT, env=env, stdout=stream, stderr=subprocess.STDOUT)
             if args.native and name != "base-store":
-                activate(process)
+                activate(process, output if name == "base-presentation" else None)
             try:
                 code = process.wait(timeout=600)
             except subprocess.TimeoutExpired:

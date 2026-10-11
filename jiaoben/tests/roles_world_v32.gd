@@ -186,11 +186,18 @@ func complete_freight_trip(id: String) -> bool:
 		if not check(bool(context.get("ready",false)),"actual approach satisfies gate distance speed and loaded mass"):return false
 		var origin: String=host.state.current_sector();var credit: int=host.state.player().credit
 		var units: int=host.gameplay.consignments.instance(id).cargo_units
+		# A completed AU leg can queue its ordinary autosave. Let the real
+		# asynchronous writer finish before native interaction is permitted.
+		await settle()
+		if not root.has_focus():root.grab_focus();await frames(2)
+		if not check(host._keyboard_control_allowed(),"native gate input waits for the real save barrier"):return false
 		await key(KEY_F)
 		host.set_process(true);host.set_physics_process(true)
 		var deadline: int=Time.get_ticks_msec()+45000
 		while (host.travel.active() or host.busy) and Time.get_ticks_msec()<deadline:await get_tree().physics_frame
 		await frames(4);host.set_process(false);host.set_physics_process(false);host._process(0.0)
+		if host.state.current_sector()==origin or host.travel.active():
+			print("ROLE_TRANSFER_REJECTED ",JSON.stringify({"phase":host.travel.phase,"travel_error":host.travel.last_error,"store_error":host.store.last_error,"toast":host.ui.toast.text,"context":host.interaction_context(info.waypoint_id),"save_block":host._save_block_reason(),"state_speed":Vector3(host.state.ship().vel_x,host.state.ship().vel_y,host.state.ship().vel_z).length(),"paused":host._paused()}))
 		if not check(host.state.current_sector()!=origin and not host.travel.active(),"real wormhole transfer commits the loaded carrier"):return false
 		check(host.gameplay.consignments.instance(id).cargo_units==units,"custody survives real origin/destination SQLite endpoints")
 		observations.append({"kind":"freight_leg","origin":origin,"destination":host.state.current_sector(),"cargo_units":units,"mass_kg":host.gameplay.metrics(host.state.ship()).total_mass_kg,"gate_credit":credit-host.state.player().credit})
