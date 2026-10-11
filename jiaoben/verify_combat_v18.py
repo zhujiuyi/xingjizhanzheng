@@ -165,9 +165,11 @@ def run_suite():
         if name == "fitting":
             assert record["summary"]["checks"] >= (77 if os.environ.get("XJ_FITTING_LEGACY_DATABASE") else 60) and len(captures) == 0
         if name == "fitting-world":
-            assert args.native and record["summary"]["checks"] >= 140 and len(captures) == 12
+            assert args.native and record["summary"]["checks"] >= 149 and len(captures) == 12
             actual_range = next(row for row in record["summary"]["observations"] if row["kind"] == "range")
             assert actual_range["base_range_m"] < actual_range["distance_m"] < actual_range["actual_range_m"] and actual_range["damage"] > 0
+            layouts = {row["case"]: (row["logical_width"], row["logical_height"]) for row in record["summary"]["observations"] if row["kind"] == "layout"}
+            assert layouts == {"1440x900-100": (1440, 900), "3440x1188-100": (3440, 1188), "1280x720-200": (640, 360)}
         if name == "civilization-world":
             assert args.native and record["summary"]["checks"] >= 90 and len(captures) == 12
             battle = [entry for entry in record["summary"]["observations"] if entry["kind"] == "battle"]

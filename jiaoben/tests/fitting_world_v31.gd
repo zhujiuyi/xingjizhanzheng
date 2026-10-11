@@ -49,6 +49,7 @@ func run() -> void:
 	directory=OS.get_environment("XJ_FITTING_WORLD_V31_DIRECTORY").replace("\\","/")
 	if not check(DisplayServer.get_name()!="headless" and directory.is_absolute_path() and directory.contains("/jiaoben/tmp/fitting-world-v31/") and not FileAccess.file_exists(directory.path_join("progress.db")),"native fitting uses fresh scoped world and real renderer"):await finish();return
 	root.mode=Window.MODE_WINDOWED;root.size=Vector2i(1440,900)
+	root.content_scale_mode=Window.CONTENT_SCALE_MODE_CANVAS_ITEMS;root.content_scale_factor=1.0;root.content_scale_size=root.size
 	host=Main.new();host.progress_database_path=directory.path_join("progress.db");root.add_child(host);await frames(5)
 	await host._command("new_world","配装与专精原生",1,"");await settle();host.set_process(false);host.set_physics_process(false)
 	if not await fixture():await finish();return
@@ -102,7 +103,7 @@ func run() -> void:
 	observations.append({"kind":"range","distance_m":host.world.flight.position.distance_to(host.world.npcs[role_actor].position),"base_range_m":host.store.catalog.one("module_defs","module_id","module_thermal_sunline_iii").range_m,"actual_range_m":host.gameplay.specializations.weapon_spec(host.state.find("equipment_state","module_def_id","module_thermal_sunline_iii"),host.state.ship()).range_m,"damage":health-hp(role_actor)})
 	await capture("fitting-tuned-physical-range")
 	await flight_layout_checks()
-	root.size=Vector2i(1280,720);root.content_scale_factor=2.0;await show("fitting_analysis")
+	root.size=Vector2i(1280,720);root.content_scale_factor=1.0;root.content_scale_size=Vector2i(640,360);await show("fitting_analysis")
 	var calculate: Button=host.ui.body.find_child("FittingCalculate",true,false)
 	await click(calculate,"compact high-scale analysis control")
 	check(Rect2(Vector2.ZERO,host.ui.root.size).encloses(calculate.get_global_rect()),"high-scale calculation button remains reachable")
@@ -110,10 +111,12 @@ func run() -> void:
 	await finish()
 func flight_layout_checks() -> void:
 	for layout: Dictionary in [{"size":Vector2i(1440,900),"scale":1.0},{"size":Vector2i(3440,1188),"scale":1.0},{"size":Vector2i(1280,720),"scale":2.0}]:
-		root.size=layout.size;root.content_scale_factor=layout.scale;host.ui.show_page("");await frames(6);host.ui.tick(1.0);await frames(4)
+		root.size=layout.size;root.content_scale_factor=1.0;root.content_scale_size=Vector2i(Vector2(layout.size)/layout.scale);host.ui.show_page("");await frames(6);host.ui.tick(1.0);await frames(4)
 		var ui: XJUI=host.ui;var bounds: Rect2=Rect2(Vector2.ZERO,ui.root.size)
 		var center: Rect2=Rect2(ui.root.size*0.5-Vector2(40,30),Vector2(80,60))
 		var label: String="%dx%d-%d" % [layout.size.x,layout.size.y,int(layout.scale*100)]
+		check(ui.root.size.is_equal_approx(Vector2(layout.size)/layout.scale),"actual logical viewport matches the declared pixel size and scale "+label)
+		observations.append({"kind":"layout","case":label,"logical_width":ui.root.size.x,"logical_height":ui.root.size.y})
 		var panels: Array[Control]=[ui.flight_header,ui.navigation,ui.navigation_frame,ui.hud_left.get_parent(),ui.target_panel,ui.flight_dock]
 		for panel: Control in panels:
 			check(panel.is_visible_in_tree() and bounds.encloses(panel.get_global_rect()) and not panel.get_global_rect().intersects(center),"clean HUD panel is bounded and preserves the ship "+panel.name+" "+label)
