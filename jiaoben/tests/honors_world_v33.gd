@@ -27,6 +27,8 @@ func actual_settlement_fixture() -> bool:
 	helper.fit("module_scanner_beacon_i","utility:0")
 	helper.complete_event("exp_mirror_relic");helper.complete_event("exp_echo_rescue");helper.freight(6);helper.demolition()
 	helper.at_capital(faction);helper.step(business.combat_remaining_s+0.2)
+	var front: RefCounted=business.get("frontier")
+	if front!=null and front.supported():business.inventory.grant(business.inventory.warehouse(business.station()),front.balance.material_id,int(front.balance.supply_units))
 	var valid: bool=check(helper.failures.is_empty() and business.honors.completed(faction)==4,"native certification fixture earns all four actual settled abilities")
 	helper.g=null;helper.state=null;helper.store=null;helper.free();business.dispose()
 	return await activate(candidate) if valid else false
@@ -76,9 +78,17 @@ func run() -> void:
 	for war: Dictionary in host.gameplay.rows("civilization_war_defs"):
 		if war.faction_id==faction:war_id=war.war_id;break
 	button=host.ui.body.find_child("CivilizationWar_"+war_id,true,false)
+	var front: RefCounted=host.gameplay.get("frontier")
+	var warehouse: String=host.gameplay.inventory.warehouse(host.gameplay.station())
+	var supplies_before: int=host.gameplay.inventory.count(warehouse,front.balance.material_id,true) if front!=null and front.supported() else 0
 	await click(button,"native qualified commander accepts a real fleet campaign");real_actions+=1
 	var campaign: RefCounted=host.gameplay.civilizations.active_war()
-	check(campaign!=null and host.gameplay.civilizations.living_fleet(campaign,"ally").size()==3 and host.gameplay.civilizations.living_fleet(campaign,"defender").size()==4,"native dispatch creates the actual seven campaign actors")
+	if front!=null and front.supported():
+		check(campaign!=null and front.campaign(war_id).phase=="scouting","native qualified dispatch starts the real reconnaissance stage")
+		check(host.gameplay.inventory.count(warehouse,front.balance.material_id,true)==supplies_before-int(front.balance.supply_units) and front.campaign(war_id).supplies_paid_units==int(front.balance.supply_units),"native dispatch pays the exact ordinary warehouse supply escrow")
+		check(host.state.rows("war_fleet_state").filter(func(member: RefCounted)->bool:return member.war_id==war_id).size()==7 and host.gameplay.civilizations.living_fleet(campaign,"ally").is_empty() and host.gameplay.civilizations.living_fleet(campaign,"defender").is_empty(),"seven campaign actors stay dormant until the real escort delivers")
+	else:
+		check(campaign!=null and host.gameplay.civilizations.living_fleet(campaign,"ally").size()==3 and host.gameplay.civilizations.living_fleet(campaign,"defender").size()==4,"native dispatch creates the actual seven campaign actors")
 	await reveal(host.ui.body.find_child("CivilizationWarStatus",true,false));await capture("honors-qualified-dispatch")
 	for layout: Dictionary in [{"size":Vector2i(3440,1188),"scale":1.0,"tag":"ultrawide"},{"size":Vector2i(1280,720),"scale":2.0,"tag":"compact-200"}]:
 		root.size=layout.size;root.content_scale_factor=1.0;root.content_scale_size=Vector2i(Vector2(layout.size)/float(layout.scale));await frames(5);await show("civilizations")
