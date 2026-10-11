@@ -201,10 +201,14 @@ func friendly(npc_id: String) -> bool:
 		if not owner.is_empty(): return owner == g.state.ship().ship_instance_id or friendly(owner)
 	if g.exploration != null and g.exploration.friendly(npc_id): return true
 	if g.frontier!=null and g.frontier.friendly(npc_id):return true
+	if g.hired!=null and g.hired.friendly(npc_id):return true
 	var member: D.WarFleetStateDto = fleet_member(npc_id)
 	return member != null and member.side == "ally"
 
 func escort_hull(npc_id: String) -> String:
+	if g.hired!=null:
+		var companion: String=g.hired.model(npc_id)
+		if not companion.is_empty():return companion
 	if g.frontier!=null:
 		var model: String=g.frontier.model(npc_id)
 		if not model.is_empty():return model

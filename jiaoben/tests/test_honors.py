@@ -37,7 +37,7 @@ class HonorDefinitions(unittest.TestCase):
   self.assertEqual(db.execute('PRAGMA user_version').fetchone(),(p.FORMAT_VERSION,))
  def test_old_migrations_and_adapters_remain_the_published_bytes(self):
   for path in sorted((ROOT/'code/database/progress').glob('*.sql')):
-   if path.name.startswith(('021_','022_')) or path.name in ('catalog_adapter_v0_17.sql','catalog_adapter_v0_18.sql'):continue
+   if path.name.startswith(('021_','022_','023_')) or path.name in ('catalog_adapter_v0_17.sql','catalog_adapter_v0_18.sql','catalog_adapter_v0_19.sql'):continue
    old=subprocess.check_output(['git','show','8bd08141459cbd8ab82607954aff621a83318ab8:'+path.relative_to(ROOT).as_posix()],cwd=ROOT)
    self.assertEqual(path.read_bytes(),old,path.name)
  def test_core_only_dto_generator_cannot_delete_expanded_groups(self):
@@ -63,7 +63,7 @@ class HonorSealing(unittest.TestCase):
   row={**self.ctx,'source_token':'exploration:exp_mirror_relic:1','task_id':self.task,'source_kind':'exploration','source_def_id':'exp_mirror_relic','generation':1,'credited_units':1,'recorded_tick':0}
   row.update(values);p.insert(self.db,'civilization_honor_evidence_state',row)
  def test_initial_world_has_no_free_proofs_or_qualification(self):
-  self.assertEqual(len(p.STATE_TABLES),68)
+  self.assertEqual(len(p.STATE_TABLES),70)
   self.assertEqual(self.db.execute("SELECT count(*),sum(paid_credit),sum(awarded_reputation) FROM civilization_command_state WHERE snapshot_id='honor-candidate' AND phase='unregistered'").fetchone(),(3,0,0))
   self.assertEqual(self.db.execute("SELECT count(*) FROM civilization_honor_evidence_state WHERE snapshot_id='honor-candidate'").fetchone(),(0,))
   self.seal()

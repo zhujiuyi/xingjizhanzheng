@@ -18,6 +18,7 @@ const Specializations = preload("res://runtime/gameplay/specializations.gd")
 const FittingAnalysis = preload("res://runtime/gameplay/fitting_analysis.gd")
 const ShipRoles = preload("res://runtime/gameplay/ship_roles.gd")
 const Frontier = preload("res://runtime/gameplay/frontier.gd")
+const Hired = preload("res://runtime/gameplay/hire.gd")
 const Honors = preload("res://runtime/gameplay/honors.gd")
 const Consignments = preload("res://runtime/gameplay/consignments.gd")
 const ResourceBudget = preload("res://runtime/gameplay/resource_budget.gd")
@@ -41,6 +42,7 @@ var specializations: RefCounted
 var fitting_analysis: RefCounted
 var ship_roles: RefCounted
 var frontier: RefCounted
+var hired: RefCounted
 var honors: RefCounted
 var consignments: RefCounted
 var operations: RefCounted
@@ -90,6 +92,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog, preview: bool = 
 	consignments = Consignments.new(self)
 	honors = Honors.new(self)
 	frontier = Frontier.new(self)
+	hired = Hired.new(self)
 	if preview: return
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
@@ -218,6 +221,7 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 	if action == "consignment_action": command.action_kind = T.ActionKind.CONSIGNMENT_ACTION
 	if action == "honor_action": command.action_kind = T.ActionKind.HONOR_ACTION
 	if action == "frontier_action":command.action_kind=T.ActionKind.FRONTIER_ACTION
+	if action == "hire_action":command.action_kind=T.ActionKind.HIRE_ACTION
 	if action == "operation_action": command.action_kind = T.ActionKind.OPERATION_ACTION
 	if action == "drone_command": command.action_kind = T.ActionKind.DRONE_COMMAND
 	if action == "drone_replenish": command.action_kind = T.ActionKind.DRONE_REPLENISH
@@ -274,6 +278,9 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 			"frontier_action":
 				var frontier_parts: PackedStringArray=extra.split(":",true,1)
 				ok=frontier.execute(target,frontier_parts[0],quantity,frontier_parts[1]) if frontier_parts.size()==2 else fail("边疆请求缺少操作与阶段")
+			"hire_action":
+				var hire_parts: PackedStringArray=extra.split("|",true,1)
+				ok=hired.execute(target,hire_parts[0],hire_parts[1] if hire_parts.size()==2 else "") if quantity==1 else fail("僚舰合同一次只能操作一份")
 			"consignment_action":
 				var freight_parts: PackedStringArray = extra.split(":")
 				ok = consignments.execute(target,freight_parts[0],quantity,freight_parts[1]) if freight_parts.size()==2 else fail("承运请求缺少操作与代次")
@@ -588,6 +595,7 @@ func finish_step(delta: float) -> void:
 	tactics.tick(delta)
 	operations.tick(delta)
 	ship_roles.tick(delta)
+	hired.tick(delta)
 	consignments.tick(delta)
 	drone_control.sync()
 	_tick_resources(delta)
@@ -683,6 +691,7 @@ func damage_ship(raw_vector: Vector3) -> float:
 	ship.state_version += 1
 	if ship.hull <= 0:
 		ship.status = T.ShipStatus.DESTROYED
+		hired.controlled_ship_lost()
 		ship_roles.stop_support()
 		work.stop_scan(); work.stop_mining()
 		inventory.ship_destroyed(ship)
@@ -698,6 +707,7 @@ func _sync_spawns(delta: float = 0.0) -> void:
 		if exploration.managed_spawns.has(spawn.spawn_id): continue
 		if civilizations.handles_spawn(spawn.spawn_id): continue
 		if frontier.handles_spawn(spawn.spawn_id):continue
+		if hired.handles_spawn(spawn.spawn_id):continue
 		if encounters.handles(spawn.spawn_id): continue
 		if not unlocked(spawn.required_unlock_id): continue
 		var mission: D.MissionStateDto = missions.active_for_target("destroy_spawn", spawn.spawn_id)
@@ -793,10 +803,10 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired]:
 		if service != null: service.g = null
 	specializations = null; fitting_analysis = null
-	ship_roles = null; consignments = null; honors = null; frontier = null
+	ship_roles = null; consignments = null; honors = null; frontier = null; hired = null
 	operations = null
 	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null; mobile_belts = null
 	tactics = null; drone_control = null

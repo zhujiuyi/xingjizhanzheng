@@ -52,6 +52,9 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-hire-v35","file":"hire_v35.gd","prefix":"hire-v35","env":"XJ_HIRE_V35","meta":"xj_hire_v35_diagnostic"},
+		{"flag":"--xj-verify-hire-world-v35","file":"hire_world_v35.gd","prefix":"hire-world-v35","env":"XJ_HIRE_WORLD_V35","meta":"xj_hire_world_v35_diagnostic"},
+		{"flag":"--xj-verify-hire-travel-world-v35","file":"hire_travel_world_v35.gd","prefix":"hire-travel-world-v35","env":"XJ_HIRE_TRAVEL_WORLD_V35","meta":"xj_hire_travel_world_v35_diagnostic"},
 		{"flag":"--xj-verify-frontier-v34","file":"frontier_v34.gd","prefix":"frontier-v34","env":"XJ_FRONTIER_V34","meta":"xj_frontier_v34_diagnostic"},
 		{"flag":"--xj-verify-frontier-governance-world-v34","file":"frontier_governance_world_v34.gd","prefix":"frontier-governance-world-v34","env":"XJ_FRONTIER_GOVERNANCE_WORLD_V34","meta":"xj_frontier_governance_world_v34_diagnostic"},
 		{"flag":"--xj-verify-frontier-world-v34","file":"frontier_world_v34.gd","prefix":"frontier-world-v34","env":"XJ_FRONTIER_WORLD_V34","meta":"xj_frontier_world_v34_diagnostic"},
@@ -366,6 +369,7 @@ func _physics_process(delta: float) -> void:
 		camera.bind(world.flight, store.catalog, state.player().camera_mode)
 	gameplay.call("begin_step", delta)
 	gameplay.ship_roles.spatial_active = not travel.active() and not local_navigation.warp_active()
+	gameplay.hired.spatial_active = not travel.active() and not local_navigation.warp_active()
 	world.flight.metrics = gameplay.call("metrics", ship)
 	if _manual_navigation_override(): source_goal.clear()
 	if _manual_navigation_override() and combat_automation != null:
@@ -877,6 +881,9 @@ func _business_action(action: String, target: String, quantity: int, extra: Stri
 	if action == "open_salvage":
 		_identify_salvage(target, quantity)
 		return
+	if action=="hire_action" and (target=="dismiss" or not gameplay.hired.profile(target).is_empty()):
+		_hire_financial(target,quantity,extra)
+		return
 	if ui.page == "warehouse" and action in ["move_stack", "move_item", "move_salvage"]:
 		var kind: String = {"move_stack": "stack", "move_item": "item", "move_salvage": "salvage"}[action]
 		var quote: Dictionary = gameplay.get("inventory").call("quote_transfer", kind, target, quantity, extra)
@@ -929,6 +936,21 @@ func _business_action(action: String, target: String, quantity: int, extra: Stri
 	else:
 		if presentation != null: presentation.ui_result(false)
 		ui.notify(feedback, true)
+
+func _hire_financial(target: String,quantity: int,extra: String) -> void:
+	var blocked: String=_save_block_reason()
+	if not blocked.is_empty():ui.notify("等待%s结束后提交雇佣合同。" % blocked,true);return
+	var candidate: XJRuntimeState=store.clone_state(state)
+	if candidate==null:ui.notify("无法准备雇佣合同，资金保留。",true);return
+	var actor: RefCounted=preload("res://runtime/gameplay.gd").new();actor.setup(candidate,store.catalog)
+	var result: Dtos.ActionResultDto=actor.act("hire_action",target,quantity,extra)
+	var feedback: String=str(actor.status_text) if result.phase==Types.ActionPhase.APPLIED else str(actor.last_error)
+	actor.dispose()
+	if result.phase!=Types.ActionPhase.APPLIED:ui.notify(feedback,true);return
+	var old_page: String=ui.page;busy=true;_sync_combat_automation();ui.set_operation_status("save","正在提交雇佣合同")
+	if not _stage_candidate(candidate,store.catalog) or not store.save(candidate,"auto",auto_slot):
+		_discard_staged();busy=false;_sync_combat_automation();ui.set_operation_status("idle","");ui.notify("合同未提交，原僚舰与资金保留。"+store.last_error,true);return
+	auto_slot=(auto_slot+1)%3;_activate(candidate);busy=false;_sync_combat_automation();ui.set_operation_status("idle","");ui.show_page(old_page);ui.notify(feedback)
 
 func _identify_salvage(package_id: String, quantity: int) -> void:
 	# Identification consumes the sealed package, awards its frozen result and
@@ -1138,6 +1160,13 @@ func _tactical_warning(message: String) -> void:
 	if ui != null: ui.notify(message, not message.contains("维修"))
 	if presentation != null: presentation.ui_result(message.contains("维修"))
 
+func _hire_warning(message: String) -> void:
+	var critical: bool=message.contains("损失") or message.contains("失联")
+	if ui!=null:ui.notify(message,critical)
+	if presentation!=null:presentation.ui_result(not critical)
+func _hire_healed(npc_id: String,ship_id: String,layer: String) -> void:
+	if presentation!=null:presentation.companion_support(npc_id,ship_id,layer)
+
 func _navigate_guidance(info: Dictionary, do_travel: bool, announce: bool, approach_destination: bool = false) -> void:
 	world.sync_entities()
 	var id: String = str(info.get("waypoint_id", ""))
@@ -1167,6 +1196,7 @@ func _record_arrival(candidate: XJRuntimeState, connection_id: String) -> void:
 	var business: RefCounted = source.new()
 	business.call("setup", candidate, store.catalog)
 	business.call("record_event", "transit_connection", connection_id, 1)
+	business.hired.follow_arrival()
 	if business.has_method("dispose"):
 		business.call("dispose")
 
@@ -1219,6 +1249,8 @@ func _activate(candidate: XJRuntimeState) -> void:
 	gameplay.consignments.warning_changed.connect(_tactical_warning)
 	gameplay.honors.warning_changed.connect(_tactical_warning)
 	gameplay.frontier.warning_changed.connect(_tactical_warning)
+	gameplay.hired.warning_changed.connect(_hire_warning)
+	gameplay.hired.healed.connect(_hire_healed)
 	gameplay.operations.warning_changed.connect(_tactical_warning)
 	gameplay.tactics.warning_changed.connect(_tactical_warning)
 	gameplay.drone_control.warning_changed.connect(_tactical_warning)
@@ -1363,6 +1395,7 @@ func _local_navigation_changed(_mode: String, phase: String, message: String) ->
 	if local_navigation == null: return
 	if gameplay != null:
 		gameplay.ship_roles.spatial_active = not local_navigation.warp_active()
+		gameplay.hired.spatial_active = not local_navigation.warp_active()
 		if local_navigation.warp_active(): gameplay.ship_roles.stop_support()
 	_sync_combat_automation()
 	if local_navigation.warp_active():

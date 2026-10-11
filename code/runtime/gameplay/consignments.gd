@@ -33,7 +33,7 @@ func _route(id: String,quantity: int) -> Array[Dictionary]:
 	return g.missions._route(g.state.current_sector(),destination.sector_id,true,float(g.metrics(g.state.ship()).total_mass_kg)+quantity*float(spec.unit_mass_kg))
 func travel_reserve(id: String,quantity: int) -> int:
 	var amount: int = 0
-	for endpoint: Dictionary in _route(id,quantity): amount += int(g.definition("effective_connection_defs","connection_id",endpoint.connection_id).fee_credit)
+	for endpoint: Dictionary in _route(id,quantity): amount += g.hired.party_fee(int(g.definition("effective_connection_defs","connection_id",endpoint.connection_id).fee_credit))
 	return amount
 func action_reason(id: String,action: String,quantity: int = 1) -> String:
 	var row: RefCounted = instance(id); var spec: Dictionary = definition(id)

@@ -291,8 +291,9 @@ func _gate_route_reason(endpoint: Dictionary, mass: float) -> String:
 	if connection.is_empty() or gate == null: return "航门状态不可用"
 	if gate.has_lifetime_remaining_s and gate.lifetime_remaining_s <= 0.0: return "虫洞寿命已耗尽"
 	if not gate.enabled: return "航门处于关闭状态"
-	if mass > float(connection.max_gross_mass_kg): return "当前舰船总质量超过单舰通行上限；卸货或换用较小舰船"
-	if gate.has_remaining_mass_budget_kg and mass > gate.remaining_mass_budget_kg: return "虫洞剩余总质量额度不足；选择其他航路"
+	var companion_mass: float=g.hired.party_mass_kg()
+	if mass > float(connection.max_gross_mass_kg) or companion_mass > float(connection.max_gross_mass_kg): return "编队中有舰船超过单舰通行上限；卸货或换用较小舰船"
+	if gate.has_remaining_mass_budget_kg and mass+companion_mass > gate.remaining_mass_budget_kg: return "虫洞剩余总质量额度不足；选择其他航路"
 	return ""
 
 func _sector_title(sector_id: String) -> String:

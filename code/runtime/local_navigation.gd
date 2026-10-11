@@ -34,6 +34,7 @@ var travel_duration_s: float = 0.0
 var travel_elapsed_s: float = 0.0
 var warp_heading: Vector3 = Vector3.FORWARD
 var _origin_site: String = ""
+var _companion_origin: Dictionary = {}
 var _destination_site: String = ""
 var _macro_origin: Dictionary = {}
 var _macro_destination: Dictionary = {}
@@ -88,6 +89,8 @@ func inspect(id: String) -> Dictionary:
 		result.warp_reason = "此目标只支持接近和环绕"
 	elif active():
 		result.warp_reason = "先停止当前自动航行"
+	elif not gameplay.hired.travel_reason().is_empty():
+		result.warp_reason=gameplay.hired.travel_reason()
 	elif not _stable():
 		result.warp_reason = pending + "后才能跃迁" if not pending.is_empty() else "脱离交战并等待设备周期结束后才能跃迁"
 	elif not _landing_clear(world.flight.global_position):
@@ -144,6 +147,7 @@ func _begin(requested_mode: String, id: String, combat_order: bool = false, weap
 	if world.flight.metrics.is_empty(): world.flight.metrics = gameplay.call("metrics", state.ship())
 	var node: Node3D = world.targets[id].node
 	if mode == "warp":
+		_companion_origin=gameplay.hired.departure_pose()
 		origin = world.flight.global_position
 		last_safe_position = origin
 		_safe_positions = [origin]
@@ -456,7 +460,15 @@ func _shapes_clear(node: Node, displacement: Vector3) -> bool:
 		if not _shapes_clear(child, displacement): return false
 	return true
 
-func _zero_motion() -> void:
+func _sync_companion_pose() -> void:
+	var npc: RefCounted=gameplay.hired.actor()
+	if npc==null or not world.npcs.has(npc.npc_instance_id):return
+	var body: CharacterBody3D=world.npcs[npc.npc_instance_id]
+	body.global_position=Vector3(npc.pos_x,npc.pos_y,npc.pos_z);body.velocity=Vector3(npc.vel_x,npc.vel_y,npc.vel_z)
+	body.quaternion=Quaternion(npc.quat_x,npc.quat_y,npc.quat_z,npc.quat_w).normalized();body.reset_physics_interpolation()
+
+func _zero_motion(restore_companion: bool=true) -> void:
+	var companion_restored: bool=false
 	if is_instance_valid(world) and is_instance_valid(world.flight):
 		if warp_active() and _cross_site():
 			world.end_strategic_departure()
@@ -467,8 +479,13 @@ func _zero_motion() -> void:
 			else:
 				Space.assign(state, "ship", state.ship().ship_instance_id, _origin_site)
 				world.flight.global_position = origin
+				world.flight.write_back()
+				if restore_companion:gameplay.hired.restore_departure(_companion_origin);companion_restored=true
 				world.refresh_site()
 				world.sync_entities()
+		if warp_active() and restore_companion:
+			if not companion_restored:gameplay.hired.restore_departure(_companion_origin)
+			_sync_companion_pose()
 		if warp_active() and not _landing_clear(world.flight.global_position): _recover_warp_position()
 		world.flight.clear_intent()
 		world.flight.velocity = Vector3.ZERO
@@ -530,12 +547,16 @@ func _clear_combat_order() -> void:
 
 func _arrive() -> void:
 	var id: String = target_id
+	if mode=="warp":
+		gameplay.hired.follow_arrival()
+		if not world.sync_entities():_abort(world.last_error);return
+		_sync_companion_pose()
 	# A completed strategic arrival keeps the destination context. Cancellation
 	# and failed clearance use _zero_motion's departure restoration instead.
 	if _cross_site():
 		_origin_site = _destination_site
 		world.strategic_render_position = {}
-	_zero_motion()
+	_zero_motion(false)
 	if not _after_warp_mode.is_empty():
 		mode = _after_warp_mode
 		_after_warp_mode = ""

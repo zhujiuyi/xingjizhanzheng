@@ -25,7 +25,7 @@ func _support(state: XJRuntimeState,catalog: XJCatalog) -> bool:
 		if cap.is_empty() or not bool(cap.remote_repair_allowed) or ship.ship_instance_id!=state.ship().ship_instance_id or ship.status!=T.ShipStatus.FLYING or ship.policy_id!="normal_owned" or item.policy_id!="normal_owned" or item.durability<=0.0 or not equipment.enabled or slot==null or slot.ship_instance_id!=ship.ship_instance_id or repair.is_empty(): return _fail("Support hull or equipment unavailable")
 		var actor: RefCounted=state.find("exploration_actor_state","npc_instance_id",row.target_npc_id)
 		var member: RefCounted=state.find("war_fleet_state","npc_instance_id",row.target_npc_id)
-		var friendly: bool=(actor!=null and actor.actor_role=="escort") or (member!=null and member.side=="ally") or (catalog.table_names.has("frontier_campaign_defs") and preload("res://runtime/data/frontier_validation.gd").new().friendly(state,row.target_npc_id))
+		var friendly: bool=(actor!=null and actor.actor_role=="escort") or (member!=null and member.side=="ally") or (catalog.table_names.has("frontier_campaign_defs") and preload("res://runtime/data/frontier_validation.gd").new().friendly(state,row.target_npc_id)) or preload("res://runtime/data/hire_validation.gd").actor_binding(state,catalog,row.target_npc_id)
 		if not friendly or not npc.alive or npc.generation!=row.target_generation or repair.layer_id!=row.layer_id: return _fail("Support target generation or allegiance invalid")
 		if row.phase=="armed":
 			if row.remaining_s!=0.0 or row.paid_restore!=0.0: return _fail("Unpaid support has a paid budget")

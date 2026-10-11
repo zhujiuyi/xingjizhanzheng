@@ -228,6 +228,8 @@ func sync_entities() -> bool:
 			targets[row.npc_instance_id]["friendly"] = gameplay.civilizations.friendly(row.npc_instance_id)
 			if bool(targets[row.npc_instance_id].friendly): targets[row.npc_instance_id].title = "友军 · " + str(catalog.one("ship_defs", "ship_id", escort_hull).display_name)
 			elif gameplay.civilizations.fleet_member(row.npc_instance_id) != null: targets[row.npc_instance_id].title = "中立守军 · Lv.%d" % int(definition.level)
+			var companion: RefCounted=gameplay.hired.contract_for(row.npc_instance_id)
+			if companion!=null:targets[row.npc_instance_id].title="友军 · "+str(gameplay.hired.profile(companion.profile_id).display_name)
 		var group_id: String = gameplay.get("encounters").group_for_spawn(row.spawn_id)
 		targets[row.npc_instance_id]["group_target_id"] = "group:" + group_id if not group_id.is_empty() else "encounter:" + row.spawn_id if row.has_mission_instance_id else ""
 	for id: String in targets.keys():
@@ -297,6 +299,7 @@ func simulate_npcs(delta: float) -> void:
 			continue
 		var body: CharacterBody3D = npcs[id]
 		if gameplay.operations.handles(row.spawn_id): body.velocity = Vector3.ZERO; continue
+		if XJHirePilot.step(self,row,body,delta):continue
 		if XJFrontierPilot.step(self,row,body,delta):continue
 		if WarFleetPilot.step(self, row, body, delta): continue
 		if XJExplorationPilot.step(self, row, body, delta): continue
@@ -305,9 +308,14 @@ func simulate_npcs(delta: float) -> void:
 		var behavior: Dictionary = catalog.one("npc_behavior_defs", "behavior_id", spawn.behavior_id)
 		var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)
 		var home := anchor_position(spawn.anchor_id)
-		var distance := body.position.distance_to(flight.position)
-		var visible := line_of_sight(body.position, flight.position, body.get_rid(), flight.record.ship_instance_id)
-		var can_acquire := flight.record.status == Types.ShipStatus.FLYING and not in_safe_zone(flight.position) and not in_safe_zone(body.position)
+		var victim: Node3D=flight;var victim_id: String=flight.record.ship_instance_id
+		var companion: RefCounted=gameplay.hired.actor()
+		if companion!=null and companion.alive and npcs.has(companion.npc_instance_id):
+			var escort: Node3D=npcs[companion.npc_instance_id]
+			if not in_safe_zone(escort.position) and body.position.distance_to(escort.position)<body.position.distance_to(flight.position):victim=escort;victim_id=companion.npc_instance_id
+		var distance := body.position.distance_to(victim.position)
+		var visible := line_of_sight(body.position, victim.position, body.get_rid(), victim_id)
+		var can_acquire := (victim!=flight or flight.record.status == Types.ShipStatus.FLYING) and not in_safe_zone(victim.position) and not in_safe_zone(body.position)
 		var destination := home
 		var should_move := true
 		row.cooldown_remaining_s = maxf(0.0, row.cooldown_remaining_s - delta)
@@ -336,7 +344,7 @@ func simulate_npcs(delta: float) -> void:
 				if row.wait_remaining_s <= 0.0:
 					row.behavior_phase = Types.NpcPhase.PURSUE
 			Types.NpcPhase.PURSUE, Types.NpcPhase.ATTACK:
-				destination = flight.position
+				destination = victim.position
 				row.wait_remaining_s = 0.0 if visible else row.wait_remaining_s + delta
 				if not can_acquire or distance > float(behavior.target_drop_range_m) or body.position.distance_to(home) > float(behavior.leash_radius_m) or row.wait_remaining_s >= float(behavior.los_loss_timeout_s):
 					row.behavior_phase = Types.NpcPhase.DISENGAGE
@@ -344,7 +352,7 @@ func simulate_npcs(delta: float) -> void:
 				elif distance <= float(definition.range_m) and visible:
 					row.behavior_phase = Types.NpcPhase.ATTACK
 					should_move = distance > float(definition.range_m) * float(behavior.preferred_range_ratio)
-					var direction := body.position.direction_to(flight.position)
+					var direction := body.position.direction_to(victim.position)
 					if row.cooldown_remaining_s <= 0.0 and (-body.basis.z).angle_to(direction) <= float(behavior.fire_cone_half_angle_rad):
 						var amount: float = float(definition.raw_dps) * float(behavior.attack_cycle_s)
 						var raw := Vector3.ZERO
@@ -357,7 +365,7 @@ func simulate_npcs(delta: float) -> void:
 						var profile: Dictionary = {}
 						if catalog.table_names.has("weapon_behavior_defs"):
 							profile = {"family_id": str(definition.damage_type), "fire_mode": str(behavior.fire_mode)}
-						projectiles.fire(id, body.get_rid(), origin, origin.direction_to(flight.global_position), float(behavior.projectile_speed_mps) if behavior.projectile_speed_mps != null else 0.0, float(definition.range_m), raw, profile)
+						projectiles.fire(id, body.get_rid(), origin, origin.direction_to(victim.global_position), float(behavior.projectile_speed_mps) if behavior.projectile_speed_mps != null else 0.0, float(definition.range_m), raw, profile, "", victim_id if victim!=flight else "")
 						gameplay.call("mark_hostile_attempt")
 						row.cooldown_remaining_s = float(behavior.attack_cycle_s)
 				else:
@@ -403,6 +411,7 @@ func contact_visible(entry: Dictionary, distance: float) -> bool:
 	if str(entry.get("kind", "")) == "drone": return gameplay.drone_control.live.has(str(entry.get("id", ""))) and distance <= gameplay.ship_roles.detection_range()
 	if str(entry.get("kind", "")) != "npc": return true
 	var sensor: float = gameplay.ship_roles.detection_range()
+	if gameplay.hired.friendly(str(entry.get("id",""))):sensor=maxf(sensor,float(gameplay.hired.balance.communication_m))
 	if distance > sensor: return false
 	var group_id: String = str(entry.get("group_target_id", ""))
 	if group_id.is_empty() or not targets.has(group_id): return true

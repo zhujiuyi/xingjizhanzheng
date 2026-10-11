@@ -88,7 +88,9 @@ func run() -> void:
 	await capture("frontier-"+battle_kind+"-battle")
 	if battle_kind=="hold":
 		await click(host.ui.equipment_bar.combat_option_buttons.seek,"native commander seeks hostile ships after escort delivery")
-		host.set_process(true);host.set_physics_process(true);deadline=Time.get_ticks_msec()+90000
+		# Rendering and legitimate save barriers consume wall time while the
+		# unchanged 45-second world-time objective is still progressing.
+		host.set_process(true);host.set_physics_process(true);deadline=Time.get_ticks_msec()+180000
 		while phase.phase=="hold" and Time.get_ticks_msec()<deadline:await get_tree().physics_frame
 		host.set_process(false);host.set_physics_process(false);host._process(0.0)
 	else:
@@ -107,6 +109,13 @@ func run() -> void:
 			while n.alive and phase.phase=="demolition" and Time.get_ticks_msec()<deadline:await get_tree().physics_frame
 			host.set_process(false);host.set_physics_process(false);host._process(0.0)
 			check(not n.alive or phase.phase=="rebuilding","physical weapon hits destroy the selected structure")
+	if phase.phase!="rebuilding":
+		var war: RefCounted=host.gameplay.civilizations.active_war();var actors: Array=[]
+		for member: RefCounted in host.state.rows("war_fleet_state"):
+			var actor: RefCounted=host.state.find("npc_state","npc_instance_id",member.npc_instance_id)
+			if actor!=null:actors.append({"side":member.side,"alive":actor.alive,"hp":actor.shield+actor.armor+actor.hull,"position":host.gameplay.position(actor)})
+		print("FRONTIER_OBJECTIVE_DIAGNOSTIC ",JSON.stringify({"phase":phase.phase,"hold_remaining_s":phase.hold_remaining_s,"war":war.status if war!=null else "none","ship_status":host.state.ship().status,"ship_hp":host.state.ship().shield+host.state.ship().armor+host.state.ship().hull,"ship_position":host.world.flight.position,"actors":actors}))
+		await capture("frontier-objective-failure")
 	check(phase.phase=="rebuilding" and host.state.ship().status==T.ShipStatus.FLYING,"actual fleet combat completes the authored objective")
 	if phase.phase!="rebuilding":await finish();return
 	await capture("frontier-battle-result")

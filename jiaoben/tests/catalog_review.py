@@ -27,8 +27,17 @@ def without_fitting_extensions(connection, table, rows):
     index = columns.index(column)
     return {r for r in rows if not str(r[index]).startswith(prefix)}
 
+def without_hire_extensions(connection,table,rows):
+    """Only eight reviewed additive tables; test_hire protects all v0.26 rows."""
+    columns_by_table={'anchor_defs':'anchor_id','anchor_site_defs':'anchor_id','npc_archetype_defs':'archetype_id','npc_resistances':'archetype_id','npc_behavior_defs':'behavior_id','npc_defs':'npc_id','npc_spawn_defs':'spawn_id','npc_patrol_points':'spawn_id'}
+    if table not in columns_by_table:return rows
+    columns=[r[1] for r in connection.execute(f'PRAGMA table_info("{table}")')]
+    index=columns.index(columns_by_table[table])
+    return {r for r in rows if not str(r[index]).startswith('hire_')}
+
 def without_frontier_extensions(connection, table, rows):
-    """Only the five named additive base tables; test_frontier verifies them."""
+    """Reviewed frontier/hire additions only; newest archive checks every old row."""
+    rows=without_hire_extensions(connection,table,rows)
     columns_by_table={'anchor_defs':'anchor_id','anchor_site_defs':'anchor_id','npc_defs':'npc_id','npc_spawn_defs':'spawn_id','npc_patrol_points':'spawn_id'}
     if table not in columns_by_table:return rows
     columns=[r[1] for r in connection.execute(f'PRAGMA table_info("{table}")')]

@@ -418,13 +418,16 @@ func show_page(next_page: String) -> void:
 		_station()
 		_responsive()
 		return
-	_build_panel("边疆战役与治理" if next_page=="frontier" else "承运合同" if next_page=="consignments" else "配装分析" if next_page=="fitting_analysis" else "舰船角色" if next_page=="ship_roles" else "战术行动" if next_page == "operations" else "无人机管理" if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
+	_build_panel("雇佣僚舰" if next_page=="hire" else "边疆战役与治理" if next_page=="frontier" else "承运合同" if next_page=="consignments" else "配装分析" if next_page=="fitting_analysis" else "舰船角色" if next_page=="ship_roles" else "战术行动" if next_page == "operations" else "无人机管理" if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
 	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
 		if next_page=="ships" and gameplay.fitting_analysis.supported():_button(body,"舰船定位",show_page.bind("ship_roles")).name="ShipRolesEntry"
+		if next_page=="ships" and gameplay.hired.supported():_button(body,"雇佣僚舰",show_page.bind("hire")).name="HireFleetEntry"
 		_text("此服务需要停靠空间站。使用星图找到站点，进入停靠范围并减速后按 F。")
 		_focus_page.call_deferred()
 		return
 	match next_page:
+		"hire":
+			var hire_panel: VBoxContainer=preload("res://runtime/ui/hire_panel.gd").new();body.add_child(hire_panel);hire_panel.setup(self)
 		"frontier":
 			var frontier_panel: VBoxContainer=preload("res://runtime/ui/frontier_panel.gd").new();body.add_child(frontier_panel);frontier_panel.setup(self,frontier_selected_id)
 		"consignments":
@@ -756,7 +759,9 @@ func _station() -> void:
 	_focus_page.call_deferred()
 
 func _ships() -> void:
-	if gameplay.fitting_analysis.supported():_button(body,"查看18舰角色与预算",show_page.bind("ship_roles")).name="ShipRolesEntry"
+	var fleet_tools: HFlowContainer=HFlowContainer.new();body.add_child(fleet_tools)
+	if gameplay.fitting_analysis.supported():_button(fleet_tools,"查看18舰角色与预算",show_page.bind("ship_roles")).name="ShipRolesEntry"
+	if gameplay.hired.supported():_button(fleet_tools,"雇佣僚舰",show_page.bind("hire")).name="HireFleetEntry"
 	var list: VBoxContainer = _business_list("舰体与借船", "单价 / 服务费", "数量")
 	list.call("add_section", "自有舰队")
 	for row: Dtos.ShipStateDto in state.rows("ship_state"):
@@ -1057,7 +1062,7 @@ func _industry() -> void:
 
 func _service_context_page() -> String:
 	if page == "fitting_analysis": return "fitting"
-	if page == "ship_roles": return "ships"
+	if page in ["ship_roles","hire"]: return "ships"
 	if page == "operations": return "missions"
 	if page=="frontier":return "civilizations"
 	if page == "consignments": return "missions"
@@ -2440,7 +2445,7 @@ func _responsive() -> void:
 		navigation.offset_left = safe
 		navigation.offset_right = safe + rail_width
 		navigation.offset_top = flight_content_top
-		navigation.offset_bottom = flight_content_top + (244.0 if compact else 300.0)
+		navigation.offset_bottom = flight_content_top + toolbar_buttons.size()*(36.0 if compact else 42.0)+maxi(0,toolbar_buttons.size()-1)*(4.0 if compact else 8.0)+8.0
 		navigation.add_theme_stylebox_override("panel", UISkin.flat(Color(0.025,0.035,0.05,0.4),Color(0.15,0.21,0.27,0.35),2))
 		var toolbar_row: VBoxContainer = navigation.get_node("ToolbarActions")
 		toolbar_row.add_theme_constant_override("separation", 4 if compact else 8)
@@ -2992,8 +2997,8 @@ func _build_navigation() -> void:
 	row.name = "ToolbarActions"
 	row.add_theme_constant_override("separation", 6)
 	navigation.add_child(row)
-	for key: String in ["show_ship", "missions", "map", "drones", "pause"]:
-		var title: String = {"show_ship": "舰船", "missions": "任务", "map": "星图", "drones":"无人机", "pause": "系统"}[key]
+	for key: String in ["show_ship", "missions", "map", "drones", "hire", "pause"]:
+		var title: String = {"show_ship": "舰船", "missions": "任务", "map": "星图", "drones":"无人机", "hire":"僚舰", "pause": "系统"}[key]
 		var callback: Callable = func(): requested.emit("show_ship", "", 1, "")
 		if key != "show_ship": callback = show_page.bind(key)
 		var button: Button = _button(row, title, callback)
@@ -3004,12 +3009,12 @@ func _build_navigation() -> void:
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.autowrap_mode = TextServer.AUTOWRAP_OFF
 		button.add_theme_font_size_override("font_size", 12)
-		button.icon = ServiceNavigation.texture(ServiceNavigation.OBSERVE_ICON) if key == "show_ship" else ServiceNavigation.icon("ships" if key == "drones" else key)
+		button.icon = ServiceNavigation.texture(ServiceNavigation.OBSERVE_ICON) if key == "show_ship" else ServiceNavigation.icon("ships" if key in ["drones","hire"] else key)
 		button.expand_icon = true
 		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 		button.add_theme_constant_override("icon_max_width", 18)
-		button.tooltip_text = {"missions":"任务与合同 · J", "map":"星域航路 · M", "drones":"无人机管理", "pause":"暂停与存读档 · Esc"}.get(key, "显示舰船")
+		button.tooltip_text = {"missions":"任务与合同 · J", "map":"星域航路 · M", "drones":"无人机管理", "hire":"雇佣僚舰与四种编队指令", "pause":"暂停与存读档 · Esc"}.get(key, "显示舰船")
 		if key == "show_ship":
 			show_ship_button = button
 			button.name = "ShowPlayerShip"

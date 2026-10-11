@@ -185,6 +185,11 @@ func _add(node: Node3D) -> void:
 	_pause_particles(node, effects_paused)
 	effects.append(node)
 
+func companion_support(npc_id: String,ship_id: String,layer: String) -> void:
+	if not is_instance_valid(world) or not is_instance_valid(world.flight) or world.flight.record.ship_instance_id!=ship_id or not world.npcs.has(npc_id):return
+	var node: Node3D=Effects.beam(world.npcs[npc_id].global_position,world.flight.global_position,Color("8ce6cf") if layer=="shield" else Color("e8c48a"),config)
+	if node!=null:_add(node)
+
 func _particles(node: Node) -> int:
 	var count: int = node.amount if node is GPUParticles3D else 0
 	for child in node.get_children():

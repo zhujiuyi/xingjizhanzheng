@@ -30,6 +30,8 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	if not honor_check.validate(state,catalog):return _fail(honor_check.last_error)
 	var frontier_check: RefCounted=preload("res://runtime/data/frontier_validation.gd").new()
 	if not frontier_check.validate(state,catalog):return _fail(frontier_check.last_error)
+	var hire_check: RefCounted=preload("res://runtime/data/hire_validation.gd").new()
+	if not hire_check.validate(state,catalog):return _fail(hire_check.last_error)
 	for ship in state.rows("ship_state"):
 		var norm: float = ship.quat_x * ship.quat_x + ship.quat_y * ship.quat_y + ship.quat_z * ship.quat_z + ship.quat_w * ship.quat_w
 		if abs(norm - 1.0) >= 0.00001: return _fail("Invalid normalized ship quaternion")
@@ -457,7 +459,7 @@ func _validate_space(state: State, catalog: XJCatalog) -> bool:
 			var npc: RefCounted = state.find("npc_state", "npc_instance_id", row.entity_id)
 			var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", npc.spawn_id)
 			var anchor_id: String = preload("res://runtime/gameplay/mobile_belts.gd").resolved_anchor(catalog, state, str(spawn.get("anchor_id", "")))
-			if catalog.one("anchor_site_defs", "anchor_id", anchor_id).get("site_id") != row.site_id: return _fail("NPC site differs from its frozen spawn/route")
+			if catalog.one("anchor_site_defs", "anchor_id", anchor_id).get("site_id") != row.site_id and not preload("res://runtime/data/hire_validation.gd").actor_binding(state,catalog,npc.npc_instance_id): return _fail("NPC site differs from its frozen spawn/route")
 		if row.entity_kind == "ship":
 			var ship: RefCounted = state.find("ship_state", "ship_instance_id", row.entity_id)
 			if ship.status == Types.ShipStatus.DOCKED:

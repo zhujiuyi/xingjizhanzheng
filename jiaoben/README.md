@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+雇佣支援实施中：`build_hire.py`追加2张定义表及严格`hire_`前缀的NPC/锚点，`store_generate_hire.py`只生成023和v0.19适配器，复制完整空间/远修守卫后加入有严格付费合同绑定的分支。`tests/test_hire.py`覆盖旧143表/四视图、旧SQL原字节、迁移回滚、单名额/费用/退款/演员/预算负例；`verify_combat_v18.py --only hire`检查两角色、实际action支付、四命令、有限储备和70组恢复；`--native --only hire-world`检查真实按钮/失败保留/物理协同与精确缩放。资格/资金/初始姿态/盾量和策略时间边界是声明夹具；跨门、真实旧v0.26升级、适用回归与发行包尚未验收，见[62](../doc/62-雇佣支援与舰队指令.md)。
+
 边疆阶段：`build_frontier.py`只追加五表及有明确前缀的NPC/锚点；`store_generate_frontier.py`仅生成022/v0.18，复制旧守卫并只放开有完整新历史的主权关联与有严格友方归属的补给舰/信标远修。`verify_combat_v18.py --only frontier`验证实际阶段支付、双目标、重建、主权循环、报价和68组恢复；资格/到达/长策略时间明确作为夹具。`prepare_roles_upgrade_v32.py --frontier --legacy-executable <已核验v0.25 EXE>`通过旧包固定fitting入口生成历史占领与活动战争、订单/研究/在途货物format18档；`XJ_FRONTIER_LEGACY_DATABASE`启用真实升级与失败回滚。原生`frontier-world`、`frontier-demolition-world`、`frontier-governance-world`验证真实物理护送/受击/远修、两类战斗与重建、支付/运输/防守/精确缩放；失守及回收的边界另有Core与SQL检查。规则和未完成验收见[61](../doc/61-边疆战争与重建争夺.md)。
 
 文明指挥考核：`build_honors.py`、`store_generate_honors.py`仅追加3张定义表、021与v0.17适配器；旧135表/视图和001–020保持。`verify_combat_v18.py --only honors`检查真实四类结算、三文明资格与61组恢复；`prepare_roles_upgrade_v32.py --honors --legacy-executable <已核验v0.24 EXE>`从旧包固定fitting入口生成带付费在途货物及活动战争的真实format17夹具，通过`XJ_HONORS_LEGACY_DATABASE`验证升级与失败回滚。`--native --only honors-world`验证真实登记、来源选择/星图、认证、战争受领、旧回调以及3440×1188/100%和1280×720/200%的精确逻辑尺寸。SQL拒绝见`tests/test_honors.py`，规则见[60](../doc/60-文明贡献与指挥资格.md)。

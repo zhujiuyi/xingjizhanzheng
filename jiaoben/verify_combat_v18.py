@@ -11,6 +11,9 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "hire": ("hire_v35.gd", "XJ_HIRE_V35", "hire-v35", "HIRE_V35", "--xj-verify-hire-v35"),
+    "hire-world": ("hire_world_v35.gd", "XJ_HIRE_WORLD_V35", "hire-world-v35", "HIRE_WORLD_V35", "--xj-verify-hire-world-v35"),
+    "hire-travel-world": ("hire_travel_world_v35.gd", "XJ_HIRE_TRAVEL_WORLD_V35", "hire-travel-world-v35", "HIRE_TRAVEL_WORLD_V35", "--xj-verify-hire-travel-world-v35"),
     "frontier": ("frontier_v34.gd", "XJ_FRONTIER_V34", "frontier-v34", "FRONTIER_V34", "--xj-verify-frontier-v34"),
     "frontier-governance-world": ("frontier_governance_world_v34.gd", "XJ_FRONTIER_GOVERNANCE_WORLD_V34", "frontier-governance-world-v34", "FRONTIER_GOVERNANCE_WORLD_V34", "--xj-verify-frontier-governance-world-v34"),
     "frontier-world": ("frontier_world_v34.gd", "XJ_FRONTIER_WORLD_V34", "frontier-world-v34", "FRONTIER_WORLD_V34", "--xj-verify-frontier-world-v34"),
@@ -186,6 +189,14 @@ def run_suite():
             assert record["summary"]["checks"] >= (200 if name == "civilizations" else 25) and len(captures) == 0
         if name == "frontier-governance-world":
             assert record["summary"]["checks"] >= 58 and len(captures) == 5 and record["summary"]["defended"] and record["summary"]["dispatched"] and record["summary"]["physical_damage"] > 0
+        if name == "hire":
+            assert record["summary"]["checks"] >= 40 and set(record["summary"]["roles"]) == {"escort", "support"} and record["summary"]["groups"] == 70 and not captures
+            if os.environ.get("XJ_HIRE_LEGACY_DATABASE"):
+                assert record["summary"]["checks"] >= 70 and record["summary"]["legacy_checked"] is True
+        if name == "hire-world":
+            assert record["summary"]["checks"] >= 60 and len(captures) == 7 and record["summary"]["escort_distance"] > 50 and record["summary"]["enemy_damage"] > 0 and record["summary"]["companion_damage"] > 0 and record["summary"]["healed_cycles"] >= 2 and record["summary"]["refunded"] and record["summary"]["pause_checked"]
+        if name == "hire-travel-world":
+            assert record["summary"]["checks"] >= 40 and len(captures) == 5 and record["summary"]["crossed"] == 2 and record["summary"]["cancelled"] and record["summary"]["failed_destination"] and record["summary"]["mass_checked"]
         if name == "frontier":
             assert record["summary"]["checks"] >= 134 and {"hold", "demolition"} <= set(record["summary"]["stages"]) and len(record["summary"]["conquered"]) == 2
             if os.environ.get("XJ_FRONTIER_LEGACY_DATABASE"):

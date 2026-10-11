@@ -1032,6 +1032,49 @@ class FrontierDirectorStateDto extends RefCounted:
 	var has_active_faction_id: bool = false
 	var active_faction_id: String = ""
 
+## 对应 progress.hire_contract_state；只有活动合同绑定实际NPC。
+class HireContractStateDto extends RefCounted:
+	var contract_id: String = ""
+	var player_id: String = ""
+	var profile_id: String = ""
+	var origin_station_id: String = ""
+	var phase: String = "deployed"
+	var has_npc_instance_id: bool = false
+	var npc_instance_id: String = ""
+	var sector_id: String = ""
+	var site_id: String = ""
+	var order_kind: String = "regroup"
+	var order_revision: int = 0
+	var has_focus_target_id: bool = false
+	var focus_target_id: String = ""
+	var lease_remaining_s: float = 0.0
+	var return_remaining_s: float = 0.0
+	var retreat_remaining_s: float = 0.0
+	var goal_x: float = 0.0
+	var goal_y: float = 0.0
+	var goal_z: float = 0.0
+	var retreat_origin_x: float = 0.0
+	var retreat_origin_y: float = 0.0
+	var retreat_origin_z: float = 0.0
+	var fee_paid_credit: int = 0
+	var deposit_paid_credit: int = 0
+	var condition_ratio: float = 1.0
+	var refund_credit: int = 0
+	var support_cycles_remaining: int = 0
+	var support_cooldown_s: float = 0.0
+	var expiry_warned: bool = false
+	var end_reason: String = ""
+	var created_tick: int = 0
+	var finished_tick: int = 0
+
+class HireReceiptStateDto extends RefCounted:
+	var source_token: String = ""
+	var contract_id: String = ""
+	var event_kind: String = "hire"
+	var paid_credit: int = 0
+	var refund_credit: int = 0
+	var event_tick: int = 0
+
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
 	var content: ContentRefDto = ContentRefDto.new()
@@ -1099,6 +1142,8 @@ class WorldSnapshotDto extends RefCounted:
 	var frontier_journal_state_rows: Array[FrontierJournalStateDto] = []
 	var frontier_supply_order_state_rows: Array[FrontierSupplyOrderStateDto] = []
 	var frontier_director_state_rows: Array[FrontierDirectorStateDto] = []
+	var hire_contract_state_rows: Array[HireContractStateDto] = []
+	var hire_receipt_state_rows: Array[HireReceiptStateDto] = []
 	var tactical_site_state_rows: Array[TacticalSiteStateDto] = []
 	var npc_tactic_state_rows: Array[NpcTacticStateDto] = []
 	var ship_tactical_effect_state_rows: Array[ShipTacticalEffectStateDto] = []
