@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+文明指挥考核：`build_honors.py`、`store_generate_honors.py`仅追加3张定义表、021与v0.17适配器；旧135表/视图和001–020保持。`verify_combat_v18.py --only honors`检查真实四类结算、三文明资格与61组恢复；`prepare_roles_upgrade_v32.py --honors --legacy-executable <已核验v0.24 EXE>`从旧包固定fitting入口生成带付费在途货物及活动战争的真实format17夹具，通过`XJ_HONORS_LEGACY_DATABASE`验证升级与失败回滚。`--native --only honors-world`验证真实登记、来源选择/星图、认证、战争受领、旧回调以及3440×1188/100%和1280×720/200%的精确逻辑尺寸。SQL拒绝见`tests/test_honors.py`，规则见[60](../doc/60-文明贡献与指挥资格.md)。
+
 舰种/承运：`build_roles.py`追加3张定义表，旧132表/四视图不变；`store_generate_roles.py`仅生成020与v0.16适配器，复制完整旧封存守卫并只允许有完整持久记录的远修周期。`verify_combat_v18.py --only roles`检查真实调查、十八舰权限、付费恢复、中断、货损/退款/超时与59组恢复。`prepare_roles_upgrade_v32.py --legacy-executable <实际v0.23 EXE>`经旧包固定fitting测试入口的显式夹具分支，生成真实订单/取消/部分研究/机库format16档；传`XJ_ROLES_LEGACY_DATABASE`验证故障回滚及56组原状态。`--native --only roles-world`检查真实按钮、物理治疗、同225000基础造价上限战斗对照、9km感知、24批满载四门航程/交付及精确640×360逻辑界面。`XJ_ROLES_TRIP_ONLY=1`仅用于临时排障，正式门槛拒绝该子集。SQL负例见`tests/test_roles.py`，规则与边界见[59](../doc/59-舰种能力与有限承运.md)。
 
 配装/火控/HUD：`build_fitting.py`和`store_generate_fitting.py`只追加新SQL与019/v0.15，`build_fitting_assets.py`生成3个原创静态SVG及映射。`verify_combat_v18.py --only fitting`验证真实预算对照、只读比较、部分投入/替代来源、56组恢复；`prepare_fitting_upgrade_v31.py --legacy-executable <实际v0.22 EXE>`生成已关闭的format15付费订单夹具，通过`XJ_FITTING_LEGACY_DATABASE`验证53组旧状态和失败回滚。`--native --only fitting-world`验证实际鼠标/键盘比较、替换和超原射程命中，以及三窗口/缩放HUD和雷达切换，共用审计锁与fresh UUID。真实包使用`--executable`。SQL负例与旧表保护见`tests/test_fitting.py`，旧阶段测试只排除显式受审的新ID，不能放宽历史行或视图一致性。见[57](../doc/57-配装比较与火控专精.md)、[58](../doc/58-太空界面与简洁配装分析.md)。

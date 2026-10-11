@@ -11,6 +11,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "honors": ("honors_v33.gd", "XJ_HONORS_V33", "honors-v33", "HONORS_V33", "--xj-verify-honors-v33"),
+    "honors-world": ("honors_world_v33.gd", "XJ_HONORS_WORLD_V33", "honors-world-v33", "HONORS_WORLD_V33", "--xj-verify-honors-world-v33"),
     "roles": ("roles_v32.gd", "XJ_ROLES_V32", "roles-v32", "ROLES_V32", "--xj-verify-roles-v32"),
     "roles-world": ("roles_world_v32.gd", "XJ_ROLES_WORLD_V32", "roles-world-v32", "ROLES_WORLD_V32", "--xj-verify-roles-world-v32"),
     "fitting": ("fitting_v31.gd", "XJ_FITTING_V31", "fitting-v31", "FITTING_V31", "--xj-verify-fitting-v31"),
@@ -175,6 +177,12 @@ def run_suite():
             assert len(captures) == (0 if name == "base-store" else 17)
         if name in ("civilizations", "civilization-upgrade"):
             assert record["summary"]["checks"] >= (200 if name == "civilizations" else 25) and len(captures) == 0
+        if name == "honors-world":
+            assert record["summary"]["checks"] >= 60 and record["summary"]["real_actions"] == 4 and len(captures) == 7
+        if name == "honors":
+            assert record["summary"]["checks"] >= 150 and record["summary"]["factions"] == 3 and record["summary"]["evidence"] >= 15 and not captures
+            if os.environ.get("XJ_HONORS_LEGACY_DATABASE"):
+                assert record["summary"]["checks"] >= 190 and record["summary"]["legacy_checked"] is True
         if name == "fitting":
             assert record["summary"]["checks"] >= (77 if os.environ.get("XJ_FITTING_LEGACY_DATABASE") else 60) and len(captures) == 0
         if name == "roles":

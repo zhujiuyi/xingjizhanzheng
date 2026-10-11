@@ -922,6 +922,29 @@ class ConsignmentReceiptStateDto extends RefCounted:
 	var refunded_credit: int = 0
 	var reward_credit: int = 0
 
+## 对应 progress.civilization_command_state；公共复合键由 WorldSnapshot.meta 注入。
+class CivilizationCommandStateDto extends RefCounted:
+	var player_id: String = ""
+	var faction_id: String = ""
+	var phase: String = "unregistered"
+	var registered_tick: int = 0
+	var certified_tick: int = 0
+	var paid_credit: int = 0
+	var awarded_reputation: int = 0
+	var has_legacy_war_id: bool = false
+	var legacy_war_id: String = ""
+	var legacy_attempt: int = 0
+
+## 对应 progress.civilization_honor_evidence_state；公共复合键由 WorldSnapshot.meta 注入。
+class CivilizationHonorEvidenceStateDto extends RefCounted:
+	var source_token: String = ""
+	var task_id: String = ""
+	var source_kind: String = ""
+	var source_def_id: String = ""
+	var generation: int = 0
+	var credited_units: int = 0
+	var recorded_tick: int = 0
+
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
 	var content: ContentRefDto = ContentRefDto.new()
@@ -980,6 +1003,8 @@ class WorldSnapshotDto extends RefCounted:
 	var remote_support_state_rows: Array[RemoteSupportStateDto] = []
 	var consignment_state_rows: Array[ConsignmentStateDto] = []
 	var consignment_receipt_state_rows: Array[ConsignmentReceiptStateDto] = []
+	var civilization_command_state_rows: Array[CivilizationCommandStateDto] = []
+	var civilization_honor_evidence_state_rows: Array[CivilizationHonorEvidenceStateDto] = []
 	var tactical_site_state_rows: Array[TacticalSiteStateDto] = []
 	var npc_tactic_state_rows: Array[NpcTacticStateDto] = []
 	var ship_tactical_effect_state_rows: Array[ShipTacticalEffectStateDto] = []

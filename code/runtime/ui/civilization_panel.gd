@@ -6,9 +6,11 @@ var u: Node
 var war_status: Label
 var join_button: Button
 var join_note: Label
+var honor_panel: RefCounted
 
 func build(ui: Node) -> void:
 	u = ui
+	honor_panel=null
 	var civ: RefCounted = u.gameplay.civilizations
 	if not civ.supported():
 		u._text("当前世界仍使用旧规则。重新载入后可按备份分支流程升级文明内容。", 16)
@@ -40,6 +42,7 @@ func build(ui: Node) -> void:
 	u._text("声望 %d · %s · 管辖 %d 个星系\n核心站：%s" % [u.gameplay.economy.reputation(faction), title_status, owned, u._station_name(str(selected.capital_station_id))], 14)
 	var map_button: Button = _command(u.body, "定位文明核心星系", "civilization_map", faction)
 	map_button.name = "CivilizationCapital"
+	if joined==faction:_build_commander(faction)
 	u._text("入籍任务", 18)
 	for step: Dictionary in u.catalog.rows("civilization_join_missions"):
 		if step.faction_id != faction: continue
@@ -94,7 +97,7 @@ func build(ui: Node) -> void:
 	u._text("爵位与权限", 18)
 	for rank: Dictionary in u.catalog.rows("civilization_rank_defs"):
 		if rank.faction_id != faction: continue
-		var benefit: String = "正式效忠后生效" if int(rank.rank_level) == 1 else "专属舰船与设计学" if int(rank.rank_level) in [2, 4, 6] else "可受领舰队战争委托" if int(rank.rank_level) == 5 else ""
+		var benefit: String = "正式效忠后生效" if int(rank.rank_level) == 1 else "专属舰船与设计学" if int(rank.rank_level) in [2, 4, 6] else ("舰队战争 · 另需指挥资格" if u.gameplay.honors.supported() else "可受领舰队战争委托") if int(rank.rank_level) == 5 else ""
 		u._text("%s · 声望 %d%s" % [rank.display_name, int(rank.required_reputation), " · " + benefit if not benefit.is_empty() else ""], 13)
 	u._text("文明专属舰船", 18)
 	for hull: Dictionary in u.catalog.rows("civilization_hull_defs"):
@@ -112,6 +115,7 @@ func build(ui: Node) -> void:
 		var label: Label = u._text_to(row, "%s · %s\n%s\n%s" % [ship.display_name, required.display_name, hull.description, "技术已掌握" if u.gameplay.unlocked(hull.required_unlock_id) else "需研究对应设计学；采购和制造另核验效忠"], 13)
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	u._button(u.body, "打开科技与设施", func(): u.show_page("research"))
+	if honor_panel==null:_build_commander(faction)
 	u._text("舰队战争", 18)
 	war_status = u._text_to(u.body, "", 14)
 	war_status.name = "CivilizationWarStatus"
@@ -125,7 +129,7 @@ func build(ui: Node) -> void:
 		_command(controls, "集火当前目标", "fleet_command", "focus", null, str(u.target_id))
 		_command(controls, "撤退并放弃战役", "fleet_command", "retreat")
 	else:
-		u._text("舰队伯爵可在所属核心站受领委托。率领3艘友舰前往战区，清除守军及常规敌舰，再于目标点持续驻留完成占领。出生航路受保护。", 13)
+		u._text("舰队伯爵"+("取得指挥资格后" if u.gameplay.honors.supported() else "")+"可在所属核心站受领委托。3艘友舰在战区集结，清敌后驻留占领。出生航路受保护。", 13)
 		for war: Dictionary in u.catalog.rows("civilization_war_defs"):
 			if war.faction_id != faction: continue
 			var reason: String = civ.war_reason(war.war_id)
@@ -136,7 +140,12 @@ func build(ui: Node) -> void:
 			button.tooltip_text = reason if not reason.is_empty() else "战役奖励：%d 信用点、声望 %d；胜利后星系归属所代表文明。" % [int(war.reward_credit), int(war.reward_reputation)]
 	tick()
 
+func _build_commander(faction: String) -> void:
+	honor_panel=preload("res://runtime/ui/civilization_honors_panel.gd").new()
+	honor_panel.build(u,faction,self)
+
 func tick() -> void:
+	if honor_panel!=null:honor_panel.tick()
 	if not is_instance_valid(war_status): return
 	var civ: RefCounted = u.gameplay.civilizations
 	if is_instance_valid(join_button):

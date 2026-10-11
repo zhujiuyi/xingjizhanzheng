@@ -22,10 +22,10 @@ sys.path.insert(0, str(ROOT / "jiaoben"))
 import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
-MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql", "018_operations.sql", "019_fitting.sql", "020_roles.sql")
-FORMAT_VERSION = 17
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_16.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_16"
+MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql", "018_operations.sql", "019_fitting.sql", "020_roles.sql", "021_honors.sql")
+FORMAT_VERSION = 18
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_17.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_17"
 REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_3": PROGRESS_DIR / "catalog_adapter_v0_3.sql",
     "frozen_catalog_v0_4": PROGRESS_DIR / "catalog_adapter_v0_4.sql",
@@ -41,9 +41,10 @@ REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_13": PROGRESS_DIR / "catalog_adapter_v0_13.sql",
     "frozen_catalog_v0_14": PROGRESS_DIR / "catalog_adapter_v0_14.sql",
     "frozen_catalog_v0_15": PROGRESS_DIR / "catalog_adapter_v0_15.sql",
-    "frozen_catalog_v0_16": ADAPTER,
+    "frozen_catalog_v0_16": PROGRESS_DIR / "catalog_adapter_v0_16.sql",
+    "frozen_catalog_v0_17": ADAPTER,
 }
-RULE_CODE_VERSION = "singleplayer_roles_v1"
+RULE_CODE_VERSION = "singleplayer_honors_v1"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
 STATE_TABLES = (
@@ -63,6 +64,7 @@ STATE_TABLES = (
     "exploration_belt_state",
     "specialization_progress_state", "specialization_evidence_state", "specialization_research_state",
     "remote_support_state", "consignment_state", "consignment_receipt_state",
+    "civilization_command_state", "civilization_honor_evidence_state",
     "operation_state",
     "tactical_site_state", "npc_tactic_state", "ship_tactical_effect_state", "drone_bay_state",
 )
@@ -383,6 +385,8 @@ def initial_state(connection, snapshot, world, content):
         insert(connection, "exploration_belt_state", {**ctx, "event_id": route["event_id"], "route_id": route["route_id"], "stage_index": 0, "warning_stage_index": 0, "start_elapsed_s": 0.0, "initial_units": variant["mineral_units"]})
     if frozen("weapon_tuning_defs"):
         insert(connection,"specialization_progress_state",{**ctx,"player_id":player_id,"earned_points":0,"spent_points":0,"donated_points":0})
+    for spec in frozen("civilization_command_defs"):
+        insert(connection,"civilization_command_state",{**ctx,"player_id":player_id,"faction_id":spec["faction_id"]})
     for spec in frozen("consignment_defs"):
         insert(connection,"consignment_state",{**ctx,"contract_id":spec["contract_id"]})
     for operation in frozen("operation_defs"):

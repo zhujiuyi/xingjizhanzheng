@@ -139,6 +139,8 @@ func war_reason(war_id: String) -> String:
 	reason = capital_reason(definition.faction_id)
 	if not reason.is_empty(): return reason
 	if active_war() != null: return "已有进行中的舰队战争"
+	reason=g.honors.war_reason(str(definition.faction_id))
+	if not reason.is_empty():return reason
 	var policy: Dictionary = g.definition("sector_sovereignty_defs", "sector_id", definition.target_sector_id)
 	if policy.is_empty() or not bool(policy.conquerable) or not owner(definition.target_sector_id).is_empty(): return "目标已非可争夺的中立星系"
 	if g.missions.has_pending_loans(): return "先归还待清理的任务借船"

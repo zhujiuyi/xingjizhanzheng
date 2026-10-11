@@ -54,7 +54,7 @@ class SpaceCatalog(unittest.TestCase):
     def test_reviewed_metadata_and_content_identity(self):
         row = self.rows("catalog_meta")[0]
         self.assertEqual((row["schema_version"], row["content_version"], row["ruleset_version"]),
-                         (15, "v0.16-roles", "singleplayer_roles_v1"))
+                         (16, "v0.17-honors", "singleplayer_honors_v1"))
         self.assertEqual(builder.logical_content_hash(self.db), row["content_hash"])
         source = self.copy()
         try:
@@ -159,7 +159,7 @@ class SpaceCatalog(unittest.TestCase):
     def test_reviewed_adapter_has_exact_schema_and_logical_identity(self):
         source = sqlite3.connect(":memory:")
         try:
-            source.executescript((ROOT / "code/database/progress/catalog_adapter_v0_16.sql").read_text(encoding="utf-8"))
+            source.executescript((ROOT / "code/database/progress/catalog_adapter_v0_17.sql").read_text(encoding="utf-8"))
             for table in builder.CONTENT_TABLES:
                 expected = self.db.execute(f'PRAGMA table_info("{table}")').fetchall()
                 actual = source.execute(f'PRAGMA table_info("{table}")').fetchall()

@@ -52,6 +52,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-honors-v33","file":"honors_v33.gd","prefix":"honors-v33","env":"XJ_HONORS_V33","meta":"xj_honors_v33_diagnostic"},
+		{"flag":"--xj-verify-honors-world-v33","file":"honors_world_v33.gd","prefix":"honors-world-v33","env":"XJ_HONORS_WORLD_V33","meta":"xj_honors_world_v33_diagnostic"},
 		{"flag":"--xj-verify-roles-v32","file":"roles_v32.gd","prefix":"roles-v32","env":"XJ_ROLES_V32","meta":"xj_roles_v32_diagnostic"},
 		{"flag":"--xj-verify-roles-world-v32","file":"roles_world_v32.gd","prefix":"roles-world-v32","env":"XJ_ROLES_WORLD_V32","meta":"xj_roles_world_v32_diagnostic"},
 		{"flag":"--xj-verify-fitting-v31","file":"fitting_v31.gd","prefix":"fitting-v31","env":"XJ_FITTING_V31","meta":"xj_fitting_v31_diagnostic"},
@@ -1190,6 +1192,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	gameplay.specializations.warning_changed.connect(_tactical_warning)
 	gameplay.ship_roles.warning_changed.connect(_tactical_warning)
 	gameplay.consignments.warning_changed.connect(_tactical_warning)
+	gameplay.honors.warning_changed.connect(_tactical_warning)
 	gameplay.operations.warning_changed.connect(_tactical_warning)
 	gameplay.tactics.warning_changed.connect(_tactical_warning)
 	gameplay.drone_control.warning_changed.connect(_tactical_warning)

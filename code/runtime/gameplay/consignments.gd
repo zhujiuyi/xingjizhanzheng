@@ -55,12 +55,13 @@ func action_reason(id: String,action: String,quantity: int = 1) -> String:
 	if action == "withdraw": return "" if row.phase == "active" else "没有可中止的在途合同"
 	if action == "claim": return "" if row.phase == "ready" and g.state.player().has_docked_station_id else "成果待结算后，在空间站领取"
 	return "未知承运操作"
-func _receipt(row: RefCounted,kind: String,units: int,paid: int = 0,refunded: int = 0,reward: int = 0) -> void:
+func _receipt(row: RefCounted,kind: String,units: int,paid: int = 0,refunded: int = 0,reward: int = 0) -> D.ConsignmentReceiptStateDto:
 	var receipt: D.ConsignmentReceiptStateDto = D.ConsignmentReceiptStateDto.new()
 	receipt.receipt_id = g.id("freight"); receipt.contract_id = row.contract_id; receipt.generation = row.generation
 	receipt.action_kind = kind; receipt.units = units; receipt.paid_credit = paid; receipt.refunded_credit = refunded; receipt.reward_credit = reward
 	g.state.add("consignment_receipt_state",receipt)
 	row.paid_credit_total += paid; row.refunded_credit_total += refunded; row.reward_credit_total += reward
+	return receipt
 func execute(id: String,action: String,quantity: int,expected_generation: String) -> bool:
 	var row: RefCounted = instance(id)
 	if row == null or str(row.generation) != expected_generation: return g.fail("承运合同已更新，请重新查看")
@@ -87,8 +88,9 @@ func execute(id: String,action: String,quantity: int,expected_generation: String
 			var refund: int = (row.delivered_units+row.returned_units)*int(spec.deposit_per_unit)
 			var reward: int = row.delivered_units*int(spec.reward_per_unit)
 			g.state.player().credit += refund+reward
-			_receipt(row,"claim",row.delivered_units,0,refund,reward)
+			var receipt: RefCounted=_receipt(row,"claim",row.delivered_units,0,refund,reward)
 			row.phase = "claimed"; row.cooldown_remaining_s = spec.cooldown_s
+			g.honors.consignment_claimed(receipt)
 	g.request_autosave()
 	return true
 func _finish(row: RefCounted) -> void:

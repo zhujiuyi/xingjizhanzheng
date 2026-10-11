@@ -29,7 +29,7 @@ class RoleDefinitions(unittest.TestCase):
   with self.assertRaises(sqlite3.OperationalError):p.apply_migrations(db,fault_after=20)
   self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(16,))
   self.assertEqual(before,db.execute('SELECT type,name,sql FROM sqlite_schema ORDER BY type,name').fetchall())
-  p.apply_migrations(db);self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(17,))
+  p.apply_migrations(db);self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(p.FORMAT_VERSION,))
 
 class RoleSealing(unittest.TestCase):
  @classmethod

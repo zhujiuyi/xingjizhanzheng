@@ -136,7 +136,24 @@ func develop(faction: String) -> void:
 			if input.hull_recipe_id == recipe: g.inventory.grant(warehouse, input.item_id, int(input.quantity))
 		check(action("manufacture", recipe) and state.rows("ship_state").size() == count + 2, "authorized manufacture consumes recipe and creates one owned hull")
 
+func commander_fixture() -> void:
+	var honors: RefCounted=g.get("honors")
+	if honors==null or not honors.supported() or honors.instance(g.civilizations.allegiance()).phase=="certified":return
+	# Current-rule war regression earns its prerequisite through the same real
+	# settlement actions. Funds, variants and arrival poses remain test fixtures.
+	var helper: Node=(load(get_script().resource_path.get_base_dir().path_join("honors_v33.gd")) as Script).new()
+	helper.g=g;helper.state=state;helper.store=store
+	var previous_ship: String=state.ship().ship_instance_id
+	var faction: String=g.civilizations.allegiance()
+	helper.hull("transport_caravan");helper.fit("module_scanner_beacon_i","utility:0")
+	helper.at_capital(faction);helper.apply("honor_action",faction,1,"register:unregistered")
+	helper.complete_event("exp_mirror_relic");helper.complete_event("exp_echo_rescue");helper.freight(6);helper.demolition()
+	helper.at_capital(faction);helper.apply("honor_action",faction,1,"certify:assessing");helper.step(g.combat_remaining_s+0.2)
+	check(helper.failures.is_empty() and honors.instance(faction).phase=="certified","current war regression earns a complete actual commander qualification")
+	state.player().controlled_ship_id=previous_ship;capital(faction)
+	helper.g=null;helper.state=null;helper.store=null;helper.free()
 func campaign() -> void:
+	commander_fixture()
 	var civ: RefCounted = g.civilizations
 	var faction: String = civ.allegiance()
 	capital(faction)

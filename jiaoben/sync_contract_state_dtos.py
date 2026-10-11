@@ -47,6 +47,10 @@ def class_name(table):
 def main():
     tables = dict(re.findall(r"CREATE TABLE (\w+) \((.*?)\) STRICT;", SQL.read_text(), re.S))
     states = [table for table in tables if table.endswith("_state")]
+    generated = {class_name(table) for table in states}
+    existing = set(re.findall(r"class (\w+StateDto) extends RefCounted:", GD.read_text(encoding="utf-8")))
+    if existing - generated:
+        raise ValueError("Core-only generator cannot replace expanded state DTOs; append the reviewed migration's declarations instead")
     lines = []
     for table in states:
         lines += [f"## 对应 progress.{table}；公共复合键由 WorldSnapshot.meta 注入。", f"class {class_name(table)} extends RefCounted:"]

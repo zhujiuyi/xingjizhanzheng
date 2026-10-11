@@ -26,6 +26,8 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	if not _validate_specializations(state,catalog): return false
 	var role_check: RefCounted=preload("res://runtime/data/role_validation.gd").new()
 	if not role_check.validate(state,catalog): return _fail(role_check.last_error)
+	var honor_check: RefCounted=preload("res://runtime/data/honor_validation.gd").new()
+	if not honor_check.validate(state,catalog):return _fail(honor_check.last_error)
 	for ship in state.rows("ship_state"):
 		var norm: float = ship.quat_x * ship.quat_x + ship.quat_y * ship.quat_y + ship.quat_z * ship.quat_z + ship.quat_w * ship.quat_w
 		if abs(norm - 1.0) >= 0.00001: return _fail("Invalid normalized ship quaternion")

@@ -303,6 +303,7 @@ func _claim(row: D.ExplorationInstanceStateDto) -> bool:
 		break
 	g.state.add("exploration_claim_state", receipt); row.phase = "claimed"
 	g.specializations.exploration_claimed(receipt)
+	g.honors.exploration_claimed(receipt)
 	return true
 
 func research(research_id: String) -> bool:
