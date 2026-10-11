@@ -22,6 +22,7 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	if not _validate_exploration(state, catalog): return false
 	if not _validate_mobile_belts(state, catalog): return false
 	if not _validate_tactics(state, catalog): return false
+	if not _validate_operations(state, catalog): return false
 	for ship in state.rows("ship_state"):
 		var norm: float = ship.quat_x * ship.quat_x + ship.quat_y * ship.quat_y + ship.quat_z * ship.quat_z + ship.quat_w * ship.quat_w
 		if abs(norm - 1.0) >= 0.00001: return _fail("Invalid normalized ship quaternion")
@@ -102,9 +103,43 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 				if package_def.is_empty(): return _fail("Unknown recovery package")
 				volume += float(package_def.volume_m3) * 1000.0
 				payload += float(package_def.mass_kg)
+			if container.kind == Types.ContainerKind.CARGO and catalog.table_names.has("operation_defs"):
+				for operation: RefCounted in state.rows("operation_state"):
+					if not operation.has_payload_ship_id or operation.payload_ship_id != ship.ship_instance_id: continue
+					var op_def: Dictionary = catalog.one("operation_defs","operation_id",operation.operation_id)
+					volume += operation.cargo_units * float(op_def.cargo_volume_l)
+					payload += operation.cargo_units * float(op_def.cargo_mass_kg)
 			var capacity: int = definition.cargo_l if container.kind == Types.ContainerKind.CARGO else definition.mineral_cargo_l
 			if volume > capacity: return _fail("Cargo volume exceeded")
 		if payload > definition.max_payload_mass_kg + 0.0000001: return _fail("Shared payload mass exceeded")
+	return true
+
+func _validate_operations(state: State, catalog: XJCatalog) -> bool:
+	if not catalog.table_names.has("operation_defs"): return state.rows("operation_state").is_empty() or _fail("Operations under legacy content")
+	if state.rows("operation_state").size() != catalog.rows("operation_defs").size(): return _fail("Operation coverage incomplete")
+	var seen: Dictionary = {}
+	for row: RefCounted in state.rows("operation_state"):
+		var spec: Dictionary = catalog.one("operation_defs","operation_id",row.operation_id)
+		if spec.is_empty() or seen.has(row.operation_id): return _fail("Invalid operation identity")
+		seen[row.operation_id] = true
+		if row.phase not in ["available","accepted","active","ready","claimed","failed","withdrawn"] or row.generation < 0: return _fail("Invalid operation phase")
+		if row.remaining_s < 0.0 or row.remaining_s > float(spec.duration_s) or row.cooldown_remaining_s < 0.0 or row.cooldown_remaining_s > float(spec.cooldown_s) or row.exposure_remaining_s < 0.0 or row.exposure_remaining_s > float(spec.exposure_duration_s) or row.damage_debt_hp < 0.0 or row.damage_debt_hp >= float(spec.loss_damage_hp): return _fail("Invalid operation timing")
+		if mini(mini(row.loaded_units,row.cargo_units),mini(row.completed_units,mini(row.lost_units,row.jettisoned_units))) < 0 or row.loaded_units > int(spec.target_units) or row.completed_units > int(spec.target_units) or row.rewarded_units_total < 0 or row.paid_credit_total != row.rewarded_units_total * int(spec.credit_per_unit): return _fail("Invalid operation reward ledger")
+		if spec.operation_kind == "demolition":
+			if row.loaded_units + row.cargo_units + row.lost_units + row.jettisoned_units != 0 or row.has_payload_ship_id: return _fail("Demolition has unexpected cargo")
+			var destroyed: int = 0
+			for structure: Dictionary in catalog.rows("operation_structure_defs"):
+				if structure.operation_id != row.operation_id: continue
+				var npc: RefCounted = state.find("npc_state","spawn_id",structure.spawn_id)
+				if row.phase in ["active","ready","claimed"] and (npc == null or npc.generation != row.generation): return _fail("Operation physical structure missing")
+				if npc != null and npc.generation == row.generation and not npc.alive: destroyed += 1
+			if row.phase in ["active","ready","claimed"] and destroyed != row.completed_units: return _fail("Demolition progress differs from actual HP")
+		else:
+			if row.loaded_units != row.cargo_units + row.completed_units + row.lost_units + row.jettisoned_units: return _fail("Operation cargo conservation failed")
+			if row.cargo_units > 0:
+				var ship: RefCounted = state.find("ship_state","ship_instance_id",row.payload_ship_id)
+				if not row.has_payload_ship_id or row.phase != "active" or ship == null or ship.status != Types.ShipStatus.FLYING or ship.owner_player_id != state.player().player_id: return _fail("Operation cargo owner unavailable")
+		if row.phase == "ready" and row.completed_units <= 0: return _fail("Empty operation claim")
 	return true
 
 func _validate_tactics(state: State, catalog: XJCatalog) -> bool:

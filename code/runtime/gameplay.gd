@@ -14,6 +14,7 @@ const ResourceIntel = preload("res://runtime/gameplay/resource_intel.gd")
 const Exploration = preload("res://runtime/gameplay/exploration.gd")
 const MobileBelts = preload("res://runtime/gameplay/mobile_belts.gd")
 const Tactics = preload("res://runtime/gameplay/tactics.gd")
+const Operations = preload("res://runtime/gameplay/operations.gd")
 const DroneControl = preload("res://runtime/gameplay/drone_control.gd")
 const Space = preload("res://runtime/space_coordinates.gd")
 var state: XJRuntimeState
@@ -29,6 +30,7 @@ var resource_intel: RefCounted
 var exploration: RefCounted
 var mobile_belts: RefCounted
 var tactics: RefCounted
+var operations: RefCounted
 var drone_control: RefCounted
 var events: Array[D.EventDto] = []
 var pending_autosave_request_id: String = ""
@@ -68,6 +70,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog) -> void:
 	mobile_belts = MobileBelts.new(self)
 	tactics = Tactics.new(self)
 	drone_control = DroneControl.new(self)
+	operations = Operations.new(self)
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
 	for ship: D.ShipStateDto in state.rows("ship_state"):
@@ -185,6 +188,7 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 	if industry_actions.has(action): command.action_kind = T.ActionKind.CLAIM_INDUSTRY + industry_actions.find(action)
 	if action == "exploration_action": command.action_kind = T.ActionKind.EXPLORATION_ACTION
 	if action == "exploration_research": command.action_kind = T.ActionKind.EXPLORATION_RESEARCH
+	if action == "operation_action": command.action_kind = T.ActionKind.OPERATION_ACTION
 	if action == "drone_command": command.action_kind = T.ActionKind.DRONE_COMMAND
 	if action == "drone_replenish": command.action_kind = T.ActionKind.DRONE_REPLENISH
 	_active_action = command
@@ -231,6 +235,9 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 			"claim_industry": ok = industry.claim(target)
 			"cancel_industry": ok = industry.cancel(target)
 			"deliver_demand": ok = industry.deliver(target, quantity, extra)
+			"operation_action":
+				var parts: PackedStringArray = extra.split(":")
+				ok = operations.execute(target,parts[0],parts[1]) if parts.size() == 2 else fail("行动请求缺少动作与代次")
 			"exploration_action":
 				var parts: PackedStringArray = extra.split(":")
 				ok = exploration.execute(target, parts[0], parts[1]) if parts.size() == 2 else fail("探索请求缺少动作与代次")
@@ -365,7 +372,7 @@ func metrics(ship: D.ShipStateDto) -> Dictionary:
 	m.acceleration_mps2 *= mass_factor
 	m.turn_radps = m.turn_rad_s * sqrt(mass_factor)
 	if tactics != null:
-		var ratio: float = tactics.thrust_ratio(ship.ship_instance_id)
+		var ratio: float = minf(tactics.thrust_ratio(ship.ship_instance_id),operations.thrust_ratio(ship.ship_instance_id) if operations != null else 1.0)
 		m.speed_mps *= ratio; m.acceleration_mps2 *= ratio
 	m.brake_multiplier = rule("brake_acceleration_multiplier")
 	m.strafe_multiplier = rule("strafe_acceleration_multiplier")
@@ -472,6 +479,7 @@ func _engine_cycle() -> bool:
 	for e in equipped(state.ship()):
 		if e.module_def_id.begins_with("module_engine_") and pay_cycle(e):
 			e.active_remaining_s = definition("module_defs", "module_id", e.module_def_id).cycle_s
+			operations.boosted()
 			event(T.EventKind.ENGINE_ACTIVE, state.ship().ship_instance_id, "", e.item_instance_id)
 			return true
 	return fail("引擎循环不可用")
@@ -528,6 +536,7 @@ func finish_step(delta: float) -> void:
 	industry.tick(delta)
 	exploration.tick(delta)
 	tactics.tick(delta)
+	operations.tick(delta)
 	drone_control.sync()
 	_tick_resources(delta)
 	_sync_spawns(delta)
@@ -579,6 +588,7 @@ func apply_damage(victim: RefCounted, raw: Vector3, resist: Dictionary) -> float
 func damage_npc(instance_id: String, raw_vector: Vector3) -> float:
 	var npc: D.NpcStateDto = state.find("npc_state", "npc_instance_id", instance_id)
 	if npc == null or not npc.alive or not raw_vector.is_finite() : return 0.0
+	if operations.handles(npc.spawn_id) and not operations.structure_active(npc): return 0.0
 	if Space.supported(catalog) and not same_entity_site("ship", state.ship(), "npc", npc): return 0.0
 	var spawn: Dictionary = definition("npc_spawn_defs", "spawn_id", npc.spawn_id)
 	var def: Dictionary = definition("npc_full_defs", "npc_id", spawn.npc_id)
@@ -590,6 +600,7 @@ func damage_npc(instance_id: String, raw_vector: Vector3) -> float:
 	if npc.hull <= 0:
 		npc.alive = false; npc.behavior_phase = T.NpcPhase.DEAD
 		tactics.destroyed(npc)
+		operations.destroyed(npc)
 		npc.respawn_remaining_s = float(spawn.respawn_s) if spawn.respawn_s != null else 0.0
 		if spawn.bounty_enabled and not npc.bounty_claimed: state.player().credit += def.reward_credit; npc.bounty_claimed = true
 		var packaged: bool = encounters.on_destroy(npc)
@@ -608,6 +619,7 @@ func damage_ship(raw_vector: Vector3) -> float:
 	var ship: D.ShipStateDto = state.ship()
 	if ship.status != T.ShipStatus.FLYING or not raw_vector.is_finite(): return 0
 	var amount: float = apply_damage(ship, raw_vector.max(Vector3.ZERO), metrics(ship).resistances)
+	operations.damaged(amount)
 	ship.shield_delay_remaining_s = rule("shield_recharge_delay_s")
 	mark_hostile_attempt()
 	ship.state_version += 1
@@ -623,7 +635,7 @@ func _sync_spawns(delta: float = 0.0) -> void:
 	encounters.tick(delta)
 	tactics.sync(delta)
 	for spawn in rows("npc_spawn_defs"):
-		if tactics.handles(spawn.spawn_id): continue
+		if tactics.handles(spawn.spawn_id) or operations.handles(spawn.spawn_id): continue
 		if exploration.managed_spawns.has(spawn.spawn_id): continue
 		if civilizations.handles_spawn(spawn.spawn_id): continue
 		if encounters.handles(spawn.spawn_id): continue
@@ -719,8 +731,9 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations]:
 		if service != null: service.g = null
+	operations = null
 	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null; mobile_belts = null
 	tactics = null; drone_control = null
 	pending_autosave_request_id=""; events.clear(); _pending_repairs.clear(); _definition_cache.clear(); _index_cache.clear(); _rules.clear()

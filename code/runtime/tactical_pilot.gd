@@ -14,6 +14,7 @@ static func step(world: Node3D, npc: D.NpcStateDto, body: CharacterBody3D, delta
 	var home: Vector3 = world.anchor_position(spawn.anchor_id)
 	var player_distance: float = body.position.distance_to(player.position)
 	var detection: float = float(behavior.detection_range_m) if npc.behavior_phase in [T.NpcPhase.IDLE,T.NpcPhase.PATROL,T.NpcPhase.RETURN] else float(behavior.target_drop_range_m)
+	detection = maxf(detection, g.operations.detection_range())
 	var engaged: bool = g.state.ship().status == T.ShipStatus.FLYING and player_distance <= detection and body.position.distance_to(home) <= float(behavior.leash_radius_m) and not world.in_safe_zone(player.position)
 	var target: Node3D = player
 	var target_id: String = g.state.ship().ship_instance_id

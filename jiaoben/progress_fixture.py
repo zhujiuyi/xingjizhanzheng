@@ -22,10 +22,10 @@ sys.path.insert(0, str(ROOT / "jiaoben"))
 import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
-MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql")
-FORMAT_VERSION = 14
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_13.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_13"
+MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql", "018_operations.sql")
+FORMAT_VERSION = 15
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_14.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_14"
 REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_3": PROGRESS_DIR / "catalog_adapter_v0_3.sql",
     "frozen_catalog_v0_4": PROGRESS_DIR / "catalog_adapter_v0_4.sql",
@@ -38,9 +38,10 @@ REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_10": PROGRESS_DIR / "catalog_adapter_v0_10.sql",
     "frozen_catalog_v0_11": PROGRESS_DIR / "catalog_adapter_v0_11.sql",
     "frozen_catalog_v0_12": PROGRESS_DIR / "catalog_adapter_v0_12.sql",
-    "frozen_catalog_v0_13": ADAPTER,
+    "frozen_catalog_v0_13": PROGRESS_DIR / "catalog_adapter_v0_13.sql",
+    "frozen_catalog_v0_14": ADAPTER,
 }
-RULE_CODE_VERSION = "singleplayer_tactics_v1"
+RULE_CODE_VERSION = "singleplayer_operations_v1"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
 STATE_TABLES = (
@@ -58,6 +59,7 @@ STATE_TABLES = (
     "exploration_instance_state", "exploration_actor_state", "exploration_claim_state",
     "exploration_progress_state", "exploration_research_state",
     "exploration_belt_state",
+    "operation_state",
     "tactical_site_state", "npc_tactic_state", "ship_tactical_effect_state", "drone_bay_state",
 )
 
@@ -375,6 +377,8 @@ def initial_state(connection, snapshot, world, content):
         event = rows(connection, "exploration_instance_state", "snapshot_id=? AND event_id=?", (snapshot, route["event_id"]))[0]
         variant = next(r for r in frozen("exploration_variant_defs") if r["variant_id"] == event["variant_id"])
         insert(connection, "exploration_belt_state", {**ctx, "event_id": route["event_id"], "route_id": route["route_id"], "stage_index": 0, "warning_stage_index": 0, "start_elapsed_s": 0.0, "initial_units": variant["mineral_units"]})
+    for operation in frozen("operation_defs"):
+        insert(connection, "operation_state", {**ctx,"operation_id":operation["operation_id"],"generation":0,"phase":"available","remaining_s":0.0,"cooldown_remaining_s":0.0,"payload_ship_id":None,"loaded_units":0,"cargo_units":0,"completed_units":0,"lost_units":0,"jettisoned_units":0,"exposure_remaining_s":0.0,"damage_debt_hp":0.0,"rewarded_units_total":0,"paid_credit_total":0})
     for site in frozen("tactical_site_defs"):
         insert(connection, "tactical_site_state", {**ctx, "site_id": site["site_id"], "generation": 0, "respawn_remaining_s": 0.0, "cleared_cycles": 0})
     drones = {r["module_id"]: r for r in frozen("drone_management_defs")}

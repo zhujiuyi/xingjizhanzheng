@@ -52,6 +52,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-operations-v30","file":"operations_v30.gd","prefix":"operations-v30","env":"XJ_OPERATIONS_V30","meta":"xj_operations_v30_diagnostic"},
+		{"flag":"--xj-verify-operations-world-v30","file":"operations_world_v30.gd","prefix":"operations-world-v30","env":"XJ_OPERATIONS_WORLD_V30","meta":"xj_operations_world_v30_diagnostic"},
 		{"flag": "--xj-verify-exploration-world-v27", "file": "exploration_world_v27.gd", "prefix": "exploration-world-v27", "env": "XJ_EXPLORATION_WORLD_V27", "meta": "xj_exploration_world_v27_diagnostic"},
 		{"flag": "--xj-verify-exploration-v27", "file": "exploration_v27.gd", "prefix": "exploration-v27", "env": "XJ_EXPLORATION_V27", "meta": "xj_exploration_v27_diagnostic"},
 		{"flag": "--xj-verify-mobile-belts-v28", "file": "mobile_belts_v28.gd", "prefix": "mobile-belts-v28", "env": "XJ_MOBILE_BELTS_V28", "meta": "xj_mobile_belts_v28_diagnostic"},
@@ -710,6 +712,10 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 	match action:
 		"drone_command":
 			_drone_order(extra, target)
+		"operation_open":
+			ui.show_page("operations")
+		"operation_map", "operation_nav":
+			_operation_navigation(action,target,extra)
 		"exploration_open":
 			var event_id: String = str(world.targets.get(target, {}).get("event_id", target))
 			ui.open_exploration(event_id)
@@ -1014,7 +1020,8 @@ func _source_navigation(action: String, key: String, item_id: String) -> void:
 func _source_after_arrival() -> void:
 	await get_tree().process_frame
 	if not source_goal.is_empty() and state != null and source_goal.world == state.world_id and not busy:
-		if source_goal.has("event"): _exploration_navigation("exploration_nav", source_goal.event, str(source_goal.generation))
+		if source_goal.has("operation"): _operation_navigation("operation_nav",source_goal.operation,str(source_goal.generation))
+		elif source_goal.has("event"): _exploration_navigation("exploration_nav", source_goal.event, str(source_goal.generation))
 		else: _source_navigation("source_travel", source_goal.key, source_goal.item)
 
 func _drone_order(kind: String, target: String) -> void:
@@ -1042,6 +1049,21 @@ func _drone_order(kind: String, target: String) -> void:
 	ui.notify({"attack":"无人机攻击指令已下达。","follow":"无人机跟随指令已下达；本次仍只有一次已支付攻击。","recall":"无人机正在回收，尚未发出的攻击已停止。"}.get(kind, "无人机指令已更新。"))
 	if kind != "recall" and not launched and gameplay.drone_control.live.is_empty(): ui.notify("指令已更新；机库冷却或电容不足，满足条件后可再次出击。",true)
 	ui.refresh_page()
+
+func _operation_navigation(action: String, id: String, generation: String) -> void:
+	if state == null or gameplay == null or busy or travel.active(): return
+	var row: RefCounted = gameplay.operations.instance(id)
+	if row == null or str(row.generation) != generation: ui.notify("行动代次已变化，请重新查看。",true); return
+	var info: Dictionary = gameplay.operations.guidance(id)
+	if info.is_empty(): return
+	if action == "operation_map":
+		ui.show_page("map")
+		if is_instance_valid(ui.resource_chart): ui.resource_chart.select_sector(info.sector_id)
+		return
+	if state.ship().status != Types.ShipStatus.FLYING: ui.notify("出港后可前往行动地点。",true); return
+	if not str(info.route_reason).is_empty(): ui.notify(str(info.route_reason),true); return
+	source_goal = {"world":state.world_id,"operation":id,"generation":row.generation}
+	_navigate_guidance(info,true,true,true)
 
 func _exploration_navigation(action: String, event_id: String, generation: String) -> void:
 	if state == null or gameplay == null or busy or travel.active(): return
@@ -1142,6 +1164,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	ui.bind(state, store.catalog, gameplay, world, camera)
 	gameplay.civilizations.status_changed.connect(_civilization_status)
 	gameplay.exploration.warning_changed.connect(_exploration_warning)
+	gameplay.operations.warning_changed.connect(_tactical_warning)
 	gameplay.tactics.warning_changed.connect(_tactical_warning)
 	gameplay.drone_control.warning_changed.connect(_tactical_warning)
 	combat_automation = CombatAutomation.new()

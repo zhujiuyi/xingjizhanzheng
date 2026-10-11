@@ -34,7 +34,7 @@ class MobileDefinitions(unittest.TestCase):
             if table not in ('anchor_defs','anchor_site_defs','site_defs','npc_archetype_defs','npc_behavior_defs','npc_resistances','npc_defs','npc_spawn_defs','npc_patrol_points'):self.assertEqual(before,after,table)
             else:
                 key=next(i for i,r in enumerate(old.execute(f'PRAGMA table_info("{table}")')) if r[5]==1)
-                self.assertTrue(all(r[key].startswith(('belt_','tac_')) for r in after-before),table)
+                self.assertTrue(all(r[key].startswith(('belt_','tac_','op_')) for r in after-before),table)
         self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.db.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
 
     def test_016_failure_retains_complete_format12_schema_then_retries(self):

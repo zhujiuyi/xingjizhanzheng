@@ -97,6 +97,7 @@ func create(catalog: XJCatalog, seed_value: int) -> State:
 	for row: RefCounted in preload("res://runtime/gameplay/mobile_belts.gd").initial_rows(catalog, result): result.add("exploration_belt_state", row)
 	for row: RefCounted in preload("res://runtime/gameplay/tactics.gd").initial_sites(catalog): result.add("tactical_site_state", row)
 	for row: RefCounted in preload("res://runtime/gameplay/drone_control.gd").initial_bays(catalog, result): result.add("drone_bay_state", row)
+	for row: RefCounted in preload("res://runtime/gameplay/operations.gd").initial_rows(catalog): result.add("operation_state", row)
 	return result
 
 func _add(table: String, values: Dictionary) -> void:

@@ -783,6 +783,24 @@ class ExplorationBeltStateDto extends RefCounted:
 	var start_elapsed_s: float = 0.0
 	var initial_units: int = 0
 
+class OperationStateDto extends RefCounted:
+	var operation_id: String = ""
+	var generation: int = 0
+	var phase: String = "available"
+	var remaining_s: float = 0.0
+	var cooldown_remaining_s: float = 0.0
+	var has_payload_ship_id: bool = false
+	var payload_ship_id: String = ""
+	var loaded_units: int = 0
+	var cargo_units: int = 0
+	var completed_units: int = 0
+	var lost_units: int = 0
+	var jettisoned_units: int = 0
+	var exposure_remaining_s: float = 0.0
+	var damage_debt_hp: float = 0.0
+	var rewarded_units_total: int = 0
+	var paid_credit_total: int = 0
+
 class TacticalSiteStateDto extends RefCounted:
 	var site_id: String = ""
 	var generation: int = 0
@@ -895,6 +913,7 @@ class WorldSnapshotDto extends RefCounted:
 	var exploration_progress_state_rows: Array[ExplorationProgressStateDto] = []
 	var exploration_research_state_rows: Array[ExplorationResearchStateDto] = []
 	var exploration_belt_state_rows: Array[ExplorationBeltStateDto] = []
+	var operation_state_rows: Array[OperationStateDto] = []
 	var tactical_site_state_rows: Array[TacticalSiteStateDto] = []
 	var npc_tactic_state_rows: Array[NpcTacticStateDto] = []
 	var ship_tactical_effect_state_rows: Array[ShipTacticalEffectStateDto] = []

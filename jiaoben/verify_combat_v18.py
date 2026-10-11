@@ -11,6 +11,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "operations": ("operations_v30.gd", "XJ_OPERATIONS_V30", "operations-v30", "OPERATIONS_V30", "--xj-verify-operations-v30"),
+    "operations-world": ("operations_world_v30.gd", "XJ_OPERATIONS_WORLD_V30", "operations-world-v30", "OPERATIONS_WORLD_V30", "--xj-verify-operations-world-v30"),
     "tactics-world": ("tactics_world_v29.gd", "XJ_TACTICS_WORLD_V29", "tactics-world-v29", "TACTICS_WORLD_V29", "--xj-verify-tactics-world-v29"),
     "tactics": ("tactics_v29.gd", "XJ_TACTICS_V29", "tactics-v29", "TACTICS_V29", "--xj-verify-tactics-v29"),
     "mobile-belts-world": ("mobile_belts_world_v28.gd", "XJ_MOBILE_BELTS_WORLD_V28", "mobile-belts-world-v28", "MOBILE_BELTS_WORLD_V28", "--xj-verify-mobile-belts-world-v28"),
@@ -179,6 +181,14 @@ def run_suite():
             assert record["summary"]["checks"] >= 46 and len(captures) == 0
             if os.environ.get("XJ_TACTICS_LEGACY_DATABASE"):
                 assert record["summary"]["legacy_checked"] and record["summary"]["checks"] >= 60
+        if name == "operations":
+            assert record["summary"]["checks"] >= (55 if os.environ.get("XJ_OPERATIONS_LEGACY_DATABASE") else 44) and len(captures) == 0
+        if name == "operations-world":
+            assert args.native and record["summary"]["checks"] >= 77 and len(captures) == 8
+            voyage = next(row for row in record["summary"]["observations"] if row["kind"] == "breakthrough")
+            assert voyage["moved_m"] > 4800 and voyage["exit_distance_m"] <= 180 and voyage["seconds"] > 20 and voyage["hp_lost"] > 0 and voyage["enemies_alive"] == 3
+            exposure = next(row for row in record["summary"]["observations"] if row["kind"] == "exposure")
+            assert exposure["lost"] > 0
         if name == "tactics-world":
             assert args.native and record["summary"]["checks"] >= 101 and len(captures) == 12
             evasion = next(row for row in record["summary"]["observations"] if row["kind"] == "evasion")

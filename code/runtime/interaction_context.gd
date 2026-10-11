@@ -31,15 +31,20 @@ static func inspect(sector: XJSector, state: XJRuntimeState, catalog: XJCatalog,
 	if state.ship() == null: return result
 	if not sector.targets.has(target_id): return result
 	var target: Dictionary = sector.targets[target_id]
-	if target.get("navigation_only", false) or target.get("kind", "") not in ["station", "gate", "wreck", "signal", "resource", "exploration", "exploration_exit"]: return result
+	if target.get("navigation_only", false) or target.get("kind", "") not in ["station", "gate", "wreck", "signal", "resource", "exploration", "exploration_exit", "encounter"]: return result
+	if target.get("kind", "") == "encounter" and target.get("operation_id") == null: return result
 	var candidate_node: Variant = target.get("node")
 	if not is_instance_valid(candidate_node) or not candidate_node is Node3D: return result
 	var node: Node3D = candidate_node as Node3D
 	if not node.is_inside_tree(): return result
 	result.target_id = target_id; result.title = str(target.get("title", target_id)); result.kind = str(target.kind)
 	result.distance_m = sector.target_distance(target_id)
+	if target.get("operation_id") != null: result.kind = "operation"
 	result.speed_mps = sector.flight.velocity.length()
 	match result.kind:
+		"operation":
+			var spec: Dictionary = catalog.one("operation_defs","operation_id",str(target.operation_id))
+			result.action = "operation_open"; result.range_m = float(spec.interaction_radius_m)
 		"exploration", "exploration_exit":
 			var event: Dictionary = catalog.one("exploration_event_defs", "event_id", str(target.get("event_id", "")))
 			if event.is_empty(): return result

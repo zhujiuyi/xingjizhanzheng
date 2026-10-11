@@ -48,7 +48,7 @@ class ExplorationData(unittest.TestCase):
                 self.assertEqual(before, after, table)
             else:
                 key = next(i for i, row in enumerate(old.execute(f'PRAGMA table_info("{table}")')) if row[5] == 1)
-                self.assertTrue(all(row[key].startswith(("exp_", "belt_", "tac_")) for row in after - before), table)
+                self.assertTrue(all(row[key].startswith(("exp_", "belt_", "tac_", "op_")) for row in after - before), table)
         self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(), self.source.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
 
     def test_managed_actors_have_no_free_bounty_or_respawn(self):

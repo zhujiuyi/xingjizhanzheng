@@ -224,11 +224,11 @@ func _ready() -> void:
 	mission_navigation_row.add_theme_constant_override("h_separation", 4)
 	mission_navigation_row.add_theme_constant_override("v_separation", 3)
 	hud_left.add_child(mission_navigation_row)
-	mission_locate_button = _button(mission_navigation_row, "定位任务", func(): requested.emit("mission_locate", "", 1, ""))
+	mission_locate_button = _button(mission_navigation_row, "定位任务", func(): _hud_task_navigation(false))
 	mission_locate_button.name = "MissionLocate"
-	mission_travel_button = _button(mission_navigation_row, "前往目标", func(): requested.emit("mission_travel", "", 1, ""))
+	mission_travel_button = _button(mission_navigation_row, "前往目标", func(): _hud_task_navigation(true))
 	mission_travel_button.name = "MissionTravel"
-	mission_guide_button = _button(mission_navigation_row, "主线指引", func(): mission_filter = "story"; mission_status_filter = "all"; mission_location_filter = "all"; mission_focus_id = ""; mission_page = 0; show_page("missions"))
+	mission_guide_button = _button(mission_navigation_row, "主线指引", _hud_task_details)
 	mission_guide_button.name = "MissionGuide"
 	for action_button: Button in [mission_locate_button, mission_travel_button, mission_guide_button]:
 		action_button.custom_minimum_size = Vector2(76, 24)
@@ -410,12 +410,14 @@ func show_page(next_page: String) -> void:
 		_station()
 		_responsive()
 		return
-	_build_panel("无人机管理" if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
+	_build_panel("战术行动" if next_page == "operations" else "无人机管理" if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
 	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
 		_text("此服务需要停靠空间站。使用星图找到站点，进入停靠范围并减速后按 F。")
 		_focus_page.call_deferred()
 		return
 	match next_page:
+		"operations":
+			var operations: VBoxContainer = preload("res://runtime/ui/operations_panel.gd").new(); body.add_child(operations); operations.setup(self)
 		"drones":
 			var drones: VBoxContainer = preload("res://runtime/ui/drone_panel.gd").new(); body.add_child(drones); drones.setup(self)
 		"exploration":
@@ -476,7 +478,9 @@ func tick(delta: float) -> void:
 		top.text = "%s · %s" % [_sector_name(ship.sector_id), _risk_name(str(definition.get("risk_zone_id", "")))]
 		health.text = "护盾 %.0f%% · 装甲 %.0f%% · 结构 %.0f%%\n电容 %.0f%% · 热量 %.0f%% %s\n速度 %s · 货 %.0f/%.0f L" % [ship.shield / maxf(metrics.shield_max, 1.0) * 100, ship.armor / maxf(metrics.armor_max, 1.0) * 100, ship.hull / maxf(metrics.hull_max, 1.0) * 100, ship.energy / maxf(metrics.energy_max, 1.0) * 100, ship.heat / maxf(metrics.heat_max, 1.0) * 100, "过热" if ship.overheated else "", XJSpaceUnits.speed(_display_speed()), metrics.cargo_used_l + metrics.mineral_used_l, metrics.cargo_capacity_l + metrics.mineral_capacity_l]
 	objective.text = _objective_text()
-	if gameplay.exploration.supported():
+	var operation: RefCounted = _hud_operation()
+	if operation != null: objective.text = gameplay.operations.hud_text()
+	if operation == null and gameplay.exploration.supported():
 		for event: RefCounted in state.rows("exploration_instance_state"):
 			if gameplay.exploration._site(event) and event.phase not in ["claimed", "failed", "withdrawn"]:
 				objective.text += "\n" + gameplay.exploration.status_text(event.event_id)
@@ -780,6 +784,9 @@ func _ships() -> void:
 		handoff.disabled = definition.get("return_station_id") != state.player().docked_station_id
 
 func _warehouse() -> void:
+	for operation: RefCounted in state.rows("operation_state"):
+		if operation.cargo_units > 0 and operation.payload_ship_id == state.ship().ship_instance_id:
+			_text("突破物资 × %d 已计入本舰货舱/载荷；送达、受损或任务页抛弃时移除。" % operation.cargo_units,14)
 	var warehouse: String = ""
 	var cargo: String = ""
 	for container: Dtos.ContainerStateDto in state.rows("container_state"):
@@ -1022,6 +1029,7 @@ func _industry() -> void:
 	_update_quotes()
 
 func _service_context_page() -> String:
+	if page == "operations": return "missions"
 	if page == "exploration": return "map"
 	if page == "drones": return "fitting"
 	if page != "sources": return page
@@ -1053,6 +1061,8 @@ func _source_button(parent: Node, blueprint_id: String) -> void:
 	button.tooltip_text = "查询本行缺料的采集、采购、加工和打捞地点及实际航路，不消耗任何物资。"
 
 func _missions() -> void:
+	if gameplay.operations.supported():
+		_button(body,"查看拆除与突破行动",func(): show_page("operations")).name = "MissionOperations"
 	_text("本页不暂停飞行。目标按顺序完成；舰船损失保留当前任务，交付需要指定实物。", 14)
 	_campaign_summary()
 	_mission_filter_group("type", "类型", ["all", "tutorial", "story", "civilization", "contract"], {"all": "全部类型", "tutorial": "新手教学", "story": "主线剧情", "civilization": "文明入籍", "contract": "地区合同"}, mission_filter)
@@ -1577,6 +1587,7 @@ func _refresh_targets() -> void:
 			var npc: Dtos.NpcStateDto = state.find("npc_state", "npc_instance_id", str(entry.id))
 			if npc != null and not npc.alive: continue
 		var record: Dictionary = {"id": str(entry.id), "title": _target_title(entry), "kind": kind, "type_title": _target_type(kind), "distance_m": distance, "navigation_only": bool(entry.get("navigation_only", false)), "remote_site": not sector.target_is_local(str(entry.id)), "known": kind != "npc"}
+		if entry.get("operation_id") != null: record.type_title = "撤离点" if str(entry.id).ends_with(":exit") else "行动起点"
 		record["friendly"] = bool(entry.get("friendly", false))
 		if record.friendly: record.type_title = "友军"
 		if kind == "resource":
@@ -1616,7 +1627,8 @@ func _selected_details() -> Dictionary:
 	if str(entry.kind) == "resource":
 		details["resource_info"] = ResourceStatus.inspect(state, catalog, target_id)
 		details["resource_forecast"] = gameplay.resource_intel.forecast(target_id)
-	if str(entry.kind) == "encounter":
+	if entry.get("operation_id") != null: details.type_title = "撤离点" if target_id.ends_with(":exit") else "行动起点"
+	elif str(entry.kind) == "encounter":
 		details["encounter_info"] = _encounter_summary(entry)
 		details["type_title"] = _encounter_summary(entry)
 	return details
@@ -1680,8 +1692,37 @@ func _mission_location_text(info: Dictionary) -> String:
 	if not str(info.get("route_reason", "")).is_empty(): result += "\n" + str(info.route_reason)
 	return result
 
+func _hud_operation() -> RefCounted:
+	if gameplay == null: return null
+	var operation: RefCounted = gameplay.operations.focused()
+	if operation != null and operation.phase != "active" and (gameplay.civilizations.active_war() != null or gameplay.missions.active() != null): return null
+	return operation
+
+func _hud_task_navigation(travel_to: bool) -> void:
+	var operation: RefCounted = _hud_operation()
+	if operation != null: requested.emit("operation_nav" if travel_to else "operation_map",operation.operation_id,1,str(operation.generation))
+	else: requested.emit("mission_travel" if travel_to else "mission_locate","",1,"")
+
+func _hud_task_details() -> void:
+	if _hud_operation() != null: show_page("operations"); return
+	mission_filter = "story"; mission_status_filter = "all"; mission_location_filter = "all"; mission_focus_id = ""; mission_page = 0; show_page("missions")
+
 func _update_mission_guidance() -> void:
 	if not is_instance_valid(mission_navigation_row) or gameplay == null: return
+	var operation: RefCounted = _hud_operation()
+	mission_guide_button.text = "行动详情" if operation != null else "主线指引"
+	if operation != null:
+		war_navigation_row.hide(); mission_navigation_row.show()
+		mission_locate_button.show(); mission_travel_button.show(); mission_guide_button.show()
+		var location: Dictionary = gameplay.operations.guidance(operation.operation_id)
+		mission_locate_button.disabled = operation_blocks_flight
+		mission_travel_button.disabled = operation_blocks_flight or state.ship().status != Types.ShipStatus.FLYING or not str(location.get("route_reason", "")).is_empty()
+		mission_travel_button.text = "前往目标"
+		mission_travel_button.tooltip_text = "前往当前行动起点、撤离点或交付站；按真实航程选择跃迁或接近。"
+		mission_locate_button.tooltip_text = "在星图定位当前行动地点。"
+		mission_locate_button.set_meta("action","operation_map"); mission_locate_button.set_meta("target",operation.operation_id)
+		mission_travel_button.set_meta("action","operation_nav"); mission_travel_button.set_meta("target",operation.operation_id)
+		return
 	var war: RefCounted = gameplay.civilizations.active_war()
 	war_navigation_row.visible = war != null
 	if war != null:
@@ -2255,7 +2296,7 @@ func _update_navigation() -> void:
 	interaction_button.visible = not candidate_id.is_empty() and (bool(interaction_candidate.in_range) or candidate_id == target_id)
 	interaction_label.visible = interaction_button.visible
 	if not interaction_button.visible: return
-	var label: String = {"dock": "停靠空间站", "travel": "进入虫洞", "pickup_wreck": "回收残骸", "start_scan": "扫描信号", "start_mining": "开采矿体", "recover_resource": "回收组件", "exploration_open": "查看探索事件"}.get(str(interaction_candidate.action), "交互")
+	var label: String = {"dock": "停靠空间站", "travel": "进入虫洞", "pickup_wreck": "回收残骸", "start_scan": "扫描信号", "start_mining": "开采矿体", "recover_resource": "回收组件", "operation_open": "查看战术行动", "exploration_open": "查看探索事件"}.get(str(interaction_candidate.action), "交互")
 	interaction_button.text = "[F] " + label
 	interaction_button.disabled = not bool(interaction_candidate.ready)
 	interaction_button.tooltip_text = str(interaction_candidate.title) + " · " + str(interaction_candidate.reason)

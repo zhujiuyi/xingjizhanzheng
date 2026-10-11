@@ -54,6 +54,10 @@ func totals(container_id: String) -> Dictionary:
 		var def: Dictionary = g.definition("salvage_package_defs", "package_def_id", package.package_def_id)
 		mass += float(def.mass_kg)
 		volume += float(def.volume_m3) * 1000.0
+	var hold_row: RefCounted = g.state.find("container_state","container_id",container_id)
+	if g.operations != null and hold_row != null and hold_row.kind == T.ContainerKind.CARGO:
+		var payload: Dictionary = g.operations.cargo(hold_row.ship_instance_id)
+		mass += float(payload.mass); volume += float(payload.volume)
 	return {"mass":mass,"volume":volume}
 
 func room(container_id: String, item_id: String, requested: int, moved_mass_credit: float = 0.0) -> int:

@@ -27,7 +27,7 @@ class TacticDefinitions(unittest.TestCase):
             if table not in extend:self.assertEqual(before,after,table)
             else:
                 key=next(i for i,r in enumerate(old.execute(f'PRAGMA table_info("{table}")')) if r[5]==1)
-                self.assertTrue(all(r[key].startswith('tac_') for r in after-before),table)
+                self.assertTrue(all(r[key].startswith(('tac_','op_')) for r in after-before),table)
         self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.db.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
     def test_017_failure_retains_exact_format13_schema(self):
         db=p.connect();self.addCleanup(db.close)
@@ -36,7 +36,7 @@ class TacticDefinitions(unittest.TestCase):
         with self.assertRaises(sqlite3.OperationalError):p.apply_migrations(db,fault_after=17)
         self.assertEqual(before,db.execute('SELECT type,name,sql FROM sqlite_schema ORDER BY type,name').fetchall())
         self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(13,))
-        p.apply_migrations(db);self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(14,))
+        p.apply_migrations(db);self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(p.FORMAT_VERSION,))
 class TacticSealing(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -1,6 +1,6 @@
 # 正式进度数据库结构
 
-本目录提供单人客户端的固定受审SQL，运行路径为`user://database/progress.db`。世界状态按关系表保存，数值来自封存的catalog完整副本。当前格式9，追加[012_civilizations.sql](012_civilizations.sql)和[catalog_adapter_v0_8.sql](catalog_adapter_v0_8.sql)，保存文明身份、主权、战役和舰队状态。旧迁移文件保持原字节；历史档先备份，格式迁移与世界内容升级分开进行。基础数据服务见[24](../../../doc/24-数据服务实现与验证.md)，文明升级及本机验证见[49](../../../doc/49-文明声望与星域战争.md)和[26](../../../doc/26-开发阶段与交付记录.md)。
+本目录提供单人客户端的固定受审SQL，运行路径为`user://database/progress.db`。世界状态按关系表保存，数值来自封存的catalog完整副本。当前格式15，新增[018_operations.sql](018_operations.sql)和[catalog_adapter_v0_14.sql](catalog_adapter_v0_14.sql)，在工业、探索、矿带及战术基础上保存拆除与物资突破，总计53组typed状态。001–017及历史适配器保持原字节；历史档先备份，格式迁移与世界内容升级分开进行。基础数据服务见[24](../../../doc/24-数据服务实现与验证.md)，当前规则及本机验证见[56](../../../doc/56-拆除与封锁突破.md)和[26](../../../doc/26-开发阶段与交付记录.md)。
 
 | 文件 | 用途 |
 | --- | --- |
@@ -14,9 +14,20 @@
 | [007_profile_resume.sql](007_profile_resume.sql) | 格式4：独立记录菜单当前世界，跨世界继续可恢复 |
 | [008_paid_engine_family.sql](008_paid_engine_family.sql) | 格式5：受审engine组的所有型号保存付费周期 |
 | [catalog_adapter_v0_4.sql](catalog_adapter_v0_4.sql) | 83内容表版本的固定适配器 |
-| [catalog_adapter_v0_4_r2.sql](catalog_adapter_v0_4_r2.sql) | 当前84内容表/4视图的固定适配器 |
+| [catalog_adapter_v0_4_r2.sql](catalog_adapter_v0_4_r2.sql) | 历史84内容表/4视图的固定适配器 |
+| [009_encounters_and_salvage.sql](009_encounters_and_salvage.sql) | 敌群、预定密封回收包与历史来源 |
+| [010_combat_and_lighting.sql](010_combat_and_lighting.sql) | 分类武器、无人机、舰种配装与光照冻结定义 |
+| [011_space_locations.sql](011_space_locations.sql) | AU战略地点与局部实体绑定 |
+| [012_civilizations.sql](012_civilizations.sql) | 文明效忠、主权、战役和舰队 |
+| [013_industry.sql](013_industry.sql) | 制造托管队列、单次产物与区域需求 |
+| [014_resource_intel.sql](014_resource_intel.sql) | 矿物品位、来源和航路情报 |
+| [015_exploration.sql](015_exploration.sql) | 多阶段探索、风险、证据和研究 |
+| [016_mobile_belts.sql](016_mobile_belts.sql) | 矿带路线、分段散逸与预警状态 |
+| [017_tactics.sql](017_tactics.sql) | 战术能力、短时干扰与无人机持久损失 |
+| [018_operations.sql](018_operations.sql) | 格式15：拆除/突破成果、货物守恒和共享容量封存 |
+| [catalog_adapter_v0_14.sql](catalog_adapter_v0_14.sql) | 当前127表固定适配器，独立验证新冻结内容 |
 
-加载迁移前启用foreign_keys；空库按编号执行八份迁移，同一 `BEGIN IMMEDIATE` 内登记SQL摘要。旧库先核对身份、历史数量和每份SQL摘要，再做已验证备份；所有待执行迁移在同一事务完成。错误保留旧库，不能删旧档绕过。正式运行只执行这些发布SQL与绑定参数，不执行保存的manifest文本。派生视图文本参与兼容核验，适配器属于受审代码。
+加载迁移前启用foreign_keys；空库按编号执行全部十八份迁移，同一 `BEGIN IMMEDIATE` 内登记SQL摘要。旧库先核对身份、历史数量和每份SQL摘要，再做已验证备份；所有待执行迁移在同一事务完成。错误保留旧库，不能删旧档绕过。正式运行只执行这些发布SQL与绑定参数，不执行保存的manifest文本。派生视图文本参与兼容核验，适配器属于受审代码。
 
 完整保存/加载、动作去重、跨区端点、保留、备份与迁移顺序见 [18-进度数据库与存档实现规格](../../../doc/18-进度数据库与存档实现规格.md)。生成器、测试及夹具均在脚本目录：
 

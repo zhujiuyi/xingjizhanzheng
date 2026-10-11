@@ -10,6 +10,11 @@ func _ready() -> void:
 func run_for(seconds: float) -> void:
 	host.set_process(true);host.set_physics_process(true);await get_tree().create_timer(seconds).timeout
 	host.set_process(false);host.set_physics_process(false);host._process(0.0)
+func simulation_ticks(count: int) -> int:
+	var start: int=host.state.snapshot.meta.simulation_tick
+	var deadline: int=Time.get_ticks_msec()+30000
+	while host.state.snapshot.meta.simulation_tick-start<count and Time.get_ticks_msec()<deadline:await get_tree().physics_frame
+	return host.state.snapshot.meta.simulation_tick-start
 func qualify(kind: String, close: bool = false, hull_id: String = "battleship_bastion") -> bool:
 	var candidate: XJRuntimeState = host.store.clone_state(host.state)
 	var g: Gameplay = Gameplay.new();g.setup(candidate,host.store.catalog)
@@ -53,9 +58,16 @@ func qualify(kind: String, close: bool = false, hull_id: String = "battleship_ba
 	g.dispose();return await activate(candidate)
 func fire_at(id: String) -> void:
 	host.ui.show_page("");host.ui._select_target(id)
+	root.grab_focus();await frames(3);await settle()
+	check(host._keyboard_control_allowed(),"real ray input has foreground focus and an available controller")
+	print("TACTICS_INPUT_CONTEXT ",JSON.stringify({"focus":root.has_focus(),"busy":host.busy,"keyboard_blocked":host.ui.keyboard_blocked(),"exit_pending":host._exit_save_pending(),"paused":host._paused()}))
 	var node: Node3D = host.world.targets[id].node
-	var direction: Vector3 = host.world.flight.global_position.direction_to(node.global_position)
-	if not direction.is_zero_approx():host.world.flight.quaternion=Basis.looking_at(direction,Vector3.UP).get_rotation_quaternion();host.world.flight.write_back()
+	# Fixture aims the actual fitted muzzle. A tiny close drone is not centered
+	# on a large hull's offset hardpoint; aiming from hull origin can legally miss.
+	for adjustment: int in range(3):
+		var muzzle: Transform3D = host.world.flight.muzzle(1)
+		var direction: Vector3 = muzzle.origin.direction_to(node.global_position)
+		if not direction.is_zero_approx():host.world.flight.quaternion=(Quaternion(-muzzle.basis.z,direction)*host.world.flight.quaternion).normalized();host.world.flight.write_back()
 	host._process(0.0);await frames(3)
 	host.set_process(true);host.set_physics_process(true)
 	for down: bool in [true,false]:
@@ -146,13 +158,17 @@ func siege_volley() -> void:
 	var row: RefCounted = host.gameplay.tactics.instance(role_actor)
 	var aim: Vector3 = Vector3(row.aim_x,row.aim_y,row.aim_z)
 	# Lateral motion is real flight input after the AI has committed its aim.
-	host.ui.show_page("");host.set_process(true);host.set_physics_process(true)
+	host.ui.show_page("");root.grab_focus();await frames(3);await settle()
+	check(host._keyboard_control_allowed(),"real evasion input has foreground focus and an available controller")
+	host.set_process(true);host.set_physics_process(true)
 	var event: InputEventKey = InputEventKey.new();event.keycode=KEY_SPACE;event.physical_keycode=KEY_SPACE;event.pressed=true;event.window_id=root.get_window_id();Input.parse_input_event(event)
-	await get_tree().create_timer(3.0).timeout
+	var held_ticks: int=await simulation_ticks(3*Engine.physics_ticks_per_second)
 	event=InputEventKey.new();event.keycode=KEY_SPACE;event.physical_keycode=KEY_SPACE;event.pressed=false;event.window_id=root.get_window_id();Input.parse_input_event(event)
-	await get_tree().create_timer(3.0).timeout;host.set_process(false);host.set_physics_process(false)
+	var coast_ticks: int=await simulation_ticks(3*Engine.physics_ticks_per_second)
+	host.set_process(false);host.set_physics_process(false)
+	check(held_ticks>=3*Engine.physics_ticks_per_second and coast_ticks>=3*Engine.physics_ticks_per_second,"evasion measures six actual simulated seconds rather than a rendering-stalled wall timer")
 	var metrics: Dictionary = host.gameplay.metrics(host.state.ship())
-	observations.append({"kind":"evasion","distance_m":host.world.flight.position.distance_to(aim),"shield":host.state.ship().shield,"maximum_shield":metrics.shield_max,"armor":host.state.ship().armor,"maximum_armor":metrics.armor_max})
+	observations.append({"kind":"evasion","distance_m":host.world.flight.position.distance_to(aim),"shield":host.state.ship().shield,"maximum_shield":metrics.shield_max,"armor":host.state.ship().armor,"maximum_armor":metrics.armor_max,"held_ticks":held_ticks,"coast_ticks":coast_ticks})
 	check(host.world.flight.position.distance_to(aim)>50.0 and is_equal_approx(host.state.ship().shield,float(metrics.shield_max)) and is_equal_approx(host.state.ship().armor,float(metrics.armor_max)),"real movement can evade a volley aimed at the original position")
 	await capture("tactics-siege-evasion")
 func commander() -> void:

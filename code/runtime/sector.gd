@@ -196,7 +196,7 @@ func sync_entities() -> bool:
 		if row.sector_id != state.current_sector():
 			continue
 		if Space.supported(catalog) and Space.site_for_entity(state, "npc", row.npc_instance_id) != Space.current_site(state): continue
-		if not row.alive:
+		if not row.alive or (gameplay.operations.handles(row.spawn_id) and not gameplay.operations.structure_active(row)):
 			if npcs.has(row.npc_instance_id):
 				var retired: CharacterBody3D = npcs[row.npc_instance_id]
 				retired.hide()
@@ -210,7 +210,7 @@ func sync_entities() -> bool:
 			var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)
 			var escort_hull: String = gameplay.civilizations.escort_hull(row.npc_instance_id)
 			if escort_hull.is_empty(): escort_hull = gameplay.tactics.model(row.npc_instance_id)
-			var body: CharacterBody3D = factory.scene(escort_hull) if not escort_hull.is_empty() else factory.enemy_scene(str(definition.archetype_id))
+			var body: CharacterBody3D = preload("res://runtime/operation_visual.gd").generator() if gameplay.operations.handles(row.spawn_id) else factory.scene(escort_hull) if not escort_hull.is_empty() else factory.enemy_scene(str(definition.archetype_id))
 			if body == null:
 				last_error = "敌舰表现资源不可用：" + str(definition.archetype_id)
 				return false
@@ -255,6 +255,7 @@ func _remove_target(id: String) -> void:
 func _sync_waypoints() -> void:
 	var entries: Array[Dictionary] = gameplay.get("encounters").waypoints(state.current_sector())
 	entries.append_array(gameplay.tactics.waypoints(state.current_sector()))
+	entries.append_array(gameplay.operations.waypoints(state.current_sector()))
 	# Task sites survive range filtering; only their actual enemies are sensor
 	# contacts. A site has no mesh or collider that could duplicate the ship.
 	for spawn in catalog.rows("npc_spawn_defs"):
@@ -294,6 +295,7 @@ func simulate_npcs(delta: float) -> void:
 		if row == null or not row.alive:
 			continue
 		var body: CharacterBody3D = npcs[id]
+		if gameplay.operations.handles(row.spawn_id): body.velocity = Vector3.ZERO; continue
 		if WarFleetPilot.step(self, row, body, delta): continue
 		if XJExplorationPilot.step(self, row, body, delta): continue
 		if XJTacticalPilot.step(self, row, body, delta): continue
