@@ -17,6 +17,40 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 CODE = ROOT / 'code'
 
+def windows_numeric_version(client_version: str) -> str:
+    if not re.fullmatch(r'\d+(?:\.\d+){0,3}', client_version):
+        raise ValueError('Windows client version requires one to four numeric components')
+    parts = client_version.split('.')
+    if any(int(part) > 65535 for part in parts):
+        raise ValueError('Windows version component exceeds 16-bit resource limit')
+    return '.'.join(parts + ['0'] * (4 - len(parts)))
+
+
+def check_windows_preset_version(preset: str, client_version: str) -> str:
+    expected = windows_numeric_version(client_version)
+    for key in ('file_version', 'product_version'):
+        values = re.findall(r'^application/' + key + r'="([^"]*)"$', preset, re.M)
+        if not values or any(value != expected for value in values):
+            raise ValueError(f'Windows {key} must match project version {expected}')
+    return expected
+
+
+def inspect_windows_binary_version(executable: Path, expected: str) -> dict:
+    if os.name != 'nt':
+        return {'result': 'NOT_RUN', 'expected': expected, 'reason': 'native Windows metadata API required'}
+    literal = str(executable.resolve()).replace("'", "''")
+    command = ("$taskVersion=(Get-Item -LiteralPath '" + literal + "').VersionInfo; "
+               "$taskVersion | Select-Object FileVersion,ProductVersion | ConvertTo-Json -Compress")
+    result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', command],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20,
+                            creationflags=subprocess.CREATE_NO_WINDOW)
+    if result.returncode:
+        raise RuntimeError('Cannot inspect exported Windows executable metadata: ' + result.stderr.decode('utf-8', errors='replace'))
+    actual = json.loads(result.stdout.decode('utf-8-sig'))
+    if actual.get('FileVersion') != expected or actual.get('ProductVersion') != expected:
+        raise RuntimeError(f'Exported Windows version differs: expected={expected}, actual={actual}')
+    return {'result': 'PASS', 'file_version': actual['FileVersion'], 'product_version': actual['ProductVersion']}
+
 def run(command: list[str], log: Path, env: dict[str, str] | None = None,
         timeout: int | None = None) -> str:
     with log.open('w') as output:
@@ -223,6 +257,9 @@ def main() -> None:
     dirty = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip())
     version = re.search(r'^config/version="([^"]+)"$', (CODE / 'project.godot').read_text(), re.M)
     if version is None: raise RuntimeError('Client version is absent')
+    windows_expected_version = None
+    if args.platform in ('all', 'windows'):
+        windows_expected_version = check_windows_preset_version((CODE / 'export_presets.cfg').read_text(encoding='utf-8'), version[1])
     build_id = version[1] + '-' + source_revision[:8] + '-' + time.strftime('%Y%m%d-%H%M%S')
     staging = ROOT / 'jiaoben/tmp/delivery' / build_id
     staging.mkdir(parents=True)
@@ -331,6 +368,7 @@ def main() -> None:
             if not list(folder.glob('*.pck')) or not list(folder.glob('*.dll')):
                 raise RuntimeError('Windows runtime PCK or SQLite DLL absent')
             if output.read_bytes()[:2] != b'MZ': raise RuntimeError('Windows PE header absent')
+            evidence['verification']['windows_version'] = inspect_windows_binary_version(output, windows_expected_version)
             evidence['verification']['windows'] = 'x64 release export and runtime components PASS; native Windows execution requires separate acceptance'
             archive = staging / '星际战舰-Windows-x64.zip'
             with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as bundle:
