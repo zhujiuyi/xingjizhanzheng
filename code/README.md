@@ -4,7 +4,7 @@
 
 [project.godot](project.godot) 的实际启动场景是 [main.tscn](scenes/main.tscn)，由 [main.gd](runtime/main.gd) 协调权威模拟、3D场景、存读档和界面。当前定义包含54星系、18型舰船、I/II/III装备、三文明入籍与爵位、NPC舰队战争、教学与区域任务、科研、工业、设施和贸易；范围见[49](../doc/49-文明声望与星域战争.md)，实际验证状态见[26](../doc/26-开发阶段与交付记录.md)。
 
-存档、读档和游戏数值以数据库为权威来源。基础定义来自[catalog_schema.sql](database/catalog_schema.sql)、[catalog_seed.sql](database/catalog_seed.sql)，再叠加空间、文明、工业、资源情报、探索、迁移矿带、战术与[行动定义](database/operations_schema.sql)及[行动种子](database/operations_seed.sql)。当前内容`v0.14-operations`、目录schema13、127定义表，正式[catalog.db](data/catalog.db)由[build_catalog.py](../jiaoben/build_catalog.py)重建并只读加载。进度格式15追加018迁移，保存53组typed状态；各历史目录作为受审升级桥保留，最近为[catalog_tactics_v13.db](data/catalog_tactics_v13.db)。修改数值须更新SQL并执行内容、数值及存档检查。
+存档、读档和游戏数值以数据库为权威来源。基础定义来自[catalog_schema.sql](database/catalog_schema.sql)、[catalog_seed.sql](database/catalog_seed.sql)，再叠加空间、文明、工业、资源情报、探索、迁移矿带、战术、行动及[火控定义](database/fitting_schema.sql)/[种子](database/fitting_seed.sql)。当前内容`v0.15-fitting`、目录schema14、132定义表，正式[catalog.db](data/catalog.db)由[build_catalog.py](../jiaoben/build_catalog.py)重建并只读加载。进度格式16追加019迁移，保存56组typed状态；各历史目录作为受审升级桥保留，最近为[catalog_operations_v14.db](data/catalog_operations_v14.db)。配装比较、横向研究及太空HUD见[57](../doc/57-配装比较与火控专精.md)、[58](../doc/58-太空界面与简洁配装分析.md)。修改数值须更新SQL并执行内容、数值及存档检查。
 
 个人进度保存在应用 `user://database/progress.db`，完整快照和冻结内容使用规范化SQLite表，不提交Git。原生服务实现与兼容验证见 [24](../doc/24-数据服务实现与验证.md)；受审迁移见 [progress](database/progress/README.md)。类型化数据和预留联机协议见 [contracts](contracts/README.md)。
 
