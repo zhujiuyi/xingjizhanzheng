@@ -55,7 +55,7 @@ class ResourceIntelligence(unittest.TestCase):
         db = p.connect(); self.addCleanup(db.close)
         p.apply_migrations(db)
         initial, content = p.new_world(db, self.db)
-        self.assertEqual(db.execute("SELECT format_version FROM database_meta").fetchone(), (13,))
+        self.assertEqual(db.execute("SELECT format_version FROM database_meta").fetchone(), (14,))
         for table in ("resource_grade_defs", "sector_activity_defs"):
             self.assertGreater(db.execute(f"SELECT count(*) FROM frozen_{table} WHERE content_snapshot_id=?", (content,)).fetchone()[0], 0)
             with self.assertRaisesRegex(sqlite3.IntegrityError, "immutable"):

@@ -91,6 +91,12 @@ func _run() -> void:
 	check(first.remaining_s > 0 and first.remaining_s < first.duration_s, "world time advances partial production")
 	check(store.save(state, "manual", 0), "save running job and regional timers: " + store.last_error)
 	if OS.get_environment("XJ_INDUSTRY_FIXTURE_ONLY") == "1":
+		if OS.get_environment("XJ_TACTICS_FIXTURE_BAY") == "1":
+			var hull: RefCounted = g.inventory.create_ship("cruiser_horizon", g.station())
+			state.player().controlled_ship_id = hull.ship_instance_id
+			var bay: String = g.inventory.grant(g.inventory.warehouse(g.station()), "module_drone_swarm_ii", 1)[0]
+			check(act("fit_module", bay, 1, "weapon"), "old tactics fixture legally installs an existing drone bay")
+			check(store.save(state, "manual", 0), "old tactics fixture keeps paid orders and usable drone bay")
 		print("INDUSTRY_FIXTURE_READY ", JSON.stringify({"database": store.path, "format": store._records("SELECT format_version FROM database_meta")[0].format_version, "content_hash": store.catalog.content_hash, "jobs": g.industry.jobs().size()}))
 		g.dispose(); store.close(); quit(0); return
 	var slot: String = ""
@@ -243,7 +249,7 @@ func _real_legacy_upgrade() -> void:
 	faulty.failure = ""
 	if not check(store.open(), "retry migrates actual format9 database to format10: " + store.last_error): return
 	check(FileAccess.file_exists(directory.path_join("migration-format9-backup.db")), "format upgrade creates a closed old-format backup")
-	check(int(store._records("SELECT format_version FROM database_meta")[0].format_version) == 13, "actual legacy database reaches current format13")
+	check(int(store._records("SELECT format_version FROM database_meta")[0].format_version) == 14, "actual legacy database reaches current format14")
 	var slot: Dictionary
 	for entry: Dictionary in store.list_slots():
 		if entry.slot_kind == "manual": slot = entry; break

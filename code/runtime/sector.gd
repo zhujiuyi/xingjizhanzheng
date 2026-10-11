@@ -16,6 +16,7 @@ var projectiles: XJProjectiles
 var definitions: Dictionary = {}
 var targets: Dictionary = {}
 var exploration_view: RefCounted
+var tactical_view: Node3D
 var npcs: Dictionary = {}
 var last_error: String = ""
 var factory: Script
@@ -184,6 +185,8 @@ func sync_entities() -> bool:
 	refresh_site()
 	if exploration_view == null: exploration_view = preload("res://runtime/exploration_view.gd").new(self)
 	exploration_view.sync()
+	if tactical_view == null:
+		tactical_view = preload("res://runtime/tactical_view.gd").new(); add_child(tactical_view); tactical_view.setup(self)
 	_sync_waypoints()
 	for id: String in npcs.keys():
 		if state.find("npc_state", "npc_instance_id", id) == null or (Space.supported(catalog) and Space.site_for_entity(state, "npc", id) != Space.current_site(state)):
@@ -206,6 +209,7 @@ func sync_entities() -> bool:
 			var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", row.spawn_id)
 			var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)
 			var escort_hull: String = gameplay.civilizations.escort_hull(row.npc_instance_id)
+			if escort_hull.is_empty(): escort_hull = gameplay.tactics.model(row.npc_instance_id)
 			var body: CharacterBody3D = factory.scene(escort_hull) if not escort_hull.is_empty() else factory.enemy_scene(str(definition.archetype_id))
 			if body == null:
 				last_error = "敌舰表现资源不可用：" + str(definition.archetype_id)
@@ -250,6 +254,7 @@ func _remove_target(id: String) -> void:
 
 func _sync_waypoints() -> void:
 	var entries: Array[Dictionary] = gameplay.get("encounters").waypoints(state.current_sector())
+	entries.append_array(gameplay.tactics.waypoints(state.current_sector()))
 	# Task sites survive range filtering; only their actual enemies are sensor
 	# contacts. A site has no mesh or collider that could duplicate the ship.
 	for spawn in catalog.rows("npc_spawn_defs"):
@@ -291,6 +296,7 @@ func simulate_npcs(delta: float) -> void:
 		var body: CharacterBody3D = npcs[id]
 		if WarFleetPilot.step(self, row, body, delta): continue
 		if XJExplorationPilot.step(self, row, body, delta): continue
+		if XJTacticalPilot.step(self, row, body, delta): continue
 		var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", row.spawn_id)
 		var behavior: Dictionary = catalog.one("npc_behavior_defs", "behavior_id", spawn.behavior_id)
 		var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)
@@ -388,7 +394,8 @@ func contact_visible(entry: Dictionary, distance: float) -> bool:
 	# A durable source site is retained throughout strategic travel for safe
 	# cancellation. It must not remain a local radar echo during that transit.
 	if departure_active and target_is_local(str(entry.get("id", ""))) and not bool(entry.get("navigation_only", false)): return false
-	if str(entry.get("kind", "")) in ["npc", "wreck"] and not target_is_local(str(entry.get("id", ""))): return false
+	if str(entry.get("kind", "")) in ["npc", "wreck", "drone"] and not target_is_local(str(entry.get("id", ""))): return false
+	if str(entry.get("kind", "")) == "drone": return gameplay.drone_control.live.has(str(entry.get("id", ""))) and distance <= float(catalog.rule("target_marker_detection_range_m"))
 	if str(entry.get("kind", "")) != "npc": return true
 	var sensor: float = float(catalog.rule("target_marker_detection_range_m"))
 	if distance > sensor: return false
@@ -432,6 +439,9 @@ func target_site(id: String) -> String:
 	if not targets.has(id): return ""
 	var entry: Dictionary = targets[id]
 	if entry.kind in ["npc", "wreck"]: return Space.site_for_entity(state, str(entry.kind), id)
+	if entry.kind == "drone":
+		var owner: String = gameplay.drone_control.owner(id)
+		return Space.site_for_entity(state, "ship" if owner == state.ship().ship_instance_id else "npc", owner)
 	return Space.site_for_anchor(catalog, str(entry.get("anchor_id", "")))
 
 func target_is_local(id: String) -> bool:

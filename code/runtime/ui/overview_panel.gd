@@ -198,7 +198,7 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 			resource_bar.value = clampf(float(info.remaining_units) / float(info.capacity_units) * 100.0, 0, 100)
 			resource_fraction.text = "矿量 %.0f%%" % resource_bar.value
 			resource_bar.tooltip_text = resource_label.tooltip_text
-	action_grid.columns = 2 if kind == "npc" else 3
+	action_grid.columns = 2 if kind in ["npc","drone"] else 3
 	var running: bool = bool(navigation.get("active", false))
 	status_label.text = UISkin.navigation_phase(str(navigation.get("phase", ""))) if running else str(navigation.get("reason", ""))
 	if running and str(navigation.get("title", "")) != selected_title.text and not str(navigation.get("title", "")).is_empty(): status_label.text += " · " + str(navigation.title)
@@ -222,9 +222,9 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 			"nav_orbit": button.visible = not selected_id.is_empty() and not bool(details.get("navigation_only", false)); button.disabled = busy or not bool(navigation.get("orbit_ready", false))
 			"nav_stop": button.visible = running; button.disabled = busy
 			"nav_dock": button.visible = kind == "station"; button.disabled = busy or not bool(navigation.get("dock_ready", navigation.get("approach_ready", false)))
-			"combat_engage": button.visible = kind == "npc"; button.disabled = busy or not bool(navigation.get("combat_engage_ready", false))
+			"combat_engage": button.visible = kind in ["npc","drone"]; button.disabled = busy or not bool(navigation.get("combat_engage_ready", false))
 			"combat_toggle":
-				button.visible = kind == "npc"
+				button.visible = kind in ["npc","drone"]
 				button.text = "停止开火" if bool(navigation.get("combat_active", false)) else "对此开火"
 				button.disabled = busy or (not bool(navigation.get("combat_active", false)) and not bool(navigation.get("combat_ready", false)))
 		button.tooltip_text = str(navigation.get(action.trim_prefix("nav_") + "_reason", navigation.get("reason", "由航行控制器检查资格。")))
@@ -272,7 +272,7 @@ func _refresh_rows() -> void:
 	if target_list == null: return
 	var visible_rows: Array[Dictionary] = []
 	for entry: Dictionary in entry_rows:
-		var combat: bool = str(entry.get("kind", "")) in ["npc", "wreck", "encounter"]
+		var combat: bool = str(entry.get("kind", "")) in ["npc", "drone", "wreck", "encounter"]
 		if filter_mode == "combat" and not combat: continue
 		if filter_mode == "navigation" and combat: continue
 		visible_rows.append(entry)

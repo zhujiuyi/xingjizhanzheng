@@ -21,6 +21,7 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	if not _validate_industry(state, catalog): return false
 	if not _validate_exploration(state, catalog): return false
 	if not _validate_mobile_belts(state, catalog): return false
+	if not _validate_tactics(state, catalog): return false
 	for ship in state.rows("ship_state"):
 		var norm: float = ship.quat_x * ship.quat_x + ship.quat_y * ship.quat_y + ship.quat_z * ship.quat_z + ship.quat_w * ship.quat_w
 		if abs(norm - 1.0) >= 0.00001: return _fail("Invalid normalized ship quaternion")
@@ -104,6 +105,57 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 			var capacity: int = definition.cargo_l if container.kind == Types.ContainerKind.CARGO else definition.mineral_cargo_l
 			if volume > capacity: return _fail("Cargo volume exceeded")
 		if payload > definition.max_payload_mass_kg + 0.0000001: return _fail("Shared payload mass exceeded")
+	return true
+
+func _validate_tactics(state: State, catalog: XJCatalog) -> bool:
+	var tables: Array[String] = ["tactical_site_state","npc_tactic_state","ship_tactical_effect_state","drone_bay_state"]
+	if not catalog.table_names.has("npc_tactic_defs"):
+		for table: String in tables:
+			if not state.rows(table).is_empty(): return _fail("Tactical state in legacy rules")
+		return true
+	var seen: Dictionary = {}
+	for row: RefCounted in state.rows("tactical_site_state"):
+		var spec: Dictionary = catalog.one("tactical_site_defs", "site_id", row.site_id)
+		if spec.is_empty() or seen.has(row.site_id) or row.generation < 0 or row.cleared_cycles < 0 or not is_finite(row.respawn_remaining_s) or row.respawn_remaining_s < 0 or row.respawn_remaining_s > float(spec.respawn_s): return _fail("Invalid tactical site")
+		seen[row.site_id] = true
+	if seen.size() != catalog.rows("tactical_site_defs").size(): return _fail("Incomplete tactical sites")
+	seen.clear()
+	for row: RefCounted in state.rows("npc_tactic_state"):
+		var npc: RefCounted = state.find("npc_state", "npc_instance_id", row.npc_instance_id)
+		var spec: Dictionary = catalog.one("npc_tactic_defs", "tactic_id", row.tactic_id)
+		var binding: Dictionary = catalog.one("npc_tactic_bindings", "spawn_id", npc.spawn_id) if npc != null else {}
+		if npc == null or spec.is_empty() or binding.get("tactic_id", "") != row.tactic_id or seen.has(row.npc_instance_id): return _fail("Invalid tactical actor identity")
+		seen[row.npc_instance_id] = true
+		if row.phase not in ["ready","charging","active","cooldown"]: return _fail("Invalid tactical phase")
+		for field: String in ["energy","remaining_s","cooldown_remaining_s","charge_start_hp"]:
+			if not is_finite(row.get(field)) or row.get(field) < 0.0: return _fail("Invalid tactical scalar")
+		for field: String in ["aim_x","aim_y","aim_z"]:
+			if not is_finite(row.get(field)): return _fail("Invalid tactical aim")
+		if row.energy > float(spec.energy_max) or row.remaining_s > maxf(float(spec.charge_s), float(spec.duration_s)) or row.cooldown_remaining_s > float(spec.cooldown_s) or row.drone_stock < 0 or row.lost_drones < 0 or row.drone_stock + row.lost_drones != int(spec.drone_reserve) or row.deployed_drones != 0: return _fail("Tactical limits or outstanding drones")
+		if row.has_target_entity_id and state.find("ship_state", "ship_instance_id", row.target_entity_id) == null and state.find("npc_state", "npc_instance_id", row.target_entity_id) == null: return _fail("Missing tactical target")
+	for npc: RefCounted in state.rows("npc_state"):
+		if not catalog.one("npc_tactic_bindings", "spawn_id", npc.spawn_id).is_empty() and not seen.has(npc.npc_instance_id): return _fail("Tactical actor state missing")
+	var balance: Dictionary = catalog.rows("tactical_balance_defs")[0]
+	seen.clear()
+	for row: RefCounted in state.rows("ship_tactical_effect_state"):
+		if seen.has(row.ship_instance_id) or state.find("ship_state", "ship_instance_id", row.ship_instance_id) == null: return _fail("Invalid jammed ship")
+		seen[row.ship_instance_id] = true
+		for field: String in ["jam_remaining_s","immunity_remaining_s","repeat_window_s"]:
+			if not is_finite(row.get(field)) or row.get(field) < 0.0: return _fail("Invalid jam timer")
+		if row.jam_remaining_s > float(balance.jam_max_duration_s) or row.immunity_remaining_s > float(balance.jam_immunity_s) or row.repeat_window_s > float(balance.jam_repeat_window_s) or row.repeat_count < 0 or row.repeat_count > int(balance.jam_max_repeat): return _fail("Jam exceeds minimum-control policy")
+		if row.has_source_npc_id and state.find("npc_state", "npc_instance_id", row.source_npc_id) == null: return _fail("Jam source missing")
+		if row.jam_remaining_s > 0.0 and not row.has_source_npc_id: return _fail("Active jam without source")
+	seen.clear()
+	for row: RefCounted in state.rows("drone_bay_state"):
+		var item: RefCounted = state.find("item_instance_state", "item_instance_id", row.item_instance_id)
+		var spec: Dictionary = catalog.one("drone_management_defs", "module_id", item.item_def_id) if item != null else {}
+		if item == null or spec.is_empty() or seen.has(row.item_instance_id): return _fail("Invalid drone bay")
+		seen[row.item_instance_id] = true
+		var count: int = int(catalog.one("drone_defs", "module_id", item.item_def_id).drone_count)
+		if row.stock_units < 0 or row.stock_units > count or row.deployed_units != 0 or row.lost_units < 0 or row.replenished_units < 0 or row.stock_units != count - row.lost_units + row.replenished_units or row.paid_credit_total != row.replenished_units * int(spec.credit_per_unit) or row.material_units_total != row.replenished_units * int(spec.material_per_unit) or row.revision < 0 or row.command_kind not in ["attack","follow","recall"]: return _fail("Drone stock or paid replacement ledger mismatch")
+		if row.replenished_units > 0 and item.policy_id != "normal_owned": return _fail("Protected drone replenishment")
+	for item: RefCounted in state.rows("item_instance_state"):
+		if not catalog.one("drone_management_defs", "module_id", item.item_def_id).is_empty() and not seen.has(item.item_instance_id): return _fail("Drone bay state missing")
 	return true
 
 func _validate_mobile_belts(state: State, catalog: XJCatalog) -> bool:

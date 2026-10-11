@@ -11,6 +11,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "tactics-world": ("tactics_world_v29.gd", "XJ_TACTICS_WORLD_V29", "tactics-world-v29", "TACTICS_WORLD_V29", "--xj-verify-tactics-world-v29"),
+    "tactics": ("tactics_v29.gd", "XJ_TACTICS_V29", "tactics-v29", "TACTICS_V29", "--xj-verify-tactics-v29"),
     "mobile-belts-world": ("mobile_belts_world_v28.gd", "XJ_MOBILE_BELTS_WORLD_V28", "mobile-belts-world-v28", "MOBILE_BELTS_WORLD_V28", "--xj-verify-mobile-belts-world-v28"),
     "mobile-belts": ("mobile_belts_v28.gd", "XJ_MOBILE_BELTS_V28", "mobile-belts-v28", "MOBILE_BELTS_V28", "--xj-verify-mobile-belts-v28"),
     "exploration-world": ("exploration_world_v27.gd", "XJ_EXPLORATION_WORLD_V27", "exploration-world-v27", "EXPLORATION_WORLD_V27", "--xj-verify-exploration-world-v27"),
@@ -173,6 +175,14 @@ def run_suite():
             assert record["summary"]["checks"] >= 150 and record["summary"]["cases"] == 6 and len(captures) == 0
             if os.environ.get("XJ_MOBILE_BELTS_LEGACY_DATABASE"):
                 assert record["summary"]["legacy_checked"] and record["summary"]["checks"] >= 170
+        if name == "tactics":
+            assert record["summary"]["checks"] >= 46 and len(captures) == 0
+            if os.environ.get("XJ_TACTICS_LEGACY_DATABASE"):
+                assert record["summary"]["legacy_checked"] and record["summary"]["checks"] >= 60
+        if name == "tactics-world":
+            assert args.native and record["summary"]["checks"] >= 101 and len(captures) == 12
+            evasion = next(row for row in record["summary"]["observations"] if row["kind"] == "evasion")
+            assert evasion["distance_m"] > 50 and evasion["shield"] == evasion["maximum_shield"] and evasion["armor"] == evasion["maximum_armor"]
         if name == "mobile-belts-world":
             assert args.native and record["summary"]["checks"] >= 110 and record["summary"]["routes"] == 3 and len(captures) == 7
             routes = [row for row in record["summary"]["observations"] if row["kind"] == "route"]

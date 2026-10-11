@@ -783,6 +783,67 @@ class ExplorationBeltStateDto extends RefCounted:
 	var start_elapsed_s: float = 0.0
 	var initial_units: int = 0
 
+class TacticalSiteStateDto extends RefCounted:
+	var site_id: String = ""
+	var generation: int = 0
+	var respawn_remaining_s: float = 0.0
+	var cleared_cycles: int = 0
+class NpcTacticStateDto extends RefCounted:
+	var npc_instance_id: String = ""
+	var tactic_id: String = ""
+	var phase: String = "ready"
+	var remaining_s: float = 0.0
+	var cooldown_remaining_s: float = 0.0
+	var energy: float = 0.0
+	var has_target_entity_id: bool = false
+	var target_entity_id: String = ""
+	var aim_x: float = 0.0
+	var aim_y: float = 0.0
+	var aim_z: float = 0.0
+	var charge_start_hp: float = 0.0
+	var drone_stock: int = 0
+	var deployed_drones: int = 0
+	var lost_drones: int = 0
+class ShipTacticalEffectStateDto extends RefCounted:
+	var ship_instance_id: String = ""
+	var has_source_npc_id: bool = false
+	var source_npc_id: String = ""
+	var jam_remaining_s: float = 0.0
+	var immunity_remaining_s: float = 0.0
+	var repeat_window_s: float = 0.0
+	var repeat_count: int = 0
+class DroneBayStateDto extends RefCounted:
+	var item_instance_id: String = ""
+	var stock_units: int = 0
+	var deployed_units: int = 0
+	var lost_units: int = 0
+	var replenished_units: int = 0
+	var paid_credit_total: int = 0
+	var material_units_total: int = 0
+	var revision: int = 0
+	var command_kind: String = "attack"
+class DroneRuntimeDto extends RefCounted:
+	var drone_id: String = ""
+	var owner_id: String = ""
+	var module_instance_id: String = ""
+	var module_def_id: String = ""
+	var health: float = 0.0
+	var health_max: float = 0.0
+	var command_kind: String = "attack"
+	var communication_lost: bool = false
+	var target_id: String = ""
+	var returning: bool = false
+	var fired: bool = false
+	var pos_x: float = 0.0
+	var pos_y: float = 0.0
+	var pos_z: float = 0.0
+class DroneCommandRequestDto extends RefCounted:
+	var action: String = ""
+	var target_id: String = ""
+	var order_kind: String = ""
+	var quantity: int = 1
+	var quote_revision: String = ""
+
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
 	var content: ContentRefDto = ContentRefDto.new()
@@ -834,6 +895,10 @@ class WorldSnapshotDto extends RefCounted:
 	var exploration_progress_state_rows: Array[ExplorationProgressStateDto] = []
 	var exploration_research_state_rows: Array[ExplorationResearchStateDto] = []
 	var exploration_belt_state_rows: Array[ExplorationBeltStateDto] = []
+	var tactical_site_state_rows: Array[TacticalSiteStateDto] = []
+	var npc_tactic_state_rows: Array[NpcTacticStateDto] = []
+	var ship_tactical_effect_state_rows: Array[ShipTacticalEffectStateDto] = []
+	var drone_bay_state_rows: Array[DroneBayStateDto] = []
 
 ## 表现派生值不是另一份定义：每次由 frozen catalog + 当前状态计算。
 class ShipMetricsViewDto extends RefCounted:

@@ -56,6 +56,8 @@ func _ready() -> void:
 		{"flag": "--xj-verify-exploration-v27", "file": "exploration_v27.gd", "prefix": "exploration-v27", "env": "XJ_EXPLORATION_V27", "meta": "xj_exploration_v27_diagnostic"},
 		{"flag": "--xj-verify-mobile-belts-v28", "file": "mobile_belts_v28.gd", "prefix": "mobile-belts-v28", "env": "XJ_MOBILE_BELTS_V28", "meta": "xj_mobile_belts_v28_diagnostic"},
 		{"flag": "--xj-verify-mobile-belts-world-v28", "file": "mobile_belts_world_v28.gd", "prefix": "mobile-belts-world-v28", "env": "XJ_MOBILE_BELTS_WORLD_V28", "meta": "xj_mobile_belts_world_v28_diagnostic"},
+		{"flag":"--xj-verify-tactics-v29","file":"tactics_v29.gd","prefix":"tactics-v29","env":"XJ_TACTICS_V29","meta":"xj_tactics_v29_diagnostic"},
+		{"flag":"--xj-verify-tactics-world-v29","file":"tactics_world_v29.gd","prefix":"tactics-world-v29","env":"XJ_TACTICS_WORLD_V29","meta":"xj_tactics_world_v29_diagnostic"},
 		{"flag": "--xj-verify-resource-intel-world-v26", "file": "resource_intel_world_v26.gd", "prefix": "resource-intel-world-v26", "env": "XJ_RESOURCE_INTEL_WORLD_V26", "meta": "xj_resource_intel_world_v26_diagnostic"},
 		{"flag": "--xj-verify-resource-intel-v26", "file": "resource_intel_v26.gd", "prefix": "resource-intel-v26", "env": "XJ_RESOURCE_INTEL_V26", "meta": "xj_resource_intel_v26_diagnostic"},
 		{"flag": "--xj-verify-industry-v25", "file": "industry_v25.gd", "prefix": "industry-v25", "env": "XJ_INDUSTRY_V25", "meta": "xj_industry_v25_diagnostic"},
@@ -525,7 +527,7 @@ func _world_target_at(screen_position: Vector2) -> String:
 	var view: Camera3D = camera.camera
 	var start: Vector3 = view.project_ray_origin(screen_position)
 	var end: Vector3 = start + view.project_ray_normal(screen_position) * view.far
-	var query := PhysicsRayQueryParameters3D.create(start, end, 67, [world.flight.get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(start, end, 195, [world.flight.get_rid()])
 	var hit: Dictionary = world.get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty(): return ""
 	var collider: Node = hit.collider as Node
@@ -537,6 +539,7 @@ func _world_target_at(screen_position: Vector2) -> String:
 		if str(entry.kind) == "npc":
 			var npc: RefCounted = state.find("npc_state", "npc_instance_id", id)
 			if npc == null or not npc.alive or world.flight.global_position.distance_to(node.global_position) > float(store.catalog.rule("target_marker_detection_range_m")): return ""
+		if str(entry.kind) == "drone" and not gameplay.drone_control.live.has(id): return ""
 		return id
 	return ""
 
@@ -606,6 +609,7 @@ func _fire_weapons(automatic: bool = false, target_override: String = "") -> voi
 		var profile: Dictionary = gameplay.call("weapon_profile", equipment.module_def_id)
 		if profile.is_empty(): continue
 		var drone: bool = str(profile.fire_mode) == "drone"
+		if drone and gameplay.drone_control.supported() and gameplay.drone_control.bay(equipment.item_instance_id).command_kind != "attack": continue
 		if drone and (world.projectiles.module_busy(equipment.item_instance_id) or not _enemy_target_valid(selected_target)): continue
 		var cone: float = float(profile.fire_cone_half_angle_rad)
 		var origin := world.flight.muzzle(slot.slot_index)
@@ -704,6 +708,8 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		if action == "set_combat_option": _sync_combat_automation()
 		return
 	match action:
+		"drone_command":
+			_drone_order(extra, target)
 		"exploration_open":
 			var event_id: String = str(world.targets.get(target, {}).get("event_id", target))
 			ui.open_exploration(event_id)
@@ -1011,6 +1017,32 @@ func _source_after_arrival() -> void:
 		if source_goal.has("event"): _exploration_navigation("exploration_nav", source_goal.event, str(source_goal.generation))
 		else: _source_navigation("source_travel", source_goal.key, source_goal.item)
 
+func _drone_order(kind: String, target: String) -> void:
+	if travel.active() or local_navigation.warp_active(): ui.notify("航行转移期间先等待无人机稳定回收。", true); return
+	var result: Dtos.ActionResultDto = gameplay.act("drone_command", target, 1, kind)
+	if result.phase != Types.ActionPhase.APPLIED: ui.notify(str(result.display_reason_key), true); return
+	var launched: bool = false
+	if kind == "recall": world.projectiles.recall_drones()
+	else:
+		var target_id: String = target if kind == "attack" else state.ship().ship_instance_id
+		var target_node: Node3D = world.targets[target].node if kind == "attack" and world.targets.has(target) else world.flight
+		for equipment: RefCounted in gameplay.equipped(state.ship()):
+			var profile: Dictionary = gameplay.weapon_profile(equipment.module_def_id)
+			if profile.get("fire_mode", "") != "drone" or not equipment.enabled or world.projectiles.module_busy(equipment.item_instance_id): continue
+			var module: Dictionary = store.catalog.one("module_defs", "module_id", equipment.module_def_id)
+			if kind == "attack" and (not world.target_is_local(target) or world.flight.global_position.distance_to(target_node.global_position) > float(module.range_m)): continue
+			var slot: RefCounted = state.find("container_state", "container_id", equipment.slot_container_id)
+			var origin: Transform3D = world.flight.muzzle(slot.slot_index)
+			if kind == "attack" and not world.line_of_sight(origin.origin, target_node.global_position, world.flight.get_rid(), target): continue
+			var cycle: Dictionary = gameplay.consume_weapon_cycle(equipment.item_instance_id)
+			if cycle.is_empty(): continue
+			var direction: Vector3 = origin.origin.direction_to(target_node.global_position) if kind == "attack" else -origin.basis.z
+			world.projectiles.fire(state.ship().ship_instance_id, world.flight.get_rid(), origin.origin, direction, float(cycle.speed), float(cycle.range), cycle.damage_vector, cycle.profile, equipment.item_instance_id, target_id)
+			launched = true
+	ui.notify({"attack":"无人机攻击指令已下达。","follow":"无人机跟随指令已下达；本次仍只有一次已支付攻击。","recall":"无人机正在回收，尚未发出的攻击已停止。"}.get(kind, "无人机指令已更新。"))
+	if kind != "recall" and not launched and gameplay.drone_control.live.is_empty(): ui.notify("指令已更新；机库冷却或电容不足，满足条件后可再次出击。",true)
+	ui.refresh_page()
+
 func _exploration_navigation(action: String, event_id: String, generation: String) -> void:
 	if state == null or gameplay == null or busy or travel.active(): return
 	var row: RefCounted = gameplay.exploration.instance(event_id)
@@ -1029,6 +1061,10 @@ func _exploration_navigation(action: String, event_id: String, generation: Strin
 func _exploration_warning(message: String) -> void:
 	if ui != null: ui.notify(message, true)
 	if presentation != null: presentation.ui_result(false)
+
+func _tactical_warning(message: String) -> void:
+	if ui != null: ui.notify(message, not message.contains("维修"))
+	if presentation != null: presentation.ui_result(message.contains("维修"))
 
 func _navigate_guidance(info: Dictionary, do_travel: bool, announce: bool, approach_destination: bool = false) -> void:
 	world.sync_entities()
@@ -1078,6 +1114,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	staged_gameplay = null
 	world.visible = true
 	world.apply_visual_quality(str(preferences.get("quality_mode", "high")))
+	if world.tactical_view != null: world.tactical_view.intensity = float(preferences.get("vfx_intensity", 1.0))
 	last_destroyed_ship = ""
 	presentation = XJPresentation.new()
 	world.add_child(presentation)
@@ -1105,6 +1142,8 @@ func _activate(candidate: XJRuntimeState) -> void:
 	ui.bind(state, store.catalog, gameplay, world, camera)
 	gameplay.civilizations.status_changed.connect(_civilization_status)
 	gameplay.exploration.warning_changed.connect(_exploration_warning)
+	gameplay.tactics.warning_changed.connect(_tactical_warning)
+	gameplay.drone_control.warning_changed.connect(_tactical_warning)
 	combat_automation = CombatAutomation.new()
 	combat_automation.changed.connect(_sync_combat_automation)
 	combat_automation.acquired.connect(_combat_acquired)
@@ -1300,7 +1339,8 @@ func _enemy_target_valid(target_id: String) -> bool:
 	if not world.targets.has(target_id): return false
 	var target: Dictionary = world.targets[target_id]
 	var node: Variant = target.get("node")
-	if target.get("kind", "") != "npc" or not is_instance_valid(node) or not node.global_position.is_finite(): return false
+	if target.get("kind", "") not in ["npc","drone"] or not is_instance_valid(node) or not node.global_position.is_finite(): return false
+	if target.get("kind", "") == "drone": return gameplay.drone_control.live.has(target_id) and world.target_is_local(target_id) and world.contact_visible(target, world.flight.global_position.distance_to(node.global_position))
 	var npc: RefCounted = state.find("npc_state", "npc_instance_id", target_id)
 	if npc == null or not npc.alive or npc.sector_id != state.current_sector(): return false
 	return world.contact_visible(target, world.flight.global_position.distance_to(node.global_position))
@@ -1467,6 +1507,7 @@ func _apply_preferences() -> void:
 		AudioServer.set_bus_volume_db(0, linear_to_db(float(preferences.master_volume)))
 	var quality: String = str(preferences.get("quality_mode", "high"))
 	if world != null: world.apply_visual_quality(quality)
+	if world != null and world.tactical_view != null: world.tactical_view.intensity = float(preferences.get("vfx_intensity", 1.0))
 	RenderingServer.viewport_set_msaa_3d(get_viewport().get_viewport_rid(), RenderingServer.VIEWPORT_MSAA_2X if quality == "high" else RenderingServer.VIEWPORT_MSAA_DISABLED)
 	if presentation != null:
 		presentation.intensity = float(preferences.get("vfx_intensity", 1.0))

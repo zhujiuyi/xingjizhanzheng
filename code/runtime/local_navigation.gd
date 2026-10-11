@@ -339,15 +339,17 @@ func _target_reason(id: String) -> String:
 		"npc":
 			var npc: RefCounted = state.find("npc_state", "npc_instance_id", id)
 			if npc == null or not npc.alive or npc.sector_id != state.current_sector(): return "敌舰已离开或失效"
+		"drone":
+			if not gameplay.drone_control.live.has(id): return "无人机已回收或失效"
 	if str(entry.kind) in ["station", "resource", "signal", "marker"]:
 		if definition.is_empty() or str(definition.sector_id) != state.current_sector(): return "目标不在当前星系"
-	if str(entry.kind) == "npc":
+	if str(entry.kind) in ["npc","drone"]:
 		var sensor: float = float(catalog.rule("target_marker_detection_range_m"))
 		if world.flight.global_position.distance_to((candidate as Node3D).global_position) > sensor: return "敌舰超出探测范围"
 	return ""
 
 func _rule_kind(kind: String) -> String:
-	return str({"exploration": "signal", "exploration_exit": "marker", "encounter": "marker"}.get(kind, kind))
+	return str({"exploration": "signal", "exploration_exit": "marker", "encounter": "marker", "drone":"npc"}.get(kind, kind))
 
 func _target_rule(entry: Dictionary) -> Dictionary:
 	# A site is a navigation marker, while its stand-off distance is frozen

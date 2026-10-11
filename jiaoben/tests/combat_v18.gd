@@ -188,6 +188,19 @@ func _physical_weapon_checks() -> void:
 	await get_tree().physics_frame; await get_tree().physics_frame
 
 func _reset_sortie() -> void:
+	if host.gameplay.drone_control.supported():
+		var bay: RefCounted = host.gameplay.drone_control.bay(drone_item_id)
+		var maximum: int = int(host.store.catalog.one("drone_defs","module_id","module_drone_swarm_i").drone_count)
+		if bay != null and bay.stock_units < maximum:
+			# Qualified supplies, actual dock/service/cost path; permanent loss is never erased.
+			var station: Dictionary = host.store.catalog.one("station_defs","station_id","station_anchor_port")
+			await _preview_place(host.world.anchor_position(station.station_anchor_id),station.station_anchor_id)
+			host.state.ship().status=T.ShipStatus.DOCKED;host.state.ship().has_station_id=true;host.state.ship().station_id=station.station_id
+			host.state.player().has_docked_station_id=true;host.state.player().docked_station_id=station.station_id
+			host.gameplay.inventory.grant(host.gameplay.inventory.warehouse(station.station_id),"material_structural_stock",100)
+			check(host.gameplay.act("drone_replenish",drone_item_id,maximum-bay.stock_units,str(bay.revision)).phase==T.ActionPhase.APPLIED,"sortie fixture pays actual replenishment after permanent loss")
+			host.state.ship().status=T.ShipStatus.FLYING;host.state.ship().has_station_id=false;host.state.ship().station_id=""
+			host.state.player().has_docked_station_id=false;host.state.player().docked_station_id=""
 	var equipment: D.EquipmentStateDto = host.state.find("equipment_state", "item_instance_id", drone_item_id)
 	equipment.enabled = true; equipment.cooldown_remaining_s = 0.0; equipment.active_remaining_s = 0.0; equipment.cycle_paid = false
 	host.state.ship().energy = float(host.gameplay.metrics(host.state.ship()).energy_max)
@@ -320,7 +333,7 @@ func _gate_preview_evidence(endpoint_id: String, context: Dictionary, label: Str
 	var hostile: bool = false
 	for npc: D.NpcStateDto in host.state.rows("npc_state"):
 		if npc.alive and npc.behavior_phase in [T.NpcPhase.ACQUIRE, T.NpcPhase.PURSUE, T.NpcPhase.ATTACK, T.NpcPhase.DISENGAGE]: hostile = true
-	var qualified: bool = host.state.ship().status == T.ShipStatus.FLYING and endpoint.origin_sector_id == host.state.current_sector() and host.state.find("unlock_state", "unlock_id", str(endpoint.required_unlock_id)) != null and gate != null and gate.enabled and (not gate.has_lifetime_remaining_s or gate.lifetime_remaining_s > 0.0) and (cooldown == null or cooldown.remaining_s <= 0.0) and mass <= float(connection.max_gross_mass_kg) and (not gate.has_remaining_mass_budget_kg or mass <= gate.remaining_mass_budget_kg) and host.state.ship().energy >= float(connection.energy_cost_eu) and host.state.player().credit >= int(connection.fee_credit) and bool(context.in_range) and float(context.speed_mps) <= float(context.max_speed_mps) and host.gameplay.save_eligible() and not hostile and str(node.get_meta("entity_id", "")) == endpoint_id
+	var qualified: bool = host.state.ship().status == T.ShipStatus.FLYING and endpoint.origin_sector_id == host.state.current_sector() and host.state.find("unlock_state", "unlock_id", str(endpoint.required_unlock_id)) != null and gate != null and gate.enabled and (not gate.has_lifetime_remaining_s or gate.lifetime_remaining_s > 0.0) and (cooldown == null or cooldown.remaining_s <= 0.0) and mass <= float(connection.max_gross_mass_kg) and (not gate.has_remaining_mass_budget_kg or mass <= gate.remaining_mass_budget_kg) and host.state.ship().energy >= float(connection.energy_cost_eu) and host.state.player().credit >= int(connection.fee_credit) and bool(context.in_range) and float(context.speed_mps) <= float(context.max_speed_mps) and (host.gameplay.save_eligible() or (host.world.projectiles.drones.size()>0 and not host.gameplay.in_combat() and not host.gameplay.work.busy() and host.gameplay._pending_repairs.is_empty() and host.gameplay.equipped(host.state.ship()).all(func(e: RefCounted)->bool:return e.active_remaining_s<=0.0))) and not hostile and str(node.get_meta("entity_id", "")) == endpoint_id
 	print("COMBAT_V18_GATE_EVIDENCE " + JSON.stringify({"label": label, "context": context, "ship_id": host.state.ship().ship_instance_id, "ship_def": host.state.ship().ship_def_id, "ship_status": T.ShipStatus.keys()[int(host.state.ship().status)], "ship_sector": host.state.current_sector(), "endpoint": endpoint_id, "origin_sector": endpoint.origin_sector_id, "target_node_id": node.get_meta("entity_id", ""), "target_node_position": str(node.global_position), "required_unlock": endpoint.required_unlock_id, "unlocked": host.state.find("unlock_state", "unlock_id", str(endpoint.required_unlock_id)) != null, "gate_enabled": gate.enabled, "has_lifetime": gate.has_lifetime_remaining_s, "lifetime_s": gate.lifetime_remaining_s, "cooldown_s": cooldown.remaining_s if cooldown != null else 0.0, "gross_mass_kg": mass, "max_gross_mass_kg": connection.max_gross_mass_kg, "has_mass_budget": gate.has_remaining_mass_budget_kg, "mass_budget_kg": gate.remaining_mass_budget_kg, "energy": host.state.ship().energy, "energy_cost": connection.energy_cost_eu, "credit": host.state.player().credit, "fee_credit": connection.fee_credit, "save_eligible": host.gameplay.save_eligible(), "hostile_phase": hostile, "active_bullets": host.world.projectiles.active.size(), "returning_drones": host.world.projectiles.drones.size(), "qualified_except_pending": qualified}))
 	return qualified
 
@@ -338,7 +351,7 @@ func _pending_preview_checks() -> void:
 	host.gameplay.combat_remaining_s = 0.0
 	for equipment: D.EquipmentStateDto in host.gameplay.equipped(host.state.ship()):
 		equipment.active_remaining_s = 0.0; equipment.cycle_paid = false
-	if not check(shots.active.is_empty() and not shots.drones.is_empty() and shots.drones.all(func(drone: RefCounted) -> bool: return drone.returning) and host.gameplay.save_eligible(), "real returning drones alone remain pending after combat and paid-period fixture clocks end"): return
+	if not check(shots.active.is_empty() and not shots.drones.is_empty() and shots.drones.all(func(drone: RefCounted) -> bool: return drone.returning) and (not host.gameplay.save_eligible() if host.gameplay.drone_control.supported() else host.gameplay.save_eligible()), "real returning drones alone remain pending after combat and paid-period fixture clocks end"): return
 	var station_id: String = "station_anchor_port"
 	var station: Dictionary = host.store.catalog.one("station_defs", "station_id", station_id)
 	var station_point: Vector3 = host.world.anchor_position(str(station.station_anchor_id)) + Vector3.BACK * float(host.store.catalog.rule("dock_radius_m")) * 0.75

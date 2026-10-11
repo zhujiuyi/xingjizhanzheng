@@ -410,12 +410,14 @@ func show_page(next_page: String) -> void:
 		_station()
 		_responsive()
 		return
-	_build_panel("星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
+	_build_panel("无人机管理" if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
 	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
 		_text("此服务需要停靠空间站。使用星图找到站点，进入停靠范围并减速后按 F。")
 		_focus_page.call_deferred()
 		return
 	match next_page:
+		"drones":
+			var drones: VBoxContainer = preload("res://runtime/ui/drone_panel.gd").new(); body.add_child(drones); drones.setup(self)
 		"exploration":
 			var explorer: VBoxContainer = preload("res://runtime/ui/exploration_panel.gd").new()
 			body.add_child(explorer); explorer.setup(self)
@@ -888,6 +890,7 @@ func _salvage_rows(list: VBoxContainer, section: bool = true) -> int:
 	return count
 
 func _fitting() -> void:
+	if gameplay.drone_control.supported(): _button(body, "无人机管理", show_page.bind("drones")).name = "FittingDroneManagement"
 	var metrics: Dictionary = gameplay.call("metrics", state.ship())
 	_text("供能 %.0f/%.0f · 算力 %.0f/%.0f · 总质量 %.2f kg" % [metrics.power_used, metrics.power_capacity, metrics.cpu_used, metrics.cpu_capacity, metrics.total_mass_kg])
 	var list: VBoxContainer = _business_list("舰船挂点与适配设备")
@@ -1020,6 +1023,7 @@ func _industry() -> void:
 
 func _service_context_page() -> String:
 	if page == "exploration": return "map"
+	if page == "drones": return "fitting"
 	if page != "sources": return page
 	return sources_return_page if sources_return_page in ["industry", "market", "map"] else "map"
 
@@ -1465,6 +1469,7 @@ func _pause() -> void:
 	var resume: Button = _wide_button(_button(flight_card, "继续航行", _back))
 	_primary(resume)
 	_secondary(_wide_button(_button(flight_card, "设置", show_page.bind("settings"))))
+	if gameplay.drone_control.supported(): _secondary(_wide_button(_button(flight_card, "无人机管理", show_page.bind("drones"))))
 	_text_to(flight_card, "光标常驻：左键短击只选目标，长按拖动观察；双击总览目标自动转向并接近。拖动松开后保留角度，滚轮缩放，右键禁用。", 13)
 	_text_to(flight_card, "W/S 沿当前观察航向加速/反向加速，A/D 左右转弯；Space/C 升降、Q/E 滚转；Ctrl 发射、Z 自动开火、X 停船、Shift 增推、F 交互、V 视角。X 只停船；左拖看向上方后按 W 可向上航行。", 13)
 	var rescue: Button = _wide_button(_command(flight_card, "舰船损失后返回保障站", "request_rescue"))
@@ -1567,7 +1572,7 @@ func _refresh_targets() -> void:
 		if not entry is Dictionary or not is_instance_valid(entry.get("node")) or not entry.node is Node3D: continue
 		var distance: float = sector.target_distance(str(entry.id))
 		var kind: String = str(entry.get("kind", ""))
-		if kind == "npc":
+		if kind in ["npc","drone"]:
 			if not _npc_visible(entry, distance): continue
 			var npc: Dtos.NpcStateDto = state.find("npc_state", "npc_instance_id", str(entry.id))
 			if npc != null and not npc.alive: continue
@@ -1596,7 +1601,7 @@ func _select_target(id: String) -> void:
 	target_selected.emit(target_id)
 
 func _target_type(kind: String) -> String:
-	return str({"station": "空间站", "gate": "虫洞门", "npc": "敌舰", "encounter": "敌舰群", "group": "敌舰群", "resource": "矿体", "signal": "信号", "wreck": "残骸", "marker": "航标", "planet": "天体", "exploration": "探索事件", "exploration_exit": "撤离点"}.get(kind, "目标"))
+	return str({"station": "空间站", "gate": "虫洞门", "npc": "敌舰", "drone":"无人机", "encounter": "敌舰群", "group": "敌舰群", "resource": "矿体", "signal": "信号", "wreck": "残骸", "marker": "航标", "planet": "天体", "exploration": "探索事件", "exploration_exit": "撤离点"}.get(kind, "目标"))
 
 func _selected_details() -> Dictionary:
 	if sector == null or not is_instance_valid(sector.flight) or not sector.targets.has(target_id): return {}
@@ -1605,6 +1610,9 @@ func _selected_details() -> Dictionary:
 	if not is_instance_valid(node) or not node is Node3D: return {}
 	var details: Dictionary = {"id": target_id, "title": _target_title(entry), "kind": str(entry.kind), "type_title": _target_type(str(entry.kind)), "distance_m": sector.target_distance(target_id), "navigation_only": bool(entry.get("navigation_only", false)), "remote_site": not sector.target_is_local(target_id)}
 	if bool(entry.get("friendly", false)): details.type_title = "友军"
+	if str(entry.kind) == "drone" and gameplay.drone_control.live.has(target_id):
+		var drone: RefCounted = gameplay.drone_control.live[target_id]
+		details.type_title = ("友方" if bool(entry.get("friendly", false)) else "敌方") + "无人机 · 结构 %.0f/%.0f" % [drone.health,drone.health_max]
 	if str(entry.kind) == "resource":
 		details["resource_info"] = ResourceStatus.inspect(state, catalog, target_id)
 		details["resource_forecast"] = gameplay.resource_intel.forecast(target_id)
@@ -2217,6 +2225,7 @@ func _pointer_over(control: Control) -> bool:
 func _update_navigation() -> void:
 	if state == null or not is_instance_valid(sector) or catalog == null or gameplay == null: return
 	var navigation_context: Dictionary = _navigation_context()
+	if toolbar_buttons.has("drones"): toolbar_buttons.drones.visible = gameplay.drone_control.supported()
 	var automatic: bool = bool(navigation_context.get("active", false))
 	navigation_status.text = (UISkin.navigation_phase(str(navigation_context.get("phase", ""))) + " · " + _friendly(str(navigation_context.get("title", "")))) if automatic else "手动航行 · 已知位置可跃迁"
 	if automatic and float(navigation_context.get("remaining_s", 0.0)) > 0.0: navigation_status.text += " · %.1f s" % float(navigation_context.remaining_s)
@@ -2577,6 +2586,8 @@ func _update_npc_target() -> void:
 	var spawn: Dictionary = _one("npc_spawn_defs", "spawn_id", npc.spawn_id)
 	var definition: Dictionary = _one("npc_full_defs", "npc_id", str(spawn.get("npc_id", "")))
 	npc_title.text = str(definition.get("display_name", "敌方舰船"))
+	var tactic_status: String = gameplay.tactics.status(target_id)
+	if not tactic_status.is_empty(): npc_title.text += "\n" + tactic_status
 	for index: int in range(3):
 		var key: String = ["shield", "armor", "hull"][index]
 		var maximum: float = float(definition.get(key + "_max", 0))
@@ -2867,8 +2878,8 @@ func _build_navigation() -> void:
 	row.name = "ToolbarActions"
 	row.add_theme_constant_override("separation", 10)
 	navigation.add_child(row)
-	for key: String in ["show_ship", "missions", "map", "pause"]:
-		var title: String = {"show_ship": "显示舰船", "missions": "任务  J", "map": "星图  M", "pause": "系统  Esc"}[key]
+	for key: String in ["show_ship", "missions", "map", "drones", "pause"]:
+		var title: String = {"show_ship": "显示舰船", "missions": "任务  J", "map": "星图  M", "drones":"无人机管理", "pause": "系统  Esc"}[key]
 		var callback: Callable = func(): requested.emit("show_ship", "", 1, "")
 		if key != "show_ship": callback = show_page.bind(key)
 		var button: Button = _button(row, title, callback)

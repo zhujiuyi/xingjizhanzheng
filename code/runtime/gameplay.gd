@@ -13,6 +13,8 @@ const Industry = preload("res://runtime/gameplay/industry.gd")
 const ResourceIntel = preload("res://runtime/gameplay/resource_intel.gd")
 const Exploration = preload("res://runtime/gameplay/exploration.gd")
 const MobileBelts = preload("res://runtime/gameplay/mobile_belts.gd")
+const Tactics = preload("res://runtime/gameplay/tactics.gd")
+const DroneControl = preload("res://runtime/gameplay/drone_control.gd")
 const Space = preload("res://runtime/space_coordinates.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
@@ -26,6 +28,8 @@ var industry: RefCounted
 var resource_intel: RefCounted
 var exploration: RefCounted
 var mobile_belts: RefCounted
+var tactics: RefCounted
+var drone_control: RefCounted
 var events: Array[D.EventDto] = []
 var pending_autosave_request_id: String = ""
 var status_text: String = ""
@@ -62,6 +66,8 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog) -> void:
 	resource_intel = ResourceIntel.new(self)
 	exploration = Exploration.new(self)
 	mobile_belts = MobileBelts.new(self)
+	tactics = Tactics.new(self)
+	drone_control = DroneControl.new(self)
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
 	for ship: D.ShipStateDto in state.rows("ship_state"):
@@ -71,6 +77,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog) -> void:
 	missions.refresh()
 	work.ensure_tutorial_supplies()
 	_sync_spawns()
+	drone_control.sync()
 
 func set_spatial_validator(callback: Callable) -> void:
 	spatial_validator = callback
@@ -142,6 +149,7 @@ func entity_distance(kind_a: String, row_a: RefCounted, kind_b: String, row_b: R
 
 func remove_npc(row: D.NpcStateDto) -> void:
 	if row == null: return
+	if tactics != null: tactics.retired(row.npc_instance_id)
 	Space.remove(state, "npc", row.npc_instance_id)
 	state.remove("npc_state", row)
 
@@ -177,6 +185,8 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 	if industry_actions.has(action): command.action_kind = T.ActionKind.CLAIM_INDUSTRY + industry_actions.find(action)
 	if action == "exploration_action": command.action_kind = T.ActionKind.EXPLORATION_ACTION
 	if action == "exploration_research": command.action_kind = T.ActionKind.EXPLORATION_RESEARCH
+	if action == "drone_command": command.action_kind = T.ActionKind.DRONE_COMMAND
+	if action == "drone_replenish": command.action_kind = T.ActionKind.DRONE_REPLENISH
 	_active_action = command
 	_active_payload = _request_for(action, target, quantity, extra)
 	var ok: bool = false
@@ -225,6 +235,8 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 				var parts: PackedStringArray = extra.split(":")
 				ok = exploration.execute(target, parts[0], parts[1]) if parts.size() == 2 else fail("探索请求缺少动作与代次")
 			"exploration_research": ok = exploration.research(target)
+			"drone_command": ok = drone_control.command(extra, target)
+			"drone_replenish": ok = drone_control.replenish(target, quantity, extra)
 			"set_module_enabled": ok = _set_enabled(target, extra != "off")
 			"request_engine_cycle": ok = _engine_cycle()
 			_: fail("不支持的动作：" + action)
@@ -352,6 +364,9 @@ func metrics(ship: D.ShipStateDto) -> Dictionary:
 	m.speed_mps = m.max_speed_mps * sqrt(mass_factor)
 	m.acceleration_mps2 *= mass_factor
 	m.turn_radps = m.turn_rad_s * sqrt(mass_factor)
+	if tactics != null:
+		var ratio: float = tactics.thrust_ratio(ship.ship_instance_id)
+		m.speed_mps *= ratio; m.acceleration_mps2 *= ratio
 	m.brake_multiplier = rule("brake_acceleration_multiplier")
 	m.strafe_multiplier = rule("strafe_acceleration_multiplier")
 	m.reverse_multiplier = rule("reverse_acceleration_multiplier")
@@ -437,6 +452,7 @@ func consume_weapon_cycle(item_id: String) -> Dictionary:
 	if not compatible.is_empty(): fail(compatible); return {}
 	var profile: Dictionary = weapon_profile(e.module_def_id)
 	if profile.is_empty(): fail("缺少武器行为定义"); return {}
+	if profile.fire_mode == "drone" and drone_control.supported() and drone_control.stock(state.ship().ship_instance_id, item_id) <= 0: fail("无人机舱已空，需在空间站补充"); return {}
 	var hold: String = inventory.hold(state.ship(), T.ContainerKind.CARGO)
 	if weapon.ammo_item_id != null and inventory.count(hold, weapon.ammo_item_id, false) < weapon.ammo_per_cycle:
 		fail("弹药不足"); return {}
@@ -511,6 +527,8 @@ func finish_step(delta: float) -> void:
 	economy.tick(delta)
 	industry.tick(delta)
 	exploration.tick(delta)
+	tactics.tick(delta)
+	drone_control.sync()
 	_tick_resources(delta)
 	_sync_spawns(delta)
 	_tick_gate_lifetimes(delta)
@@ -571,6 +589,7 @@ func damage_npc(instance_id: String, raw_vector: Vector3) -> float:
 	mark_hostile_attempt()
 	if npc.hull <= 0:
 		npc.alive = false; npc.behavior_phase = T.NpcPhase.DEAD
+		tactics.destroyed(npc)
 		npc.respawn_remaining_s = float(spawn.respawn_s) if spawn.respawn_s != null else 0.0
 		if spawn.bounty_enabled and not npc.bounty_claimed: state.player().credit += def.reward_credit; npc.bounty_claimed = true
 		var packaged: bool = encounters.on_destroy(npc)
@@ -602,7 +621,9 @@ func damage_ship(raw_vector: Vector3) -> float:
 
 func _sync_spawns(delta: float = 0.0) -> void:
 	encounters.tick(delta)
+	tactics.sync(delta)
 	for spawn in rows("npc_spawn_defs"):
+		if tactics.handles(spawn.spawn_id): continue
 		if exploration.managed_spawns.has(spawn.spawn_id): continue
 		if civilizations.handles_spawn(spawn.spawn_id): continue
 		if encounters.handles(spawn.spawn_id): continue
@@ -645,6 +666,11 @@ func in_combat() -> bool:
 	return false
 
 func save_blocked() -> bool:
+	if drone_control != null and not drone_control.live.is_empty(): return true
+	for row: RefCounted in state.rows("drone_bay_state"):
+		if row.deployed_units > 0: return true
+	for row: RefCounted in state.rows("npc_tactic_state"):
+		if row.deployed_drones > 0: return true
 	if in_combat() or work.busy() or not _pending_repairs.is_empty(): return true
 	for e in state.rows("equipment_state"):
 		if e.active_remaining_s <= 0: continue
@@ -693,9 +719,10 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control]:
 		if service != null: service.g = null
 	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null; mobile_belts = null
+	tactics = null; drone_control = null
 	pending_autosave_request_id=""; events.clear(); _pending_repairs.clear(); _definition_cache.clear(); _index_cache.clear(); _rules.clear()
 	_active_action = null; _active_payload = null; state = null; catalog = null; spatial_validator = Callable()
 
@@ -712,6 +739,10 @@ func _tick_gate_lifetimes(delta: float) -> void:
 
 func _request_for(action: String, target: String, quantity: int, extra: String) -> RefCounted:
 	# UI convenience is converted into reviewed typed requests, never SQL or a JSON protocol.
+	if action in ["drone_command", "drone_replenish"]:
+		var request: D.DroneCommandRequestDto = D.DroneCommandRequestDto.new()
+		request.action = action; request.target_id = target; request.quantity = quantity; request.order_kind = extra if action == "drone_command" else ""; request.quote_revision = extra if action == "drone_replenish" else ""
+		return request
 	if action in ["join_civilization", "donate_civilization", "start_war", "fleet_command"]:
 		var request: D.CivilizationRequestDto = D.CivilizationRequestDto.new()
 		request.action = action; request.target_id = target; request.quantity = quantity; request.extra = extra

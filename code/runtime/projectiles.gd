@@ -7,6 +7,7 @@ signal impact(point: Vector3, color: Color)
 signal surface_impact(point: Vector3, color: Color, normal: Vector3)
 const Effects = preload("res://runtime/visuals/visual_effects.gd")
 const Types = preload("res://contracts/contract_types.gd")
+const D = preload("res://contracts/contract_dtos.gd")
 class Projectile extends RefCounted:
 	var owner_id: String
 	var excluded_rid: RID
@@ -17,6 +18,7 @@ class Projectile extends RefCounted:
 	var raw_damage: Vector3
 	var visual: Node3D
 class Drone extends RefCounted:
+	var data: D.DroneRuntimeDto
 	var owner_id: String
 	var excluded_rid: RID
 	var module_instance_id: String
@@ -31,11 +33,19 @@ class Drone extends RefCounted:
 	var age_s: float = 0.0
 	var returning: bool = false
 	var fired: bool = false
+	var owner_clearance_m: float = 0.0
+	var formation_index: float = 0.0
 var active: Array[Projectile] = []
 var drones: Array[Drone] = []
 var flashes: Array[Dictionary] = []
 var config: Dictionary = {}
 var paused: bool = false
+var warned_bays: Dictionary = {}
+
+func _control() -> RefCounted:
+	var world: Node = get_parent()
+	var game: RefCounted = world.get("gameplay") if world != null else null
+	return game.drone_control if game != null else null
 
 func setup(catalog: XJCatalog) -> void:
 	for row in catalog.rows("presentation_defs"):
@@ -55,7 +65,11 @@ func module_busy(module_instance_id: String) -> bool:
 
 func recall_drones() -> void:
 	# Disarm future shots without deleting already launched projectiles.
-	for drone in drones: drone.returning = true
+	var state: XJRuntimeState = get_parent().get("state") as XJRuntimeState
+	for drone in drones:
+		if drone.data != null and state != null and drone.owner_id != state.ship().ship_instance_id: continue
+		drone.returning = true
+		if drone.data != null: drone.data.returning = true
 
 func fire(owner_id: String, excluded: RID, origin: Vector3, direction: Vector3, speed: float, range_m: float, raw_damage: Vector3, profile: Dictionary = {}, module_instance_id: String = "", target_id: String = "") -> void:
 	if not origin.is_finite() or not direction.is_finite() or direction.is_zero_approx() or range_m <= 0.0 or not raw_damage.is_finite(): return
@@ -112,7 +126,10 @@ func clear() -> void:
 	for shot in active:
 		if is_instance_valid(shot.visual): shot.visual.queue_free()
 	for drone in drones:
-		if is_instance_valid(drone.visual): drone.visual.queue_free()
+		var control: RefCounted = _control()
+		if drone.data != null and control != null: control.retire(drone.data.drone_id, false)
+		if drone.data != null: get_parent()._remove_target(drone.data.drone_id)
+		elif is_instance_valid(drone.visual): drone.visual.queue_free()
 	for flash: Dictionary in flashes:
 		if is_instance_valid(flash.visual): flash.visual.queue_free()
 	active.clear()
@@ -122,7 +139,11 @@ func clear() -> void:
 func _cast(owner_id: String, excluded: RID, from: Vector3, to: Vector3, damage: Vector3, draw: bool) -> bool:
 	var exclusions: Array[RID] = []
 	if excluded.is_valid(): exclusions.append(excluded)
-	var query := PhysicsRayQueryParameters3D.create(from, to, 3, exclusions)
+	var control: RefCounted = _control()
+	if control != null and control.supported():
+		for drone: Drone in drones:
+			if drone.data != null and drone.visual is CollisionObject3D and is_instance_valid(drone.visual) and not control.g.civilizations.hostile_to(owner_id, drone.data.drone_id): exclusions.append((drone.visual as CollisionObject3D).get_rid())
+	var query := PhysicsRayQueryParameters3D.create(from, to, 131, exclusions)
 	var result: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 	var end: Vector3 = result.position if not result.is_empty() else to
 	if draw:
@@ -134,7 +155,13 @@ func _cast(owner_id: String, excluded: RID, from: Vector3, to: Vector3, damage: 
 		flashes.append({"visual": ray, "remaining_s": lifetime, "lifetime_s": lifetime})
 	if result.is_empty(): return false
 	var collider: Object = result.collider
-	if collider.has_meta("entity_id"):
+	if collider.get_meta("entity_kind", "") == "drone" and control != null:
+		var drone_id: String = str(collider.get_meta("entity_id", ""))
+		control.damage(drone_id, owner_id, damage)
+		if not control.live.has(drone_id):
+			for drone: Drone in drones.duplicate():
+				if drone.data != null and drone.data.drone_id == drone_id: _retire_drone(drone)
+	elif collider.has_meta("entity_id"):
 		hit.emit(str(collider.get_meta("entity_id")), damage, end, owner_id)
 	if str(collider.get_meta("entity_kind", "")) not in ["player", "npc"]:
 		# Stable station/ore IDs are interactive identities, not damageable ships.
@@ -146,7 +173,12 @@ func _cast(owner_id: String, excluded: RID, from: Vector3, to: Vector3, damage: 
 func _launch_drones(owner_id: String, excluded: RID, origin: Vector3, direction: Vector3, range_m: float, damage: Vector3, definition: Dictionary, module_instance_id: String, target_id: String) -> void:
 	if definition.is_empty() or module_instance_id.is_empty() or target_id.is_empty() or module_busy(module_instance_id) or _entity_node(owner_id) == null or _entity_node(target_id) == null: return
 	var count: int = int(definition.drone_count)
+	var nominal: int = count
+	var control: RefCounted = _control()
+	var modern: bool = control != null and control.supported()
+	if modern: count = mini(count, control.stock(owner_id, module_instance_id))
 	if count <= 0: return
+	warned_bays.erase(module_instance_id)
 	var right: Vector3 = direction.cross(Vector3.UP).normalized()
 	if right.is_zero_approx(): right = Vector3.RIGHT
 	for index: int in count:
@@ -161,25 +193,54 @@ func _launch_drones(owner_id: String, excluded: RID, origin: Vector3, direction:
 		drone.raw_damage = damage / float(count)
 		drone.control_range_m = range_m
 		drone.profile = definition.duplicate(true)
-		drone.visual = _visual("drone")
-		add_child(drone.visual)
+		drone.owner_clearance_m = _owner_radius(_entity_node(owner_id))
+		drone.formation_index = float(index) - float(count - 1) * 0.5
+		if modern:
+			drone.data = control.register(owner_id, module_instance_id, str(definition.module_id), target_id)
+			if drone.data == null: continue
+			drone.raw_damage = damage / float(nominal)
+			var body: StaticBody3D = StaticBody3D.new()
+			body.collision_layer = 128; body.collision_mask = 0
+			body.set_meta("entity_kind", "drone"); body.set_meta("entity_id", drone.data.drone_id)
+			var shape: CollisionShape3D = CollisionShape3D.new(); var sphere: SphereShape3D = SphereShape3D.new(); sphere.radius = float(control.g.tactics.balance.drone_radius_m); shape.shape = sphere
+			body.add_child(shape); body.add_child(_visual("drone"))
+			drone.visual = body; get_parent().add_child(body)
+			_place(body, drone.position, direction)
+			get_parent()._target(drone.data.drone_id, "友方无人机" if control.g.civilizations.friendly(drone.data.drone_id) else "敌方无人机", "drone", body, "")
+			get_parent().targets[drone.data.drone_id]["friendly"] = control.g.civilizations.friendly(drone.data.drone_id)
+		else:
+			drone.visual = _visual("drone"); add_child(drone.visual)
 		_place(drone.visual, drone.position, direction)
+		if drone.data != null:
+			drone.data.pos_x = drone.position.x; drone.data.pos_y = drone.position.y; drone.data.pos_z = drone.position.z
 		drones.append(drone)
 
 func _simulate_drones(delta: float) -> void:
 	for drone: Drone in drones.duplicate():
+		var control: RefCounted = _control()
+		if drone.data != null:
+			if control == null or not control.live.has(drone.data.drone_id): _retire_drone(drone); continue
+			drone.target_id = drone.data.target_id; drone.returning = drone.data.returning; drone.fired = drone.data.fired
 		var owner: Node3D = _entity_node(drone.owner_id)
-		if owner == null: _retire_drone(drone); continue
+		if owner == null: _retire_drone(drone, true); continue
 		drone.age_s += delta
 		var target: Node3D = _entity_node(drone.target_id)
-		if not _drone_module_live(drone) or target == null or drone.age_s >= float(drone.profile.sortie_timeout_s): drone.returning = true
-		if target != null and owner.global_position.distance_to(target.global_position) > drone.control_range_m: drone.returning = true
-		if owner.global_position.distance_to(drone.position) > drone.control_range_m: drone.returning = true
+		var follow_order: bool = drone.data != null and drone.data.command_kind == "follow"
+		if not _drone_module_live(drone) or (target == null and not follow_order) or drone.age_s >= float(drone.profile.sortie_timeout_s): drone.returning = true
+		var disconnected: bool = (not follow_order and target != null and owner.global_position.distance_to(target.global_position) > drone.control_range_m) or owner.global_position.distance_to(drone.position) > drone.control_range_m
+		if disconnected:
+			drone.returning = true
+			if drone.data != null:
+				drone.data.communication_lost = true
+				if not warned_bays.has(drone.module_instance_id) and drone.owner_id == control.g.state.ship().ship_instance_id:
+					warned_bays[drone.module_instance_id] = true; control.warning_changed.emit("无人机超出通信范围：攻击已停止，正在自动返航。")
 		if drone.returning and drone.position.distance_to(owner.global_position) <= float(drone.profile.return_radius_m): _retire_drone(drone); continue
 		# The recovery window is finite. Recalled drones are already disarmed and
 		# expiration cannot erase a projectile in the independent active array.
-		if drone.age_s >= float(drone.profile.sortie_timeout_s) * 2.0: _retire_drone(drone); continue
-		var destination: Vector3 = owner.global_position if drone.returning else target.global_position
+		if drone.age_s >= float(drone.profile.sortie_timeout_s) * 2.0: _retire_drone(drone, true); continue
+		var destination: Vector3 = owner.global_position if drone.returning or follow_order else target.global_position
+		var follow: bool = drone.data != null and drone.data.command_kind == "follow" and not drone.returning
+		if follow: destination = owner.global_position + owner.global_basis.x * (drone.owner_clearance_m + float(drone.profile.return_radius_m) * 2.0) + owner.global_basis.z * drone.formation_index * float(drone.profile.return_radius_m)
 		var wanted: Vector3 = drone.position.direction_to(destination)
 		if wanted.is_zero_approx(): continue
 		var turn: float = float(drone.profile.turn_rad_s) * delta
@@ -189,11 +250,12 @@ func _simulate_drones(delta: float) -> void:
 			var axis: Vector3 = drone.direction.cross(wanted).normalized()
 			if axis.is_zero_approx(): axis = drone.direction.cross(Vector3.UP if absf(drone.direction.y) < 0.99 else Vector3.RIGHT).normalized()
 			drone.direction = drone.direction.rotated(axis, turn).normalized()
-		if not drone.returning and not drone.fired and drone.position.distance_to(destination) <= float(drone.profile.attack_range_m) and drone.direction.angle_to(wanted) <= turn and _drone_has_sight(drone, target):
+		if not follow and not drone.returning and not drone.fired and drone.position.distance_to(destination) <= float(drone.profile.attack_range_m) and drone.direction.angle_to(wanted) <= turn and _drone_has_sight(drone, target):
 			fire(drone.owner_id, drone.excluded_rid, drone.position, drone.direction, float(drone.profile.projectile_speed_mps), float(drone.profile.attack_range_m), drone.raw_damage, {"family_id": "kinetic", "fire_mode": "projectile"})
 			drone.fired = true
 			drone.returning = true
 		var speed: float = float(drone.profile.speed_mps)
+		if follow: speed = minf(speed, sqrt(2.0 * float(drone.profile.acceleration_mps2) * maxf(0.0, drone.position.distance_to(destination) - float(drone.profile.return_radius_m))))
 		if drone.returning:
 			var stopping_distance: float = maxf(0.0, drone.position.distance_to(owner.global_position) - float(drone.profile.return_radius_m))
 			speed = minf(speed, sqrt(2.0 * float(drone.profile.acceleration_mps2) * stopping_distance))
@@ -210,6 +272,19 @@ func _simulate_drones(delta: float) -> void:
 				drone.position = collision.position + collision.normal * float(config.projectile_radius_m)
 			else: drone.position = next_position
 		_place(drone.visual, drone.position, drone.direction)
+		if drone.data != null:
+			drone.data.returning = drone.returning; drone.data.fired = drone.fired; drone.data.pos_x = drone.position.x; drone.data.pos_y = drone.position.y; drone.data.pos_z = drone.position.z
+
+func _owner_radius(owner: Node3D) -> float:
+	if owner == null: return 0.0
+	return _shape_radius(owner, owner.global_position)
+func _shape_radius(node: Node, center: Vector3) -> float:
+	var radius: float = 0.0
+	if node is CollisionShape3D and node.shape != null:
+		var bounds: AABB = node.shape.get_debug_mesh().get_aabb()
+		for index: int in range(8): radius = maxf(radius, (node.global_transform * bounds.get_endpoint(index)).distance_to(center))
+	for child: Node in node.get_children(): radius = maxf(radius, _shape_radius(child, center))
+	return radius
 
 func _entity_node(entity_id: String) -> Node3D:
 	var sector: Node = get_parent()
@@ -219,6 +294,9 @@ func _entity_node(entity_id: String) -> Node3D:
 	if entity_id == state.ship().ship_instance_id:
 		if state.ship().status != Types.ShipStatus.FLYING: return null
 		return sector.get("flight") as Node3D
+	var control: RefCounted = _control()
+	if control != null and control.live.has(entity_id):
+		return sector.targets[entity_id].node if sector.targets.has(entity_id) else null
 	var npc: RefCounted = state.find("npc_state", "npc_instance_id", entity_id)
 	if npc == null or not npc.alive: return null
 	var targets: Dictionary = sector.get("targets")
@@ -226,6 +304,8 @@ func _entity_node(entity_id: String) -> Node3D:
 	return targets[entity_id].node as Node3D
 
 func _drone_module_live(drone: Drone) -> bool:
+	var control: RefCounted = _control()
+	if drone.data != null and control != null: return control.module_live(drone.owner_id, drone.module_instance_id)
 	var state: XJRuntimeState = get_parent().get("state") as XJRuntimeState
 	if state == null or state.ship().ship_instance_id != drone.owner_id: return false
 	var equipment: RefCounted = state.find("equipment_state", "item_instance_id", drone.module_instance_id)
@@ -237,8 +317,12 @@ func _drone_has_sight(drone: Drone, target: Node3D) -> bool:
 	var collision: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 	return collision.is_empty() or (collision.collider.has_meta("entity_id") and str(collision.collider.get_meta("entity_id")) == drone.target_id)
 
-func _retire_drone(drone: Drone) -> void:
-	if is_instance_valid(drone.visual): drone.visual.queue_free()
+func _retire_drone(drone: Drone, lost: bool = false) -> void:
+	var control: RefCounted = _control()
+	if drone.data != null:
+		if control != null: control.retire(drone.data.drone_id, lost)
+		get_parent()._remove_target(drone.data.drone_id)
+	elif is_instance_valid(drone.visual): drone.visual.queue_free()
 	drones.erase(drone)
 
 func _visual(family: String) -> Node3D:

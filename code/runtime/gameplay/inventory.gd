@@ -213,6 +213,7 @@ func grant(container_id: String, item_id: String, quantity: int, policy: String 
 			var salvage: Dictionary = g.definition("module_salvage_recipe_defs", "module_id", item_id)
 			item.salvage_recipe_id = recipe_id if not recipe_id.is_empty() else str(salvage.get("recipe_id",""))
 			g.state.add("item_instance_state",item); ids.append(item.item_instance_id)
+			if g.drone_control != null: g.drone_control.sync()
 			if not loan_id.is_empty():
 				var asset: D.LoanAssetStateDto = D.LoanAssetStateDto.new(); asset.loan_id = loan_id; asset.item_instance_id = item.item_instance_id; g.state.add("loan_asset_state",asset)
 	return ids
@@ -232,6 +233,7 @@ func consume(container_id: String, item_id: String, quantity: int, normal_only: 
 	return left == 0
 
 func erase_item(item: D.ItemInstanceStateDto) -> void:
+	if g.drone_control != null: g.drone_control.remove_item(item.item_instance_id)
 	var e: RefCounted = g.state.find("equipment_state", "item_instance_id", item.item_instance_id)
 	if e != null: g.state.remove("equipment_state",e)
 	for table in ["loan_asset_state","manufacture_input_state"]:

@@ -43,7 +43,7 @@ class Radar extends Control:
 		for contact: Dictionary in host.contacts:
 			var point: Vector2 = host.radar_point(contact, size)
 			var color: Color = host.contact_color(str(contact.kind))
-			if contact.kind in ["npc", "ship", "ally"]:
+			if contact.kind in ["npc", "drone", "ship", "ally"]:
 				draw_colored_polygon(PackedVector2Array([point + Vector2(0, -4), point + Vector2(-4, 4), point + Vector2(4, 4)]), color)
 			elif contact.kind == "planet":
 				draw_arc(point, 4, 0, TAU, 18, color, 1.5, true)
@@ -228,7 +228,7 @@ func radar_point(contact: Dictionary, canvas_size: Vector2) -> Vector2:
 
 func contact_color(kind: String) -> Color:
 	if kind == "ally": return Color("7fcca4")
-	if kind == "npc": return Color("ee816e")
+	if kind in ["npc","drone"]: return Color("ee816e")
 	if kind == "planet": return UISkin.AMBER
 	if kind == "gate": return Color("b7c9e8")
 	return UISkin.ICE

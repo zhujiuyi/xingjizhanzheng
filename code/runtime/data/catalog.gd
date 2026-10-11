@@ -19,6 +19,7 @@ const INDUSTRY_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v
 const RESOURCE_INTEL_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_10.sql"
 const EXPLORATION_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_11.sql"
 const MOBILE_BELTS_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_12.sql"
+const TACTICS_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_13.sql"
 var adapter_path: String = ADAPTER_PATH
 
 func open(path: String = "res://data/catalog.db") -> bool:
@@ -36,6 +37,7 @@ func open(path: String = "res://data/catalog.db") -> bool:
 		return false
 	if not refresh(): return false
 	if int(rows("catalog_meta")[0].schema_version) <= 2: adapter_path = "res://database/progress/catalog_adapter_v0_3.sql"
+	elif table_names.has("npc_tactic_defs"): adapter_path = TACTICS_ADAPTER_PATH
 	elif table_names.has("exploration_belt_route_defs"): adapter_path = MOBILE_BELTS_ADAPTER_PATH
 	elif table_names.has("exploration_event_defs"): adapter_path = EXPLORATION_ADAPTER_PATH
 	elif table_names.has("resource_grade_defs"): adapter_path = RESOURCE_INTEL_ADAPTER_PATH
