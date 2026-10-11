@@ -11,6 +11,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "fitting": ("fitting_v31.gd", "XJ_FITTING_V31", "fitting-v31", "FITTING_V31", "--xj-verify-fitting-v31"),
+    "fitting-world": ("fitting_world_v31.gd", "XJ_FITTING_WORLD_V31", "fitting-world-v31", "FITTING_WORLD_V31", "--xj-verify-fitting-world-v31"),
     "operations": ("operations_v30.gd", "XJ_OPERATIONS_V30", "operations-v30", "OPERATIONS_V30", "--xj-verify-operations-v30"),
     "operations-world": ("operations_world_v30.gd", "XJ_OPERATIONS_WORLD_V30", "operations-world-v30", "OPERATIONS_WORLD_V30", "--xj-verify-operations-world-v30"),
     "tactics-world": ("tactics_world_v29.gd", "XJ_TACTICS_WORLD_V29", "tactics-world-v29", "TACTICS_WORLD_V29", "--xj-verify-tactics-world-v29"),
@@ -160,6 +162,12 @@ def run_suite():
             assert len(captures) == (0 if name == "base-store" else 17)
         if name in ("civilizations", "civilization-upgrade"):
             assert record["summary"]["checks"] >= (200 if name == "civilizations" else 25) and len(captures) == 0
+        if name == "fitting":
+            assert record["summary"]["checks"] >= (77 if os.environ.get("XJ_FITTING_LEGACY_DATABASE") else 60) and len(captures) == 0
+        if name == "fitting-world":
+            assert args.native and record["summary"]["checks"] >= 140 and len(captures) == 12
+            actual_range = next(row for row in record["summary"]["observations"] if row["kind"] == "range")
+            assert actual_range["base_range_m"] < actual_range["distance_m"] < actual_range["actual_range_m"] and actual_range["damage"] > 0
         if name == "civilization-world":
             assert args.native and record["summary"]["checks"] >= 90 and len(captures) == 12
             battle = [entry for entry in record["summary"]["observations"] if entry["kind"] == "battle"]

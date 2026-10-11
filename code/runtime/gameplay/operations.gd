@@ -104,6 +104,7 @@ func execute(id: String, action: String, generation: String) -> bool:
 			var station: Dictionary = g.definition("station_defs", "station_id", spec.station_id)
 			var reputation: RefCounted = g.state.find("reputation_state", "faction_id", station.faction_id)
 			if reputation != null: reputation.reputation += row.completed_units * int(spec.reputation_per_unit)
+			g.specializations.operation_claimed(row)
 			warning_changed.emit("行动成果已交付 · %d / %d · %d 信用点" % [row.completed_units, spec.target_units, credit])
 	g.request_autosave()
 	return true

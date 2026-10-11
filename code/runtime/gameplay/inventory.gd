@@ -323,7 +323,25 @@ func unfit(item_id: String) -> bool:
 	item.container_id = warehouse(g.station())
 	g.state.remove("equipment_state",e)
 	var m: Dictionary = g.metrics(g.state.ship())
-	g.state.ship().armor = minf(g.state.ship().armor,m.armor_max)
+	for layer: String in ["armor","shield","energy"]:g.state.ship().set(layer,minf(g.state.ship().get(layer),m[layer+"_max"]))
+	return true
+
+func replace_fit(item_id: String,slot_ref: String,expected_old: String) -> bool:
+	var quote: Dictionary=g.fitting_analysis.quote(item_id,slot_ref,float(g.fitting_analysis.config().get("default_distance_m",0.0)))
+	if not quote.ok:return g.fail(quote.reason)
+	if str(quote.old_item_id)!=expected_old:return g.fail("原槽位设备已变化，请重新比较")
+	if quote.old_item_id==item_id:return g.fail("此设备已经安装")
+	var old_item: D.ItemInstanceStateDto=g.state.find("item_instance_state","item_instance_id",expected_old)
+	var old_equipment: D.EquipmentStateDto=g.state.find("equipment_state","item_instance_id",expected_old)
+	var old_container: String=old_item.container_id if old_item!=null else ""
+	var ship: D.ShipStateDto=g.state.ship();var hp: Vector3=Vector3(ship.armor,ship.shield,ship.energy)
+	if old_equipment!=null and not unfit(expected_old):return false
+	if not fit(item_id,0,slot_ref):
+		if old_item!=null:old_item.container_id=old_container;g.state.add("equipment_state",old_equipment)
+		ship.armor=hp.x;ship.shield=hp.y;ship.energy=hp.z
+		return false
+	var limits: Dictionary=g.metrics(ship)
+	for layer: String in ["armor","shield","energy"]:ship.set(layer,minf(ship.get(layer),limits[layer+"_max"]))
 	return true
 
 func create_ship(ship_id: String, station_id: String, policy: String = "normal_owned", loadout_id: String = "", loan_id: String = "") -> D.ShipStateDto:

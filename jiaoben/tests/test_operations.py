@@ -3,6 +3,7 @@ from pathlib import Path
 import sqlite3
 import sys
 import unittest
+from catalog_review import without_fitting_extensions
 from unittest import mock
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'jiaoben'))
@@ -20,6 +21,7 @@ class OperationDefinitions(unittest.TestCase):
    self.assertEqual(old.execute(f'PRAGMA table_info("{table}")').fetchall(),self.db.execute(f'PRAGMA table_info("{table}")').fetchall(),table)
    before=set(old.execute(f'SELECT * FROM "{table}"'));after=set(self.db.execute(f'SELECT * FROM "{table}"'))
    self.assertLessEqual(before,after,table)
+   after = without_fitting_extensions(self.db, table, after)
    if table not in extend:self.assertEqual(before,after,table)
    else:
     key=next(i for i,r in enumerate(old.execute(f'PRAGMA table_info("{table}")')) if r[5]==1)
@@ -33,7 +35,7 @@ class OperationDefinitions(unittest.TestCase):
   with self.assertRaises(sqlite3.OperationalError):p.apply_migrations(db,fault_after=18)
   self.assertEqual(before,db.execute('SELECT type,name,sql FROM sqlite_schema ORDER BY type,name').fetchall())
   self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(14,))
-  p.apply_migrations(db);self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(15,))
+  p.apply_migrations(db);self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(p.FORMAT_VERSION,))
 
 class OperationSealing(unittest.TestCase):
  @classmethod

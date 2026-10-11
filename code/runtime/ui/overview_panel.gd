@@ -16,6 +16,10 @@ var sort_buttons: Dictionary = {}
 var target_buttons: Dictionary = {}
 var action_buttons: Dictionary = {}
 var action_grid: GridContainer
+var more_actions: Button
+var actions_expanded: bool = false
+var eligible_actions: Dictionary = {}
+var selected_kind: String = ""
 var target_list: VBoxContainer
 var target_scroll: ScrollContainer
 var body_scroll: ScrollContainer
@@ -135,6 +139,11 @@ func _ready() -> void:
 		button.pressed.connect(func(): command.emit(key, selected_id))
 		button.hide()
 		action_buttons[key] = button
+	more_actions = _button(details, "更多操作")
+	more_actions.name = "SelectedMoreActions"
+	more_actions.pressed.connect(func():
+		actions_expanded = not actions_expanded
+		_layout_actions())
 	npc_detail = VBoxContainer.new()
 	npc_detail.add_theme_constant_override("separation", 2)
 	details.add_child(npc_detail)
@@ -175,9 +184,11 @@ func set_entries(rows: Array[Dictionary], id: String) -> void:
 
 func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = false) -> void:
 	selected_id = str(details.get("id", ""))
+	if selected_id != _last_selection_id: actions_expanded = false
 	if _compact and selected_id != _last_selection_id: body_scroll.set_deferred("scroll_vertical", 0)
 	_last_selection_id = selected_id
 	var kind: String = str(details.get("kind", ""))
+	selected_kind = kind
 	selected_title.text = str(details.get("title", "尚未选择目标"))
 	selected_title.tooltip_text = selected_title.text
 	selected_distance.text = ("%s · %s" % [str(details.get("type_title", "目标")), format_distance(float(details.get("distance_m", 0.0)))]) + (" · 航向参考" if bool(details.get("navigation_only", false)) else " · 远程地点" if bool(details.get("remote_site", false)) else "") if not selected_id.is_empty() else "左键选目标 · Tab切换"
@@ -231,6 +242,23 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 		if action == "combat_engage": button.tooltip_text = "交战：自动接近所选敌舰，并明确切换对此目标自动开火。\n" + str(navigation.get("combat_engage_reason", "由战斗控制器检查目标与航行资格。"))
 		if action == "combat_toggle": button.tooltip_text = "按钮明确切换对所选敌舰开火；保留接近或环绕。Z 有开火指令时停止当前开火，无指令时启动所选敌舰。武器仍检查射程、射界、视线、冷却、电容与热量。\n" + str(navigation.get("combat_reason", "由战斗控制器检查资格。"))
 		if action == "nav_dock": button.tooltip_text = "接近所选空间站，满足停靠条件后入站。F 仅进行当前范围内的即时交互。"
+	eligible_actions.clear()
+	for action: String in action_buttons: eligible_actions[action] = action_buttons[action].visible
+	_layout_actions()
+
+func _layout_actions() -> void:
+	var primary: Array[String] = ["nav_warp","nav_approach","nav_orbit"]
+	if selected_kind == "station" and not action_buttons.nav_warp.disabled: primary = ["nav_warp","nav_dock","nav_approach"]
+	elif selected_kind == "station": primary = ["nav_approach","nav_orbit"]
+	elif selected_kind in ["npc","drone"]: primary = ["combat_engage","combat_toggle","nav_orbit"]
+	var extra: bool = false
+	for action: String in action_buttons:
+		var eligible: bool = bool(eligible_actions.get(action,false))
+		extra = extra or (eligible and action not in primary)
+		action_buttons[action].visible = eligible and (actions_expanded or action in primary)
+	more_actions.visible = extra
+	more_actions.text = "收起操作" if actions_expanded else "更多操作"
+	_queue_list_layout()
 
 func responsive(compact: bool, available_height: float = -1.0) -> void:
 	_compact = compact

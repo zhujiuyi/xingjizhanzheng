@@ -60,3 +60,11 @@ static func _initialize()->void:
 				var path: String = str(entry.get("resource_path", ""))
 				if path.begins_with("res://assets/civilization_v1/") or path.begins_with(ASSET_ROOT):
 					_paths[str(entry.kind) + ":" + str(entry.id)] = path
+	var fitting_path: String = "res://assets/fitting_v1/manifest.json"
+	if FileAccess.file_exists(fitting_path):
+		var fitting: Variant = JSON.parse_string(FileAccess.get_file_as_string(fitting_path))
+		if fitting is Dictionary:
+			for entry: Dictionary in fitting.get("entries", []):
+				var path: String = str(entry.get("resource_path", ""))
+				if path.begins_with("res://assets/fitting_v1/") and not path.contains(".."):
+					_paths[str(entry.kind) + ":" + str(entry.id)] = path

@@ -14,6 +14,9 @@ const ResourceIntel = preload("res://runtime/gameplay/resource_intel.gd")
 const Exploration = preload("res://runtime/gameplay/exploration.gd")
 const MobileBelts = preload("res://runtime/gameplay/mobile_belts.gd")
 const Tactics = preload("res://runtime/gameplay/tactics.gd")
+const Specializations = preload("res://runtime/gameplay/specializations.gd")
+const FittingAnalysis = preload("res://runtime/gameplay/fitting_analysis.gd")
+const ResourceBudget = preload("res://runtime/gameplay/resource_budget.gd")
 const Operations = preload("res://runtime/gameplay/operations.gd")
 const DroneControl = preload("res://runtime/gameplay/drone_control.gd")
 const Space = preload("res://runtime/space_coordinates.gd")
@@ -30,6 +33,8 @@ var resource_intel: RefCounted
 var exploration: RefCounted
 var mobile_belts: RefCounted
 var tactics: RefCounted
+var specializations: RefCounted
+var fitting_analysis: RefCounted
 var operations: RefCounted
 var drone_control: RefCounted
 var events: Array[D.EventDto] = []
@@ -48,7 +53,7 @@ var _step_accumulator: float = 0.0
 var _active_payload: RefCounted
 var _active_action: D.CommandEnvelopeDto
 
-func setup(world_state: XJRuntimeState, definitions: XJCatalog) -> void:
+func setup(world_state: XJRuntimeState, definitions: XJCatalog, preview: bool = false) -> void:
 	if inventory != null: dispose()
 	state = world_state
 	catalog = definitions
@@ -71,6 +76,9 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog) -> void:
 	tactics = Tactics.new(self)
 	drone_control = DroneControl.new(self)
 	operations = Operations.new(self)
+	specializations = Specializations.new(self)
+	fitting_analysis = FittingAnalysis.new(self)
+	if preview: return
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
 	for ship: D.ShipStateDto in state.rows("ship_state"):
@@ -188,6 +196,9 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 	if industry_actions.has(action): command.action_kind = T.ActionKind.CLAIM_INDUSTRY + industry_actions.find(action)
 	if action == "exploration_action": command.action_kind = T.ActionKind.EXPLORATION_ACTION
 	if action == "exploration_research": command.action_kind = T.ActionKind.EXPLORATION_RESEARCH
+	if action == "specialization_donate": command.action_kind = T.ActionKind.SPECIALIZATION_DONATE
+	if action == "specialization_research": command.action_kind = T.ActionKind.SPECIALIZATION_RESEARCH
+	if action == "replace_fit": command.action_kind = T.ActionKind.REPLACE_FIT
 	if action == "operation_action": command.action_kind = T.ActionKind.OPERATION_ACTION
 	if action == "drone_command": command.action_kind = T.ActionKind.DRONE_COMMAND
 	if action == "drone_replenish": command.action_kind = T.ActionKind.DRONE_REPLENISH
@@ -235,6 +246,11 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 			"claim_industry": ok = industry.claim(target)
 			"cancel_industry": ok = industry.cancel(target)
 			"deliver_demand": ok = industry.deliver(target, quantity, extra)
+			"specialization_donate": ok = specializations.donate(quantity)
+			"specialization_research": ok = specializations.research(target,quantity,extra)
+			"replace_fit":
+				var replace_parts: PackedStringArray=extra.split("|")
+				ok=inventory.replace_fit(target,replace_parts[0],replace_parts[1]) if replace_parts.size()==2 else fail("替换请求缺少槽位和原设备")
 			"operation_action":
 				var parts: PackedStringArray = extra.split(":")
 				ok = operations.execute(target,parts[0],parts[1]) if parts.size() == 2 else fail("行动请求缺少动作与代次")
@@ -360,6 +376,8 @@ func metrics(ship: D.ShipStateDto) -> Dictionary:
 			else: m[change.stat_id] *= 1 + (change.amount - 1) * item.quality_multiplier
 		for change in rows("module_resistance_modifiers"):
 			if change.module_id == e.module_def_id: resist[change.layer_id][damage_index(change.damage_type)] += change.delta
+	if specializations != null and specializations.supported():
+		m.energy_recharge=m.recharge_eu_s; m.heat_cooling=m.cooling_hu_s; m.shield_recharge=m.shield_recharge_hp_s
 	for container in state.rows("container_state"):
 		if container.ship_instance_id != ship.ship_instance_id or container.kind == T.ContainerKind.SLOT: continue
 		var totals: Dictionary = inventory.totals(container.container_id)
@@ -401,13 +419,14 @@ func _set_enabled(item_id: String, enabled: bool) -> bool:
 
 func pay_cycle(equipment: D.EquipmentStateDto) -> bool:
 	var ship: D.ShipStateDto = state.ship()
-	var mod: Dictionary = definition("module_defs", "module_id", equipment.module_def_id)
+	var mod: Dictionary = specializations.weapon_spec(equipment,ship)
+	if mod.is_empty(): mod=definition("module_defs", "module_id", equipment.module_def_id)
 	var item: D.ItemInstanceStateDto = state.find("item_instance_state", "item_instance_id", equipment.item_instance_id)
 	if ship.status != T.ShipStatus.FLYING or not equipment.enabled or equipment.cooldown_remaining_s > 0 or item == null or item.durability <= 0: return fail("设备不可用或冷却中")
-	if ship.overheated or ship.heat + mod.heat_hu > metrics(ship).heat_max:
-		ship.overheated = true
-		return fail("热量已达到限制")
-	if ship.energy < mod.energy_eu: return fail("能量不足")
+	var blocked: String=ResourceBudget.blocked(ship.energy,ship.heat,ship.overheated,metrics(ship).heat_max,mod.energy_eu,mod.heat_hu)
+	if not blocked.is_empty():
+		if blocked=="热量已达到限制":ship.overheated=true
+		return fail(blocked)
 	ship.energy -= mod.energy_eu; ship.heat += mod.heat_hu
 	equipment.cooldown_remaining_s = mod.cycle_s
 	equipment.active_remaining_s = mod.cycle_s
@@ -457,7 +476,7 @@ func consume_weapon_cycle(item_id: String) -> Dictionary:
 	if weapon.is_empty(): return {}
 	var compatible: String = weapon_fit_reason(state.ship(), e.module_def_id, item_id)
 	if not compatible.is_empty(): fail(compatible); return {}
-	var profile: Dictionary = weapon_profile(e.module_def_id)
+	var profile: Dictionary = specializations.weapon_spec(e,state.ship())
 	if profile.is_empty(): fail("缺少武器行为定义"); return {}
 	if profile.fire_mode == "drone" and drone_control.supported() and drone_control.stock(state.ship().ship_instance_id, item_id) <= 0: fail("无人机舱已空，需在空间站补充"); return {}
 	var hold: String = inventory.hold(state.ship(), T.ContainerKind.CARGO)
@@ -466,10 +485,9 @@ func consume_weapon_cycle(item_id: String) -> Dictionary:
 	if not pay_cycle(e): return {}
 	if weapon.ammo_item_id != null: inventory.consume(hold, weapon.ammo_item_id, weapon.ammo_per_cycle, false)
 	mark_hostile_attempt()
-	var item: RefCounted = state.find("item_instance_state", "item_instance_id", item_id)
-	var raw: Vector3 = Vector3.ZERO; raw[damage_index(weapon.damage_type)] = weapon.raw_damage * item.quality_multiplier
+	var raw: Vector3 = Vector3.ZERO; raw[damage_index(weapon.damage_type)] = profile.raw_damage
 	event(T.EventKind.WEAPON_FIRED, state.ship().ship_instance_id, "", item_id)
-	return {"damage_vector":raw,"speed":profile.projectile_speed_mps,"range":mod.range_m,"cycle":mod.cycle_s,"damage_type":weapon.damage_type,"module_id":e.module_def_id,"profile":profile}
+	return {"damage_vector":raw,"speed":profile.projectile_speed_mps,"range":profile.range_m,"cycle":profile.cycle_s,"damage_type":weapon.damage_type,"module_id":e.module_def_id,"profile":profile}
 
 func mark_hostile_attempt() -> void:
 	# A paid shot or an actual NPC fire attempt starts combat even when it misses.
@@ -505,11 +523,9 @@ func begin_step(delta: float) -> void:
 			var def:Dictionary=definition("ship_defs","ship_id",ship.ship_def_id)
 			if ship.energy==def.energy_max and ship.shield==def.shield_max:continue
 		var m: Dictionary = metrics(ship)
-		ship.energy = minf(m.energy_max, ship.energy + m.energy_recharge * delta)
-		ship.heat = maxf(0, ship.heat - m.heat_cooling * delta)
+		ResourceBudget.advance(ship,m,delta,rule("overheat_unlock_ratio"))
 		ship.shield_delay_remaining_s = maxf(0, ship.shield_delay_remaining_s - delta)
 		if ship.shield_delay_remaining_s == 0: ship.shield = minf(m.shield_max, ship.shield + m.shield_recharge * delta * (float(exploration.environment().shield) if ship.ship_instance_id == state.ship().ship_instance_id else 1.0))
-		if ship.heat <= m.heat_max * rule("overheat_unlock_ratio"): ship.overheated = false
 	for e in state.rows("equipment_state"):
 		e.cooldown_remaining_s = maxf(0, e.cooldown_remaining_s - delta)
 		e.active_remaining_s = maxf(0, e.active_remaining_s - delta)
@@ -610,6 +626,7 @@ func damage_npc(instance_id: String, raw_vector: Vector3) -> float:
 				if loot.archetype_id == def.archetype_id: inventory.grant(wreck, loot.item_id, loot.quantity, "normal_owned")
 			npc.loot_claimed = true
 		if packaged: npc.loot_claimed = true
+		specializations.tactic_destroyed(npc)
 		record_event("destroy_spawn", npc.spawn_id, 1)
 		event(T.EventKind.SHIP_DESTROYED, instance_id, "")
 		request_autosave()
@@ -731,8 +748,9 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis]:
 		if service != null: service.g = null
+	specializations = null; fitting_analysis = null
 	operations = null
 	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null; mobile_belts = null
 	tactics = null; drone_control = null

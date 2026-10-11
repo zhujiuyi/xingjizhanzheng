@@ -52,6 +52,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-fitting-v31","file":"fitting_v31.gd","prefix":"fitting-v31","env":"XJ_FITTING_V31","meta":"xj_fitting_v31_diagnostic"},
+		{"flag":"--xj-verify-fitting-world-v31","file":"fitting_world_v31.gd","prefix":"fitting-world-v31","env":"XJ_FITTING_WORLD_V31","meta":"xj_fitting_world_v31_diagnostic"},
 		{"flag":"--xj-verify-operations-v30","file":"operations_v30.gd","prefix":"operations-v30","env":"XJ_OPERATIONS_V30","meta":"xj_operations_v30_diagnostic"},
 		{"flag":"--xj-verify-operations-world-v30","file":"operations_world_v30.gd","prefix":"operations-world-v30","env":"XJ_OPERATIONS_WORLD_V30","meta":"xj_operations_world_v30_diagnostic"},
 		{"flag": "--xj-verify-exploration-world-v27", "file": "exploration_world_v27.gd", "prefix": "exploration-world-v27", "env": "XJ_EXPLORATION_WORLD_V27", "meta": "xj_exploration_world_v27_diagnostic"},
@@ -608,7 +610,7 @@ func _fire_weapons(automatic: bool = false, target_override: String = "") -> voi
 			continue
 		if not equipment.enabled:
 			continue
-		var profile: Dictionary = gameplay.call("weapon_profile", equipment.module_def_id)
+		var profile: Dictionary = gameplay.specializations.weapon_spec(equipment,state.ship())
 		if profile.is_empty(): continue
 		var drone: bool = str(profile.fire_mode) == "drone"
 		if drone and gameplay.drone_control.supported() and gameplay.drone_control.bay(equipment.item_instance_id).command_kind != "attack": continue
@@ -618,7 +620,7 @@ func _fire_weapons(automatic: bool = false, target_override: String = "") -> voi
 		var direction := -origin.basis.z
 		if automatic or drone:
 			if not is_instance_valid(target_node): continue
-			var definition: Dictionary = store.catalog.one("module_defs", "module_id", equipment.module_def_id)
+			var definition: Dictionary = profile
 			var range_origin: Vector3 = world.flight.global_position if drone else origin.origin
 			if range_origin.distance_to(target_node.global_position) > float(definition.get("range_m", 0.0)): continue
 			if direction.angle_to(origin.origin.direction_to(target_node.global_position)) > cone: continue
@@ -1164,6 +1166,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	ui.bind(state, store.catalog, gameplay, world, camera)
 	gameplay.civilizations.status_changed.connect(_civilization_status)
 	gameplay.exploration.warning_changed.connect(_exploration_warning)
+	gameplay.specializations.warning_changed.connect(_tactical_warning)
 	gameplay.operations.warning_changed.connect(_tactical_warning)
 	gameplay.tactics.warning_changed.connect(_tactical_warning)
 	gameplay.drone_control.warning_changed.connect(_tactical_warning)

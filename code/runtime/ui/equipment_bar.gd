@@ -5,6 +5,7 @@ signal toggle_requested(item_id: String, enabled: bool)
 signal engine_requested()
 signal combat_option_requested(option: String, enabled: bool)
 const UISkin = preload("res://runtime/ui_theme.gd")
+const Portraits = preload("res://runtime/ui/item_portraits.gd")
 var module_records: Array[Dictionary] = []
 var module_buttons: Dictionary = {}
 var module_labels: Dictionary = {}
@@ -64,7 +65,7 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 	slot_records.clear()
 	slot_buttons.clear()
 	if row == null: return
-	summary_label.text = "电容 %.0f / %.0f · 热量 %.0f%%" % [float(resources.get("energy", 0.0)), float(resources.get("energy_max", 0.0)), float(resources.get("heat_ratio", 0.0)) * 100.0]
+	summary_label.text = "%d件设备" % records.size()
 	var ids: Array[String] = []
 	var has_engine: bool = false
 	for record: Dictionary in records:
@@ -89,6 +90,13 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 			labels.add_theme_constant_override("separation", 0)
 			labels.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			button.add_child(labels)
+			var icon: TextureRect = TextureRect.new()
+			icon.texture = Portraits.texture("item", str(record.module_id))
+			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon.custom_minimum_size = Vector2(20,20)
+			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			labels.add_child(icon)
 			var title: Label = _header_label(labels, "", 10, UISkin.TEXT)
 			var status: Label = _header_label(labels, "", 10, UISkin.MUTED)
 			var cost: Label = _header_label(labels, "", 9, UISkin.MUTED)
@@ -118,11 +126,11 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 		button.tooltip_text = "%s\n%s槽 %d · %s\n循环 %.1f s · 电容 %.0f · 热量 %.0f\n耐久 %.0f · 点击%s设备" % [str(record.title), str(record.get("slot_title", "")), int(record.get("slot_index", 0)) + 1, str(record.get("state_label", "")), float(record.get("cycle_s", 0.0)), float(record.get("energy_eu", 0.0)), float(record.get("heat_hu", 0.0)), float(record.get("durability", 0.0)), "关闭" if bool(record.get("enabled", false)) else "启用"]
 		var labels: Dictionary = module_labels[id]
 		labels.title.text = "%s%d · %s" % [str(record.get("slot_short", "")), int(record.get("slot_index", 0)) + 1, str(record.title)]
-		labels.status.text = str(record.get("state_label", "")) + (" · 电%.0f 热%.0f" % [float(record.get("energy_eu", 0.0)), float(record.get("heat_hu", 0.0))] if _compact else "")
+		labels.status.text = str(record.get("state_label", ""))
 		labels.cost.text = "电容 %.0f · 热量 %.0f" % [float(record.get("energy_eu", 0.0)), float(record.get("heat_hu", 0.0))]
-		labels.cost.visible = not _compact
+		labels.cost.hide()
 		labels.status.add_theme_color_override("font_color", UISkin.AMBER if not bool(record.get("ready", false)) and bool(record.get("enabled", false)) else UISkin.TEXT if bool(record.get("enabled", false)) else UISkin.MUTED)
-		button.custom_minimum_size = Vector2(96, 36) if _compact else Vector2(106, 54)
+		button.custom_minimum_size = Vector2(68,58) if _compact else Vector2(80,62)
 		var progress: ProgressBar = module_progress[id]
 		progress.max_value = maxf(float(record.get("cycle_s", 0.0)), 0.001)
 		progress.value = float(record.get("cooldown_remaining_s", 0.0))
@@ -150,7 +158,7 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 			empty_slot_buttons[slot_id] = placeholder
 		placeholder.text = "%s%d · 空槽" % [str(record.slot_short), int(record.slot_index) + 1]
 		placeholder.add_theme_font_size_override("font_size", 10)
-		placeholder.custom_minimum_size = Vector2(96, 36) if _compact else Vector2(106, 54)
+		placeholder.custom_minimum_size = Vector2(68,58) if _compact else Vector2(80,62)
 		placeholder.tooltip_text = "%s槽 %d · 当前未安装设备\n停靠空间站后前往配装页面安装兼容设备。" % [str(record.slot_title), int(record.slot_index) + 1]
 		slot_buttons[slot_id] = placeholder
 	for slot_id: String in empty_slot_buttons.keys():
@@ -180,8 +188,8 @@ func responsive(compact: bool) -> void:
 	for labels: Dictionary in module_labels.values():
 		labels.title.add_theme_font_size_override("font_size", 10)
 		labels.status.add_theme_font_size_override("font_size", 9 if compact else 10)
-		labels.cost.visible = not compact
-	for button: Variant in slot_buttons.values(): button.custom_minimum_size = Vector2(96, 36) if compact else Vector2(106, 54)
+		labels.cost.hide()
+	for button: Variant in slot_buttons.values(): button.custom_minimum_size = Vector2(68,58) if compact else Vector2(80,62)
 
 func _build_combat_options(parent: VBoxContainer) -> void:
 	combat_options_row = HBoxContainer.new()

@@ -783,6 +783,29 @@ class ExplorationBeltStateDto extends RefCounted:
 	var start_elapsed_s: float = 0.0
 	var initial_units: int = 0
 
+class SpecializationProgressStateDto extends RefCounted:
+	var player_id: String = ""
+	var earned_points: int = 0
+	var spent_points: int = 0
+	var donated_points: int = 0
+class SpecializationEvidenceStateDto extends RefCounted:
+	var player_id: String = ""
+	var source_token: String = ""
+	var source_kind: String = ""
+	var source_def_id: String = ""
+	var generation: int = 0
+	var source_units: int = 0
+	var awarded_points: int = 0
+	var material_units: int = 0
+	var paid_credit: int = 0
+class SpecializationResearchStateDto extends RefCounted:
+	var player_id: String = ""
+	var research_id: String = ""
+	var invested_points: int = 0
+	var paid_credit: int = 0
+	var completed: bool = false
+	var completed_tick: int = 0
+
 class OperationStateDto extends RefCounted:
 	var operation_id: String = ""
 	var generation: int = 0
@@ -913,6 +936,9 @@ class WorldSnapshotDto extends RefCounted:
 	var exploration_progress_state_rows: Array[ExplorationProgressStateDto] = []
 	var exploration_research_state_rows: Array[ExplorationResearchStateDto] = []
 	var exploration_belt_state_rows: Array[ExplorationBeltStateDto] = []
+	var specialization_progress_state_rows: Array[SpecializationProgressStateDto] = []
+	var specialization_evidence_state_rows: Array[SpecializationEvidenceStateDto] = []
+	var specialization_research_state_rows: Array[SpecializationResearchStateDto] = []
 	var operation_state_rows: Array[OperationStateDto] = []
 	var tactical_site_state_rows: Array[TacticalSiteStateDto] = []
 	var npc_tactic_state_rows: Array[NpcTacticStateDto] = []

@@ -23,6 +23,7 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	if not _validate_mobile_belts(state, catalog): return false
 	if not _validate_tactics(state, catalog): return false
 	if not _validate_operations(state, catalog): return false
+	if not _validate_specializations(state,catalog): return false
 	for ship in state.rows("ship_state"):
 		var norm: float = ship.quat_x * ship.quat_x + ship.quat_y * ship.quat_y + ship.quat_z * ship.quat_z + ship.quat_w * ship.quat_w
 		if abs(norm - 1.0) >= 0.00001: return _fail("Invalid normalized ship quaternion")
@@ -112,6 +113,42 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 			var capacity: int = definition.cargo_l if container.kind == Types.ContainerKind.CARGO else definition.mineral_cargo_l
 			if volume > capacity: return _fail("Cargo volume exceeded")
 		if payload > definition.max_payload_mass_kg + 0.0000001: return _fail("Shared payload mass exceeded")
+	return true
+
+func _validate_specializations(state: State,catalog: XJCatalog) -> bool:
+	if not catalog.table_names.has("weapon_tuning_defs"):
+		for table: String in ["specialization_progress_state","specialization_evidence_state","specialization_research_state"]:
+			if not state.rows(table).is_empty():return _fail("Specialization data under legacy content")
+		return true
+	if state.rows("specialization_progress_state").size()!=1:return _fail("Specialization coverage incomplete")
+	var progress: RefCounted=state.rows("specialization_progress_state")[0];var earned: int=0;var donated: int=0;var spent: int=0;var sources: Dictionary={};var projects: Dictionary={}
+	var balance: Dictionary=catalog.rows("specialization_balance_defs")[0]
+	for row: RefCounted in state.rows("specialization_evidence_state"):
+		if row.player_id!=state.player().player_id or sources.has(row.source_token) or row.source_units<=0 or row.awarded_points<=0 or row.generation<0:return _fail("Invalid specialization source identity")
+		sources[row.source_token]=true;earned+=row.awarded_points
+		if row.source_kind=="donation":
+			donated+=row.awarded_points
+			if row.source_def_id!=balance.donation_item_id or row.source_units>int(balance.max_donation_points) or row.awarded_points!=row.source_units or row.material_units!=row.source_units*int(balance.donation_units_per_point) or row.paid_credit!=row.source_units*int(balance.donation_credit_per_point):return _fail("Unpaid specialization donation")
+		else:
+			if row.material_units!=0 or row.paid_credit!=0:return _fail("Unexpected source payment")
+			match row.source_kind:
+				"tactic":
+					if row.source_units!=1 or row.awarded_points!=int(balance.tactic_points) or catalog.one("npc_tactic_bindings","spawn_id",row.source_def_id).is_empty():return _fail("Invalid tactical research source")
+				"exploration":
+					var found: bool=false
+					for claim: RefCounted in state.rows("exploration_claim_state"):
+						if claim.event_id==row.source_def_id and claim.generation==row.generation:found=true
+					if not found or row.source_units!=1 or row.awarded_points!=int(balance.exploration_points):return _fail("Invalid exploration research source")
+				"operation":
+					var operation: RefCounted=state.find("operation_state","operation_id",row.source_def_id);var spec: Dictionary=catalog.one("operation_defs","operation_id",row.source_def_id)
+					if operation==null or operation.generation<row.generation or row.source_units>int(spec.target_units) or row.awarded_points!=row.source_units*int(balance.operation_points_per_unit):return _fail("Invalid operation research source")
+				_:return _fail("Unknown specialization evidence kind")
+	for row: RefCounted in state.rows("specialization_research_state"):
+		var spec: Dictionary=catalog.one("specialization_research_defs","research_id",row.research_id)
+		if spec.is_empty() or projects.has(row.research_id) or row.player_id!=state.player().player_id or row.invested_points<=0 or row.invested_points>int(spec.required_points) or row.paid_credit!=row.invested_points*int(spec.credit_per_point) or row.completed!=(row.invested_points==int(spec.required_points)) or (not row.completed and row.completed_tick!=0):return _fail("Invalid specialization research ledger")
+		if row.completed and state.find("unlock_state","unlock_id",spec.reward_unlock_id)==null:return _fail("Completed specialization unlock missing")
+		projects[row.research_id]=true;spent+=row.invested_points
+	if progress.player_id!=state.player().player_id or progress.earned_points!=earned or progress.spent_points!=spent or progress.donated_points!=donated or spent>earned:return _fail("Specialization evidence conservation failed")
 	return true
 
 func _validate_operations(state: State, catalog: XJCatalog) -> bool:

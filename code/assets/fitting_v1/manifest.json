@@ -1,0 +1,68 @@
+{
+  "format_version": 1,
+  "asset_version": "fitting-v1",
+  "entries": [
+    {
+      "kind": "item",
+      "id": "module_spec_burst",
+      "resource_path": "res://assets/fitting_v1/burst.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_spec_burst",
+      "resource_path": "res://assets/fitting_v1/burst.svg"
+    },
+    {
+      "kind": "research",
+      "id": "spec_burst",
+      "resource_path": "res://assets/fitting_v1/burst.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_spec_sustain",
+      "resource_path": "res://assets/fitting_v1/sustain.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_spec_sustain",
+      "resource_path": "res://assets/fitting_v1/sustain.svg"
+    },
+    {
+      "kind": "research",
+      "id": "spec_sustain",
+      "resource_path": "res://assets/fitting_v1/sustain.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_spec_range",
+      "resource_path": "res://assets/fitting_v1/range.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_spec_range",
+      "resource_path": "res://assets/fitting_v1/range.svg"
+    },
+    {
+      "kind": "research",
+      "id": "spec_range",
+      "resource_path": "res://assets/fitting_v1/range.svg"
+    }
+  ],
+  "resources": [
+    {
+      "resource_path": "res://assets/fitting_v1/burst.svg",
+      "sha256": "5cc7418b5e597e424f38b8dd40dc6f49abaf511a5c97ab0a41d05fc478d86ccf",
+      "source": "Project-authored static SVG"
+    },
+    {
+      "resource_path": "res://assets/fitting_v1/sustain.svg",
+      "sha256": "02a14f4f73b598080bd9d654d98882b6136fbaa205dd335e7b3cf3e332016506",
+      "source": "Project-authored static SVG"
+    },
+    {
+      "resource_path": "res://assets/fitting_v1/range.svg",
+      "sha256": "688fa90a8d3c97bf08e9e1a3c6bf048cbe0a547a1e7d6da9139651b5a3336878",
+      "source": "Project-authored static SVG"
+    }
+  ]
+}

@@ -4,7 +4,7 @@ extends RefCounted
 const MANIFESTS: Array[String] = ["res://assets/interface_v2/manifest.json", "res://assets/hangar_v2/manifest.json", "res://assets/interface_v3/manifest.json", "res://assets/navigation_v3/manifest.json", "res://assets/ship_v3/manifest.json", "res://assets/station_v3/manifest.json", "res://data/local_navigation_v1_manifest.json", "res://data/warp_presentation_v3_manifest.json", "res://assets/business_v11/manifest.json", "res://assets/service_navigation_v3/manifest.json"]
 
 static func validate() -> String:
-	for manifest_path: String in MANIFESTS + ["res://assets/civilization_v1/manifest.json"]:
+	for manifest_path: String in MANIFESTS + ["res://assets/civilization_v1/manifest.json", "res://assets/fitting_v1/manifest.json"]:
 		if not FileAccess.file_exists(manifest_path): return "表现资源清单缺失：" + manifest_path
 		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(manifest_path))
 		if not parsed is Dictionary or not parsed.get("resources") is Array or parsed.resources.is_empty():

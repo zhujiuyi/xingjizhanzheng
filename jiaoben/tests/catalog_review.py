@@ -1,0 +1,28 @@
+"""Isolate only v0.15's reviewed names in older additive-preservation checks.
+
+Callers first require every historical row to remain present. test_fitting.py
+separately compares all v0.14 schemas, rows and views against the live catalogue.
+"""
+FITTING_NAMES = {
+    'unlock_defs': ('unlock_id', 'unlock_spec_'),
+    'item_defs': ('item_id', 'module_spec_'),
+    'module_defs': ('module_id', 'module_spec_'),
+    'module_tech_defs': ('module_id', 'module_spec_'),
+    'module_group_members': ('module_id', 'module_spec_'),
+    'module_salvage_recipe_defs': ('module_id', 'module_spec_'),
+    'module_exclusion_groups': ('group_id', 'spec_'),
+    'recipe_defs': ('recipe_id', 'recipe_spec_'),
+    'recipe_inputs': ('recipe_id', 'recipe_spec_'),
+    'recipe_access_defs': ('recipe_id', 'recipe_spec_'),
+    'recycle_outputs': ('source_item_id', 'module_spec_'),
+    'station_stock_defs': ('item_id', 'module_spec_'),
+    'industry_recipe_defs': ('blueprint_id', 'recipe_spec_'),
+}
+
+def without_fitting_extensions(connection, table, rows):
+    if table not in FITTING_NAMES:
+        return rows
+    column, prefix = FITTING_NAMES[table]
+    columns = [r[1] for r in connection.execute(f'PRAGMA table_info("{table}")')]
+    index = columns.index(column)
+    return {r for r in rows if not str(r[index]).startswith(prefix)}

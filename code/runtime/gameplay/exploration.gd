@@ -296,6 +296,7 @@ func _claim(row: D.ExplorationInstanceStateDto) -> bool:
 		receipt.has_demand_id = true; receipt.demand_id = need.demand_id; receipt.demand_generation = demand.generation
 		break
 	g.state.add("exploration_claim_state", receipt); row.phase = "claimed"
+	g.specializations.exploration_claimed(receipt)
 	return true
 
 func research(research_id: String) -> bool:
