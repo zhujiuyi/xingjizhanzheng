@@ -78,8 +78,8 @@ func _run() -> void:
 	state=store.new_world("文明真实能力考核",3301)
 	if not check(state!=null,"all commander coverage seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==61 and state.rows("civilization_command_state").size()==3 and state.rows("civilization_honor_evidence_state").is_empty(),"sixty-one groups initialize without free qualifications")
-	check(int(store._records("PRAGMA user_version")[0].values()[0])==18,"real newly created SQLite user version matches format18")
+	check(XJRuntimeState.TABLES.size()==68 and state.rows("civilization_command_state").size()==3 and state.rows("civilization_honor_evidence_state").is_empty(),"retained commander groups and frontier authority initialize without free qualifications")
+	check(int(store._records("PRAGMA user_version")[0].values()[0])==19,"real newly created SQLite user version matches format19")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)
 	state.player().credit=1000000;g.missions.refresh();g._sync_spawns()
 	hull("transport_caravan");fit("module_scanner_beacon_i","utility:0")
@@ -125,6 +125,8 @@ func _run() -> void:
 		check(state.player().credit==credit+int(def.reward_credit) and g.economy.reputation(faction)==reputation+int(def.reward_reputation),"certification pays the exact one-time reward")
 		credit=state.player().credit
 		check(not apply("honor_action",faction,1,"certify:assessing") and state.player().credit==credit,"repeated certification cannot pay again")
+		var front: RefCounted=g.get("frontier")
+		if front!=null and front.supported():g.inventory.grant(g.inventory.warehouse(g.station()),front.balance.material_id,int(front.balance.supply_units))
 		check(g.civilizations.war_reason(war_id).is_empty() and apply("start_war",war_id),"qualification has a real new-war permission consumer")
 		check(apply("fleet_command","retreat"),"qualified campaign can use real existing retreat")
 		step(g.combat_remaining_s+0.2)
@@ -142,7 +144,7 @@ func _run() -> void:
 func prior_honor_signature(value: XJRuntimeState) -> String:
 	var data: Dictionary={}
 	for table: String in XJRuntimeState.TABLES:
-		if table in ["civilization_command_state","civilization_honor_evidence_state"]:continue
+		if table in ["civilization_command_state","civilization_honor_evidence_state"] or table.begins_with("frontier_"):continue
 		var rows: Array=[]
 		for row: RefCounted in value.rows(table):rows.append(Codec.new().encode_row(table,row))
 		rows.sort_custom(func(a: Dictionary,b: Dictionary)->bool:return JSON.stringify(a)<JSON.stringify(b));data[table]=rows

@@ -1,3 +1,4 @@
+from catalog_review import without_frontier_extensions
 """Immutable old balance, equal installation budgets and research escrow invariants."""
 from pathlib import Path
 import sqlite3,sys,unittest
@@ -21,6 +22,7 @@ class FittingDefinitions(unittest.TestCase):
    info=old.execute(f'PRAGMA table_info("{table}")').fetchall();self.assertEqual(info,self.db.execute(f'PRAGMA table_info("{table}")').fetchall(),table)
    before=set(old.execute(f'SELECT * FROM "{table}"'));after=set(self.db.execute(f'SELECT * FROM "{table}"'))
    self.assertLessEqual(before,after,table)
+   after=without_frontier_extensions(self.db,table,after)
    if table not in allowed:self.assertEqual(before,after,table)
    else:
     column,prefix=allowed[table];index=next(i for i,r in enumerate(info) if r[1]==column)

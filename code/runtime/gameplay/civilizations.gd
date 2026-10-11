@@ -144,12 +144,13 @@ func war_reason(war_id: String) -> String:
 	var policy: Dictionary = g.definition("sector_sovereignty_defs", "sector_id", definition.target_sector_id)
 	if policy.is_empty() or not bool(policy.conquerable) or not owner(definition.target_sector_id).is_empty(): return "目标已非可争夺的中立星系"
 	if g.missions.has_pending_loans(): return "先归还待清理的任务借船"
-	return ""
+	return g.frontier.quote_reason(war_id)
 
 func start_war(war_id: String) -> bool:
 	var reason: String = war_reason(war_id)
 	if not reason.is_empty(): return g.fail(reason)
 	if not g.allowed_service("mission_board"): return false
+	if not g.frontier.pay_begin(war_id):return false
 	var definition: Dictionary = g.definition("civilization_war_defs", "war_id", war_id)
 	var campaign: D.WarCampaignStateDto = g.state.find("war_campaign_state", "war_id", war_id)
 	if campaign == null:
@@ -185,6 +186,7 @@ func start_war(war_id: String) -> bool:
 		var fleet: D.WarFleetStateDto = D.WarFleetStateDto.new()
 		fleet.npc_instance_id = npc.npc_instance_id; fleet.war_id = war_id; fleet.side = entry.side
 		g.state.add("war_fleet_state", fleet)
+	g.frontier.begin(campaign)
 	return true
 
 func handles_spawn(spawn_id: String) -> bool:
@@ -198,10 +200,14 @@ func friendly(npc_id: String) -> bool:
 		var owner: String = g.drone_control.owner(npc_id)
 		if not owner.is_empty(): return owner == g.state.ship().ship_instance_id or friendly(owner)
 	if g.exploration != null and g.exploration.friendly(npc_id): return true
+	if g.frontier!=null and g.frontier.friendly(npc_id):return true
 	var member: D.WarFleetStateDto = fleet_member(npc_id)
 	return member != null and member.side == "ally"
 
 func escort_hull(npc_id: String) -> String:
+	if g.frontier!=null:
+		var model: String=g.frontier.model(npc_id)
+		if not model.is_empty():return model
 	if g.exploration != null:
 		var event_hull: String = g.exploration.escort_hull(npc_id)
 		if not event_hull.is_empty(): return event_hull
@@ -248,6 +254,7 @@ func tick(delta: float) -> void:
 	if member != null: member.switch_cooldown_remaining_s = maxf(0, member.switch_cooldown_remaining_s - delta)
 	var campaign: D.WarCampaignStateDto = active_war()
 	if campaign == null: return
+	if g.frontier.owns_campaign(campaign):g.frontier.tick_campaign(delta,campaign);return
 	var definition: Dictionary = g.definition("civilization_war_defs", "war_id", campaign.war_id)
 	if g.state.ship().status == T.ShipStatus.DESTROYED or living_fleet(campaign, "ally").is_empty():
 		_finish(campaign, "failed")
@@ -282,6 +289,8 @@ func tick(delta: float) -> void:
 		_finish(campaign, "won")
 
 func _finish(campaign: D.WarCampaignStateDto, status: String) -> void:
+	if status=="cancelled":g.frontier.cancelled(campaign)
+	g.frontier.legacy_finished(campaign,status)
 	campaign.status = status
 	campaign.finished_tick = g.state.snapshot.meta.simulation_tick
 	_clear_fleet(campaign.war_id)

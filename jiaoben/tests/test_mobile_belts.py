@@ -4,7 +4,7 @@ from pathlib import Path
 import sqlite3
 import sys
 import unittest
-from catalog_review import without_fitting_extensions
+from catalog_review import without_later_extensions
 from unittest import mock
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -32,7 +32,7 @@ class MobileDefinitions(unittest.TestCase):
             self.assertEqual(old.execute(f'PRAGMA table_info("{table}")').fetchall(),self.db.execute(f'PRAGMA table_info("{table}")').fetchall(),table)
             before=set(old.execute(f'SELECT * FROM "{table}"'));after=set(self.db.execute(f'SELECT * FROM "{table}"'))
             self.assertLessEqual(before,after,table)
-            after = without_fitting_extensions(self.db, table, after)
+            after = without_later_extensions(self.db, table, after)
             if table not in ('anchor_defs','anchor_site_defs','site_defs','npc_archetype_defs','npc_behavior_defs','npc_resistances','npc_defs','npc_spawn_defs','npc_patrol_points'):self.assertEqual(before,after,table)
             else:
                 key=next(i for i,r in enumerate(old.execute(f'PRAGMA table_info("{table}")')) if r[5]==1)

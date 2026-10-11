@@ -126,8 +126,8 @@ func discount(station_id: String) -> float:
 	if not supported(): return 1.0
 	for state: D.StationDemandStateDto in g.state.rows("station_demand_state"):
 		if state.benefit_remaining_s <= 0: continue
-		if g.definition("station_demand_defs", "demand_id", state.demand_id).station_id == station_id: return 1.0 - float(balance.demand_industry_discount_bp) / 10000.0
-	return 1.0
+		if g.definition("station_demand_defs", "demand_id", state.demand_id).station_id == station_id: return (1.0 - float(balance.demand_industry_discount_bp) / 10000.0)*g.frontier.station_factor(station_id,"industry")
+	return g.frontier.station_factor(station_id,"industry")
 
 func price_factor(item_id: String) -> float:
 	if not supported(): return 1.0

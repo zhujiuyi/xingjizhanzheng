@@ -26,3 +26,14 @@ def without_fitting_extensions(connection, table, rows):
     columns = [r[1] for r in connection.execute(f'PRAGMA table_info("{table}")')]
     index = columns.index(column)
     return {r for r in rows if not str(r[index]).startswith(prefix)}
+
+def without_frontier_extensions(connection, table, rows):
+    """Only the five named additive base tables; test_frontier verifies them."""
+    columns_by_table={'anchor_defs':'anchor_id','anchor_site_defs':'anchor_id','npc_defs':'npc_id','npc_spawn_defs':'spawn_id','npc_patrol_points':'spawn_id'}
+    if table not in columns_by_table:return rows
+    columns=[r[1] for r in connection.execute(f'PRAGMA table_info("{table}")')]
+    index=columns.index(columns_by_table[table])
+    return {r for r in rows if not str(r[index]).startswith('frontier_')}
+
+def without_later_extensions(connection,table,rows):
+    return without_frontier_extensions(connection,table,without_fitting_extensions(connection,table,rows))

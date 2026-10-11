@@ -18,6 +18,7 @@ from mobile_belts_catalog import COLUMNS as MOBILE_BELTS_COLUMNS, TABLES as MOBI
 from fitting_catalog import COLUMNS as FITTING_COLUMNS, TABLES as FITTING_TABLES, validate as validate_fitting
 from roles_catalog import COLUMNS as ROLE_COLUMNS, TABLES as ROLE_TABLES, validate as validate_roles
 from honors_catalog import COLUMNS as HONOR_COLUMNS, TABLES as HONOR_TABLES, validate as validate_honors
+from frontier_catalog import COLUMNS as FRONTIER_COLUMNS, TABLES as FRONTIER_TABLES, validate as validate_frontier
 from operations_catalog import COLUMNS as OPERATIONS_COLUMNS, TABLES as OPERATIONS_TABLES, validate as validate_operations
 from tactics_catalog import COLUMNS as TACTICS_COLUMNS, TABLES as TACTICS_TABLES, validate as validate_tactics
 
@@ -46,6 +47,8 @@ ROLE_SCHEMA = ROOT / "code/database/roles_schema.sql"
 ROLE_SEED = ROOT / "code/database/roles_seed.sql"
 HONOR_SCHEMA = ROOT / "code/database/honors_schema.sql"
 HONOR_SEED = ROOT / "code/database/honors_seed.sql"
+FRONTIER_SCHEMA = ROOT / "code/database/frontier_schema.sql"
+FRONTIER_SEED = ROOT / "code/database/frontier_seed.sql"
 HASH_ALGORITHM = "catalog_hash_v1"
 CONTENT_VIEWS = ("effective_connection_defs", "module_full_defs", "npc_full_defs", "mission_summary_defs")
 # Explicit table registry; column order and PK order come from the reviewed DDL.
@@ -271,6 +274,8 @@ CONTENT_TABLES += ROLE_TABLES
 CONTENT_COLUMNS.update(ROLE_COLUMNS)
 CONTENT_TABLES += HONOR_TABLES
 CONTENT_COLUMNS.update(HONOR_COLUMNS)
+CONTENT_TABLES += FRONTIER_TABLES
+CONTENT_COLUMNS.update(FRONTIER_COLUMNS)
 
 
 def identifier(name: str) -> str:
@@ -558,6 +563,7 @@ def validate_content_graph(connection: sqlite3.Connection) -> None:
     validate_fitting(connection)
     validate_roles(connection)
     validate_honors(connection)
+    validate_frontier(connection)
 
 
 def validate_space_content(connection: sqlite3.Connection) -> None:
@@ -772,7 +778,7 @@ def build_catalog(output: Path = DEFAULT_OUTPUT) -> dict[str, object]:
         connection.execute("PRAGMA journal_mode=DELETE")
         connection.execute("PRAGMA synchronous=EXTRA")
         # One explicit transaction: schema, seed, checks and logical hash.
-        source = "BEGIN IMMEDIATE;\n" + "\n".join(path.read_text(encoding="utf-8") for path in (SCHEMA, SEED, SPACE, CIVILIZATION_SCHEMA, CIVILIZATION_SEED, INDUSTRY_SCHEMA, INDUSTRY_SEED, RESOURCE_INTEL_SCHEMA, RESOURCE_INTEL_SEED, EXPLORATION_SCHEMA, EXPLORATION_SEED, MOBILE_BELTS_SCHEMA, MOBILE_BELTS_SEED, TACTICS_SCHEMA, TACTICS_SEED, OPERATIONS_SCHEMA, OPERATIONS_SEED, FITTING_SCHEMA, FITTING_SEED, ROLE_SCHEMA, ROLE_SEED, HONOR_SCHEMA, HONOR_SEED))
+        source = "BEGIN IMMEDIATE;\n" + "\n".join(path.read_text(encoding="utf-8") for path in (SCHEMA, SEED, SPACE, CIVILIZATION_SCHEMA, CIVILIZATION_SEED, INDUSTRY_SCHEMA, INDUSTRY_SEED, RESOURCE_INTEL_SCHEMA, RESOURCE_INTEL_SEED, EXPLORATION_SCHEMA, EXPLORATION_SEED, MOBILE_BELTS_SCHEMA, MOBILE_BELTS_SEED, TACTICS_SCHEMA, TACTICS_SEED, OPERATIONS_SCHEMA, OPERATIONS_SEED, FITTING_SCHEMA, FITTING_SEED, ROLE_SCHEMA, ROLE_SEED, HONOR_SCHEMA, HONOR_SEED, FRONTIER_SCHEMA, FRONTIER_SEED))
         connection.executescript(source)
         validate_database(connection)
         content_hash = logical_content_hash(connection)

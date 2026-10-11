@@ -945,6 +945,93 @@ class CivilizationHonorEvidenceStateDto extends RefCounted:
 	var credited_units: int = 0
 	var recorded_tick: int = 0
 
+## 对应 progress.frontier_campaign_state；公共复合键由 WorldSnapshot.meta 注入。
+class FrontierCampaignStateDto extends RefCounted:
+	var war_id: String = ""
+	var attempt: int = 0
+	var phase: String = "idle"
+	var legacy_attempt: int = 0
+	var survey_paid: bool = false
+	var survey_remaining_s: float = 0.0
+	var supplies_paid_units: int = 0
+	var supply_delivered: bool = false
+	var repair_paid_units: int = 0
+	var repair_remaining_s: float = 0.0
+	var hold_remaining_s: float = 0.0
+	var demolition_units: int = 0
+
+## 对应 progress.frontier_actor_state；公共复合键由 WorldSnapshot.meta 注入。
+class FrontierActorStateDto extends RefCounted:
+	var npc_instance_id: String = ""
+	var has_war_id: bool = false
+	var war_id: String = ""
+	var sector_id: String = ""
+	var generation: int = 0
+	var actor_role: String = ""
+
+## 对应 progress.frontier_campaign_receipt_state；公共复合键由 WorldSnapshot.meta 注入。
+class FrontierCampaignReceiptStateDto extends RefCounted:
+	var source_token: String = ""
+	var war_id: String = ""
+	var attempt: int = 0
+	var event_kind: String = ""
+	var units: int = 0
+	var material_units: int = 0
+	var reward_credit: int = 0
+	var reward_reputation: int = 0
+	var event_tick: int = 0
+
+## 对应 progress.frontier_territory_state；公共复合键由 WorldSnapshot.meta 注入。
+class FrontierTerritoryStateDto extends RefCounted:
+	var sector_id: String = ""
+	var phase: String = "neutral"
+	var revision: int = 0
+	var reserve_units: int = 0
+	var crisis_generation: int = 0
+	var warning_remaining_s: float = 0.0
+	var defense_remaining_s: float = 0.0
+	var hold_remaining_s: float = 0.0
+
+## 对应 progress.frontier_journal_state；公共复合键由 WorldSnapshot.meta 注入。
+class FrontierJournalStateDto extends RefCounted:
+	var source_token: String = ""
+	var sector_id: String = ""
+	var revision: int = 0
+	var event_kind: String = ""
+	var has_faction_id: bool = false
+	var faction_id: String = ""
+	var has_war_id: bool = false
+	var war_id: String = ""
+	var attempt: int = 0
+	var crisis_generation: int = 0
+	var has_supply_order_id: bool = false
+	var supply_order_id: String = ""
+	var units: int = 0
+	var reward_credit: int = 0
+	var reward_reputation: int = 0
+	var event_tick: int = 0
+
+## 对应 progress.frontier_supply_order_state；公共复合键由 WorldSnapshot.meta 注入。
+class FrontierSupplyOrderStateDto extends RefCounted:
+	var order_id: String = ""
+	var sector_id: String = ""
+	var faction_id: String = ""
+	var units: int = 0
+	var paid_credit: int = 0
+	var phase: String = "inflight"
+	var remaining_s: float = 0.0
+	var created_tick: int = 0
+	var finished_tick: int = 0
+
+## 对应 progress.frontier_director_state；公共复合键由 WorldSnapshot.meta 注入。
+class FrontierDirectorStateDto extends RefCounted:
+	var player_id: String = ""
+	var next_event_s: float = 0.0
+	var has_active_sector_id: bool = false
+	var active_sector_id: String = ""
+	var has_active_faction_id: bool = false
+	var active_faction_id: String = ""
+
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
 	var content: ContentRefDto = ContentRefDto.new()
@@ -1005,6 +1092,13 @@ class WorldSnapshotDto extends RefCounted:
 	var consignment_receipt_state_rows: Array[ConsignmentReceiptStateDto] = []
 	var civilization_command_state_rows: Array[CivilizationCommandStateDto] = []
 	var civilization_honor_evidence_state_rows: Array[CivilizationHonorEvidenceStateDto] = []
+	var frontier_campaign_state_rows: Array[FrontierCampaignStateDto] = []
+	var frontier_actor_state_rows: Array[FrontierActorStateDto] = []
+	var frontier_campaign_receipt_state_rows: Array[FrontierCampaignReceiptStateDto] = []
+	var frontier_territory_state_rows: Array[FrontierTerritoryStateDto] = []
+	var frontier_journal_state_rows: Array[FrontierJournalStateDto] = []
+	var frontier_supply_order_state_rows: Array[FrontierSupplyOrderStateDto] = []
+	var frontier_director_state_rows: Array[FrontierDirectorStateDto] = []
 	var tactical_site_state_rows: Array[TacticalSiteStateDto] = []
 	var npc_tactic_state_rows: Array[NpcTacticStateDto] = []
 	var ship_tactical_effect_state_rows: Array[ShipTacticalEffectStateDto] = []

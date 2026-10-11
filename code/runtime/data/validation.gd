@@ -28,6 +28,8 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	if not role_check.validate(state,catalog): return _fail(role_check.last_error)
 	var honor_check: RefCounted=preload("res://runtime/data/honor_validation.gd").new()
 	if not honor_check.validate(state,catalog):return _fail(honor_check.last_error)
+	var frontier_check: RefCounted=preload("res://runtime/data/frontier_validation.gd").new()
+	if not frontier_check.validate(state,catalog):return _fail(frontier_check.last_error)
 	for ship in state.rows("ship_state"):
 		var norm: float = ship.quat_x * ship.quat_x + ship.quat_y * ship.quat_y + ship.quat_z * ship.quat_z + ship.quat_w * ship.quat_w
 		if abs(norm - 1.0) >= 0.00001: return _fail("Invalid normalized ship quaternion")
@@ -403,7 +405,7 @@ func _validate_civilizations(state: State, catalog: XJCatalog) -> bool:
 		if war.status not in ["assembling", "fighting", "occupying", "won", "failed", "cancelled"] or war.fleet_order not in ["advance", "focus", "regroup"]: return _fail("Invalid war phase or order")
 		if war.capture_remaining_s < 0 or war.capture_remaining_s > float(definition.capture_duration_s) or war.attempt < 1: return _fail("Invalid war capture clock")
 		if bool(war.rewards_claimed) != (war.status == "won"): return _fail("War reward receipt mismatch")
-		if war.status == "won" and controls[definition.target_sector_id] != definition.faction_id: return _fail("War victory missing territory")
+		if war.status == "won" and controls[definition.target_sector_id] != definition.faction_id and not preload("res://runtime/data/frontier_validation.gd").new().historical_victory(state,catalog,war): return _fail("War victory missing territory")
 		if war.status in ["assembling", "fighting", "occupying"]:
 			active += 1
 			if not identity.has_faction_id or identity.faction_id != definition.faction_id or controls[definition.target_sector_id] != null: return _fail("Active war has wrong allegiance or occupied target")

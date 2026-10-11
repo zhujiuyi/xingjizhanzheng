@@ -11,6 +11,10 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "frontier": ("frontier_v34.gd", "XJ_FRONTIER_V34", "frontier-v34", "FRONTIER_V34", "--xj-verify-frontier-v34"),
+    "frontier-governance-world": ("frontier_governance_world_v34.gd", "XJ_FRONTIER_GOVERNANCE_WORLD_V34", "frontier-governance-world-v34", "FRONTIER_GOVERNANCE_WORLD_V34", "--xj-verify-frontier-governance-world-v34"),
+    "frontier-world": ("frontier_world_v34.gd", "XJ_FRONTIER_WORLD_V34", "frontier-world-v34", "FRONTIER_WORLD_V34", "--xj-verify-frontier-world-v34"),
+    "frontier-demolition-world": ("frontier_world_v34.gd", "XJ_FRONTIER_WORLD_V34", "frontier-world-v34", "FRONTIER_WORLD_V34", "--xj-verify-frontier-world-v34"),
     "honors": ("honors_v33.gd", "XJ_HONORS_V33", "honors-v33", "HONORS_V33", "--xj-verify-honors-v33"),
     "honors-world": ("honors_world_v33.gd", "XJ_HONORS_WORLD_V33", "honors-world-v33", "HONORS_WORLD_V33", "--xj-verify-honors-world-v33"),
     "roles": ("roles_v32.gd", "XJ_ROLES_V32", "roles-v32", "ROLES_V32", "--xj-verify-roles-v32"),
@@ -102,6 +106,8 @@ def run_suite():
         builtin = name in ("base-store", "base-presentation")
         test = ROOT / ("code" if builtin else "jiaoben/tests") / script
         env = os.environ.copy()
+        if name in ("frontier-world", "frontier-demolition-world"):
+            env["XJ_FRONTIER_BATTLE_KIND"] = "demolition" if name == "frontier-demolition-world" else "hold"
         env.pop("XJ_TEST_DATABASE", None)
         if builtin:
             env["XJ_TEST_DATABASE"] = (directory / "progress.db").as_posix()
@@ -168,6 +174,7 @@ def run_suite():
         report_path.write_text(json.dumps({"mode": mode, "identity": identity, "cases": records}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
         assert code == 0 and engine_log.exists(), f"{name} process failed: {output}"
         assert re.search(rf"^{marker}(?:_RESULT)? PASS.*failures=0", text, re.M), f"{name} incomplete/failed result: {output}"
+        assert not re.search(r"^FAIL(?:\s|$)", text, re.M), f"{name} contains a failed nested assertion: {output}"
         assert not record["diagnostics"], f"{name} diagnostics: {record['diagnostics'][:5]}"
         if "summary" in record:
             assert record["summary"]["result"] == "PASS" and record["summary"]["failures"] == 0
@@ -177,6 +184,15 @@ def run_suite():
             assert len(captures) == (0 if name == "base-store" else 17)
         if name in ("civilizations", "civilization-upgrade"):
             assert record["summary"]["checks"] >= (200 if name == "civilizations" else 25) and len(captures) == 0
+        if name == "frontier-governance-world":
+            assert record["summary"]["checks"] >= 58 and len(captures) == 5 and record["summary"]["defended"] and record["summary"]["dispatched"] and record["summary"]["physical_damage"] > 0
+        if name == "frontier":
+            assert record["summary"]["checks"] >= 134 and {"hold", "demolition"} <= set(record["summary"]["stages"]) and len(record["summary"]["conquered"]) == 2
+            if os.environ.get("XJ_FRONTIER_LEGACY_DATABASE"):
+                assert record["summary"]["checks"] >= 150 and record["summary"]["legacy_checked"] is True
+        if name in ("frontier-world", "frontier-demolition-world"):
+            assert record["summary"]["checks"] >= 45 and len(captures) == 5 and record["summary"]["moved_m"] > 2000 and record["summary"]["physical_damage"] > 0
+            assert record["summary"]["battle_kind"] == ("demolition" if name == "frontier-demolition-world" else "hold")
         if name == "honors-world":
             assert record["summary"]["checks"] >= 60 and record["summary"]["real_actions"] == 4 and len(captures) == 7
         if name == "honors":

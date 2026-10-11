@@ -1,3 +1,4 @@
+from catalog_review import without_frontier_extensions
 """Independent SQL guards for paid roles, custody, integer finance and history."""
 from pathlib import Path
 import sqlite3,sys,unittest
@@ -15,7 +16,7 @@ class RoleDefinitions(unittest.TestCase):
   self.assertEqual(p.adapter_hash(old),'67062a01b5fac2779b385d27d1bb9988bb49a93dbbc9db01567ff7fea9571409')
   for (table,) in old.execute("SELECT name FROM sqlite_schema WHERE type='table' AND name<>'catalog_meta'"):
    self.assertEqual(old.execute(f'PRAGMA table_info("{table}")').fetchall(),self.db.execute(f'PRAGMA table_info("{table}")').fetchall(),table)
-   self.assertEqual(set(old.execute(f'SELECT * FROM "{table}"')),set(self.db.execute(f'SELECT * FROM "{table}"')),table)
+   self.assertEqual(set(old.execute(f'SELECT * FROM "{table}"')),without_frontier_extensions(self.db,table,set(self.db.execute(f'SELECT * FROM "{table}"'))),table)
   self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.db.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
  def test_existing_hulls_gain_reviewed_capabilities_without_new_hull_inflation(self):
   roles_catalog.validate(self.db)

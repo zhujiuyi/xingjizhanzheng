@@ -22,6 +22,7 @@ const MOBILE_BELTS_ADAPTER_PATH: String = "res://database/progress/catalog_adapt
 const TACTICS_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_13.sql"
 const OPERATIONS_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_14.sql"
 const FITTING_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_15.sql"
+const FRONTIER_ADAPTER_PATH: String="res://database/progress/catalog_adapter_v0_18.sql"
 const HONOR_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_17.sql"
 const ROLE_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_16.sql"
 var adapter_path: String = ADAPTER_PATH
@@ -41,6 +42,7 @@ func open(path: String = "res://data/catalog.db") -> bool:
 		return false
 	if not refresh(): return false
 	if int(rows("catalog_meta")[0].schema_version) <= 2: adapter_path = "res://database/progress/catalog_adapter_v0_3.sql"
+	elif table_names.has("frontier_campaign_defs"):adapter_path=FRONTIER_ADAPTER_PATH
 	elif table_names.has("civilization_command_defs"): adapter_path = HONOR_ADAPTER_PATH
 	elif table_names.has("ship_role_capability_defs"): adapter_path = ROLE_ADAPTER_PATH
 	elif table_names.has("weapon_tuning_defs"): adapter_path = FITTING_ADAPTER_PATH

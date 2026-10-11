@@ -4,7 +4,7 @@ from pathlib import Path
 import sqlite3
 import sys
 import unittest
-from catalog_review import without_fitting_extensions
+from catalog_review import without_later_extensions
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -45,7 +45,7 @@ class ExplorationData(unittest.TestCase):
             before = set(old.execute(f'SELECT * FROM "{table}"'))
             after = set(self.source.execute(f'SELECT * FROM "{table}"'))
             self.assertLessEqual(before, after, table)
-            after = without_fitting_extensions(self.source, table, after)
+            after = without_later_extensions(self.source, table, after)
             if table not in extensions:
                 self.assertEqual(before, after, table)
             else:

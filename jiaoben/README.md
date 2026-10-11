@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+边疆阶段：`build_frontier.py`只追加五表及有明确前缀的NPC/锚点；`store_generate_frontier.py`仅生成022/v0.18，复制旧守卫并只放开有完整新历史的主权关联与有严格友方归属的补给舰/信标远修。`verify_combat_v18.py --only frontier`验证实际阶段支付、双目标、重建、主权循环、报价和68组恢复；资格/到达/长策略时间明确作为夹具。`prepare_roles_upgrade_v32.py --frontier --legacy-executable <已核验v0.25 EXE>`通过旧包固定fitting入口生成历史占领与活动战争、订单/研究/在途货物format18档；`XJ_FRONTIER_LEGACY_DATABASE`启用真实升级与失败回滚。原生`frontier-world`、`frontier-demolition-world`、`frontier-governance-world`验证真实物理护送/受击/远修、两类战斗与重建、支付/运输/防守/精确缩放；失守及回收的边界另有Core与SQL检查。规则和未完成验收见[61](../doc/61-边疆战争与重建争夺.md)。
+
 文明指挥考核：`build_honors.py`、`store_generate_honors.py`仅追加3张定义表、021与v0.17适配器；旧135表/视图和001–020保持。`verify_combat_v18.py --only honors`检查真实四类结算、三文明资格与61组恢复；`prepare_roles_upgrade_v32.py --honors --legacy-executable <已核验v0.24 EXE>`从旧包固定fitting入口生成带付费在途货物及活动战争的真实format17夹具，通过`XJ_HONORS_LEGACY_DATABASE`验证升级与失败回滚。`--native --only honors-world`验证真实登记、来源选择/星图、认证、战争受领、旧回调以及3440×1188/100%和1280×720/200%的精确逻辑尺寸。SQL拒绝见`tests/test_honors.py`，规则见[60](../doc/60-文明贡献与指挥资格.md)。
 
 舰种/承运：`build_roles.py`追加3张定义表，旧132表/四视图不变；`store_generate_roles.py`仅生成020与v0.16适配器，复制完整旧封存守卫并只允许有完整持久记录的远修周期。`verify_combat_v18.py --only roles`检查真实调查、十八舰权限、付费恢复、中断、货损/退款/超时与59组恢复。`prepare_roles_upgrade_v32.py --legacy-executable <实际v0.23 EXE>`经旧包固定fitting测试入口的显式夹具分支，生成真实订单/取消/部分研究/机库format16档；传`XJ_ROLES_LEGACY_DATABASE`验证故障回滚及56组原状态。`--native --only roles-world`检查真实按钮、物理治疗、同225000基础造价上限战斗对照、9km感知、24批满载四门航程/交付及精确640×360逻辑界面。`XJ_ROLES_TRIP_ONLY=1`仅用于临时排障，正式门槛拒绝该子集。SQL负例见`tests/test_roles.py`，规则与边界见[59](../doc/59-舰种能力与有限承运.md)。

@@ -210,7 +210,7 @@ func sync_entities() -> bool:
 			var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)
 			var escort_hull: String = gameplay.civilizations.escort_hull(row.npc_instance_id)
 			if escort_hull.is_empty(): escort_hull = gameplay.tactics.model(row.npc_instance_id)
-			var body: CharacterBody3D = preload("res://runtime/operation_visual.gd").generator() if gameplay.operations.handles(row.spawn_id) else factory.scene(escort_hull) if not escort_hull.is_empty() else factory.enemy_scene(str(definition.archetype_id))
+			var body: CharacterBody3D = preload("res://runtime/operation_visual.gd").generator() if gameplay.operations.handles(row.spawn_id) or gameplay.frontier.is_structure(row.spawn_id) else factory.scene(escort_hull) if not escort_hull.is_empty() else factory.enemy_scene(str(definition.archetype_id))
 			if body == null:
 				last_error = "敌舰表现资源不可用：" + str(definition.archetype_id)
 				return false
@@ -256,6 +256,7 @@ func _sync_waypoints() -> void:
 	var entries: Array[Dictionary] = gameplay.get("encounters").waypoints(state.current_sector())
 	entries.append_array(gameplay.tactics.waypoints(state.current_sector()))
 	entries.append_array(gameplay.operations.waypoints(state.current_sector()))
+	entries.append_array(gameplay.frontier.waypoints(state.current_sector()))
 	# Task sites survive range filtering; only their actual enemies are sensor
 	# contacts. A site has no mesh or collider that could duplicate the ship.
 	for spawn in catalog.rows("npc_spawn_defs"):
@@ -281,8 +282,8 @@ func _sync_waypoints() -> void:
 		else:
 			node = Node3D.new()
 			add_child(node)
-			node.position = anchor_position(entry.anchor_id)
 			_target(id, entry.title, "encounter", node, entry.anchor_id)
+		node.position = anchor_position(entry.anchor_id)
 		for field in entry: targets[id][field] = entry[field]
 	for id: String in targets.keys():
 		if targets[id].kind == "encounter" and not retained.has(id): _remove_target(id)
@@ -296,6 +297,7 @@ func simulate_npcs(delta: float) -> void:
 			continue
 		var body: CharacterBody3D = npcs[id]
 		if gameplay.operations.handles(row.spawn_id): body.velocity = Vector3.ZERO; continue
+		if XJFrontierPilot.step(self,row,body,delta):continue
 		if WarFleetPilot.step(self, row, body, delta): continue
 		if XJExplorationPilot.step(self, row, body, delta): continue
 		if XJTacticalPilot.step(self, row, body, delta): continue
@@ -325,7 +327,7 @@ func simulate_npcs(delta: float) -> void:
 						if row.wait_remaining_s >= float(behavior.patrol_wait_s):
 							row.patrol_point_index += 1
 							row.wait_remaining_s = 0.0
-				if can_acquire and distance <= float(behavior.detection_range_m) and visible:
+				if can_acquire and distance <= float(behavior.detection_range_m)*gameplay.frontier.hostile_detection_ratio(row.sector_id) and visible:
 					row.behavior_phase = Types.NpcPhase.ACQUIRE
 					row.wait_remaining_s = float(behavior.reaction_s)
 			Types.NpcPhase.ACQUIRE:
@@ -370,7 +372,8 @@ func simulate_npcs(delta: float) -> void:
 					row.wait_remaining_s = 0.0
 		var direction := body.position.direction_to(destination)
 		if direction.length_squared() > 0.0:
-			var wanted := Basis.looking_at(direction, Vector3.UP)
+			var up: Vector3=Vector3.UP if absf(direction.dot(Vector3.UP))<0.99 else Vector3.FORWARD
+			var wanted := Basis.looking_at(direction, up)
 			var angle := body.quaternion.angle_to(wanted.get_rotation_quaternion())
 			body.quaternion = body.quaternion.slerp(wanted.get_rotation_quaternion(), minf(1.0, float(behavior.turn_rad_s) * delta / maxf(angle, 0.00001)))
 		var desired := direction * float(definition.speed_mps) if should_move else Vector3.ZERO

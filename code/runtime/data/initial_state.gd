@@ -101,6 +101,9 @@ func create(catalog: XJCatalog, seed_value: int) -> State:
 	for row: RefCounted in preload("res://runtime/gameplay/consignments.gd").initial_rows(catalog): result.add("consignment_state",row)
 	if catalog.table_names.has("weapon_tuning_defs"): _add("specialization_progress_state", {"player_id":player_id})
 	for row: RefCounted in preload("res://runtime/gameplay/honors.gd").initial_rows(catalog,result):result.add("civilization_command_state",row)
+	var frontier_rows: Dictionary=preload("res://runtime/gameplay/frontier.gd").initial_rows(catalog,result)
+	for table: String in frontier_rows:
+		for row: RefCounted in frontier_rows[table]:result.add(table,row)
 	return result
 
 func _add(table: String, values: Dictionary) -> void:

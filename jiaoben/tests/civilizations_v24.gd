@@ -154,6 +154,8 @@ func commander_fixture() -> void:
 	helper.g=null;helper.state=null;helper.store=null;helper.free()
 func campaign() -> void:
 	commander_fixture()
+	var frontier: RefCounted=g.get("frontier")
+	if frontier!=null and frontier.supported():campaign_frontier();return
 	var civ: RefCounted = g.civilizations
 	var faction: String = civ.allegiance()
 	capital(faction)
@@ -230,6 +232,37 @@ func campaign() -> void:
 	g.civilizations.tick(0.1)
 	check(war.status == "failed" and not war.rewards_claimed and state.rows("war_fleet_state").is_empty() and g.civilizations.owner(other.target_sector_id).is_empty(), "loss of the actual allied fleet fails the war and cleans all participants")
 	check(state.player().credit == treasury, "defeat cannot award conquest credits")
+
+func campaign_frontier() -> void:
+	var faction: String=g.civilizations.allegiance();var definitions: Array[Dictionary]=[]
+	for war: Dictionary in g.rows("civilization_war_defs"):
+		if war.faction_id==faction:definitions.append(war)
+	definitions.sort_custom(func(a: Dictionary,b: Dictionary)->bool:return a.war_id<b.war_id)
+	var helper: Node=(load(get_script().resource_path.get_base_dir().path_join("frontier_v34.gd")) as Script).new();helper.g=g;helper.state=state;helper.store=store
+	check(helper.prepare(definitions[0].war_id),"current civilization regression pays and completes real frontier preparation")
+	check(helper.preserve(1,"current civilization battle phase"),"current battle retains full prepared fleet and authority on reopen")
+	g=helper.g;state=helper.state
+	var war: RefCounted=g.civilizations.active_war();var before: Dictionary=fingerprint()
+	check(not action("start_war",war.war_id) and not action("join_civilization","faction_route_council") and fingerprint()==before,"current prepared war blocks second dispatch and changing allegiance")
+	place(definitions[0].capture_anchor_id)
+	check(action("fleet_command","regroup") and war.fleet_order=="regroup","current prepared fleet accepts regroup")
+	var friend: RefCounted=g.civilizations.living_fleet(war,"ally")[0];var enemy: RefCounted=g.civilizations.living_fleet(war,"defender")[0]
+	check(not action("fleet_command","focus",1,friend.npc_instance_id),"current frontier rejects friendly focus")
+	check(action("fleet_command","focus",1,enemy.npc_instance_id),"current frontier accepts a real enemy focus")
+	helper.capture(definitions[0].war_id)
+	check(g.civilizations.owner(definitions[0].target_sector_id)==faction,"current civilization conquest requires its whole staged completion")
+	capital(faction);check(not action("start_war",definitions[0].war_id),"current controlled frontier cannot be conquered repeatedly")
+	check(helper.prepare(definitions[1].war_id),"second current frontier gets a separate real paid preparation")
+	var credit: int=state.player().credit
+	check(action("fleet_command","retreat") and g.civilizations.active_war()==null and state.rows("war_fleet_state").is_empty() and state.player().credit==credit,"current retreat cleans real fleet without sovereignty or reward")
+	check(helper.prepare(definitions[1].war_id),"withdrawn frontier supports a fresh paid attempt")
+	war=g.civilizations.active_war()
+	for ally: RefCounted in g.civilizations.living_fleet(war,"ally"):g.damage_npc(ally.npc_instance_id,Vector3(1000000,1000000,1000000))
+	g.civilizations.tick(0.1)
+	check(war.status=="failed" and not war.rewards_claimed and g.civilizations.owner(definitions[1].target_sector_id).is_empty(),"loss of the current prepared fleet fails without capture")
+	check(helper.failures.is_empty(),"every current staged civilization action passes")
+	checks+=helper.checks;failures.append_array(helper.failures)
+	helper.g=null;helper.state=null;helper.store=null;helper.free()
 
 func _run() -> void:
 	directory = OS.get_environment("XJ_CIVILIZATIONS_V24_DIRECTORY").replace("\\", "/")

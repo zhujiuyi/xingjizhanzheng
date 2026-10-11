@@ -348,7 +348,7 @@ class ProgressTests(unittest.TestCase):
         names = [row[0] for row in legacy.execute("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")]
         self.assertEqual(metadata["schema_version"], 4)
         self.assertEqual(len(names), 89)
-        self.assertEqual(len(build_catalog.CONTENT_TABLES), 138)
+        self.assertEqual(len(build_catalog.CONTENT_TABLES), 143)
         self.db.execute("BEGIN IMMEDIATE")
         self.db.execute("PRAGMA defer_foreign_keys=ON")
         cid = "historical-adapter-content"

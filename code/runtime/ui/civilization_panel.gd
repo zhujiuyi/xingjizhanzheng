@@ -121,6 +121,8 @@ func build(ui: Node) -> void:
 	war_status.name = "CivilizationWarStatus"
 	var campaign: RefCounted = civ.active_war()
 	if campaign != null:
+		if u.gameplay.frontier.owns_campaign(campaign):
+			_command(u.body,"查看战役阶段","frontier_open",campaign.war_id).name="FrontierCampaignEntry"
 		var controls := HFlowContainer.new()
 		u.body.add_child(controls)
 		_command(controls, "战区航路", "war_navigate", "")
@@ -129,7 +131,7 @@ func build(ui: Node) -> void:
 		_command(controls, "集火当前目标", "fleet_command", "focus", null, str(u.target_id))
 		_command(controls, "撤退并放弃战役", "fleet_command", "retreat")
 	else:
-		u._text("舰队伯爵"+("取得指挥资格后" if u.gameplay.honors.supported() else "")+"可在所属核心站受领委托。3艘友舰在战区集结，清敌后驻留占领。出生航路受保护。", 13)
+		u._text("舰队伯爵"+("取得指挥资格后" if u.gameplay.honors.supported() else "")+"可在所属核心站受领委托。"+("先侦察/护送，再完成战斗目标和修复。" if u.gameplay.frontier.supported() else "3艘友舰在战区集结，清敌后驻留占领。")+"出生航路受保护。", 13)
 		for war: Dictionary in u.catalog.rows("civilization_war_defs"):
 			if war.faction_id != faction: continue
 			var reason: String = civ.war_reason(war.war_id)
@@ -138,6 +140,12 @@ func build(ui: Node) -> void:
 			button.name = "CivilizationWar_" + str(war.war_id)
 			button.disabled = not reason.is_empty()
 			button.tooltip_text = reason if not reason.is_empty() else "战役奖励：%d 信用点、声望 %d；胜利后星系归属所代表文明。" % [int(war.reward_credit), int(war.reward_reputation)]
+	if u.gameplay.frontier.supported():
+		u._text("边疆治理",18)
+		for control: Dictionary in u.catalog.rows("frontier_governance_defs"):
+			if civ.owner(control.sector_id)!=faction:continue
+			var id: String=control.sector_id
+			_command(u.body,u._sector_name(id)+" · "+u.gameplay.frontier.status_text(id),"frontier_open",id).name="FrontierGovernance_"+id
 	tick()
 
 func _build_commander(faction: String) -> void:
@@ -158,6 +166,7 @@ func tick() -> void:
 	if campaign == null:
 		war_status.text = "当前没有进行中的舰队战争。"
 		return
+	if u.gameplay.frontier.owns_campaign(campaign):war_status.text=u.gameplay.frontier.status_text(campaign.war_id);return
 	var definition: Dictionary = u.catalog.one("civilization_war_defs", "war_id", campaign.war_id)
 	var phase: String = str({"assembling": "前往战区与舰队会合", "fighting": "清除战区全部敌舰", "occupying": "留在占领范围内"}.get(campaign.status, campaign.status))
 	war_status.text = "%s · %s\n友军 %d / 3 · 战役守军 %d / 4 · 占领剩余 %.1f 秒" % [u._sector_name(definition.target_sector_id), phase, civ.living_fleet(campaign, "ally").size(), civ.living_fleet(campaign, "defender").size(), campaign.capture_remaining_s]

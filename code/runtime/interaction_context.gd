@@ -32,7 +32,7 @@ static func inspect(sector: XJSector, state: XJRuntimeState, catalog: XJCatalog,
 	if not sector.targets.has(target_id): return result
 	var target: Dictionary = sector.targets[target_id]
 	if target.get("navigation_only", false) or target.get("kind", "") not in ["station", "gate", "wreck", "signal", "resource", "exploration", "exploration_exit", "encounter"]: return result
-	if target.get("kind", "") == "encounter" and target.get("operation_id") == null: return result
+	if target.get("kind", "") == "encounter" and target.get("operation_id") == null and target.get("frontier_id")==null: return result
 	var candidate_node: Variant = target.get("node")
 	if not is_instance_valid(candidate_node) or not candidate_node is Node3D: return result
 	var node: Node3D = candidate_node as Node3D
@@ -40,8 +40,11 @@ static func inspect(sector: XJSector, state: XJRuntimeState, catalog: XJCatalog,
 	result.target_id = target_id; result.title = str(target.get("title", target_id)); result.kind = str(target.kind)
 	result.distance_m = sector.target_distance(target_id)
 	if target.get("operation_id") != null: result.kind = "operation"
+	if target.get("frontier_id")!=null:result.kind="frontier"
 	result.speed_mps = sector.flight.velocity.length()
 	match result.kind:
+		"frontier":
+			result.action="frontier_open";result.range_m=float(gameplay.frontier.balance.survey_radius_m)
 		"operation":
 			var spec: Dictionary = catalog.one("operation_defs","operation_id",str(target.operation_id))
 			result.action = "operation_open"; result.range_m = float(spec.interaction_radius_m)
@@ -130,6 +133,7 @@ static func inspect(sector: XJSector, state: XJRuntimeState, catalog: XJCatalog,
 			var limit: Dictionary = gameplay.get("work").call("_output_limit", str(definition.item_id), 1)
 			if int(limit.count) <= 0: return _deny(result, "货舱、载荷或借船采集额度不足")
 			if not _line_of_sight(sector, target_id, node.global_position): return _deny(result, "目标被遮挡")
+	if result.kind=="frontier":result.target_id=str(target.frontier_id)
 	result.ready = true; result.reason = ""
 	return result
 

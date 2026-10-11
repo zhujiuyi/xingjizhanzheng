@@ -1,3 +1,4 @@
+from catalog_review import without_frontier_extensions
 """Independent SQL rejection cases for commander proofs and old-rule preservation."""
 from pathlib import Path
 import hashlib,sqlite3,subprocess,sys,unittest
@@ -16,7 +17,7 @@ class HonorDefinitions(unittest.TestCase):
   old=sqlite3.connect(path.as_uri()+'?mode=ro',uri=True);self.addCleanup(old.close)
   for (table,) in old.execute("SELECT name FROM sqlite_schema WHERE type='table' AND name<>'catalog_meta'"):
    self.assertEqual(old.execute(f'PRAGMA table_info("{table}")').fetchall(),self.db.execute(f'PRAGMA table_info("{table}")').fetchall(),table)
-   self.assertEqual(set(old.execute(f'SELECT * FROM "{table}"')),set(self.db.execute(f'SELECT * FROM "{table}"')),table)
+   self.assertEqual(set(old.execute(f'SELECT * FROM "{table}"')),without_frontier_extensions(self.db,table,set(self.db.execute(f'SELECT * FROM "{table}"'))),table)
   self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.db.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
  def test_four_real_sources_for_each_of_three_civilizations(self):
   honors_catalog.validate(self.db)
@@ -33,10 +34,10 @@ class HonorDefinitions(unittest.TestCase):
   self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(17,))
   self.assertEqual(before,db.execute('SELECT type,name,sql FROM sqlite_schema ORDER BY type,name').fetchall())
   p.apply_migrations(db)
-  self.assertEqual(db.execute('PRAGMA user_version').fetchone(),(18,))
+  self.assertEqual(db.execute('PRAGMA user_version').fetchone(),(p.FORMAT_VERSION,))
  def test_old_migrations_and_adapters_remain_the_published_bytes(self):
   for path in sorted((ROOT/'code/database/progress').glob('*.sql')):
-   if path.name.startswith('021_') or path.name=='catalog_adapter_v0_17.sql':continue
+   if path.name.startswith(('021_','022_')) or path.name in ('catalog_adapter_v0_17.sql','catalog_adapter_v0_18.sql'):continue
    old=subprocess.check_output(['git','show','8bd08141459cbd8ab82607954aff621a83318ab8:'+path.relative_to(ROOT).as_posix()],cwd=ROOT)
    self.assertEqual(path.read_bytes(),old,path.name)
  def test_core_only_dto_generator_cannot_delete_expanded_groups(self):
@@ -62,7 +63,7 @@ class HonorSealing(unittest.TestCase):
   row={**self.ctx,'source_token':'exploration:exp_mirror_relic:1','task_id':self.task,'source_kind':'exploration','source_def_id':'exp_mirror_relic','generation':1,'credited_units':1,'recorded_tick':0}
   row.update(values);p.insert(self.db,'civilization_honor_evidence_state',row)
  def test_initial_world_has_no_free_proofs_or_qualification(self):
-  self.assertEqual(len(p.STATE_TABLES),61)
+  self.assertEqual(len(p.STATE_TABLES),68)
   self.assertEqual(self.db.execute("SELECT count(*),sum(paid_credit),sum(awarded_reputation) FROM civilization_command_state WHERE snapshot_id='honor-candidate' AND phase='unregistered'").fetchone(),(3,0,0))
   self.assertEqual(self.db.execute("SELECT count(*) FROM civilization_honor_evidence_state WHERE snapshot_id='honor-candidate'").fetchone(),(0,))
   self.seal()

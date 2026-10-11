@@ -23,6 +23,7 @@ var source_filter: String = "全部"
 var source_page: int = 0
 var sources_return_page: String = "map"
 var exploration_selected: String = ""
+var frontier_selected_id: String=""
 var war_navigation_row: HFlowContainer
 var state: XJRuntimeState
 var catalog: XJCatalog
@@ -417,13 +418,15 @@ func show_page(next_page: String) -> void:
 		_station()
 		_responsive()
 		return
-	_build_panel("承运合同" if next_page=="consignments" else "配装分析" if next_page=="fitting_analysis" else "舰船角色" if next_page=="ship_roles" else "战术行动" if next_page == "operations" else "无人机管理" if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
+	_build_panel("边疆战役与治理" if next_page=="frontier" else "承运合同" if next_page=="consignments" else "配装分析" if next_page=="fitting_analysis" else "舰船角色" if next_page=="ship_roles" else "战术行动" if next_page == "operations" else "无人机管理" if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
 	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
 		if next_page=="ships" and gameplay.fitting_analysis.supported():_button(body,"舰船定位",show_page.bind("ship_roles")).name="ShipRolesEntry"
 		_text("此服务需要停靠空间站。使用星图找到站点，进入停靠范围并减速后按 F。")
 		_focus_page.call_deferred()
 		return
 	match next_page:
+		"frontier":
+			var frontier_panel: VBoxContainer=preload("res://runtime/ui/frontier_panel.gd").new();body.add_child(frontier_panel);frontier_panel.setup(self,frontier_selected_id)
 		"consignments":
 			if gameplay.consignments.supported():
 				var consignments: VBoxContainer=preload("res://runtime/ui/consignment_panel.gd").new();body.add_child(consignments);consignments.setup(self)
@@ -499,9 +502,10 @@ func tick(delta: float) -> void:
 		health.text = "护盾 %.0f%% · 装甲 %.0f%% · 结构 %.0f%%\n电容 %.0f%% · 热量 %.0f%% %s\n速度 %s · 货 %.0f/%.0f L" % [ship.shield / maxf(metrics.shield_max, 1.0) * 100, ship.armor / maxf(metrics.armor_max, 1.0) * 100, ship.hull / maxf(metrics.hull_max, 1.0) * 100, ship.energy / maxf(metrics.energy_max, 1.0) * 100, ship.heat / maxf(metrics.heat_max, 1.0) * 100, "过热" if ship.overheated else "", XJSpaceUnits.speed(_display_speed()), metrics.cargo_used_l + metrics.mineral_used_l, metrics.cargo_capacity_l + metrics.mineral_capacity_l]
 	objective.text = _objective_text()
 	var operation: RefCounted = _hud_operation()
-	if operation != null: objective.text = gameplay.operations.hud_text()
+	if not gameplay.frontier.focused_id().is_empty():objective.text=gameplay.frontier.status_text(gameplay.frontier.focused_id())
+	elif operation != null: objective.text = gameplay.operations.hud_text()
 	elif _hud_freight()!=null:objective.text=gameplay.consignments.hud_text(_hud_freight())
-	if operation == null and gameplay.exploration.supported():
+	if operation == null and gameplay.frontier.focused_id().is_empty() and gameplay.exploration.supported():
 		for event: RefCounted in state.rows("exploration_instance_state"):
 			if gameplay.exploration._site(event) and event.phase not in ["claimed", "failed", "withdrawn"]:
 				objective.text += "\n" + gameplay.exploration.status_text(event.event_id)
@@ -1055,10 +1059,12 @@ func _service_context_page() -> String:
 	if page == "fitting_analysis": return "fitting"
 	if page == "ship_roles": return "ships"
 	if page == "operations": return "missions"
+	if page=="frontier":return "civilizations"
 	if page == "consignments": return "missions"
 	if page == "exploration": return "map"
 	if page == "drones": return "fitting"
 	if page != "sources": return page
+	if sources_return_page=="frontier":return "civilizations"
 	return sources_return_page if sources_return_page in ["industry", "market", "map"] else "map"
 
 func open_exploration(event_id: String = "") -> void:
@@ -1734,6 +1740,8 @@ func _hud_freight() -> RefCounted:
 	return gameplay.consignments.focused()
 
 func _hud_task_navigation(travel_to: bool) -> void:
+	var frontier_id: String=gameplay.frontier.focused_id()
+	if not frontier_id.is_empty():requested.emit("frontier_navigate" if travel_to else "frontier_map",frontier_id,1,gameplay.frontier.expected_token(frontier_id));return
 	var operation: RefCounted = _hud_operation()
 	if operation != null: requested.emit("operation_nav" if travel_to else "operation_map",operation.operation_id,1,str(operation.generation))
 	elif _hud_freight()!=null:
@@ -1741,12 +1749,19 @@ func _hud_task_navigation(travel_to: bool) -> void:
 	else: requested.emit("mission_travel" if travel_to else "mission_locate","",1,"")
 
 func _hud_task_details() -> void:
+	if not gameplay.frontier.focused_id().is_empty():frontier_selected_id=gameplay.frontier.focused_id();show_page("frontier");return
 	if _hud_operation() != null: show_page("operations"); return
 	if _hud_freight()!=null:show_page("consignments");return
 	mission_filter = "story"; mission_status_filter = "all"; mission_location_filter = "all"; mission_focus_id = ""; mission_page = 0; show_page("missions")
 
 func _update_mission_guidance() -> void:
 	if not is_instance_valid(mission_navigation_row) or gameplay == null: return
+	var frontier_id: String=gameplay.frontier.focused_id()
+	if not frontier_id.is_empty():
+		war_navigation_row.hide();mission_navigation_row.show();mission_locate_button.show();mission_travel_button.show();mission_guide_button.show()
+		mission_guide_button.text="战役详情";mission_locate_button.disabled=operation_blocks_flight;mission_travel_button.disabled=operation_blocks_flight or state.ship().status!=Types.ShipStatus.FLYING
+		mission_locate_button.set_meta("action","frontier_map");mission_locate_button.set_meta("target",frontier_id);mission_travel_button.set_meta("action","frontier_navigate");mission_travel_button.set_meta("target",frontier_id)
+		return
 	var operation: RefCounted = _hud_operation()
 	mission_guide_button.text = "行动详情" if operation != null else "主线指引"
 	if operation != null:

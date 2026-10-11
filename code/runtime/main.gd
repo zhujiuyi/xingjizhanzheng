@@ -52,6 +52,9 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-frontier-v34","file":"frontier_v34.gd","prefix":"frontier-v34","env":"XJ_FRONTIER_V34","meta":"xj_frontier_v34_diagnostic"},
+		{"flag":"--xj-verify-frontier-governance-world-v34","file":"frontier_governance_world_v34.gd","prefix":"frontier-governance-world-v34","env":"XJ_FRONTIER_GOVERNANCE_WORLD_V34","meta":"xj_frontier_governance_world_v34_diagnostic"},
+		{"flag":"--xj-verify-frontier-world-v34","file":"frontier_world_v34.gd","prefix":"frontier-world-v34","env":"XJ_FRONTIER_WORLD_V34","meta":"xj_frontier_world_v34_diagnostic"},
 		{"flag":"--xj-verify-honors-v33","file":"honors_v33.gd","prefix":"honors-v33","env":"XJ_HONORS_V33","meta":"xj_honors_v33_diagnostic"},
 		{"flag":"--xj-verify-honors-world-v33","file":"honors_world_v33.gd","prefix":"honors-world-v33","env":"XJ_HONORS_WORLD_V33","meta":"xj_honors_world_v33_diagnostic"},
 		{"flag":"--xj-verify-roles-v32","file":"roles_v32.gd","prefix":"roles-v32","env":"XJ_ROLES_V32","meta":"xj_roles_v32_diagnostic"},
@@ -719,6 +722,12 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 	match action:
 		"drone_command":
 			_drone_order(extra, target)
+		"frontier_open":
+			ui.frontier_selected_id=target;ui.show_page("frontier")
+		"frontier_sources":
+			ui.open_sources(str(gameplay.frontier.balance.material_id))
+		"frontier_map", "frontier_navigate":
+			_frontier_navigation(action,target,extra)
 		"operation_open":
 			ui.show_page("operations")
 		"operation_map", "operation_nav":
@@ -1029,7 +1038,8 @@ func _source_navigation(action: String, key: String, item_id: String) -> void:
 func _source_after_arrival() -> void:
 	await get_tree().process_frame
 	if not source_goal.is_empty() and state != null and source_goal.world == state.world_id and not busy:
-		if source_goal.has("consignment"): _consignment_navigation("consignment_navigate",source_goal.consignment,str(source_goal.generation))
+		if source_goal.has("frontier"):_frontier_navigation("frontier_navigate",source_goal.frontier,gameplay.frontier.expected_token(source_goal.frontier))
+		elif source_goal.has("consignment"): _consignment_navigation("consignment_navigate",source_goal.consignment,str(source_goal.generation))
 		elif source_goal.has("operation"): _operation_navigation("operation_nav",source_goal.operation,str(source_goal.generation))
 		elif source_goal.has("event"): _exploration_navigation("exploration_nav", source_goal.event, str(source_goal.generation))
 		else: _source_navigation("source_travel", source_goal.key, source_goal.item)
@@ -1059,6 +1069,21 @@ func _drone_order(kind: String, target: String) -> void:
 	ui.notify({"attack":"无人机攻击指令已下达。","follow":"无人机跟随指令已下达；本次仍只有一次已支付攻击。","recall":"无人机正在回收，尚未发出的攻击已停止。"}.get(kind, "无人机指令已更新。"))
 	if kind != "recall" and not launched and gameplay.drone_control.live.is_empty(): ui.notify("指令已更新；机库冷却或电容不足，满足条件后可再次出击。",true)
 	ui.refresh_page()
+
+func _frontier_navigation(action: String,id: String,expected: String) -> void:
+	if state==null or gameplay==null or busy or travel.active():return
+	if expected!=gameplay.frontier.expected_token(id):ui.notify("边疆阶段已变化，请重新查看。",true);return
+	var info: Dictionary=gameplay.frontier.guidance(id)
+	if info.is_empty():return
+	if action=="frontier_map" or state.ship().status!=Types.ShipStatus.FLYING:
+		ui.show_page("map")
+		if ui.resource_chart!=null:ui.resource_chart.select_sector(str(info.sector_id),false);ui.resource_chart.call("focus_selected")
+		return
+	if not str(info.get("route_reason","")).is_empty():ui.notify(str(info.route_reason),true);return
+	source_goal={"world":state.world_id,"frontier":id}
+	if str(info.get("target_kind",""))=="npc" and world.targets.has(str(info.waypoint_id)) and world.target_is_local(str(info.waypoint_id)):
+		ui._select_target(str(info.waypoint_id));_navigation_command("approach",str(info.waypoint_id));return
+	_navigate_guidance(info,true,true,true)
 
 func _consignment_navigation(action: String,id: String,generation: String) -> void:
 	if state == null or gameplay == null or busy or travel.active(): return
@@ -1193,6 +1218,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	gameplay.ship_roles.warning_changed.connect(_tactical_warning)
 	gameplay.consignments.warning_changed.connect(_tactical_warning)
 	gameplay.honors.warning_changed.connect(_tactical_warning)
+	gameplay.frontier.warning_changed.connect(_tactical_warning)
 	gameplay.operations.warning_changed.connect(_tactical_warning)
 	gameplay.tactics.warning_changed.connect(_tactical_warning)
 	gameplay.drone_control.warning_changed.connect(_tactical_warning)
