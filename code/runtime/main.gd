@@ -52,6 +52,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag": "--xj-verify-exploration-world-v27", "file": "exploration_world_v27.gd", "prefix": "exploration-world-v27", "env": "XJ_EXPLORATION_WORLD_V27", "meta": "xj_exploration_world_v27_diagnostic"},
+		{"flag": "--xj-verify-exploration-v27", "file": "exploration_v27.gd", "prefix": "exploration-v27", "env": "XJ_EXPLORATION_V27", "meta": "xj_exploration_v27_diagnostic"},
 		{"flag": "--xj-verify-resource-intel-world-v26", "file": "resource_intel_world_v26.gd", "prefix": "resource-intel-world-v26", "env": "XJ_RESOURCE_INTEL_WORLD_V26", "meta": "xj_resource_intel_world_v26_diagnostic"},
 		{"flag": "--xj-verify-resource-intel-v26", "file": "resource_intel_v26.gd", "prefix": "resource-intel-v26", "env": "XJ_RESOURCE_INTEL_V26", "meta": "xj_resource_intel_v26_diagnostic"},
 		{"flag": "--xj-verify-industry-v25", "file": "industry_v25.gd", "prefix": "industry-v25", "env": "XJ_INDUSTRY_V25", "meta": "xj_industry_v25_diagnostic"},
@@ -303,7 +305,7 @@ func _process(delta: float) -> void:
 	if not deferred_save.is_empty():
 		save_wait_elapsed += delta
 		if save_wait_elapsed >= float(store.catalog.rule("save_wait_prompt_s")):
-			ui.set_operation_status("save", "保存仍在等待：继续航行、取消保存，或在暂停菜单放弃未保存进度退出", true)
+			ui.set_operation_status("save", "保存仍在等待：继续航行、取消保存，或在暂停菜单放弃未保存进度退出", true, _exit_save_pending())
 	if world != null:
 		var stopped := _paused() or busy
 		world.projectiles.set_paused(stopped)
@@ -633,7 +635,7 @@ func _weapon_hit(target_id: String, damage: Vector3, point: Vector3, owner_id: S
 	if target_id == state.ship().ship_instance_id and owner_id != target_id:
 		if presentation != null: presentation.hit(target_id, state.ship().shield > 0.0, point, damage)
 		pending_damage[target_id] = (pending_damage.get(target_id, Vector3.ZERO) as Vector3) + damage
-	elif (owner_id == state.ship().ship_instance_id or gameplay.civilizations.fleet_member(owner_id) != null) and state.find("npc_state", "npc_instance_id", target_id) != null:
+	elif (owner_id == state.ship().ship_instance_id or state.find("npc_state", "npc_instance_id", owner_id) != null) and state.find("npc_state", "npc_instance_id", target_id) != null:
 		var npc := state.find("npc_state", "npc_instance_id", target_id) as Dtos.NpcStateDto
 		if presentation != null: presentation.hit(target_id, npc.shield > 0.0, point, damage)
 		pending_damage[target_id] = (pending_damage.get(target_id, Vector3.ZERO) as Vector3) + damage
@@ -700,6 +702,11 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		if action == "set_combat_option": _sync_combat_automation()
 		return
 	match action:
+		"exploration_open":
+			var event_id: String = str(world.targets.get(target, {}).get("event_id", target))
+			ui.open_exploration(event_id)
+		"exploration_map", "exploration_nav":
+			_exploration_navigation(action, target, extra)
 		"source_map", "source_travel":
 			_source_navigation(action, target, extra)
 		"civilization_map", "war_navigate":
@@ -999,7 +1006,27 @@ func _source_navigation(action: String, key: String, item_id: String) -> void:
 func _source_after_arrival() -> void:
 	await get_tree().process_frame
 	if not source_goal.is_empty() and state != null and source_goal.world == state.world_id and not busy:
-		_source_navigation("source_travel", source_goal.key, source_goal.item)
+		if source_goal.has("event"): _exploration_navigation("exploration_nav", source_goal.event, str(source_goal.generation))
+		else: _source_navigation("source_travel", source_goal.key, source_goal.item)
+
+func _exploration_navigation(action: String, event_id: String, generation: String) -> void:
+	if state == null or gameplay == null or busy or travel.active(): return
+	var row: RefCounted = gameplay.exploration.instance(event_id)
+	if row == null or generation != str(row.generation): ui.notify("事件代次已变化，请重新查看线索。", true); return
+	var info: Dictionary = gameplay.exploration.guidance(event_id)
+	if info.is_empty(): return
+	if action == "exploration_map":
+		ui.show_page("map")
+		if is_instance_valid(ui.resource_chart): ui.resource_chart.select_sector(info.sector_id)
+		return
+	if state.ship().status != Types.ShipStatus.FLYING: ui.notify("出港后可前往事件或交付地点。", true); return
+	if not str(info.route_reason).is_empty(): ui.notify(str(info.route_reason), true); return
+	source_goal = {"world": state.world_id, "event": event_id, "generation": row.generation}
+	_navigate_guidance(info, true, true, true)
+
+func _exploration_warning(message: String) -> void:
+	if ui != null: ui.notify(message, true)
+	if presentation != null: presentation.ui_result(false)
 
 func _navigate_guidance(info: Dictionary, do_travel: bool, announce: bool, approach_destination: bool = false) -> void:
 	world.sync_entities()
@@ -1075,6 +1102,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	ui.slots = store.list_slots()
 	ui.bind(state, store.catalog, gameplay, world, camera)
 	gameplay.civilizations.status_changed.connect(_civilization_status)
+	gameplay.exploration.warning_changed.connect(_exploration_warning)
 	combat_automation = CombatAutomation.new()
 	combat_automation.changed.connect(_sync_combat_automation)
 	combat_automation.acquired.connect(_combat_acquired)
@@ -1381,7 +1409,7 @@ func _request_save(kind: String, index: int, after: String = "") -> void:
 		deferred_save = {"kind": kind, "index": index, "after": after}
 		_sync_combat_automation()
 		save_wait_elapsed = 0.0
-		ui.set_operation_status("save", "等待%s结束后保存；暂停时请先继续航行" % reason, true)
+		ui.set_operation_status("save", "等待%s结束后保存；暂停时请先继续航行" % reason, true, not after.is_empty())
 		return
 	_save_now(kind, index, after)
 

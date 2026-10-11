@@ -727,6 +727,54 @@ class StationDemandStateDto extends RefCounted:
 	var benefit_remaining_s: float = 0.0
 	var completed_cycles: int = 0
 
+class ExplorationInstanceStateDto extends RefCounted:
+	var event_id: String = ""
+	var generation: int = 1
+	var variant_id: String = ""
+	var variant_seed: int = 0
+	var phase: String = "clue"
+	var choice_id: String = ""
+	var operation_kind: String = ""
+	var operation_remaining_s: float = 0.0
+	var elapsed_s: float = 0.0
+	var cooldown_remaining_s: float = 0.0
+	var evidence_units: int = 0
+	var stabilized: bool = false
+	var hazard_clock_s: float = 0.0
+	var outcome: String = ""
+
+class ExplorationActorStateDto extends RefCounted:
+	var npc_instance_id: String = ""
+	var event_id: String = ""
+	var generation: int = 1
+	var actor_role: String = "enemy"
+
+class ExplorationClaimStateDto extends RefCounted:
+	var player_id: String = ""
+	var event_id: String = ""
+	var generation: int = 1
+	var variant_id: String = ""
+	var outcome: String = "partial"
+	var credit_units: int = 0
+	var insight_units: int = 0
+	var reputation_units: int = 0
+	var has_demand_id: bool = false
+	var demand_id: String = ""
+	var demand_generation: int = 0
+	var claimed_tick: int = 0
+
+class ExplorationProgressStateDto extends RefCounted:
+	var player_id: String = ""
+	var insight_available: int = 0
+	var insight_earned: int = 0
+
+class ExplorationResearchStateDto extends RefCounted:
+	var player_id: String = ""
+	var research_id: String = ""
+	var spent_insight: int = 0
+	var paid_credit: int = 0
+	var completed_tick: int = 0
+
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
 	var content: ContentRefDto = ContentRefDto.new()
@@ -772,6 +820,11 @@ class WorldSnapshotDto extends RefCounted:
 	var industry_job_state_rows: Array[IndustryJobStateDto] = []
 	var industry_input_state_rows: Array[IndustryInputStateDto] = []
 	var station_demand_state_rows: Array[StationDemandStateDto] = []
+	var exploration_instance_state_rows: Array[ExplorationInstanceStateDto] = []
+	var exploration_actor_state_rows: Array[ExplorationActorStateDto] = []
+	var exploration_claim_state_rows: Array[ExplorationClaimStateDto] = []
+	var exploration_progress_state_rows: Array[ExplorationProgressStateDto] = []
+	var exploration_research_state_rows: Array[ExplorationResearchStateDto] = []
 
 ## 表现派生值不是另一份定义：每次由 frozen catalog + 当前状态计算。
 class ShipMetricsViewDto extends RefCounted:

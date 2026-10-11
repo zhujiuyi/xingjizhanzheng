@@ -22,10 +22,10 @@ sys.path.insert(0, str(ROOT / "jiaoben"))
 import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
-MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql")
-FORMAT_VERSION = 11
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_10.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_10"
+MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql")
+FORMAT_VERSION = 12
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_11.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_11"
 REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_3": PROGRESS_DIR / "catalog_adapter_v0_3.sql",
     "frozen_catalog_v0_4": PROGRESS_DIR / "catalog_adapter_v0_4.sql",
@@ -35,9 +35,10 @@ REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_7": PROGRESS_DIR / "catalog_adapter_v0_7.sql",
     "frozen_catalog_v0_8": PROGRESS_DIR / "catalog_adapter_v0_8.sql",
     "frozen_catalog_v0_9": PROGRESS_DIR / "catalog_adapter_v0_9.sql",
-    "frozen_catalog_v0_10": ADAPTER,
+    "frozen_catalog_v0_10": PROGRESS_DIR / "catalog_adapter_v0_10.sql",
+    "frozen_catalog_v0_11": ADAPTER,
 }
-RULE_CODE_VERSION = "singleplayer_resource_intel_v1"
+RULE_CODE_VERSION = "singleplayer_exploration_v1"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
 STATE_TABLES = (
@@ -52,6 +53,8 @@ STATE_TABLES = (
     "encounter_state", "salvage_package_state", "spatial_state",
     "civilization_state", "territory_state", "war_campaign_state", "war_fleet_state",
     "industry_job_state", "industry_input_state", "station_demand_state",
+    "exploration_instance_state", "exploration_actor_state", "exploration_claim_state",
+    "exploration_progress_state", "exploration_research_state",
 )
 
 
@@ -324,8 +327,9 @@ def initial_state(connection, snapshot, world, content):
     for unlock in frozen("unlock_defs"):
         if unlock["initially_unlocked"]:
             insert(connection, "unlock_state", {**ctx, "player_id": player_id, "unlock_id": unlock["unlock_id"], "acquired_tick": 0})
+    managed_nodes = {r["node_id"] for r in frozen("exploration_resource_defs")}
     for node in frozen("resource_node_defs"):
-        insert(connection, "resource_state", {**ctx, "node_id": node["node_id"], "remaining_units": node["capacity_units"], "respawn_remaining_s": 0.})
+        insert(connection, "resource_state", {**ctx, "node_id": node["node_id"], "remaining_units": 0 if node["node_id"] in managed_nodes else node["capacity_units"], "respawn_remaining_s": 0.})
     for connection_def in frozen("connection_defs"):
         gate = next(g for g in frozen("gate_class_defs") if g["gate_class_id"] == connection_def["gate_class_id"])
         insert(connection, "gate_state", {**ctx, "connection_id": connection_def["connection_id"], "enabled": 1, "remaining_mass_budget_kg": gate["total_mass_budget_kg"], "lifetime_remaining_s": gate["lifetime_s"]})
@@ -354,6 +358,13 @@ def initial_state(connection, snapshot, world, content):
     # PCG32 standard initialization (doc21 §3.1): two discarded steps, no
     # gameplay draws. 54 and the multiplier are fixed algorithm constants.
     seed = connection.execute("SELECT seed FROM world WHERE world_id=?", (world,)).fetchone()[0]
+    events = frozen("exploration_event_defs")
+    for event in events:
+        variant_seed = int(hashlib.sha256(f"{seed}:{event['event_id']}".encode()).hexdigest()[:8], 16)
+        variants = sorted((r for r in frozen("exploration_variant_defs") if r["event_id"] == event["event_id"]), key=lambda r: r["variant_index"])
+        insert(connection, "exploration_instance_state", {**ctx, "event_id": event["event_id"], "generation": 1, "variant_id": variants[variant_seed % len(variants)]["variant_id"], "variant_seed": variant_seed, "phase": "clue", "choice_id": "", "operation_kind": "", "operation_remaining_s": 0.0, "elapsed_s": 0.0, "cooldown_remaining_s": 0.0, "evidence_units": 0, "stabilized": 0, "hazard_clock_s": 0.0, "outcome": ""})
+    if events:
+        insert(connection, "exploration_progress_state", {**ctx, "player_id": player_id, "insight_available": 0, "insight_earned": 0})
     mask64 = (1 << 64) - 1
     increment = (54 << 1) | 1
     state = ((increment + (seed & mask64)) * 6364136223846793005 + increment) & mask64

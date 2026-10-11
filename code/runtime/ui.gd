@@ -22,6 +22,7 @@ var source_search: String = ""
 var source_filter: String = "全部"
 var source_page: int = 0
 var sources_return_page: String = "map"
+var exploration_selected: String = ""
 var war_navigation_row: HFlowContainer
 var state: XJRuntimeState
 var catalog: XJCatalog
@@ -116,6 +117,7 @@ var last_page_focus: Dictionary = {}
 var operation_kind: String = ""
 var operation_message: String = ""
 var operation_waiting: bool = false
+var operation_blocks_flight: bool = false
 var navigation_hud: XJNavigationHUD
 var interaction_button: Button
 var interaction_label: Label
@@ -139,10 +141,12 @@ var toolbar_buttons: Dictionary = {}
 var flight_content_top: float = 0.0
 var flight_content_bottom: float = 0.0
 
-func set_operation_status(kind: String, message: String, waiting: bool = false) -> void:
+func set_operation_status(kind: String, message: String, waiting: bool = false, blocks_flight: bool = false) -> void:
 	operation_kind = kind
 	operation_message = _friendly(message)
 	operation_waiting = waiting
+	# A queued snapshot waits for flight to finish; it must not prevent that flight.
+	operation_blocks_flight = blocks_flight or kind in ["load", "travel"] or (kind == "save" and not waiting)
 	if is_instance_valid(operation_bar):
 		operation_bar.visible = kind not in ["idle", "local_navigation"] and not message.is_empty()
 		operation_label.text = operation_message
@@ -406,12 +410,15 @@ func show_page(next_page: String) -> void:
 		_station()
 		_responsive()
 		return
-	_build_panel("物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
+	_build_panel("星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
 	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
 		_text("此服务需要停靠空间站。使用星图找到站点，进入停靠范围并减速后按 F。")
 		_focus_page.call_deferred()
 		return
 	match next_page:
+		"exploration":
+			var explorer: VBoxContainer = preload("res://runtime/ui/exploration_panel.gd").new()
+			body.add_child(explorer); explorer.setup(self)
 		"sources":
 			var sources: VBoxContainer = preload("res://runtime/ui/resource_sources.gd").new()
 			body.add_child(sources); sources.setup(self)
@@ -467,6 +474,11 @@ func tick(delta: float) -> void:
 		top.text = "%s · %s" % [_sector_name(ship.sector_id), _risk_name(str(definition.get("risk_zone_id", "")))]
 		health.text = "护盾 %.0f%% · 装甲 %.0f%% · 结构 %.0f%%\n电容 %.0f%% · 热量 %.0f%% %s\n速度 %s · 货 %.0f/%.0f L" % [ship.shield / maxf(metrics.shield_max, 1.0) * 100, ship.armor / maxf(metrics.armor_max, 1.0) * 100, ship.hull / maxf(metrics.hull_max, 1.0) * 100, ship.energy / maxf(metrics.energy_max, 1.0) * 100, ship.heat / maxf(metrics.heat_max, 1.0) * 100, "过热" if ship.overheated else "", XJSpaceUnits.speed(_display_speed()), metrics.cargo_used_l + metrics.mineral_used_l, metrics.cargo_capacity_l + metrics.mineral_capacity_l]
 	objective.text = _objective_text()
+	if gameplay.exploration.supported():
+		for event: RefCounted in state.rows("exploration_instance_state"):
+			if gameplay.exploration._site(event) and event.phase not in ["claimed", "failed", "withdrawn"]:
+				objective.text += "\n" + gameplay.exploration.status_text(event.event_id)
+				break
 	objective.tooltip_text = objective.text
 	_update_instrument(ship, metrics)
 	_update_module_bar(ship, metrics)
@@ -1007,8 +1019,13 @@ func _industry() -> void:
 	_update_quotes()
 
 func _service_context_page() -> String:
+	if page == "exploration": return "map"
 	if page != "sources": return page
 	return sources_return_page if sources_return_page in ["industry", "market", "map"] else "map"
+
+func open_exploration(event_id: String = "") -> void:
+	if not event_id.is_empty(): exploration_selected = event_id
+	show_page("exploration")
 
 func open_sources(item_id: String = "") -> void:
 	if state == null: return
@@ -1250,6 +1267,22 @@ func _campaign_summary() -> void:
 	_secondary(marker)
 
 func _research() -> void:
+	if gameplay.exploration.supported():
+		var progress: RefCounted = state.rows("exploration_progress_state")[0]
+		_text("探索证据 %d · 累计 %d；救援、遗迹和临时矿带都可积累。" % [progress.insight_available, progress.insight_earned], 17)
+		for project: Dictionary in _defs("exploration_research_defs"):
+			var frame: PanelContainer = _frame(body, "ExplorationResearch_" + str(project.research_id))
+			var contents: VBoxContainer = VBoxContainer.new(); frame.add_child(contents)
+			_text_to(contents, str(project.display_name) + " · " + str(project.description), 15)
+			_text_to(contents, "需要探索证据 %d / 信用点 %d" % [int(project.required_insight), int(project.required_credit)], 13)
+			var context: Dictionary = {"state": state, "epoch": state.epoch, "session": state.session_id, "station": state.player().docked_station_id}
+			var research_id: String = project.research_id
+			var study: Button = _button(contents, "研究", func():
+				if page == "research" and state == context.state and state.epoch == context.epoch and state.session_id == context.session and state.player().docked_station_id == context.station: requested.emit("exploration_research", research_id, 1, ""))
+			study.name = "ExploreResearch_" + research_id
+			var done: bool = state.find("exploration_research_state", "research_id", research_id) != null
+			study.disabled = done or progress.insight_available < int(project.required_insight) or state.player().credit < int(project.required_credit) or not _service_reason("manufacture").is_empty()
+			study.tooltip_text = "已掌握" if done else "需要足够探索证据、信用点与工业实验设施。"
 	var station_faction: String = str(_one("station_defs", "station_id", state.player().docked_station_id).get("faction_id", ""))
 	var list: VBoxContainer = _business_list("科技与个人设施", "服务费", "数量")
 	list.call("add_section", "势力研究")
@@ -1303,6 +1336,9 @@ func _research() -> void:
 
 func _map() -> void:
 	_text("选择星系查看情报；拖动视图、滚轮缩放。定位后，前往虫洞并减速按 F 穿越。", 14)
+	if gameplay.exploration.supported():
+		var events: Button = _button(body, "查看星域探索事件", func(): open_exploration())
+		events.name = "MapExplorationEvents"
 	var sources: Button = _button(body, "查询物资来源", func(): open_sources())
 	sources.name = "MapResourceSources"
 	var identity: String = state.world_id + ":" + catalog.content_hash
@@ -1560,7 +1596,7 @@ func _select_target(id: String) -> void:
 	target_selected.emit(target_id)
 
 func _target_type(kind: String) -> String:
-	return str({"station": "空间站", "gate": "虫洞门", "npc": "敌舰", "encounter": "敌舰群", "group": "敌舰群", "resource": "矿体", "signal": "信号", "wreck": "残骸", "marker": "航标", "planet": "天体"}.get(kind, "目标"))
+	return str({"station": "空间站", "gate": "虫洞门", "npc": "敌舰", "encounter": "敌舰群", "group": "敌舰群", "resource": "矿体", "signal": "信号", "wreck": "残骸", "marker": "航标", "planet": "天体", "exploration": "探索事件", "exploration_exit": "撤离点"}.get(kind, "目标"))
 
 func _selected_details() -> Dictionary:
 	if sector == null or not is_instance_valid(sector.flight) or not sector.targets.has(target_id): return {}
@@ -1654,8 +1690,8 @@ func _update_mission_guidance() -> void:
 	var flight: bool = state.ship().status == Types.ShipStatus.FLYING
 	var target: String = str(info.get("waypoint_id", ""))
 	var route_ok: bool = not target.is_empty() and str(info.get("route_reason", "")).is_empty()
-	mission_locate_button.disabled = info.is_empty() or operation_waiting
-	mission_travel_button.disabled = not flight or not route_ok or operation_waiting
+	mission_locate_button.disabled = info.is_empty() or operation_blocks_flight
+	mission_travel_button.disabled = not flight or not route_ok or operation_blocks_flight
 	mission_travel_button.text = "前往目标" if bool(info.get("local", false)) else "前往虫洞"
 	var note: String = _mission_location_text(info)
 	mission_locate_button.tooltip_text = "选择并指示任务地点；不会自动移动舰船。\n" + note
@@ -2186,8 +2222,8 @@ func _update_navigation() -> void:
 	if automatic and float(navigation_context.get("remaining_s", 0.0)) > 0.0: navigation_status.text += " · %.1f s" % float(navigation_context.remaining_s)
 	navigation_status.tooltip_text = navigation_status.text
 	navigation_stop_button.visible = automatic
-	navigation_stop_button.disabled = operation_waiting or operation_kind == "travel"
-	if is_instance_valid(overview): overview.call("set_selection", _selected_details(), navigation_context, operation_waiting or operation_kind == "travel")
+	navigation_stop_button.disabled = operation_blocks_flight
+	if is_instance_valid(overview): overview.call("set_selection", _selected_details(), navigation_context, operation_blocks_flight)
 	navigation_hud.selected_id = target_id
 	navigation_hud.refresh()
 	navigation_hud.caption_obstacles.clear()
@@ -2210,7 +2246,7 @@ func _update_navigation() -> void:
 	interaction_button.visible = not candidate_id.is_empty() and (bool(interaction_candidate.in_range) or candidate_id == target_id)
 	interaction_label.visible = interaction_button.visible
 	if not interaction_button.visible: return
-	var label: String = {"dock": "停靠空间站", "travel": "进入虫洞", "pickup_wreck": "回收残骸", "start_scan": "扫描信号", "start_mining": "开采矿体", "recover_resource": "回收组件"}.get(str(interaction_candidate.action), "交互")
+	var label: String = {"dock": "停靠空间站", "travel": "进入虫洞", "pickup_wreck": "回收残骸", "start_scan": "扫描信号", "start_mining": "开采矿体", "recover_resource": "回收组件", "exploration_open": "查看探索事件"}.get(str(interaction_candidate.action), "交互")
 	interaction_button.text = "[F] " + label
 	interaction_button.disabled = not bool(interaction_candidate.ready)
 	interaction_button.tooltip_text = str(interaction_candidate.title) + " · " + str(interaction_candidate.reason)
@@ -2924,7 +2960,7 @@ func _update_module_bar(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 			elif not engine_ready: engine_reason = status
 			engine_ready = engine_ready or ready
 	records.sort_custom(func(a: Dictionary, b: Dictionary): return int(a.slot_type) < int(b.slot_type) if a.slot_type != b.slot_type else int(a.slot_index) < int(b.slot_index))
-	equipment_bar.call("refresh", records, {"energy": ship.energy, "energy_max": metrics.energy_max, "heat_ratio": ship.heat / maxf(float(metrics.heat_max), 1.0), "engine_ready": engine_ready, "engine_reason": engine_reason, "empty_slots": empty_slots}, operation_waiting or operation_kind == "travel")
+	equipment_bar.call("refresh", records, {"energy": ship.energy, "energy_max": metrics.energy_max, "heat_ratio": ship.heat / maxf(float(metrics.heat_max), 1.0), "engine_ready": engine_ready, "engine_reason": engine_reason, "empty_slots": empty_slots}, operation_blocks_flight)
 
 func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 	update_camera_status()

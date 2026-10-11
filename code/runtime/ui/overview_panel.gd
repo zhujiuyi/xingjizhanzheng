@@ -217,7 +217,7 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 	for action: String in action_buttons:
 		var button: Button = action_buttons[action]
 		match action:
-			"nav_warp": button.visible = kind in ["station", "gate", "resource", "signal", "marker"]; button.disabled = busy or not bool(navigation.get("warp_ready", false))
+			"nav_warp": button.visible = kind in ["station", "gate", "resource", "signal", "marker", "exploration", "exploration_exit"]; button.disabled = busy or not bool(navigation.get("warp_ready", false))
 			"nav_approach": button.visible = not selected_id.is_empty() and not bool(details.get("navigation_only", false)); button.disabled = busy or not bool(navigation.get("approach_ready", false))
 			"nav_orbit": button.visible = not selected_id.is_empty() and not bool(details.get("navigation_only", false)); button.disabled = busy or not bool(navigation.get("orbit_ready", false))
 			"nav_stop": button.visible = running; button.disabled = busy

@@ -27,7 +27,7 @@ class ResourceIntelligence(unittest.TestCase):
         self.assertEqual(set(build_catalog.CONTENT_COLUMNS), set(build_catalog.CONTENT_TABLES))
 
     def test_original_corridor_and_components_keep_exact_yield(self):
-        self.assertEqual(self.db.execute("SELECT count(*) FROM resource_grade_defs g JOIN resource_node_defs n USING(node_id) JOIN sector_sovereignty_defs p USING(sector_id) WHERE p.initial_faction_id IS NULL AND p.conquerable=0 AND g.yield_multiplier_bp<>10000").fetchone()[0], 0)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM resource_grade_defs g JOIN resource_node_defs n USING(node_id) JOIN sector_sovereignty_defs p USING(sector_id) WHERE p.initial_faction_id IS NULL AND p.conquerable=0 AND g.yield_multiplier_bp<>10000 AND n.node_id NOT IN (SELECT node_id FROM exploration_resource_defs)").fetchone()[0], 0)
         self.assertEqual(self.db.execute("SELECT count(*) FROM resource_grade_defs g JOIN resource_node_defs n USING(node_id) JOIN item_defs i ON i.item_id=n.item_id WHERE i.item_type<>'ore' AND g.yield_multiplier_bp<>10000").fetchone()[0], 0)
 
     def test_higher_grade_has_noncosmetic_bounded_yield(self):
@@ -39,7 +39,7 @@ class ResourceIntelligence(unittest.TestCase):
         self.addCleanup(old.close)
         self.assertEqual(p.adapter_hash(old), "c4556c55c79de72dc0e461a2484f71df9250963bea68b516d36ddc6267979852")
         for (table,) in old.execute("SELECT name FROM sqlite_schema WHERE type='table' AND name<>'catalog_meta'"):
-            self.assertEqual(sorted(old.execute(f'SELECT * FROM "{table}"').fetchall(), key=repr), sorted(self.db.execute(f'SELECT * FROM "{table}"').fetchall(), key=repr), table)
+            self.assertLessEqual(set(old.execute(f'SELECT * FROM "{table}"').fetchall()), set(self.db.execute(f'SELECT * FROM "{table}"').fetchall()), table)
 
     def test_invalid_yield_and_missing_sector_are_rejected(self):
         db = sqlite3.connect(":memory:")
@@ -55,7 +55,7 @@ class ResourceIntelligence(unittest.TestCase):
         db = p.connect(); self.addCleanup(db.close)
         p.apply_migrations(db)
         initial, content = p.new_world(db, self.db)
-        self.assertEqual(db.execute("SELECT format_version FROM database_meta").fetchone(), (11,))
+        self.assertEqual(db.execute("SELECT format_version FROM database_meta").fetchone(), (12,))
         for table in ("resource_grade_defs", "sector_activity_defs"):
             self.assertGreater(db.execute(f"SELECT count(*) FROM frozen_{table} WHERE content_snapshot_id=?", (content,)).fetchone()[0], 0)
             with self.assertRaisesRegex(sqlite3.IntegrityError, "immutable"):

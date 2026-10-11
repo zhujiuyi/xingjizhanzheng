@@ -311,7 +311,7 @@ func _target_reason(id: String) -> String:
 	if state.ship() == null or state.ship().status != T.ShipStatus.FLYING: return "出港后才能自动航行"
 	if not world.targets.has(id): return "目标不在当前星系"
 	var entry: Dictionary = world.targets[id]
-	if bool(entry.get("navigation_only", false)) or (str(entry.kind) != "encounter" and not rules.targets.has(str(entry.kind))): return "远景天体仅供航向参考"
+	if bool(entry.get("navigation_only", false)) or not rules.targets.has(_rule_kind(str(entry.kind))): return "远景天体仅供航向参考"
 	var candidate: Variant = entry.get("node")
 	if not is_instance_valid(candidate) or not candidate is Node3D or not candidate.is_inside_tree(): return "目标已离开或失效"
 	var definition: Dictionary
@@ -342,10 +342,13 @@ func _target_reason(id: String) -> String:
 		if world.flight.global_position.distance_to((candidate as Node3D).global_position) > sensor: return "敌舰超出探测范围"
 	return ""
 
+func _rule_kind(kind: String) -> String:
+	return str({"exploration": "signal", "exploration_exit": "marker", "encounter": "marker"}.get(kind, kind))
+
 func _target_rule(entry: Dictionary) -> Dictionary:
 	# A site is a navigation marker, while its stand-off distance is frozen
 	# with the combat encounter. No new balancing constants enter this controller.
-	var result: Dictionary = rules.target("marker" if entry.kind == "encounter" else str(entry.kind))
+	var result: Dictionary = rules.target(_rule_kind(str(entry.kind)))
 	if entry.kind == "encounter": result.warp_arrival_m = entry.warp_arrival_m
 	return result
 

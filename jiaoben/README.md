@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+v0.19.0探索：`build_exploration_content.py`生成独立探索SQL，`store_generate_exploration.py`只生成015与v0.11适配器，旧迁移与旧适配器不可重写。`verify_combat_v18.py --only exploration`运行18种变体、付费操作恢复、临时矿量、成果/研究/需求和SQLite约束；`prepare_exploration_upgrade_v27.py --legacy-executable <实际v0.18.0 EXE>`创建含三份付费订单的format11独立夹具，将其路径传`XJ_EXPLORATION_LEGACY_DATABASE`验证015/内容升级失败回滚、旧状态与RNG保留、旧手动档及幂等。`--only exploration-world --native`验证真实F/鼠标、运输舰移动与敌方弹丸、碎片射线遮挡、电磁扫描/护盾与稳定、临时矿体实际采集/消失、恒星热伤害和窄屏。两入口支持`--executable`验证真实PCK，独占共用锁，fresh UUID和严格双日志；资格/物资/姿态/近超时状态均是声明的专项夹具，不代表自然成长。详见[53](../doc/53-多阶段探索与环境风险.md)。
+
 v0.18.0来源情报：`store_generate_resource_intel.py`仅生成014与v0.10适配器，固定两张新定义，旧文件不可重写。`verify_combat_v18.py --only resource-intel`验证真实来源、品位采集与存档；传`XJ_RESOURCE_INTEL_LEGACY_DATABASE`时复制已关闭tmp旧库。可用实际v0.17.0 EXE固定工业诊断配合`XJ_INDUSTRY_FIXTURE_ONLY=1`生成带运行/排队订单的format10夹具，保存后立即退出，不继续执行新版检查。`--only resource-intel-world --native`覆盖真实窗口搜索、星图、过期回调、缩放及实际跨门再抵达来源；两者支持`--executable`验证真实PCK，使用fresh UUID与严格双日志。见[52](../doc/52-物资来源与矿点情报.md)。
 
 v0.17.0单机工业：`build_catalog.py`合并独立`industry_schema/seed.sql`，`store_generate_industry.py`仅生成新013迁移与v0.9固定适配器；已发布001–012和旧适配器不可改写。`verify_combat_v18.py --only industry`运行材料托管、队列/领取/取消、需求、保存和升级故障；传`XJ_INDUSTRY_LEGACY_DATABASE`时只复制已关闭的tmp旧库，真实v0.16.0库可由其实际EXE的`--xj-verify-store`创建。`--only industry-world --native`使用真实窗口输入与Main推进，覆盖过期界面、非法数量与三种尺寸；`--only row-quantity --native`保留仓储/经济矩阵，增加真实制造队列与成品领取。三者均支持`--executable <实际EXE>`而不挂源码路径，使用fresh UUID库、独立输出/引擎日志、严格退出/诊断和图摘要。所有测试数据在tmp/logs，不读取个人存档。单机完整目标和阶段边界见[51](../doc/51-单机完善实施与验收矩阵.md)。

@@ -27,11 +27,15 @@ func act(kind: String, target: String = "", quantity: int = 1, extra: String = "
 	var result: D.ActionResultDto = g.act(kind, target, quantity, extra)
 	if result.phase != T.ActionPhase.APPLIED: print("ACTION_REASON ", kind, ": ", result.display_reason_key)
 	return result.phase == T.ActionPhase.APPLIED
-func fingerprint(value: XJRuntimeState) -> String:
+func fingerprint(value: XJRuntimeState, prior_resource_rules: bool = false) -> String:
 	var data: Dictionary = {}
 	for table: String in XJRuntimeState.TABLES:
+		if prior_resource_rules and table.begins_with("exploration_"): continue
 		var rows: Array = []
-		for row: RefCounted in value.rows(table): rows.append(Codec.new().encode_row(table, row))
+		for row: RefCounted in value.rows(table):
+			if prior_resource_rules and table == "resource_state" and row.node_id.begins_with("exp_"): continue
+			rows.append(Codec.new().encode_row(table, row))
+		rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return JSON.stringify(a) < JSON.stringify(b))
 		data[table] = rows
 	return JSON.stringify(data)
 
@@ -39,7 +43,7 @@ func _run() -> void:
 	directory = OS.get_environment("XJ_RESOURCE_INTEL_V26_DIRECTORY").replace("\\", "/")
 	if not check(directory.is_absolute_path() and directory.contains("/jiaoben/tmp/resource-intel-v26/") and not directory.contains("..") and not FileAccess.file_exists(directory.path_join("progress.db")), "fresh scoped database"): get_tree().quit(2); return
 	store = Store.new(directory.path_join("progress.db"))
-	if not check(store.open(), "open format11 store: " + store.last_error): get_tree().quit(1); return
+	if not check(store.open(), "open current format12 store: " + store.last_error): get_tree().quit(1); return
 	state = store.new_world("Resource intelligence", 2601)
 	if not check(state != null, "create frozen resource world: " + store.last_error): store.close(); get_tree().quit(1); return
 	g = Gameplay.new(); g.setup(state, store.catalog)
@@ -128,21 +132,22 @@ func legacy() -> void:
 	check(not store.open(), "injected format11 failure rejects migration")
 	check(int(store._records("SELECT format_version FROM database_meta")[0].format_version) == 10, "format10 remains after migration rollback")
 	faulty.failure = ""
-	if not check(store.open(), "retry reaches format11"): return
+	if not check(store.open(), "retry reaches current format12"): return
 	var slot: Dictionary
 	for row: Dictionary in store.list_slots():
 		if row.slot_kind == "manual": slot = row; break
 	state = store.load(slot.slot_id)
 	if not check(state != null, "old frozen rules restore after schema migration"): return
-	var old: String = fingerprint(state)
+	var old: String = fingerprint(state, true)
 	check(not state.rows("industry_job_state").is_empty(), "actual old fixture contains paid running and queued jobs")
 	faulty.failure = "content_upgrade"
-	check(store.upgrade_content(state) == null and fingerprint(state) == old, "failed resource branch preserves every asset order and RNG")
+	check(store.upgrade_content(state) == null and fingerprint(state, true) == old, "failed resource branch preserves every asset order and RNG")
 	faulty.failure = ""
 	var next: XJRuntimeState = store.upgrade_content(state)
-	check(next != null and fingerprint(next) == old and store.catalog.table_names.has("resource_grade_defs"), "resource branch preserves full state including paid order durations")
+	check(next != null and fingerprint(next, true) == old and store.catalog.table_names.has("resource_grade_defs"), "resource branch preserves prior state including paid order durations")
+	check(next != null and next.rows("exploration_instance_state").size() == 6 and next.rows("exploration_progress_state")[0].insight_available == 0, "current branch adds six unpaid clues without rewards")
 	state = store.load(slot.slot_id)
-	check(state != null and fingerprint(state) == old and not store.catalog.table_names.has("resource_grade_defs"), "old manual remains independently restorable")
+	check(state != null and fingerprint(state, true) == old and not store.catalog.table_names.has("resource_grade_defs"), "old manual remains independently restorable")
 	store.close(); store = null; state = null
 
 func finish() -> void:

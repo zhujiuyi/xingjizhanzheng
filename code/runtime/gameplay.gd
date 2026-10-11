@@ -11,6 +11,7 @@ const Encounters = preload("res://runtime/gameplay/encounters.gd")
 const Civilizations = preload("res://runtime/gameplay/civilizations.gd")
 const Industry = preload("res://runtime/gameplay/industry.gd")
 const ResourceIntel = preload("res://runtime/gameplay/resource_intel.gd")
+const Exploration = preload("res://runtime/gameplay/exploration.gd")
 const Space = preload("res://runtime/space_coordinates.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
@@ -22,6 +23,7 @@ var encounters: RefCounted
 var civilizations: RefCounted
 var industry: RefCounted
 var resource_intel: RefCounted
+var exploration: RefCounted
 var events: Array[D.EventDto] = []
 var pending_autosave_request_id: String = ""
 var status_text: String = ""
@@ -56,6 +58,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog) -> void:
 	civilizations = Civilizations.new(self)
 	industry = Industry.new(self)
 	resource_intel = ResourceIntel.new(self)
+	exploration = Exploration.new(self)
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
 	for ship: D.ShipStateDto in state.rows("ship_state"):
@@ -166,6 +169,8 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 	if civilization_actions.has(action): command.action_kind = T.ActionKind.JOIN_CIVILIZATION + civilization_actions.find(action)
 	var industry_actions: Array[String] = ["claim_industry", "cancel_industry", "deliver_demand"]
 	if industry_actions.has(action): command.action_kind = T.ActionKind.CLAIM_INDUSTRY + industry_actions.find(action)
+	if action == "exploration_action": command.action_kind = T.ActionKind.EXPLORATION_ACTION
+	if action == "exploration_research": command.action_kind = T.ActionKind.EXPLORATION_RESEARCH
 	_active_action = command
 	_active_payload = _request_for(action, target, quantity, extra)
 	var ok: bool = false
@@ -210,6 +215,10 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 			"claim_industry": ok = industry.claim(target)
 			"cancel_industry": ok = industry.cancel(target)
 			"deliver_demand": ok = industry.deliver(target, quantity, extra)
+			"exploration_action":
+				var parts: PackedStringArray = extra.split(":")
+				ok = exploration.execute(target, parts[0], parts[1]) if parts.size() == 2 else fail("探索请求缺少动作与代次")
+			"exploration_research": ok = exploration.research(target)
 			"set_module_enabled": ok = _set_enabled(target, extra != "off")
 			"request_engine_cycle": ok = _engine_cycle()
 			_: fail("不支持的动作：" + action)
@@ -469,7 +478,7 @@ func begin_step(delta: float) -> void:
 		ship.energy = minf(m.energy_max, ship.energy + m.energy_recharge * delta)
 		ship.heat = maxf(0, ship.heat - m.heat_cooling * delta)
 		ship.shield_delay_remaining_s = maxf(0, ship.shield_delay_remaining_s - delta)
-		if ship.shield_delay_remaining_s == 0: ship.shield = minf(m.shield_max, ship.shield + m.shield_recharge * delta)
+		if ship.shield_delay_remaining_s == 0: ship.shield = minf(m.shield_max, ship.shield + m.shield_recharge * delta * (float(exploration.environment().shield) if ship.ship_instance_id == state.ship().ship_instance_id else 1.0))
 		if ship.heat <= m.heat_max * rule("overheat_unlock_ratio"): ship.overheated = false
 	for e in state.rows("equipment_state"):
 		e.cooldown_remaining_s = maxf(0, e.cooldown_remaining_s - delta)
@@ -495,6 +504,7 @@ func finish_step(delta: float) -> void:
 	civilizations.tick(delta)
 	economy.tick(delta)
 	industry.tick(delta)
+	exploration.tick(delta)
 	_tick_resources(delta)
 	_sync_spawns(delta)
 	_tick_gate_lifetimes(delta)
@@ -518,6 +528,7 @@ func _tick_repairs() -> void:
 
 func _tick_resources(delta: float) -> void:
 	for node in state.rows("resource_state"):
+		if exploration.managed_resources.has(node.node_id): continue
 		if node.remaining_units > 0: continue
 		node.respawn_remaining_s = maxf(0, node.respawn_remaining_s - delta)
 		if node.respawn_remaining_s == 0: node.remaining_units = definition("resource_node_defs", "node_id", node.node_id).capacity_units
@@ -586,6 +597,7 @@ func damage_ship(raw_vector: Vector3) -> float:
 func _sync_spawns(delta: float = 0.0) -> void:
 	encounters.tick(delta)
 	for spawn in rows("npc_spawn_defs"):
+		if exploration.managed_spawns.has(spawn.spawn_id): continue
 		if civilizations.handles_spawn(spawn.spawn_id): continue
 		if encounters.handles(spawn.spawn_id): continue
 		if not unlocked(spawn.required_unlock_id): continue
@@ -675,9 +687,9 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration]:
 		if service != null: service.g = null
-	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null
+	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null
 	pending_autosave_request_id=""; events.clear(); _pending_repairs.clear(); _definition_cache.clear(); _index_cache.clear(); _rules.clear()
 	_active_action = null; _active_payload = null; state = null; catalog = null; spatial_validator = Callable()
 

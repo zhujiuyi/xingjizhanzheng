@@ -37,7 +37,7 @@ func forecast(node_id: String) -> Dictionary:
 			if row.module_id == equipment.module_def_id and row.item_id == node.item_id: compatible = true; break
 		if not compatible: continue
 		var module: Dictionary = g.definition("module_defs", "module_id", equipment.module_def_id)
-		var units: int = Status.yield_per_cycle(g.catalog, node_id, g.state.ship().ship_def_id, equipment.module_def_id)
+		var units: int = Status.yield_per_cycle(g.catalog, node_id, g.state.ship().ship_def_id, equipment.module_def_id, g.exploration.mining_multiplier(node_id))
 		if float(module.cycle_s) > 0.0:
 			result.rate_per_min += float(units) / float(module.cycle_s) * 60.0
 			minimum_cycle = minf(minimum_cycle, float(module.cycle_s))
@@ -56,6 +56,7 @@ func sources(item_id: String) -> Array[Dictionary]:
 	if item.is_empty(): return result
 	for node: Dictionary in g.rows("resource_node_defs"):
 		if node.item_id != item_id: continue
+		if not g.exploration.resource_visible(node.node_id): continue
 		var location: Dictionary = g.definition("resource_node_locations", "node_id", node.node_id)
 		if location.is_empty(): continue
 		var extraction: Dictionary = forecast(node.node_id)

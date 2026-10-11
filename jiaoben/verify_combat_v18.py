@@ -11,6 +11,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "exploration-world": ("exploration_world_v27.gd", "XJ_EXPLORATION_WORLD_V27", "exploration-world-v27", "EXPLORATION_WORLD_V27", "--xj-verify-exploration-world-v27"),
+    "exploration": ("exploration_v27.gd", "XJ_EXPLORATION_V27", "exploration-v27", "EXPLORATION_V27", "--xj-verify-exploration-v27"),
     "resource-intel-world": ("resource_intel_world_v26.gd", "XJ_RESOURCE_INTEL_WORLD_V26", "resource-intel-world-v26", "RESOURCE_INTEL_WORLD_V26", "--xj-verify-resource-intel-world-v26"),
     "resource-intel": ("resource_intel_v26.gd", "XJ_RESOURCE_INTEL_V26", "resource-intel-v26", "RESOURCE_INTEL_V26", "--xj-verify-resource-intel-v26"),
     "row-quantity": ("row_quantity_v17.gd", "XJ_ROW_QUANTITY_V17", "row-quantity-v17", "ROW_QUANTITY_V17", "--xj-verify-row-quantities"),
@@ -161,6 +163,14 @@ def run_suite():
             assert record["summary"]["native_helper_sha256"] == sha(ROOT / "jiaoben/tests/civilization_world_v24.gd")
         if name == "industry":
             assert record["summary"]["checks"] >= 80 and len(captures) == 0
+        if name == "exploration":
+            assert record["summary"]["checks"] >= 249 and record["summary"]["cases"] == 18 and len(captures) == 0
+            if os.environ.get("XJ_EXPLORATION_LEGACY_DATABASE"):
+                assert record["summary"]["legacy_checked"] and record["summary"]["checks"] >= 260
+        if name == "exploration-world":
+            assert args.native and record["summary"]["checks"] >= 80 and len(captures) == 8
+            escort = next(row for row in record["summary"]["observations"] if row["kind"] == "escort")
+            assert escort["hits"] > 0 and escort["moved_m"] > 4000 and escort["outcome"] == "full"
         if name == "resource-intel":
             assert record["summary"]["checks"] >= 190 and len(captures) == 0
             if os.environ.get("XJ_RESOURCE_INTEL_LEGACY_DATABASE"):

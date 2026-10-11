@@ -31,7 +31,7 @@ static func inspect(sector: XJSector, state: XJRuntimeState, catalog: XJCatalog,
 	if state.ship() == null: return result
 	if not sector.targets.has(target_id): return result
 	var target: Dictionary = sector.targets[target_id]
-	if target.get("navigation_only", false) or target.get("kind", "") not in ["station", "gate", "wreck", "signal", "resource"]: return result
+	if target.get("navigation_only", false) or target.get("kind", "") not in ["station", "gate", "wreck", "signal", "resource", "exploration", "exploration_exit"]: return result
 	var candidate_node: Variant = target.get("node")
 	if not is_instance_valid(candidate_node) or not candidate_node is Node3D: return result
 	var node: Node3D = candidate_node as Node3D
@@ -40,6 +40,11 @@ static func inspect(sector: XJSector, state: XJRuntimeState, catalog: XJCatalog,
 	result.distance_m = sector.target_distance(target_id)
 	result.speed_mps = sector.flight.velocity.length()
 	match result.kind:
+		"exploration", "exploration_exit":
+			var event: Dictionary = catalog.one("exploration_event_defs", "event_id", str(target.get("event_id", "")))
+			if event.is_empty(): return result
+			result.action = "exploration_open"
+			result.range_m = float(gameplay.exploration.balance.extraction_radius_m) if result.kind == "exploration_exit" else float(event.operation_range_m)
 		"station":
 			result.action = "dock"; result.range_m = float(catalog.rule("dock_radius_m")); result.max_speed_mps = float(catalog.rule("dock_max_speed_mps"))
 		"gate":

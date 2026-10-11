@@ -88,6 +88,12 @@ func create(catalog: XJCatalog, seed_value: int) -> State:
 			_add("station_demand_state", {"demand_id": demand.demand_id, "remaining_units": demand.required_units, "phase_remaining_s": demand.duration_s})
 	rng.initialize(seed_value)
 	result.add("rng_state", rng.row)
+	if catalog.table_names.has("exploration_event_defs"):
+		var explorer: Script = preload("res://runtime/gameplay/exploration.gd")
+		for row: RefCounted in explorer.initial_instances(catalog, seed_value): result.add("exploration_instance_state", row)
+		_add("exploration_progress_state", {"player_id": player_id})
+		for node: Dictionary in catalog.rows("exploration_resource_defs"):
+			result.find("resource_state", "node_id", node.node_id).remaining_units = 0
 	return result
 
 func _add(table: String, values: Dictionary) -> void:

@@ -19,6 +19,7 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	if not _validate_space(state, catalog): return false
 	if not _validate_civilizations(state, catalog): return false
 	if not _validate_industry(state, catalog): return false
+	if not _validate_exploration(state, catalog): return false
 	for ship in state.rows("ship_state"):
 		var norm: float = ship.quat_x * ship.quat_x + ship.quat_y * ship.quat_y + ship.quat_z * ship.quat_z + ship.quat_w * ship.quat_w
 		if abs(norm - 1.0) >= 0.00001: return _fail("Invalid normalized ship quaternion")
@@ -102,6 +103,70 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 			var capacity: int = definition.cargo_l if container.kind == Types.ContainerKind.CARGO else definition.mineral_cargo_l
 			if volume > capacity: return _fail("Cargo volume exceeded")
 		if payload > definition.max_payload_mass_kg + 0.0000001: return _fail("Shared payload mass exceeded")
+	return true
+
+func _validate_exploration(state: State, catalog: XJCatalog) -> bool:
+	var tables: Array[String] = ["exploration_instance_state", "exploration_actor_state", "exploration_claim_state", "exploration_progress_state", "exploration_research_state"]
+	if not catalog.table_names.has("exploration_event_defs"):
+		for table: String in tables:
+			if not state.rows(table).is_empty(): return _fail("Exploration state in legacy rules")
+		return true
+	var balance: Dictionary = catalog.rows("exploration_balance_defs")[0]
+	var instances: Dictionary = {}
+	for row: RefCounted in state.rows("exploration_instance_state"):
+		var event: Dictionary = catalog.one("exploration_event_defs", "event_id", row.event_id)
+		var variant: Dictionary = catalog.one("exploration_variant_defs", "variant_id", row.variant_id)
+		if event.is_empty() or variant.is_empty() or variant.event_id != row.event_id or instances.has(row.event_id) or row.generation <= 0 or row.variant_seed < 0: return _fail("Invalid exploration instance identity")
+		instances[row.event_id] = row
+		if row.phase not in ["clue", "surveyed", "rescue", "relic", "mineral", "extracting", "ready", "claimed", "failed", "withdrawn"] or row.operation_kind not in ["", "survey", "rescue", "recover", "stabilize", "deepen"]: return _fail("Invalid exploration phase or operation")
+		for field: String in ["operation_remaining_s", "elapsed_s", "cooldown_remaining_s", "hazard_clock_s"]:
+			if not is_finite(row.get(field)) or float(row.get(field)) < 0.0: return _fail("Invalid exploration timer")
+		if row.cooldown_remaining_s > float(event.cooldown_s) or row.operation_remaining_s > maxf(float(variant.survey_duration_s), float(variant.work_duration_s)) or row.hazard_clock_s >= float(balance.hazard_period_s) or row.evidence_units < 0: return _fail("Exploration state exceeds frozen limits")
+		if row.operation_kind.is_empty() and row.operation_remaining_s != 0.0: return _fail("Idle exploration retains operation time")
+		if event.event_kind == "relic" and row.evidence_units > int(variant.relic_layers): return _fail("Too many relic evidence layers")
+		if row.phase in ["ready", "claimed"] and row.outcome not in ["full", "partial"]: return _fail("Ready exploration has no valid outcome")
+	if instances.size() != catalog.rows("exploration_event_defs").size(): return _fail("Incomplete exploration coverage")
+	var earned: int = 0
+	var claims: Dictionary = {}
+	for row: RefCounted in state.rows("exploration_claim_state"):
+		var variant: Dictionary = catalog.one("exploration_variant_defs", "variant_id", row.variant_id)
+		var key: String = row.event_id + ":" + str(row.generation)
+		if not instances.has(row.event_id) or row.player_id != state.player().player_id or variant.is_empty() or variant.event_id != row.event_id or claims.has(key) or row.generation > instances[row.event_id].generation or row.generation <= 0: return _fail("Invalid exploration reward identity")
+		claims[key] = true
+		var current: RefCounted = instances[row.event_id]
+		if row.generation == current.generation and (row.variant_id != current.variant_id or current.phase != "claimed" or row.outcome != current.outcome): return _fail("Exploration receipt differs from current result")
+		if row.outcome not in ["full", "partial"] or row.credit_units != int(variant.full_credit if row.outcome == "full" else variant.partial_credit) or row.insight_units <= 0 or row.insight_units > int(variant.insight_units) or (row.outcome == "full" and row.insight_units != int(variant.insight_units)) or row.reputation_units != int(variant.reputation_units if row.outcome == "full" else 0) or row.claimed_tick > state.snapshot.meta.simulation_tick: return _fail("Invalid exploration reward amount")
+		earned += row.insight_units
+	for row: RefCounted in state.rows("exploration_instance_state"):
+		if row.phase == "claimed" and not claims.has(row.event_id + ":" + str(row.generation)): return _fail("Exploration claim receipt missing")
+	var spent: int = 0
+	var projects: Dictionary = {}
+	for row: RefCounted in state.rows("exploration_research_state"):
+		var project: Dictionary = catalog.one("exploration_research_defs", "research_id", row.research_id)
+		if project.is_empty() or projects.has(row.research_id) or row.player_id != state.player().player_id or row.spent_insight != int(project.required_insight) or row.paid_credit != int(project.required_credit) or row.completed_tick > state.snapshot.meta.simulation_tick: return _fail("Invalid exploration research receipt")
+		projects[row.research_id] = true
+		var knowledge: bool = false
+		for unlock: RefCounted in state.rows("unlock_state"):
+			if unlock.player_id == row.player_id and unlock.unlock_id == project.reward_unlock_id: knowledge = true; break
+		if not knowledge: return _fail("Exploration research knowledge missing")
+		spent += row.spent_insight
+	if state.rows("exploration_progress_state").size() != 1: return _fail("Exploration evidence balance missing")
+	var progress: RefCounted = state.rows("exploration_progress_state")[0]
+	if progress.player_id != state.player().player_id or progress.insight_earned != earned or progress.insight_available != earned - spent or progress.insight_available < 0: return _fail("Exploration evidence ledger mismatch")
+	var actor_ids: Dictionary = {}
+	for member: RefCounted in state.rows("exploration_actor_state"):
+		var npc: RefCounted = state.find("npc_state", "npc_instance_id", member.npc_instance_id)
+		if npc == null or actor_ids.has(member.npc_instance_id) or not instances.has(member.event_id) or member.generation != instances[member.event_id].generation or npc.generation != member.generation: return _fail("Invalid exploration actor context")
+		actor_ids[member.npc_instance_id] = true
+		var definition: Dictionary = catalog.one("exploration_actor_defs", "spawn_id", npc.spawn_id)
+		if definition.is_empty() or definition.event_id != member.event_id or definition.actor_role != member.actor_role: return _fail("Exploration actor role differs from definition")
+	for spec: Dictionary in catalog.rows("exploration_resource_defs"):
+		var resource: RefCounted = state.find("resource_state", "node_id", spec.node_id)
+		if resource == null: return _fail("Managed mineral state missing")
+		var row: RefCounted = instances[spec.event_id]
+		var active: bool = row.phase == "mineral" and row.choice_id == spec.choice_id
+		var maximum: int = int(catalog.one("exploration_variant_defs", "variant_id", row.variant_id).mineral_units)
+		if resource.remaining_units < 0 or resource.remaining_units > maximum or (not active and resource.remaining_units != 0) or resource.respawn_remaining_s != 0: return _fail("Inactive or exhausted temporary mineral regenerated")
 	return true
 
 func _validate_industry(state: State, catalog: XJCatalog) -> bool:

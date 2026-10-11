@@ -15,6 +15,7 @@ var flight: XJFlight
 var projectiles: XJProjectiles
 var definitions: Dictionary = {}
 var targets: Dictionary = {}
+var exploration_view: RefCounted
 var npcs: Dictionary = {}
 var last_error: String = ""
 var factory: Script
@@ -106,6 +107,7 @@ func build(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted) -> bool
 			var system: Dictionary = catalog.one("system_defs", "system_id", destination.get("system_id", ""))
 			_target(endpoint.endpoint_id, "虫洞 · " + str(system.get("display_name", endpoint.target_sector_id)), "gate", visual, endpoint.entry_anchor_id)
 	for location in catalog.rows("resource_node_locations"):
+		if gameplay.exploration.managed_resources.has(location.node_id): continue
 		if not definitions.has(location.anchor_id):
 			continue
 		var resource: Dictionary = catalog.one("resource_node_defs", "node_id", location.node_id)
@@ -180,6 +182,8 @@ func _clear_owners(node: Node) -> void:
 
 func sync_entities() -> bool:
 	refresh_site()
+	if exploration_view == null: exploration_view = preload("res://runtime/exploration_view.gd").new(self)
+	exploration_view.sync()
 	_sync_waypoints()
 	for id: String in npcs.keys():
 		if state.find("npc_state", "npc_instance_id", id) == null or (Space.supported(catalog) and Space.site_for_entity(state, "npc", id) != Space.current_site(state)):
@@ -286,6 +290,7 @@ func simulate_npcs(delta: float) -> void:
 			continue
 		var body: CharacterBody3D = npcs[id]
 		if WarFleetPilot.step(self, row, body, delta): continue
+		if XJExplorationPilot.step(self, row, body, delta): continue
 		var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", row.spawn_id)
 		var behavior: Dictionary = catalog.one("npc_behavior_defs", "behavior_id", spawn.behavior_id)
 		var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)

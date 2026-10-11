@@ -192,10 +192,14 @@ func fleet_member(npc_id: String) -> D.WarFleetStateDto:
 	return g.state.find("war_fleet_state", "npc_instance_id", npc_id) as D.WarFleetStateDto
 
 func friendly(npc_id: String) -> bool:
+	if g.exploration != null and g.exploration.friendly(npc_id): return true
 	var member: D.WarFleetStateDto = fleet_member(npc_id)
 	return member != null and member.side == "ally"
 
 func escort_hull(npc_id: String) -> String:
+	if g.exploration != null:
+		var event_hull: String = g.exploration.escort_hull(npc_id)
+		if not event_hull.is_empty(): return event_hull
 	var member: D.WarFleetStateDto = fleet_member(npc_id)
 	if member == null or member.side != "ally": return ""
 	var definition: Dictionary = g.definition("civilization_war_defs", "war_id", member.war_id)
@@ -204,10 +208,8 @@ func escort_hull(npc_id: String) -> String:
 	return ""
 
 func hostile_to(attacker_id: String, target_id: String) -> bool:
-	var attacker: D.WarFleetStateDto = fleet_member(attacker_id)
-	var target: D.WarFleetStateDto = fleet_member(target_id)
-	var attacker_friendly: bool = attacker_id == g.state.ship().ship_instance_id or (attacker != null and attacker.side == "ally")
-	var target_friendly: bool = target_id == g.state.ship().ship_instance_id or (target != null and target.side == "ally")
+	var attacker_friendly: bool = attacker_id == g.state.ship().ship_instance_id or friendly(attacker_id)
+	var target_friendly: bool = target_id == g.state.ship().ship_instance_id or friendly(target_id)
 	return attacker_friendly != target_friendly
 
 func command(order: String, target_id: String = "") -> bool:
