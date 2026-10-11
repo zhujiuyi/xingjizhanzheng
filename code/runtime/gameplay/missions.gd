@@ -256,13 +256,13 @@ func _route_location(location: Dictionary, origin_sector: String) -> Dictionary:
 	location["route_sectors"] = sectors
 	return location
 
-func _route(source: String, destination: String, unlocked_only: bool) -> Array[Dictionary]:
+func _route(source: String, destination: String, unlocked_only: bool, mass_override: float = -1.0) -> Array[Dictionary]:
 	var queue: Array[String] = [source]
 	var seen: Dictionary = {source: true}
 	var paths: Dictionary = {source: []}
 	var endpoints: Array[Dictionary] = g.rows("gate_endpoint_defs").duplicate()
 	endpoints.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.endpoint_id) < str(b.endpoint_id))
-	var mass: float = float(g.metrics(g.state.ship()).total_mass_kg)
+	var mass: float = mass_override if mass_override >= 0.0 else float(g.metrics(g.state.ship()).total_mass_kg)
 	while not queue.is_empty():
 		var current: String = queue.pop_front()
 		for endpoint: Dictionary in endpoints:

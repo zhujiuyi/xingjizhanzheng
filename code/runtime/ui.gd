@@ -87,7 +87,7 @@ var business_preserve_view: bool = false
 var live_missions: Array[Dictionary] = []
 var definition_cache: Dictionary = {}
 var friendly_names: Dictionary = {}
-const ACTION_NAMES: Dictionary = {"undock": "已出港", "dock": "已停靠", "switch_ship": "已切换驾驶舰", "buy_item": "购买完成", "sell_item": "出售完成", "buy_ship": "船体购买完成", "sell_ship": "船体出售完成", "move_stack": "货物转移完成", "move_item": "设备转移完成", "fit_module": "配装完成", "unfit_module": "设备已卸下", "repair": "维修完成", "manufacture": "生产完成", "recycle": "拆解完成", "accept_mission": "任务已接取", "abandon_mission": "任务已放弃", "deliver_mission": "任务已交付", "claim_loan": "任务舰已交接", "handoff_loan": "借船已归还", "request_rescue": "救援完成", "start_scan": "扫描已开始", "stop_scan": "扫描已停止", "start_mining": "采矿已开始", "stop_mining": "采矿已停止", "set_module_enabled": "设备开关已更新", "request_engine_cycle": "增推已启用", "research": "研究完成", "build_base": "设施已建成", "recover_resource": "组件已回收", "pickup_wreck": "残骸已回收"}
+const ACTION_NAMES: Dictionary = {"remote_support":"远程维修已开始","stop_remote_support":"远程维修已停止","consignment_action":"承运状态已更新","undock": "已出港", "dock": "已停靠", "switch_ship": "已切换驾驶舰", "buy_item": "购买完成", "sell_item": "出售完成", "buy_ship": "船体购买完成", "sell_ship": "船体出售完成", "move_stack": "货物转移完成", "move_item": "设备转移完成", "fit_module": "配装完成", "unfit_module": "设备已卸下", "repair": "维修完成", "manufacture": "生产完成", "recycle": "拆解完成", "accept_mission": "任务已接取", "abandon_mission": "任务已放弃", "deliver_mission": "任务已交付", "claim_loan": "任务舰已交接", "handoff_loan": "借船已归还", "request_rescue": "救援完成", "start_scan": "扫描已开始", "stop_scan": "扫描已停止", "start_mining": "采矿已开始", "stop_mining": "采矿已停止", "set_module_enabled": "设备开关已更新", "request_engine_cycle": "增推已启用", "research": "研究完成", "build_base": "设施已建成", "recover_resource": "组件已回收", "pickup_wreck": "残骸已回收"}
 var preferences: Dictionary = {}
 var title_background: TextureRect
 var title_shade: ColorRect
@@ -417,12 +417,16 @@ func show_page(next_page: String) -> void:
 		_station()
 		_responsive()
 		return
-	_build_panel("配装分析" if next_page=="fitting_analysis" else "舰船角色" if next_page=="ship_roles" else "战术行动" if next_page == "operations" else "无人机管理" if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
+	_build_panel("承运合同" if next_page=="consignments" else "配装分析" if next_page=="fitting_analysis" else "舰船角色" if next_page=="ship_roles" else "战术行动" if next_page == "operations" else "无人机管理" if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
 	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
+		if next_page=="ships" and gameplay.fitting_analysis.supported():_button(body,"舰船定位",show_page.bind("ship_roles")).name="ShipRolesEntry"
 		_text("此服务需要停靠空间站。使用星图找到站点，进入停靠范围并减速后按 F。")
 		_focus_page.call_deferred()
 		return
 	match next_page:
+		"consignments":
+			if gameplay.consignments.supported():
+				var consignments: VBoxContainer=preload("res://runtime/ui/consignment_panel.gd").new();body.add_child(consignments);consignments.setup(self)
 		"fitting_analysis":
 			if gameplay.fitting_analysis.supported():
 				var analysis: VBoxContainer=preload("res://runtime/ui/fitting_panel.gd").new();body.add_child(analysis);analysis.setup(self)
@@ -465,6 +469,9 @@ func notify(message: String, is_error: bool = false) -> void:
 	message_age = 0.0
 
 func tick(delta: float) -> void:
+	if page=="consignments":
+		var freight_panel: Node=body.find_child("ConsignmentPanel",true,false)
+		if freight_panel!=null:freight_panel.call("refresh")
 	if page == "civilizations" and civilization_panel != null: civilization_panel.tick()
 	message_age += delta
 	if message_age > 12.0 and not toast.text.is_empty():
@@ -493,6 +500,7 @@ func tick(delta: float) -> void:
 	objective.text = _objective_text()
 	var operation: RefCounted = _hud_operation()
 	if operation != null: objective.text = gameplay.operations.hud_text()
+	elif _hud_freight()!=null:objective.text=gameplay.consignments.hud_text(_hud_freight())
 	if operation == null and gameplay.exploration.supported():
 		for event: RefCounted in state.rows("exploration_instance_state"):
 			if gameplay.exploration._site(event) and event.phase not in ["claimed", "failed", "withdrawn"]:
@@ -1047,6 +1055,7 @@ func _service_context_page() -> String:
 	if page == "fitting_analysis": return "fitting"
 	if page == "ship_roles": return "ships"
 	if page == "operations": return "missions"
+	if page == "consignments": return "missions"
 	if page == "exploration": return "map"
 	if page == "drones": return "fitting"
 	if page != "sources": return page
@@ -1078,6 +1087,7 @@ func _source_button(parent: Node, blueprint_id: String) -> void:
 	button.tooltip_text = "查询本行缺料的采集、采购、加工和打捞地点及实际航路，不消耗任何物资。"
 
 func _missions() -> void:
+	if gameplay.consignments.supported():_button(body,"承运合同",show_page.bind("consignments")).name="MissionFreight"
 	if gameplay.operations.supported():
 		_button(body,"查看拆除与突破行动",func(): show_page("operations")).name = "MissionOperations"
 	_text("本页不暂停飞行。目标按顺序完成；舰船损失保留当前任务，交付需要指定实物。", 14)
@@ -1640,6 +1650,7 @@ func _selected_details() -> Dictionary:
 	var node: Variant = entry.get("node")
 	if not is_instance_valid(node) or not node is Node3D: return {}
 	var details: Dictionary = {"id": target_id, "title": _target_title(entry), "kind": str(entry.kind), "type_title": _target_type(str(entry.kind)), "distance_m": sector.target_distance(target_id), "navigation_only": bool(entry.get("navigation_only", false)), "remote_site": not sector.target_is_local(target_id)}
+	details["friendly"]=bool(entry.get("friendly",false))
 	if bool(entry.get("friendly", false)): details.type_title = "友军"
 	if str(entry.kind) == "drone" and gameplay.drone_control.live.has(target_id):
 		var drone: RefCounted = gameplay.drone_control.live[target_id]
@@ -1718,13 +1729,20 @@ func _hud_operation() -> RefCounted:
 	if operation != null and operation.phase != "active" and (gameplay.civilizations.active_war() != null or gameplay.missions.active() != null): return null
 	return operation
 
+func _hud_freight() -> RefCounted:
+	if gameplay==null or _hud_operation()!=null or gameplay.civilizations.active_war()!=null:return null
+	return gameplay.consignments.focused()
+
 func _hud_task_navigation(travel_to: bool) -> void:
 	var operation: RefCounted = _hud_operation()
 	if operation != null: requested.emit("operation_nav" if travel_to else "operation_map",operation.operation_id,1,str(operation.generation))
+	elif _hud_freight()!=null:
+		var freight: RefCounted=_hud_freight();requested.emit("consignment_navigate" if travel_to else "consignment_map",freight.contract_id,1,str(freight.generation))
 	else: requested.emit("mission_travel" if travel_to else "mission_locate","",1,"")
 
 func _hud_task_details() -> void:
 	if _hud_operation() != null: show_page("operations"); return
+	if _hud_freight()!=null:show_page("consignments");return
 	mission_filter = "story"; mission_status_filter = "all"; mission_location_filter = "all"; mission_focus_id = ""; mission_page = 0; show_page("missions")
 
 func _update_mission_guidance() -> void:
@@ -1742,6 +1760,17 @@ func _update_mission_guidance() -> void:
 		mission_locate_button.tooltip_text = "在星图定位当前行动地点。"
 		mission_locate_button.set_meta("action","operation_map"); mission_locate_button.set_meta("target",operation.operation_id)
 		mission_travel_button.set_meta("action","operation_nav"); mission_travel_button.set_meta("target",operation.operation_id)
+		return
+	var freight: RefCounted=_hud_freight()
+	if freight!=null:
+		war_navigation_row.hide();mission_navigation_row.show();mission_locate_button.show();mission_travel_button.show();mission_guide_button.show()
+		mission_guide_button.text="承运详情"
+		var location: Dictionary=gameplay.consignments.guidance(freight.contract_id)
+		mission_locate_button.disabled=operation_blocks_flight
+		mission_travel_button.disabled=operation_blocks_flight or state.ship().status!=Types.ShipStatus.FLYING or not str(location.get("route_reason","")).is_empty()
+		mission_travel_button.text="前往目标";mission_locate_button.tooltip_text="在星图定位承运站点。";mission_travel_button.tooltip_text="按当前载重航路前往交付站；跨门后继续导航。"
+		mission_locate_button.set_meta("action","consignment_map");mission_locate_button.set_meta("target",freight.contract_id)
+		mission_travel_button.set_meta("action","consignment_navigate");mission_travel_button.set_meta("target",freight.contract_id)
 		return
 	var war: RefCounted = gameplay.civilizations.active_war()
 	war_navigation_row.visible = war != null
@@ -2296,6 +2325,10 @@ func _update_navigation() -> void:
 	navigation_stop_button.visible = automatic
 	navigation_stop_button.disabled = operation_blocks_flight
 	if is_instance_valid(overview): overview.call("set_selection", _selected_details(), navigation_context, operation_blocks_flight)
+	if is_instance_valid(overview):
+		var support_options: Array[Dictionary] = []
+		if gameplay.civilizations.friendly(target_id):support_options=gameplay.ship_roles.options(target_id)
+		overview.set_support_options(support_options,operation_blocks_flight)
 	navigation_hud.selected_id = target_id
 	navigation_hud.refresh()
 	navigation_hud.caption_obstacles.clear()
@@ -3005,6 +3038,8 @@ func _build_target_module() -> void:
 	interaction_button = overview.get("interaction_button")
 	interaction_label = overview.get("interaction_label")
 	overview.connect("selected", _select_target)
+	overview.connect("support_requested",func(item_id: String,selected_id: String,stop: bool):
+		requested.emit("stop_remote_support" if stop else "remote_support",item_id,1,"" if stop else selected_id))
 	overview.connect("command", func(action: String, id: String):
 		if action == "context_interact":
 			if operation_kind == "travel" and operation_waiting: requested.emit("interact", "", 1, "")
@@ -3090,6 +3125,8 @@ func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 	heat_bar.max_value = maxf(float(metrics.heat_max), 1.0)
 	heat_bar.value = ship.heat
 	cargo_label.tooltip_text = "货 %.0f/%.0f L · 矿 %.0f/%.0f L" % [float(metrics.cargo_used_l), float(metrics.cargo_capacity_l), float(metrics.mineral_used_l), float(metrics.mineral_capacity_l)]
+	var entrusted: Dictionary=gameplay.consignments.cargo(ship.ship_instance_id)
+	if float(entrusted.volume)>0.0:cargo_label.tooltip_text+="\n承运货物 %.0f L / %.0f kg" % [entrusted.volume,entrusted.mass]
 	cargo_label.text = "载荷 %.0f%%" % (100.0 * float(metrics.cargo_used_l) / maxf(float(metrics.cargo_capacity_l),1.0))
 	compact_speed_label.tooltip_text = instrument_title.text + "\n" + instrument_title.tooltip_text + "\n" + cargo_label.tooltip_text
 	instrument.tooltip_text = compact_speed_label.tooltip_text

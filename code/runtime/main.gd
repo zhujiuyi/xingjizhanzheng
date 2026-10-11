@@ -52,6 +52,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-roles-v32","file":"roles_v32.gd","prefix":"roles-v32","env":"XJ_ROLES_V32","meta":"xj_roles_v32_diagnostic"},
+		{"flag":"--xj-verify-roles-world-v32","file":"roles_world_v32.gd","prefix":"roles-world-v32","env":"XJ_ROLES_WORLD_V32","meta":"xj_roles_world_v32_diagnostic"},
 		{"flag":"--xj-verify-fitting-v31","file":"fitting_v31.gd","prefix":"fitting-v31","env":"XJ_FITTING_V31","meta":"xj_fitting_v31_diagnostic"},
 		{"flag":"--xj-verify-fitting-world-v31","file":"fitting_world_v31.gd","prefix":"fitting-world-v31","env":"XJ_FITTING_WORLD_V31","meta":"xj_fitting_world_v31_diagnostic"},
 		{"flag":"--xj-verify-operations-v30","file":"operations_v30.gd","prefix":"operations-v30","env":"XJ_OPERATIONS_V30","meta":"xj_operations_v30_diagnostic"},
@@ -358,6 +360,7 @@ func _physics_process(delta: float) -> void:
 			return
 		camera.bind(world.flight, store.catalog, state.player().camera_mode)
 	gameplay.call("begin_step", delta)
+	gameplay.ship_roles.spatial_active = not travel.active() and not local_navigation.warp_active()
 	world.flight.metrics = gameplay.call("metrics", ship)
 	if _manual_navigation_override(): source_goal.clear()
 	if _manual_navigation_override() and combat_automation != null:
@@ -542,7 +545,7 @@ func _world_target_at(screen_position: Vector2) -> String:
 		if node != collider and not node.is_ancestor_of(collider): continue
 		if str(entry.kind) == "npc":
 			var npc: RefCounted = state.find("npc_state", "npc_instance_id", id)
-			if npc == null or not npc.alive or world.flight.global_position.distance_to(node.global_position) > float(store.catalog.rule("target_marker_detection_range_m")): return ""
+			if npc == null or not npc.alive or world.flight.global_position.distance_to(node.global_position) > gameplay.ship_roles.detection_range(): return ""
 		if str(entry.kind) == "drone" and not gameplay.drone_control.live.has(id): return ""
 		return id
 	return ""
@@ -734,6 +737,8 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		"mission_locate", "mission_travel", "mission_station":
 			source_goal.clear()
 			_mission_navigation(action, target)
+		"consignment_navigate", "consignment_map":
+			_consignment_navigation(action,target,extra)
 		"nav_warp", "nav_approach", "nav_orbit", "nav_dock":
 			source_goal.clear()
 			_navigation_command(action.trim_prefix("nav_"), target)
@@ -1022,7 +1027,8 @@ func _source_navigation(action: String, key: String, item_id: String) -> void:
 func _source_after_arrival() -> void:
 	await get_tree().process_frame
 	if not source_goal.is_empty() and state != null and source_goal.world == state.world_id and not busy:
-		if source_goal.has("operation"): _operation_navigation("operation_nav",source_goal.operation,str(source_goal.generation))
+		if source_goal.has("consignment"): _consignment_navigation("consignment_navigate",source_goal.consignment,str(source_goal.generation))
+		elif source_goal.has("operation"): _operation_navigation("operation_nav",source_goal.operation,str(source_goal.generation))
 		elif source_goal.has("event"): _exploration_navigation("exploration_nav", source_goal.event, str(source_goal.generation))
 		else: _source_navigation("source_travel", source_goal.key, source_goal.item)
 
@@ -1051,6 +1057,21 @@ func _drone_order(kind: String, target: String) -> void:
 	ui.notify({"attack":"无人机攻击指令已下达。","follow":"无人机跟随指令已下达；本次仍只有一次已支付攻击。","recall":"无人机正在回收，尚未发出的攻击已停止。"}.get(kind, "无人机指令已更新。"))
 	if kind != "recall" and not launched and gameplay.drone_control.live.is_empty(): ui.notify("指令已更新；机库冷却或电容不足，满足条件后可再次出击。",true)
 	ui.refresh_page()
+
+func _consignment_navigation(action: String,id: String,generation: String) -> void:
+	if state == null or gameplay == null or busy or travel.active(): return
+	var row: RefCounted=gameplay.consignments.instance(id)
+	if row==null or str(row.generation)!=generation: ui.notify("承运合同已更新，请重新查看。",true);return
+	var info: Dictionary=gameplay.consignments.guidance(id)
+	if info.is_empty():return
+	if action=="consignment_map" or state.ship().status!=Types.ShipStatus.FLYING:
+		ui.show_page("map")
+		if is_instance_valid(ui.resource_chart):ui.resource_chart.select_sector(info.sector_id)
+		if action!="consignment_map":ui.notify("已标记目的站；出港后可前往。")
+		return
+	if not str(info.route_reason).is_empty():ui.notify(str(info.route_reason),true);return
+	source_goal={"world":state.world_id,"consignment":id,"generation":row.generation}
+	_navigate_guidance(info,true,true,true)
 
 func _operation_navigation(action: String, id: String, generation: String) -> void:
 	if state == null or gameplay == null or busy or travel.active(): return
@@ -1167,6 +1188,8 @@ func _activate(candidate: XJRuntimeState) -> void:
 	gameplay.civilizations.status_changed.connect(_civilization_status)
 	gameplay.exploration.warning_changed.connect(_exploration_warning)
 	gameplay.specializations.warning_changed.connect(_tactical_warning)
+	gameplay.ship_roles.warning_changed.connect(_tactical_warning)
+	gameplay.consignments.warning_changed.connect(_tactical_warning)
 	gameplay.operations.warning_changed.connect(_tactical_warning)
 	gameplay.tactics.warning_changed.connect(_tactical_warning)
 	gameplay.drone_control.warning_changed.connect(_tactical_warning)
@@ -1309,6 +1332,9 @@ func _navigation_command(mode: String, target_id: String, retain_combat_options:
 
 func _local_navigation_changed(_mode: String, phase: String, message: String) -> void:
 	if local_navigation == null: return
+	if gameplay != null:
+		gameplay.ship_roles.spatial_active = not local_navigation.warp_active()
+		if local_navigation.warp_active(): gameplay.ship_roles.stop_support()
 	_sync_combat_automation()
 	if local_navigation.warp_active():
 		if deferred_save.is_empty(): ui.set_operation_status("local_navigation", message)

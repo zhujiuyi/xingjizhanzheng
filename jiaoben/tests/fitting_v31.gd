@@ -1,6 +1,12 @@
 extends "exploration_v27.gd"
 ## Explicit funds/hull/equipment fixtures; actual fits, payment cycles and all 56 groups.
 func _ready() -> void:
+	if OS.get_environment("XJ_ROLE_UPGRADE_FIXTURE")=="1":
+		# The release CLI still enters its fixed reviewed test Node and UUID
+		# directory; this opt-in delegate only prepares an older paid world.
+		var fixture_path: String=get_script().resource_path.get_base_dir().path_join("roles_upgrade_fixture_v32.gd")
+		var fixture: Node=(load(fixture_path) as Script).new();get_tree().root.add_child(fixture)
+		return
 	get_tree().set_meta("xj_fitting_v31_diagnostic",true)
 	get_tree().create_timer(420.0).timeout.connect(func():print("FITTING_V31_RESULT FAIL watchdog");get_tree().quit(2))
 	_run.call_deferred()

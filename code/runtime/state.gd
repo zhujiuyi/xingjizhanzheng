@@ -13,7 +13,7 @@ const TABLES: Array[String] = [
 	"civilization_state", "territory_state", "war_campaign_state", "war_fleet_state",
 	"industry_job_state", "industry_input_state", "station_demand_state",
 	"exploration_instance_state", "exploration_actor_state", "exploration_claim_state", "exploration_progress_state", "exploration_research_state", "exploration_belt_state",
-	"tactical_site_state", "npc_tactic_state", "ship_tactical_effect_state", "drone_bay_state", "operation_state", "specialization_progress_state", "specialization_evidence_state", "specialization_research_state"]
+	"tactical_site_state", "npc_tactic_state", "ship_tactical_effect_state", "drone_bay_state", "operation_state", "specialization_progress_state", "specialization_evidence_state", "specialization_research_state", "remote_support_state", "consignment_state", "consignment_receipt_state"]
 
 var snapshot: Dtos.WorldSnapshotDto = Dtos.WorldSnapshotDto.new()
 var world_id: String = ""
@@ -117,6 +117,9 @@ static func new_row(table: String) -> RefCounted:
 		"specialization_evidence_state": return Dtos.SpecializationEvidenceStateDto.new()
 		"specialization_research_state": return Dtos.SpecializationResearchStateDto.new()
 		"operation_state": return Dtos.OperationStateDto.new()
+		"remote_support_state": return Dtos.RemoteSupportStateDto.new()
+		"consignment_state": return Dtos.ConsignmentStateDto.new()
+		"consignment_receipt_state": return Dtos.ConsignmentReceiptStateDto.new()
 		"tactical_site_state": return Dtos.TacticalSiteStateDto.new()
 		"npc_tactic_state": return Dtos.NpcTacticStateDto.new()
 		"ship_tactical_effect_state": return Dtos.ShipTacticalEffectStateDto.new()

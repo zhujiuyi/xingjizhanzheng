@@ -29,5 +29,27 @@ func _process(_delta: float) -> void:
 		line.visible = intensity > 0.0
 		(line.material_override as StandardMaterial3D).albedo_color.a = 0.7 * clampf(intensity,0.0,1.0)
 		var mesh: ImmediateMesh = line.mesh as ImmediateMesh; mesh.clear_surfaces(); mesh.surface_begin(Mesh.PRIMITIVE_LINES); mesh.surface_add_vertex(body.position); mesh.surface_add_vertex(end); mesh.surface_end()
+	for row: RefCounted in world.state.rows("remote_support_state"):
+		if row.phase != "cycling" or not world.npcs.has(row.target_npc_id) or not is_instance_valid(world.flight): continue
+		var id: String = "player_support:"+row.item_instance_id
+		retained.append(id)
+		_player_line(id,world.flight.position,world.npcs[row.target_npc_id].position,Color(0.3,0.75,1.0,0.6) if row.layer_id == "shield" else Color(0.3,1.0,0.65,0.6))
 	for id: String in lines.keys():
 		if not retained.has(id): lines[id].queue_free(); lines.erase(id)
+
+func _player_line(id: String,source: Vector3,target: Vector3,color: Color) -> void:
+	var line: MeshInstance3D
+	if lines.has(id): line = lines[id]
+	else:
+		line = MeshInstance3D.new(); line.mesh = ImmediateMesh.new()
+		line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		line.material_override = material; add_child(line); lines[id] = line
+	line.visible = intensity > 0.0
+	color.a *= clampf(intensity,0.0,1.0)
+	(line.material_override as StandardMaterial3D).albedo_color = color
+	var mesh: ImmediateMesh = line.mesh as ImmediateMesh
+	mesh.clear_surfaces(); mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	mesh.surface_add_vertex(source); mesh.surface_add_vertex(target); mesh.surface_end()

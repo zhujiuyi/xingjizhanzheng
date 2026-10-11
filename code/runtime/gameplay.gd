@@ -16,6 +16,8 @@ const MobileBelts = preload("res://runtime/gameplay/mobile_belts.gd")
 const Tactics = preload("res://runtime/gameplay/tactics.gd")
 const Specializations = preload("res://runtime/gameplay/specializations.gd")
 const FittingAnalysis = preload("res://runtime/gameplay/fitting_analysis.gd")
+const ShipRoles = preload("res://runtime/gameplay/ship_roles.gd")
+const Consignments = preload("res://runtime/gameplay/consignments.gd")
 const ResourceBudget = preload("res://runtime/gameplay/resource_budget.gd")
 const Operations = preload("res://runtime/gameplay/operations.gd")
 const DroneControl = preload("res://runtime/gameplay/drone_control.gd")
@@ -35,6 +37,8 @@ var mobile_belts: RefCounted
 var tactics: RefCounted
 var specializations: RefCounted
 var fitting_analysis: RefCounted
+var ship_roles: RefCounted
+var consignments: RefCounted
 var operations: RefCounted
 var drone_control: RefCounted
 var events: Array[D.EventDto] = []
@@ -78,6 +82,8 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog, preview: bool = 
 	operations = Operations.new(self)
 	specializations = Specializations.new(self)
 	fitting_analysis = FittingAnalysis.new(self)
+	ship_roles = ShipRoles.new(self)
+	consignments = Consignments.new(self)
 	if preview: return
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
@@ -159,6 +165,8 @@ func entity_distance(kind_a: String, row_a: RefCounted, kind_b: String, row_b: R
 	return Space.entity_distance(state, catalog, kind_a, row_a, kind_b, row_b)
 
 func remove_npc(row: D.NpcStateDto) -> void:
+	for support: RefCounted in state.rows("remote_support_state").duplicate():
+		if support.target_npc_id==row.npc_instance_id:ship_roles.stop_support(support.item_instance_id)
 	if row == null: return
 	if tactics != null: tactics.retired(row.npc_instance_id)
 	Space.remove(state, "npc", row.npc_instance_id)
@@ -199,6 +207,9 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 	if action == "specialization_donate": command.action_kind = T.ActionKind.SPECIALIZATION_DONATE
 	if action == "specialization_research": command.action_kind = T.ActionKind.SPECIALIZATION_RESEARCH
 	if action == "replace_fit": command.action_kind = T.ActionKind.REPLACE_FIT
+	if action == "remote_support": command.action_kind = T.ActionKind.REMOTE_SUPPORT
+	if action == "stop_remote_support": command.action_kind = T.ActionKind.STOP_REMOTE_SUPPORT
+	if action == "consignment_action": command.action_kind = T.ActionKind.CONSIGNMENT_ACTION
 	if action == "operation_action": command.action_kind = T.ActionKind.OPERATION_ACTION
 	if action == "drone_command": command.action_kind = T.ActionKind.DRONE_COMMAND
 	if action == "drone_replenish": command.action_kind = T.ActionKind.DRONE_REPLENISH
@@ -247,6 +258,11 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 			"cancel_industry": ok = industry.cancel(target)
 			"deliver_demand": ok = industry.deliver(target, quantity, extra)
 			"specialization_donate": ok = specializations.donate(quantity)
+			"remote_support": ok = ship_roles.start_support(target,extra)
+			"stop_remote_support": ok = ship_roles.stop_support(target,false)
+			"consignment_action":
+				var freight_parts: PackedStringArray = extra.split(":")
+				ok = consignments.execute(target,freight_parts[0],quantity,freight_parts[1]) if freight_parts.size()==2 else fail("承运请求缺少操作与代次")
 			"specialization_research": ok = specializations.research(target,quantity,extra)
 			"replace_fit":
 				var replace_parts: PackedStringArray=extra.split("|")
@@ -298,6 +314,7 @@ func _dock(station_id: String) -> bool:
 	if anchor_distance(ship, anchor) > rule("dock_radius_m") or velocity(ship).length() > rule("dock_max_speed_mps"): return fail("需进入停靠范围并减速")
 	work.stop_scan(); work.stop_mining()
 	ship.status = T.ShipStatus.DOCKED
+	ship_roles.stop_support()
 	ship.has_station_id = true; ship.station_id = station_id
 	ship.vel_x = 0; ship.vel_y = 0; ship.vel_z = 0
 	state.player().has_docked_station_id = true; state.player().docked_station_id = station_id
@@ -407,6 +424,7 @@ func _set_enabled(item_id: String, enabled: bool) -> bool:
 	equipment.enabled = enabled
 	if not enabled:
 		work.disable_equipment(item_id)
+		ship_roles.stop_support(item_id)
 		for repair in _pending_repairs.duplicate():
 			if repair.item_id==item_id:_pending_repairs.erase(repair)
 		equipment.active_remaining_s=0;equipment.cycle_paid=false
@@ -498,6 +516,7 @@ func _engine_cycle() -> bool:
 		if e.module_def_id.begins_with("module_engine_") and pay_cycle(e):
 			e.active_remaining_s = definition("module_defs", "module_id", e.module_def_id).cycle_s
 			operations.boosted()
+			consignments.boosted()
 			event(T.EventKind.ENGINE_ACTIVE, state.ship().ship_instance_id, "", e.item_instance_id)
 			return true
 	return fail("引擎循环不可用")
@@ -553,6 +572,8 @@ func finish_step(delta: float) -> void:
 	exploration.tick(delta)
 	tactics.tick(delta)
 	operations.tick(delta)
+	ship_roles.tick(delta)
+	consignments.tick(delta)
 	drone_control.sync()
 	_tick_resources(delta)
 	_sync_spawns(delta)
@@ -563,6 +584,7 @@ func _tick_repairs() -> void:
 	for e in equipped(state.ship()):
 		var repair: Dictionary = definition("repair_defs", "module_id", e.module_def_id)
 		if repair.is_empty() or not e.enabled or e.cooldown_remaining_s > 0: continue
+		if ship_roles.reserved(e.item_instance_id): continue
 		var pending:bool=false
 		for cycle in _pending_repairs:
 			if cycle.item_id==e.item_instance_id:pending=true;break
@@ -627,6 +649,8 @@ func damage_npc(instance_id: String, raw_vector: Vector3) -> float:
 			npc.loot_claimed = true
 		if packaged: npc.loot_claimed = true
 		specializations.tactic_destroyed(npc)
+		for support: RefCounted in state.rows("remote_support_state").duplicate():
+			if support.target_npc_id == instance_id: ship_roles.stop_support(support.item_instance_id)
 		record_event("destroy_spawn", npc.spawn_id, 1)
 		event(T.EventKind.SHIP_DESTROYED, instance_id, "")
 		request_autosave()
@@ -637,11 +661,13 @@ func damage_ship(raw_vector: Vector3) -> float:
 	if ship.status != T.ShipStatus.FLYING or not raw_vector.is_finite(): return 0
 	var amount: float = apply_damage(ship, raw_vector.max(Vector3.ZERO), metrics(ship).resistances)
 	operations.damaged(amount)
+	consignments.on_damage(amount)
 	ship.shield_delay_remaining_s = rule("shield_recharge_delay_s")
 	mark_hostile_attempt()
 	ship.state_version += 1
 	if ship.hull <= 0:
 		ship.status = T.ShipStatus.DESTROYED
+		ship_roles.stop_support()
 		work.stop_scan(); work.stop_mining()
 		inventory.ship_destroyed(ship)
 		missions.ship_destroyed(ship)
@@ -703,6 +729,7 @@ func save_blocked() -> bool:
 	if in_combat() or work.busy() or not _pending_repairs.is_empty(): return true
 	for e in state.rows("equipment_state"):
 		if e.active_remaining_s <= 0: continue
+		if ship_roles.reserved(e.item_instance_id): continue # The paid target/cycle is durable.
 		var engine: bool = false
 		for member in rows("module_group_members"):
 			if member.module_id == e.module_def_id and member.group_id == "engine": engine = true
@@ -728,6 +755,7 @@ func save_eligible() -> bool:
 	return not save_blocked()
 func stop_interactions() -> void:
 	work.stop_scan(); work.stop_mining()
+	ship_roles.stop_support()
 func mission_view() -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
 	for def in rows("mission_defs"):
@@ -748,9 +776,10 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis,ship_roles,consignments]:
 		if service != null: service.g = null
 	specializations = null; fitting_analysis = null
+	ship_roles = null; consignments = null
 	operations = null
 	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null; mobile_belts = null
 	tactics = null; drone_control = null

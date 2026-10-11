@@ -59,6 +59,9 @@ func perk(kind: String) -> float:
 func _scan_range() -> float:
 	var scan_range: float = g.rule("basic_scan_range_m")
 	for equipment: D.EquipmentStateDto in g.equipped(g.state.ship()):
+		if g.ship_roles.supported():
+			var item: RefCounted = g.state.find("item_instance_state","item_instance_id",equipment.item_instance_id)
+			if item == null or item.durability <= 0.0: continue
 		if equipment.enabled and equipment.module_def_id.begins_with("module_scanner_"): scan_range = maxf(scan_range, float(g.definition("module_defs", "module_id", equipment.module_def_id).range_m))
 	return scan_range
 
@@ -126,12 +129,15 @@ func execute(event_id: String, action: String, generation: String) -> bool:
 func _start_operation(row: D.ExplorationInstanceStateDto, action: String) -> bool:
 	var spec: Dictionary = variant(row)
 	var duration: float = float(spec.survey_duration_s if action == "survey" else spec.work_duration_s)
+	var role_survey: bool = g.ship_roles.supported() and action in ["survey","deepen"]
+	if role_survey: duration /= g.ship_roles.survey_rate()
 	if action in ["rescue", "stabilize"]:
 		var cargo: String = g.inventory.hold(g.state.ship(), T.ContainerKind.CARGO)
 		if g.inventory.count(cargo, "material_structural_stock", true) < int(spec.repair_units): return g.fail("当前货舱缺少普通自有结构料 × %d" % int(spec.repair_units))
 		if not g.inventory.consume(cargo, "material_structural_stock", int(spec.repair_units), true): return g.fail("结构料投入失败")
 	else:
 		var ratio: float = maxf(1.0, float(g.metrics(g.state.ship()).scan_strength) / float(g.definition("ship_defs", "ship_id", g.state.ship().ship_def_id).scan_strength))
+		if role_survey: ratio = 1.0
 		var energy: float = g.rule("basic_scan_energy_eu_s") * duration / ratio
 		var heat: float = g.rule("basic_scan_heat_hu_s") * duration / ratio
 		if g.state.ship().energy < energy or g.state.ship().overheated or g.state.ship().heat + heat > float(g.metrics(g.state.ship()).heat_max): return g.fail("电容不足或热量过高，无法支付调查周期")

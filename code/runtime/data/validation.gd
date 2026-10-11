@@ -24,6 +24,8 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	if not _validate_tactics(state, catalog): return false
 	if not _validate_operations(state, catalog): return false
 	if not _validate_specializations(state,catalog): return false
+	var role_check: RefCounted=preload("res://runtime/data/role_validation.gd").new()
+	if not role_check.validate(state,catalog): return _fail(role_check.last_error)
 	for ship in state.rows("ship_state"):
 		var norm: float = ship.quat_x * ship.quat_x + ship.quat_y * ship.quat_y + ship.quat_z * ship.quat_z + ship.quat_w * ship.quat_w
 		if abs(norm - 1.0) >= 0.00001: return _fail("Invalid normalized ship quaternion")
@@ -111,6 +113,11 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 					volume += operation.cargo_units * float(op_def.cargo_volume_l)
 					payload += operation.cargo_units * float(op_def.cargo_mass_kg)
 			var capacity: int = definition.cargo_l if container.kind == Types.ContainerKind.CARGO else definition.mineral_cargo_l
+			if container.kind == Types.ContainerKind.CARGO and catalog.table_names.has("consignment_defs"):
+				for freight: RefCounted in state.rows("consignment_state"):
+					if not freight.has_payload_ship_id or freight.payload_ship_id!=ship.ship_instance_id: continue
+					var spec: Dictionary=catalog.one("consignment_defs","contract_id",freight.contract_id)
+					volume+=freight.cargo_units*float(spec.unit_volume_l);payload+=freight.cargo_units*float(spec.unit_mass_kg)
 			if volume > capacity: return _fail("Cargo volume exceeded")
 		if payload > definition.max_payload_mass_kg + 0.0000001: return _fail("Shared payload mass exceeded")
 	return true

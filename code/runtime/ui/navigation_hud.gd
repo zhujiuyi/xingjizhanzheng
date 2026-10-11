@@ -146,6 +146,7 @@ func configure(sector: Node3D, camera_rig: Node3D, catalog: RefCounted) -> void:
 	world = sector
 	rig = camera_rig
 	sensor_limit = float(catalog.rule("target_marker_detection_range_m"))
+	if world.gameplay!=null:sensor_limit=world.gameplay.ship_roles.detection_range()
 	refresh()
 
 func radius_m() -> float:
@@ -180,6 +181,7 @@ func _render_target_position(node: Node3D, id: String = "") -> Vector3:
 func refresh() -> void:
 	contacts.clear()
 	if not is_instance_valid(world) or not is_instance_valid(world.flight): return
+	sensor_limit=world.gameplay.ship_roles.detection_range()
 	var render_ship: Transform3D = _render_ship_transform()
 	for target: Dictionary in world.targets.values():
 		var node: Variant = target.get("node")

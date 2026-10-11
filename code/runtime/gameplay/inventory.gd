@@ -58,6 +58,9 @@ func totals(container_id: String) -> Dictionary:
 	if g.operations != null and hold_row != null and hold_row.kind == T.ContainerKind.CARGO:
 		var payload: Dictionary = g.operations.cargo(hold_row.ship_instance_id)
 		mass += float(payload.mass); volume += float(payload.volume)
+	if g.consignments != null and hold_row != null and hold_row.kind == T.ContainerKind.CARGO:
+		var freight: Dictionary = g.consignments.cargo(hold_row.ship_instance_id)
+		mass += float(freight.mass); volume += float(freight.volume)
 	return {"mass":mass,"volume":volume}
 
 func room(container_id: String, item_id: String, requested: int, moved_mass_credit: float = 0.0) -> int:
@@ -319,6 +322,7 @@ func unfit(item_id: String) -> bool:
 	if not g.allowed_service("fitting"): return false
 	var e: D.EquipmentStateDto = g.state.find("equipment_state","item_instance_id",item_id)
 	if e == null or not g.equipped(g.state.ship()).has(e): return g.fail("模块未安装到当前舰船")
+	g.ship_roles.stop_support(item_id)
 	var item: D.ItemInstanceStateDto = g.state.find("item_instance_state","item_instance_id",item_id)
 	item.container_id = warehouse(g.station())
 	g.state.remove("equipment_state",e)

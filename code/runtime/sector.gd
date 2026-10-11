@@ -397,15 +397,16 @@ func contact_visible(entry: Dictionary, distance: float) -> bool:
 	# cancellation. It must not remain a local radar echo during that transit.
 	if departure_active and target_is_local(str(entry.get("id", ""))) and not bool(entry.get("navigation_only", false)): return false
 	if str(entry.get("kind", "")) in ["npc", "wreck", "drone"] and not target_is_local(str(entry.get("id", ""))): return false
-	if str(entry.get("kind", "")) == "drone": return gameplay.drone_control.live.has(str(entry.get("id", ""))) and distance <= float(catalog.rule("target_marker_detection_range_m"))
+	if str(entry.get("kind", "")) == "drone": return gameplay.drone_control.live.has(str(entry.get("id", ""))) and distance <= gameplay.ship_roles.detection_range()
 	if str(entry.get("kind", "")) != "npc": return true
-	var sensor: float = float(catalog.rule("target_marker_detection_range_m"))
+	var sensor: float = gameplay.ship_roles.detection_range()
 	if distance > sensor: return false
 	var group_id: String = str(entry.get("group_target_id", ""))
 	if group_id.is_empty() or not targets.has(group_id): return true
 	var group: Dictionary = targets[group_id]
 	var node: Variant = group.get("node")
 	var reveal: float = float(group.get("reveal_range_m", sensor))
+	if gameplay.ship_roles.sensor_multiplier() > 1.0: reveal = maxf(reveal,sensor)
 	return distance <= reveal or (node is Node3D and is_instance_valid(node) and flight.global_position.distance_to(node.global_position) <= reveal)
 
 func line_of_sight(from: Vector3, to: Vector3, excluded: RID = RID(), target_id: String = "") -> bool:

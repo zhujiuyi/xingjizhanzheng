@@ -114,6 +114,12 @@ func _mass(ship: Dtos.ShipStateDto) -> float:
 	for package: Dtos.SalvagePackageStateDto in state.rows("salvage_package_state"):
 		if package.status == "sealed" and package.has_host_container_id and containers.has(package.host_container_id):
 			result += float(catalog.one("salvage_package_defs", "package_def_id", package.package_def_id).mass_kg)
+	if catalog.table_names.has("operation_defs"):
+		for operation: RefCounted in state.rows("operation_state"):
+			if operation.has_payload_ship_id and operation.payload_ship_id==ship.ship_instance_id:result+=operation.cargo_units*float(catalog.one("operation_defs","operation_id",operation.operation_id).cargo_mass_kg)
+	if catalog.table_names.has("consignment_defs"):
+		for freight: RefCounted in state.rows("consignment_state"):
+			if freight.has_payload_ship_id and freight.payload_ship_id==ship.ship_instance_id:result+=freight.cargo_units*float(catalog.one("consignment_defs","contract_id",freight.contract_id).unit_mass_kg)
 	return result
 
 func _commit() -> void:

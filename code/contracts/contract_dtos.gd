@@ -885,6 +885,43 @@ class DroneCommandRequestDto extends RefCounted:
 	var quantity: int = 1
 	var quote_revision: String = ""
 
+class RemoteSupportStateDto extends RefCounted:
+	var item_instance_id: String = ""
+	var ship_instance_id: String = ""
+	var target_npc_id: String = ""
+	var target_generation: int = 0
+	var layer_id: String = "armor"
+	var phase: String = "armed"
+	var remaining_s: float = 0.0
+	var paid_restore: float = 0.0
+class ConsignmentStateDto extends RefCounted:
+	var contract_id: String = ""
+	var generation: int = 1
+	var phase: String = "idle"
+	var has_payload_ship_id: bool = false
+	var payload_ship_id: String = ""
+	var accepted_units: int = 0
+	var cargo_units: int = 0
+	var delivered_units: int = 0
+	var lost_units: int = 0
+	var returned_units: int = 0
+	var remaining_s: float = 0.0
+	var cooldown_remaining_s: float = 0.0
+	var exposure_remaining_s: float = 0.0
+	var damage_debt_hp: float = 0.0
+	var paid_credit_total: int = 0
+	var refunded_credit_total: int = 0
+	var reward_credit_total: int = 0
+class ConsignmentReceiptStateDto extends RefCounted:
+	var receipt_id: String = ""
+	var contract_id: String = ""
+	var generation: int = 1
+	var action_kind: String = "dispatch"
+	var units: int = 0
+	var paid_credit: int = 0
+	var refunded_credit: int = 0
+	var reward_credit: int = 0
+
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
 	var content: ContentRefDto = ContentRefDto.new()
@@ -940,6 +977,9 @@ class WorldSnapshotDto extends RefCounted:
 	var specialization_evidence_state_rows: Array[SpecializationEvidenceStateDto] = []
 	var specialization_research_state_rows: Array[SpecializationResearchStateDto] = []
 	var operation_state_rows: Array[OperationStateDto] = []
+	var remote_support_state_rows: Array[RemoteSupportStateDto] = []
+	var consignment_state_rows: Array[ConsignmentStateDto] = []
+	var consignment_receipt_state_rows: Array[ConsignmentReceiptStateDto] = []
 	var tactical_site_state_rows: Array[TacticalSiteStateDto] = []
 	var npc_tactic_state_rows: Array[NpcTacticStateDto] = []
 	var ship_tactical_effect_state_rows: Array[ShipTacticalEffectStateDto] = []

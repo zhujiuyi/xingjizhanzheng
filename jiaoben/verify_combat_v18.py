@@ -11,6 +11,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "roles": ("roles_v32.gd", "XJ_ROLES_V32", "roles-v32", "ROLES_V32", "--xj-verify-roles-v32"),
+    "roles-world": ("roles_world_v32.gd", "XJ_ROLES_WORLD_V32", "roles-world-v32", "ROLES_WORLD_V32", "--xj-verify-roles-world-v32"),
     "fitting": ("fitting_v31.gd", "XJ_FITTING_V31", "fitting-v31", "FITTING_V31", "--xj-verify-fitting-v31"),
     "fitting-world": ("fitting_world_v31.gd", "XJ_FITTING_WORLD_V31", "fitting-world-v31", "FITTING_WORLD_V31", "--xj-verify-fitting-world-v31"),
     "operations": ("operations_v30.gd", "XJ_OPERATIONS_V30", "operations-v30", "OPERATIONS_V30", "--xj-verify-operations-v30"),
@@ -164,6 +166,21 @@ def run_suite():
             assert record["summary"]["checks"] >= (200 if name == "civilizations" else 25) and len(captures) == 0
         if name == "fitting":
             assert record["summary"]["checks"] >= (77 if os.environ.get("XJ_FITTING_LEGACY_DATABASE") else 60) and len(captures) == 0
+        if name == "roles":
+            assert record["summary"]["checks"] >= (126 if os.environ.get("XJ_ROLES_LEGACY_DATABASE") else 114) and len(captures) == 0
+            if os.environ.get("XJ_ROLES_LEGACY_DATABASE"):
+                assert record["summary"]["legacy_checked"]
+        if name == "roles-world":
+            assert args.native and record["summary"]["checks"] >= 150 and len(captures) == 11 and not record["summary"].get("trip_only", False)
+            observations = record["summary"]["observations"]
+            protection = {row["hull"]: row for row in observations if row["kind"] == "protection"}
+            assert protection.keys() == {"support_weaver", "cruiser_horizon"}
+            assert all(row["reference_cost"] <= row["budget"] == 225000 and row["final_enemy_hp"] < row["initial_enemy_hp"] for row in protection.values())
+            assert protection["support_weaver"]["final_friend_hp"] > protection["cruiser_horizon"]["final_friend_hp"]
+            delivery = next(row for row in observations if row["kind"] == "freight_delivery")
+            legs = [row for row in observations if row["kind"] == "freight_leg"]
+            assert delivery["delivered_units"] == 24 and delivery["station"] == "station_echo_depot" and delivery["legs"] == len(legs) >= 1
+            assert all(row["cargo_units"] == 24 and row["gate_credit"] > 0 for row in legs)
         if name == "fitting-world":
             assert args.native and record["summary"]["checks"] >= 149 and len(captures) == 12
             actual_range = next(row for row in record["summary"]["observations"] if row["kind"] == "range")

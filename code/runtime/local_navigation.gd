@@ -38,6 +38,10 @@ var _destination_site: String = ""
 var _macro_origin: Dictionary = {}
 var _macro_destination: Dictionary = {}
 var _after_warp_mode: String = ""
+var _gate_approach_phase: String = ""
+var _gate_approach_axis: Vector3 = Vector3.ZERO
+var _gate_clearance: float = 0.0
+var _gate_ship_radius: float = 0.0
 
 func configure(sector: XJSector, runtime: XJRuntimeState, definitions: XJCatalog, business: RefCounted, stability: Callable = Callable()) -> bool:
 	world = sector
@@ -127,6 +131,7 @@ func _begin(requested_mode: String, id: String, combat_order: bool = false, weap
 	# A validated combat toggle may replace ordinary movement or its own order.
 	# Preserve the old navigation, velocity and ownership until all checks pass.
 	if active(): release_to_manual(false)
+	_gate_approach_phase="";_gate_approach_axis=Vector3.ZERO;_gate_clearance=0.0
 	_after_warp_mode = requested_mode if requested_mode in ["approach", "dock"] and bool(context.get("remote_site", false)) else ""
 	mode = "warp" if not _after_warp_mode.is_empty() else requested_mode
 	target_id = id
@@ -233,11 +238,19 @@ func tick(delta: float) -> void:
 		# Keep the ordinary NPC stand-off rules, capped by actual weapon geometry.
 		target_rule.approach_arrival_m = minf(float(target_rule.approach_arrival_m), combat_distance_m)
 		target_rule.orbit_radius_m = minf(float(target_rule.orbit_radius_m), combat_distance_m)
-	var offset: Vector3 = world.flight.global_position - node.global_position
+	var metrics: Dictionary = world.flight.metrics
+	if metrics.is_empty() or float(metrics.acceleration_mps2)<=0.0 or float(metrics.strafe_multiplier)<=0.0 or float(metrics.turn_radps)<=0.0:_abort("舰船运动参数不可用");return
+	var approach_center: Vector3=node.global_position
+	var approach_arrival: float=float(target_rule.approach_arrival_m)
+	var gate_stage: bool=false
+	var gate_heading: Vector3=Vector3.ZERO
+	var gate_speed: float=INF
+	if mode!="orbit" and str(world.targets[target_id].kind)=="gate":
+		var path: Dictionary=_gate_approach(node,approach_arrival)
+		approach_center=path.center;approach_arrival=path.arrival;gate_stage=path.staging;gate_heading=path.heading;gate_speed=path.speed
+	var offset: Vector3 = world.flight.global_position - approach_center
 	var distance: float = offset.length()
 	var radial: Vector3 = offset / distance if distance > 0.000001 else -world.flight.global_basis.z
-	var metrics: Dictionary = world.flight.metrics
-	if metrics.is_empty() or float(metrics.acceleration_mps2) <= 0.0: _abort("舰船运动参数不可用"); return
 	var desired_velocity: Vector3
 	if mode == "orbit":
 		var tangent: Vector3 = orbit_normal.cross(radial).normalized()
@@ -247,12 +260,40 @@ func tick(delta: float) -> void:
 		if node is CharacterBody3D: desired_velocity += (node as CharacterBody3D).velocity
 		desired_velocity = desired_velocity.limit_length(float(metrics.speed_mps))
 	else:
-		var remaining: float = maxf(0.0, distance - float(target_rule.approach_arrival_m))
+		var remaining: float = maxf(0.0, distance - approach_arrival)
 		var safe_speed: float = sqrt(2.0 * float(metrics.acceleration_mps2) * remaining)
-		desired_velocity = -radial * minf(float(metrics.speed_mps) * rules.value("approach_speed_fraction"), safe_speed)
+		desired_velocity = -radial * minf(gate_speed,minf(float(metrics.speed_mps) * rules.value("approach_speed_fraction"), safe_speed))
 		if remaining <= rules.value("arrival_tolerance_m") and world.flight.velocity.length() <= rules.value("arrival_speed_mps"):
+			if gate_stage:_drive(Vector3.ZERO,-radial,delta);return
 			_arrive(); return
-	_drive(desired_velocity, -radial if mode != "orbit" or combat_managed else desired_velocity.normalized(), delta)
+	_drive(desired_velocity, gate_heading if gate_heading.length_squared()>0.0 else -radial if mode != "orbit" or combat_managed else desired_velocity.normalized(), delta)
+
+func _gate_approach(node: Node3D,arrival: float) -> Dictionary:
+	var center: Vector3=node.global_position
+	var offset: Vector3=world.flight.global_position-center
+	var distance: float=offset.length()
+	var radial: Vector3=offset.normalized() if distance>0.000001 else node.global_basis.z.normalized()
+	var tolerance: float=rules.value("arrival_tolerance_m")
+	if _gate_approach_phase.is_empty():
+		var normal: Vector3=node.global_basis.z.normalized()
+		_gate_approach_axis=normal if radial.dot(normal)>=0.0 else -normal
+		_gate_ship_radius=_collider_radius(world.flight)
+		_gate_clearance=_radius_from_center(node,center)+_gate_ship_radius*2.0+rules.value("collision_margin_m")+tolerance*2.0
+		# An already aligned approach remains direct. Side approaches first gain
+		# clearance, then use short chords outside the actual collider bounds.
+		_gate_approach_phase="final" if distance<=float(catalog.rule("gate_entry_radius_m")) or radial.angle_to(_gate_approach_axis)*maxf(distance,_gate_clearance)<=tolerance else "retreat"
+	var limit: float=minf(_gate_clearance*float(world.flight.metrics.turn_radps),sqrt(float(world.flight.metrics.acceleration_mps2)*float(world.flight.metrics.strafe_multiplier)*_gate_clearance))
+	if _gate_approach_phase=="retreat":
+		if distance<_gate_clearance-tolerance:return {"center":center+radial*_gate_clearance,"arrival":0.0,"staging":true,"heading":-radial,"speed":limit}
+		_gate_approach_phase="align"
+	if _gate_approach_phase=="align":
+		var angle: float=radial.angle_to(_gate_approach_axis)
+		if angle*_gate_clearance<=tolerance and absf(distance-_gate_clearance)<=tolerance:_gate_approach_phase="final"
+		else:
+			var lookahead: float=minf(1.0,(_gate_ship_radius+tolerance)/maxf(_gate_clearance*angle,tolerance))
+			var direction: Vector3=radial.slerp(_gate_approach_axis,lookahead).normalized()
+			return {"center":center+direction*_gate_clearance,"arrival":0.0,"staging":true,"heading":Vector3.ZERO,"speed":limit}
+	return {"center":center,"arrival":arrival,"staging":false,"heading":Vector3.ZERO,"speed":INF}
 
 func cancel() -> void:
 	stop()
@@ -344,7 +385,7 @@ func _target_reason(id: String) -> String:
 	if str(entry.kind) in ["station", "resource", "signal", "marker"]:
 		if definition.is_empty() or str(definition.sector_id) != state.current_sector(): return "目标不在当前星系"
 	if str(entry.kind) in ["npc","drone"]:
-		var sensor: float = float(catalog.rule("target_marker_detection_range_m"))
+		var sensor: float = gameplay.ship_roles.detection_range()
 		if world.flight.global_position.distance_to((candidate as Node3D).global_position) > sensor: return "敌舰超出探测范围"
 	return ""
 
@@ -379,6 +420,10 @@ func _stable() -> bool:
 
 func _arrival_point(node: Node3D, distance: float) -> Vector3:
 	for id: String in world.targets:
+		if world.targets[id].node==node and str(world.targets[id].kind)=="gate":
+			var normal: Vector3=node.global_basis.z.normalized()
+			var radial: Vector3=world.flight.global_position-node.global_position if world.target_is_local(id) else -world.target_direction(id)
+			return node.global_position+normal*(distance if radial.dot(normal)>=0.0 else -distance)
 		if world.targets[id].node == node and not world.target_is_local(id): return node.global_position - world.target_direction(id) * distance
 	var radial: Vector3 = world.flight.global_position - node.global_position
 	if radial.length_squared() < 0.000001: radial = world.flight.global_basis.z

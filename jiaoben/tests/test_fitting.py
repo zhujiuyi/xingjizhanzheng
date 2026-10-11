@@ -33,7 +33,7 @@ class FittingDefinitions(unittest.TestCase):
   with self.assertRaises(sqlite3.OperationalError):p.apply_migrations(db,fault_after=19)
   self.assertEqual(before,db.execute('SELECT type,name,sql FROM sqlite_schema ORDER BY type,name').fetchall())
   self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(15,))
-  p.apply_migrations(db);self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(16,))
+  p.apply_migrations(db);self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(p.FORMAT_VERSION,))
 class FittingSealing(unittest.TestCase):
  @classmethod
  def setUpClass(cls):

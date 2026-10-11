@@ -152,6 +152,7 @@ static func _gate_reason(sector: XJSector, state: XJRuntimeState, catalog: XJCat
 	if not bool(gameplay.call("save_eligible")): return "先脱离交战、停止采集扫描并等待设备周期结束"
 	# Travel's final validator rejects hostile phases before acquiring a barrier.
 	for npc: RefCounted in state.rows("npc_state"):
+		if catalog.table_names.has("site_defs") and not bool(gameplay.call("same_entity_site","ship",state.ship(),"npc",npc)):continue
 		if npc.alive and npc.behavior_phase in [T.NpcPhase.ACQUIRE, T.NpcPhase.PURSUE, T.NpcPhase.ATTACK, T.NpcPhase.DISENGAGE]: return "仍处于交战，先脱离敌舰"
 	return ""
 

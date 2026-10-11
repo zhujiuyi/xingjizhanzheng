@@ -16,6 +16,7 @@ from resource_intel_catalog import COLUMNS as RESOURCE_INTEL_COLUMNS, TABLES as 
 from exploration_catalog import COLUMNS as EXPLORATION_COLUMNS, TABLES as EXPLORATION_TABLES, validate as validate_exploration
 from mobile_belts_catalog import COLUMNS as MOBILE_BELTS_COLUMNS, TABLES as MOBILE_BELTS_TABLES, validate as validate_mobile_belts
 from fitting_catalog import COLUMNS as FITTING_COLUMNS, TABLES as FITTING_TABLES, validate as validate_fitting
+from roles_catalog import COLUMNS as ROLE_COLUMNS, TABLES as ROLE_TABLES, validate as validate_roles
 from operations_catalog import COLUMNS as OPERATIONS_COLUMNS, TABLES as OPERATIONS_TABLES, validate as validate_operations
 from tactics_catalog import COLUMNS as TACTICS_COLUMNS, TABLES as TACTICS_TABLES, validate as validate_tactics
 
@@ -40,6 +41,8 @@ OPERATIONS_SCHEMA = ROOT / "code/database/operations_schema.sql"
 OPERATIONS_SEED = ROOT / "code/database/operations_seed.sql"
 FITTING_SCHEMA = ROOT / "code/database/fitting_schema.sql"
 FITTING_SEED = ROOT / "code/database/fitting_seed.sql"
+ROLE_SCHEMA = ROOT / "code/database/roles_schema.sql"
+ROLE_SEED = ROOT / "code/database/roles_seed.sql"
 HASH_ALGORITHM = "catalog_hash_v1"
 CONTENT_VIEWS = ("effective_connection_defs", "module_full_defs", "npc_full_defs", "mission_summary_defs")
 # Explicit table registry; column order and PK order come from the reviewed DDL.
@@ -261,6 +264,8 @@ CONTENT_TABLES += OPERATIONS_TABLES
 CONTENT_COLUMNS.update(OPERATIONS_COLUMNS)
 CONTENT_TABLES += FITTING_TABLES
 CONTENT_COLUMNS.update(FITTING_COLUMNS)
+CONTENT_TABLES += ROLE_TABLES
+CONTENT_COLUMNS.update(ROLE_COLUMNS)
 
 
 def identifier(name: str) -> str:
@@ -546,6 +551,7 @@ def validate_content_graph(connection: sqlite3.Connection) -> None:
     validate_tactics(connection)
     validate_operations(connection)
     validate_fitting(connection)
+    validate_roles(connection)
 
 
 def validate_space_content(connection: sqlite3.Connection) -> None:
@@ -760,7 +766,7 @@ def build_catalog(output: Path = DEFAULT_OUTPUT) -> dict[str, object]:
         connection.execute("PRAGMA journal_mode=DELETE")
         connection.execute("PRAGMA synchronous=EXTRA")
         # One explicit transaction: schema, seed, checks and logical hash.
-        source = "BEGIN IMMEDIATE;\n" + "\n".join(path.read_text(encoding="utf-8") for path in (SCHEMA, SEED, SPACE, CIVILIZATION_SCHEMA, CIVILIZATION_SEED, INDUSTRY_SCHEMA, INDUSTRY_SEED, RESOURCE_INTEL_SCHEMA, RESOURCE_INTEL_SEED, EXPLORATION_SCHEMA, EXPLORATION_SEED, MOBILE_BELTS_SCHEMA, MOBILE_BELTS_SEED, TACTICS_SCHEMA, TACTICS_SEED, OPERATIONS_SCHEMA, OPERATIONS_SEED, FITTING_SCHEMA, FITTING_SEED))
+        source = "BEGIN IMMEDIATE;\n" + "\n".join(path.read_text(encoding="utf-8") for path in (SCHEMA, SEED, SPACE, CIVILIZATION_SCHEMA, CIVILIZATION_SEED, INDUSTRY_SCHEMA, INDUSTRY_SEED, RESOURCE_INTEL_SCHEMA, RESOURCE_INTEL_SEED, EXPLORATION_SCHEMA, EXPLORATION_SEED, MOBILE_BELTS_SCHEMA, MOBILE_BELTS_SEED, TACTICS_SCHEMA, TACTICS_SEED, OPERATIONS_SCHEMA, OPERATIONS_SEED, FITTING_SCHEMA, FITTING_SEED, ROLE_SCHEMA, ROLE_SEED))
         connection.executescript(source)
         validate_database(connection)
         content_hash = logical_content_hash(connection)

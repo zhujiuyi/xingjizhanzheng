@@ -3,6 +3,7 @@ extends PanelContainer
 ## Presentation adapter: targets and command eligibility are supplied by the host.
 signal selected(id: String)
 signal command(action: String, id: String)
+signal support_requested(item_id: String,target_id: String,stop: bool)
 const UISkin = preload("res://runtime/ui_theme.gd")
 const ResourceStatus = preload("res://runtime/resource_status.gd")
 var filter_mode: String = "all"
@@ -15,11 +16,16 @@ var filter_buttons: Dictionary = {}
 var sort_buttons: Dictionary = {}
 var target_buttons: Dictionary = {}
 var action_buttons: Dictionary = {}
+var support_box: VBoxContainer
+var support_buttons: Dictionary = {}
+var support_records: Dictionary = {}
+var support_status: Label
 var action_grid: GridContainer
 var more_actions: Button
 var actions_expanded: bool = false
 var eligible_actions: Dictionary = {}
 var selected_kind: String = ""
+var selected_friendly: bool = false
 var target_list: VBoxContainer
 var target_scroll: ScrollContainer
 var body_scroll: ScrollContainer
@@ -144,6 +150,14 @@ func _ready() -> void:
 	more_actions.pressed.connect(func():
 		actions_expanded = not actions_expanded
 		_layout_actions())
+	support_box = VBoxContainer.new()
+	support_box.name = "FriendlySupportControls"
+	details.add_child(support_box)
+	var support_actions: HBoxContainer = HBoxContainer.new()
+	support_actions.name = "SupportActions"
+	support_box.add_child(support_actions)
+	support_status = _label(support_box,"",10,UISkin.MUTED)
+	support_box.hide()
 	npc_detail = VBoxContainer.new()
 	npc_detail.add_theme_constant_override("separation", 2)
 	details.add_child(npc_detail)
@@ -189,6 +203,7 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 	_last_selection_id = selected_id
 	var kind: String = str(details.get("kind", ""))
 	selected_kind = kind
+	selected_friendly = bool(details.get("friendly",false))
 	selected_title.text = str(details.get("title", "尚未选择目标"))
 	selected_title.tooltip_text = selected_title.text
 	selected_distance.text = ("%s · %s" % [str(details.get("type_title", "目标")), format_distance(float(details.get("distance_m", 0.0)))]) + (" · 航向参考" if bool(details.get("navigation_only", false)) else " · 远程地点" if bool(details.get("remote_site", false)) else "") if not selected_id.is_empty() else "左键选目标 · Tab切换"
@@ -233,9 +248,9 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 			"nav_orbit": button.visible = not selected_id.is_empty() and not bool(details.get("navigation_only", false)); button.disabled = busy or not bool(navigation.get("orbit_ready", false))
 			"nav_stop": button.visible = running; button.disabled = busy
 			"nav_dock": button.visible = kind == "station"; button.disabled = busy or not bool(navigation.get("dock_ready", navigation.get("approach_ready", false)))
-			"combat_engage": button.visible = kind in ["npc","drone"]; button.disabled = busy or not bool(navigation.get("combat_engage_ready", false))
+			"combat_engage": button.visible = kind in ["npc","drone"] and not selected_friendly; button.disabled = busy or not bool(navigation.get("combat_engage_ready", false))
 			"combat_toggle":
-				button.visible = kind in ["npc","drone"]
+				button.visible = kind in ["npc","drone"] and not selected_friendly
 				button.text = "停止开火" if bool(navigation.get("combat_active", false)) else "对此开火"
 				button.disabled = busy or (not bool(navigation.get("combat_active", false)) and not bool(navigation.get("combat_ready", false)))
 		button.tooltip_text = str(navigation.get(action.trim_prefix("nav_") + "_reason", navigation.get("reason", "由航行控制器检查资格。")))
@@ -251,6 +266,7 @@ func _layout_actions() -> void:
 	if selected_kind == "station" and not action_buttons.nav_warp.disabled: primary = ["nav_warp","nav_dock","nav_approach"]
 	elif selected_kind == "station": primary = ["nav_approach","nav_orbit"]
 	elif selected_kind in ["npc","drone"]: primary = ["combat_engage","combat_toggle","nav_orbit"]
+	if selected_friendly:primary=["nav_approach","nav_orbit"]
 	var extra: bool = false
 	for action: String in action_buttons:
 		var eligible: bool = bool(eligible_actions.get(action,false))
@@ -258,6 +274,34 @@ func _layout_actions() -> void:
 		action_buttons[action].visible = eligible and (actions_expanded or action in primary)
 	more_actions.visible = extra
 	more_actions.text = "收起操作" if actions_expanded else "更多操作"
+	_queue_list_layout()
+
+func set_support_options(records: Array[Dictionary],busy: bool) -> void:
+	var retained: Array[String] = []
+	var statuses: PackedStringArray = []
+	for record: Dictionary in records:
+		var id: String = str(record.item_id)
+		retained.append(id); support_records[id] = record
+		var button: Button
+		if support_buttons.has(id): button = support_buttons[id]
+		else:
+			button = _button(support_box.get_node("SupportActions"),"")
+			button.name = "RemoteSupport_"+id.validate_node_name()
+			button.set_meta("support_item_id",id)
+			button.pressed.connect(func(): support_requested.emit(id,selected_id,bool(support_records[id].active)))
+			support_buttons[id] = button
+		var layer_title: String = "护盾" if record.layer_id == "shield" else "装甲"
+		button.text = ("停止" if record.active else "维修")+layer_title
+		button.disabled = busy or (not record.active and not str(record.reason).is_empty())
+		button.tooltip_text = "远程维修 · %s · %s\n%s" % [layer_title,format_distance(record.range_m),"停止后不退还已支付周期" if record.active else str(record.reason) if not str(record.reason).is_empty() else "完成付费周期后修复所选友舰；不能维修敌舰"]
+		if record.active: statuses.append(layer_title+" · "+str(record.get("status","%.1f秒" % record.remaining_s)))
+	for id: String in support_buttons.keys():
+		if id in retained: continue
+		var button: Button = support_buttons[id]
+		button.get_parent().remove_child(button);button.queue_free();support_buttons.erase(id);support_records.erase(id)
+	support_box.visible = not records.is_empty()
+	support_status.text = " / ".join(statuses)
+	support_status.visible = not statuses.is_empty()
 	_queue_list_layout()
 
 func responsive(compact: bool, available_height: float = -1.0) -> void:
