@@ -16,6 +16,7 @@ var stable: Callable
 var mode: String = ""
 var phase: String = "idle"
 var target_id: String = ""
+var _target_site_snapshot: String = ""
 var last_error: String = ""
 var remaining_s: float = 0.0
 var origin: Vector3 = Vector3.ZERO
@@ -129,6 +130,7 @@ func _begin(requested_mode: String, id: String, combat_order: bool = false, weap
 	_after_warp_mode = requested_mode if requested_mode in ["approach", "dock"] and bool(context.get("remote_site", false)) else ""
 	mode = "warp" if not _after_warp_mode.is_empty() else requested_mode
 	target_id = id
+	_target_site_snapshot = world.target_site(id)
 	combat_managed = combat_order
 	combat_distance_m = weapon_distance_m if combat_order else 0.0
 	_ship_id = state.ship().ship_instance_id
@@ -171,6 +173,8 @@ func tick(delta: float) -> void:
 	if not active() or delta <= 0.0 or not is_finite(delta): return
 	var reason: String = _target_reason(target_id)
 	if not reason.is_empty(): _abort(reason); return
+	if Space.supported(catalog) and world.target_site(target_id) != _target_site_snapshot:
+		_abort("目标已迁移，自动航行已停止；重新定位后前往新地点"); return
 	if state.ship().ship_instance_id != _ship_id or state.current_sector() != _sector_id:
 		_abort("舰船或星区已改变，自动航行停止"); return
 	if warp_active() and not _stable(): _abort("跃迁中断：交战、弹丸或设备周期尚未结束"); return

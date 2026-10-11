@@ -94,6 +94,7 @@ func create(catalog: XJCatalog, seed_value: int) -> State:
 		_add("exploration_progress_state", {"player_id": player_id})
 		for node: Dictionary in catalog.rows("exploration_resource_defs"):
 			result.find("resource_state", "node_id", node.node_id).remaining_units = 0
+	for row: RefCounted in preload("res://runtime/gameplay/mobile_belts.gd").initial_rows(catalog, result): result.add("exploration_belt_state", row)
 	return result
 
 func _add(table: String, values: Dictionary) -> void:

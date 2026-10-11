@@ -775,6 +775,14 @@ class ExplorationResearchStateDto extends RefCounted:
 	var paid_credit: int = 0
 	var completed_tick: int = 0
 
+class ExplorationBeltStateDto extends RefCounted:
+	var event_id: String = ""
+	var route_id: String = ""
+	var stage_index: int = 0
+	var warning_stage_index: int = 0
+	var start_elapsed_s: float = 0.0
+	var initial_units: int = 0
+
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
 	var content: ContentRefDto = ContentRefDto.new()
@@ -825,6 +833,7 @@ class WorldSnapshotDto extends RefCounted:
 	var exploration_claim_state_rows: Array[ExplorationClaimStateDto] = []
 	var exploration_progress_state_rows: Array[ExplorationProgressStateDto] = []
 	var exploration_research_state_rows: Array[ExplorationResearchStateDto] = []
+	var exploration_belt_state_rows: Array[ExplorationBeltStateDto] = []
 
 ## 表现派生值不是另一份定义：每次由 frozen catalog + 当前状态计算。
 class ShipMetricsViewDto extends RefCounted:

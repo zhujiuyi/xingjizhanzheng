@@ -82,6 +82,9 @@ func _run() -> void:
 	if not check(state != null, "frozen six-structure world creates " + store.last_error): store.close(); get_tree().quit(1); return
 	g = Gameplay.new(); g.setup(state, store.catalog)
 	check(state.rows("exploration_instance_state").size() == 6 and state.rows("exploration_actor_state").is_empty(), "six clues initialize without free actors or goods")
+	if OS.get_environment("XJ_EXPLORATION_FIXTURE_ONLY") == "1":
+		_legacy_mineral_fixture()
+		return
 	for unlock: Dictionary in g.rows("unlock_defs"): g.grant_unlock(unlock.unlock_id)
 	state.player().credit = 1000000
 	var station: String = g.station()
@@ -157,6 +160,34 @@ func _run() -> void:
 	g.dispose(); g = null; store.close(); store = null; state = null
 	if not OS.get_environment("XJ_EXPLORATION_LEGACY_DATABASE").is_empty(): legacy()
 	await finish()
+
+func _legacy_mineral_fixture() -> void:
+	# Uses only v0.19 APIs so the actual old PCK can create this fixture.
+	for unlock: Dictionary in g.rows("unlock_defs"): g.grant_unlock(unlock.unlock_id)
+	state.player().credit = 1000000
+	var miner: D.ShipStateDto = g.inventory.create_ship("miner_anvil", g.station())
+	state.player().controlled_ship_id = miner.ship_instance_id
+	var module_id: String = ""
+	for compatible: Dictionary in g.rows("mining_compatibility"):
+		if compatible.item_id == "ore_ferrosilicate": module_id = compatible.module_id; break
+	var item: String = g.inventory.grant(g.inventory.warehouse(g.station()), module_id, 1)[0]
+	check(g.act("fit_module", item, 1, "work").phase == T.ActionPhase.APPLIED, "old fixture installs legal mining head")
+	var event: RefCounted = g.exploration.instance("exp_echo_mineral")
+	place(g.exploration.definition(event.event_id).entry_anchor_id)
+	check(act("survey", event), "old fixture pays actual survey")
+	advance(float(g.exploration.variant(event).survey_duration_s) + 0.2)
+	check(act("safe", event), "old fixture opens real mineral stock")
+	var node_id: String = "exp_echo_mineral_safe"
+	place(g.definition("resource_node_locations", "node_id", node_id).anchor_id)
+	check(g.act("start_mining", node_id).phase == T.ActionPhase.APPLIED, "old fixture starts actual extraction")
+	while event.evidence_units <= 0: advance(0.2)
+	g.work.stop_mining()
+	event.elapsed_s = float(g.exploration.variant(event).duration_s) * 0.5
+	g.missions.refresh(); g._sync_spawns()
+	check(store.save(state, "manual", 0), "old fixture saves active mineral window and real cargo")
+	var summary: Dictionary = {"database": store.path, "format": int(store._records("SELECT format_version FROM database_meta")[0].format_version), "content_hash": store.catalog.content_hash, "event_id": event.event_id, "evidence": event.evidence_units, "elapsed": event.elapsed_s, "remaining_units": state.find("resource_state", "node_id", node_id).remaining_units}
+	print("EXPLORATION_FIXTURE_READY ", JSON.stringify(summary))
+	g.dispose(); g = null; store.close(); store = null; get_tree().quit(0 if failures.is_empty() else 1)
 
 func _persist_operation() -> void:
 	var row: D.ExplorationInstanceStateDto = g.exploration.instance("exp_mirror_relic")

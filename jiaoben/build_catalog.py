@@ -14,6 +14,7 @@ from civilization_catalog import COLUMNS as CIVILIZATION_COLUMNS, TABLES as CIVI
 from industry_catalog import COLUMNS as INDUSTRY_COLUMNS, TABLES as INDUSTRY_TABLES, validate as validate_industry
 from resource_intel_catalog import COLUMNS as RESOURCE_INTEL_COLUMNS, TABLES as RESOURCE_INTEL_TABLES, validate as validate_resource_intel
 from exploration_catalog import COLUMNS as EXPLORATION_COLUMNS, TABLES as EXPLORATION_TABLES, validate as validate_exploration
+from mobile_belts_catalog import COLUMNS as MOBILE_BELTS_COLUMNS, TABLES as MOBILE_BELTS_TABLES, validate as validate_mobile_belts
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "code/data/catalog.db"
@@ -28,6 +29,8 @@ RESOURCE_INTEL_SCHEMA = ROOT / "code/database/resource_intel_schema.sql"
 RESOURCE_INTEL_SEED = ROOT / "code/database/resource_intel_seed.sql"
 EXPLORATION_SCHEMA = ROOT / "code/database/exploration_schema.sql"
 EXPLORATION_SEED = ROOT / "code/database/exploration_seed.sql"
+MOBILE_BELTS_SCHEMA = ROOT / "code/database/mobile_belts_schema.sql"
+MOBILE_BELTS_SEED = ROOT / "code/database/mobile_belts_seed.sql"
 HASH_ALGORITHM = "catalog_hash_v1"
 CONTENT_VIEWS = ("effective_connection_defs", "module_full_defs", "npc_full_defs", "mission_summary_defs")
 # Explicit table registry; column order and PK order come from the reviewed DDL.
@@ -241,6 +244,8 @@ CONTENT_TABLES += RESOURCE_INTEL_TABLES
 CONTENT_COLUMNS.update(RESOURCE_INTEL_COLUMNS)
 CONTENT_TABLES += EXPLORATION_TABLES
 CONTENT_COLUMNS.update(EXPLORATION_COLUMNS)
+CONTENT_TABLES += MOBILE_BELTS_TABLES
+CONTENT_COLUMNS.update(MOBILE_BELTS_COLUMNS)
 
 
 def identifier(name: str) -> str:
@@ -522,6 +527,7 @@ def validate_content_graph(connection: sqlite3.Connection) -> None:
     validate_industry(connection)
     validate_resource_intel(connection)
     validate_exploration(connection)
+    validate_mobile_belts(connection)
 
 
 def validate_space_content(connection: sqlite3.Connection) -> None:
@@ -736,7 +742,7 @@ def build_catalog(output: Path = DEFAULT_OUTPUT) -> dict[str, object]:
         connection.execute("PRAGMA journal_mode=DELETE")
         connection.execute("PRAGMA synchronous=EXTRA")
         # One explicit transaction: schema, seed, checks and logical hash.
-        source = "BEGIN IMMEDIATE;\n" + "\n".join(path.read_text(encoding="utf-8") for path in (SCHEMA, SEED, SPACE, CIVILIZATION_SCHEMA, CIVILIZATION_SEED, INDUSTRY_SCHEMA, INDUSTRY_SEED, RESOURCE_INTEL_SCHEMA, RESOURCE_INTEL_SEED, EXPLORATION_SCHEMA, EXPLORATION_SEED))
+        source = "BEGIN IMMEDIATE;\n" + "\n".join(path.read_text(encoding="utf-8") for path in (SCHEMA, SEED, SPACE, CIVILIZATION_SCHEMA, CIVILIZATION_SEED, INDUSTRY_SCHEMA, INDUSTRY_SEED, RESOURCE_INTEL_SCHEMA, RESOURCE_INTEL_SEED, EXPLORATION_SCHEMA, EXPLORATION_SEED, MOBILE_BELTS_SCHEMA, MOBILE_BELTS_SEED))
         connection.executescript(source)
         validate_database(connection)
         content_hash = logical_content_hash(connection)

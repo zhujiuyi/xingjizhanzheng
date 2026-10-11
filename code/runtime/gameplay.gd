@@ -12,6 +12,7 @@ const Civilizations = preload("res://runtime/gameplay/civilizations.gd")
 const Industry = preload("res://runtime/gameplay/industry.gd")
 const ResourceIntel = preload("res://runtime/gameplay/resource_intel.gd")
 const Exploration = preload("res://runtime/gameplay/exploration.gd")
+const MobileBelts = preload("res://runtime/gameplay/mobile_belts.gd")
 const Space = preload("res://runtime/space_coordinates.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
@@ -24,6 +25,7 @@ var civilizations: RefCounted
 var industry: RefCounted
 var resource_intel: RefCounted
 var exploration: RefCounted
+var mobile_belts: RefCounted
 var events: Array[D.EventDto] = []
 var pending_autosave_request_id: String = ""
 var status_text: String = ""
@@ -59,6 +61,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog) -> void:
 	industry = Industry.new(self)
 	resource_intel = ResourceIntel.new(self)
 	exploration = Exploration.new(self)
+	mobile_belts = MobileBelts.new(self)
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
 	for ship: D.ShipStateDto in state.rows("ship_state"):
@@ -81,6 +84,8 @@ func rows(table: String) -> Array[Dictionary]:
 	return _definition_cache[table]
 
 func definition(table: String, key: String, value: Variant) -> Dictionary:
+	# Logical authored anchors resolve through the current saved AU route.
+	if table == "anchor_defs" and key == "anchor_id" and mobile_belts != null: value = mobile_belts.resolve(str(value))
 	var index_id: String = table + ":" + key
 	if not _index_cache.has(index_id):
 		var index: Dictionary = {}
@@ -115,6 +120,7 @@ func spatial_site(kind: String, entity_id: String) -> String:
 
 func assign_anchor_site(kind: String, entity_id: String, anchor_id: String) -> bool:
 	if not Space.supported(catalog): return true
+	if mobile_belts != null: anchor_id = mobile_belts.resolve(anchor_id)
 	return Space.assign(state, kind, entity_id, Space.site_for_anchor(catalog, anchor_id))
 
 func same_anchor_site(row: RefCounted, anchor: Dictionary) -> bool:
@@ -687,9 +693,9 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts]:
 		if service != null: service.g = null
-	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null
+	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null; mobile_belts = null
 	pending_autosave_request_id=""; events.clear(); _pending_repairs.clear(); _definition_cache.clear(); _index_cache.clear(); _rules.clear()
 	_active_action = null; _active_payload = null; state = null; catalog = null; spatial_validator = Callable()
 

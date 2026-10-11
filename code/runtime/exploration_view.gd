@@ -5,6 +5,17 @@ var fields: Dictionary = {}
 
 func _init(owner_world: Node3D) -> void: world = owner_world
 
+func _place_existing(id: String, logical_anchor: String) -> void:
+	if not world.targets.has(id): return
+	var actual: String = world.gameplay.mobile_belts.resolve(logical_anchor)
+	var target: Dictionary = world.targets[id]
+	if str(target.anchor_id) == actual: return
+	target.anchor_id = actual
+	var node: Node3D = target.node
+	node.position = world.anchor_position(logical_anchor)
+	node.reset_physics_interpolation()
+	world.apply_target_site(id)
+
 func sync() -> void:
 	var service: RefCounted = world.gameplay.exploration
 	if not service.supported(): return
@@ -19,6 +30,7 @@ func sync() -> void:
 				world.add_child(beacon); beacon.position = world.anchor_position(anchor)
 				world._target(id, ("撤离点 · " if exit_point else "探索 · ") + str(event.display_name), "exploration_exit" if exit_point else "exploration", beacon, anchor)
 				world.targets[id]["event_id"] = event.event_id
+			_place_existing(id, anchor)
 			world.targets[id]["status"] = service.status_text(event.event_id)
 		if event.environment_kind != "fragments" and not fields.has(event.event_id):
 			var marker: Node3D = Node3D.new()
@@ -32,6 +44,7 @@ func sync() -> void:
 			world.add_child(marker); marker.position = world.anchor_position(event.entry_anchor_id)
 			world._target("exp_field:" + str(event.event_id), "电磁扰动区域" if event.environment_kind == "em" else "恒星喷流区域", "scenery", marker, event.entry_anchor_id)
 			fields[event.event_id] = material
+		_place_existing("exp_field:" + str(event.event_id), event.entry_anchor_id)
 		if event.environment_kind == "solar" and fields.has(event.event_id):
 			var phase: String = service.hazard_phase(row)
 			fields[event.event_id].albedo_color.a = 0.12 if phase == "active" else 0.07 if phase == "warning" else 0.025
@@ -39,7 +52,9 @@ func sync() -> void:
 		var event: Dictionary = service.definition(obstacle.event_id)
 		if event.sector_id != world.state.current_sector() or not world.gameplay.unlocked(event.required_unlock_id): continue
 		var id: String = "exp_debris:" + str(obstacle.obstacle_id)
-		if world.targets.has(id): continue
+		if world.targets.has(id):
+			_place_existing(id, obstacle.anchor_id)
+			continue
 		var body: StaticBody3D = StaticBody3D.new()
 		body.collision_layer = 65; body.collision_mask = 2
 		var shape: CollisionShape3D = CollisionShape3D.new()

@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+v0.20.0迁移矿带：`build_mobile_belts.py`追加真实AU地点与三阶段散逸，`store_generate_mobile_belts.py`仅生成016与v0.12适配器；旧001–015和旧适配器不可重写。`--only mobile-belts`执行两事件×三路线、实际付费采集/衰减/原矿与证据保留、48组状态相等重开；`prepare_mobile_belts_upgrade_v28.py --legacy-executable <实际v0.19 EXE>`生成已采出原矿的format12活动矿带，传`XJ_MOBILE_BELTS_LEGACY_DATABASE`验证016/内容分支失败、原47组状态/余量/窗口/RNG保留、剩余窗口宽限、旧手动档及幂等。`--only mobile-belts-world --native`使用真实Main、F与鼠标完成三处矿带、实际AU跃迁/接近/采集/预警/散逸/结算、目标中途迁移安全中止及高缩放。两入口支持`--executable`，共用审计锁、fresh UUID及严格双日志；资格、返回姿态和近阶段时刻为明确夹具。见[54](../doc/54-迁移矿带与分段衰减.md)。
+
 v0.19.0探索：`build_exploration_content.py`生成独立探索SQL，`store_generate_exploration.py`只生成015与v0.11适配器，旧迁移与旧适配器不可重写。`verify_combat_v18.py --only exploration`运行18种变体、付费操作恢复、临时矿量、成果/研究/需求和SQLite约束；`prepare_exploration_upgrade_v27.py --legacy-executable <实际v0.18.0 EXE>`创建含三份付费订单的format11独立夹具，将其路径传`XJ_EXPLORATION_LEGACY_DATABASE`验证015/内容升级失败回滚、旧状态与RNG保留、旧手动档及幂等。`--only exploration-world --native`验证真实F/鼠标、运输舰移动与敌方弹丸、碎片射线遮挡、电磁扫描/护盾与稳定、临时矿体实际采集/消失、恒星热伤害和窄屏。两入口支持`--executable`验证真实PCK，独占共用锁，fresh UUID和严格双日志；资格/物资/姿态/近超时状态均是声明的专项夹具，不代表自然成长。详见[53](../doc/53-多阶段探索与环境风险.md)。
 
 v0.18.0来源情报：`store_generate_resource_intel.py`仅生成014与v0.10适配器，固定两张新定义，旧文件不可重写。`verify_combat_v18.py --only resource-intel`验证真实来源、品位采集与存档；传`XJ_RESOURCE_INTEL_LEGACY_DATABASE`时复制已关闭tmp旧库。可用实际v0.17.0 EXE固定工业诊断配合`XJ_INDUSTRY_FIXTURE_ONLY=1`生成带运行/排队订单的format10夹具，保存后立即退出，不继续执行新版检查。`--only resource-intel-world --native`覆盖真实窗口搜索、星图、过期回调、缩放及实际跨门再抵达来源；两者支持`--executable`验证真实PCK，使用fresh UUID与严格双日志。见[52](../doc/52-物资来源与矿点情报.md)。

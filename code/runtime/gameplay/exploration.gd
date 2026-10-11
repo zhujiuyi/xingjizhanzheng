@@ -113,6 +113,7 @@ func execute(event_id: String, action: String, generation: String) -> bool:
 		return true
 	if action in ["safe", "rich"]:
 		row.choice_id = action; row.phase = "mineral"; row.elapsed_s = 0.0
+		g.mobile_belts.begin(row)
 		for node_id: String in managed_resources:
 			var spec: Dictionary = managed_resources[node_id]
 			if spec.event_id == event_id:
@@ -226,6 +227,8 @@ func status_text(event_id: String) -> String:
 	if row.phase in ["surveyed", "rescue", "relic", "mineral", "extracting"]: text += "\n窗口剩余 %.0f 秒 · 已取得证据/矿量 %d" % [ceil(maxf(0.0, float(spec.duration_s) - row.elapsed_s)), row.evidence_units]
 	if not row.operation_kind.is_empty(): text += "\n%s · 剩余工作 %.1f 秒%s" % [str({"survey": "调查", "rescue": "修复", "recover": "回收", "stabilize": "稳定风险源", "deepen": "深入取证"}.get(row.operation_kind, row.operation_kind)), row.operation_remaining_s, " · 离开操作范围已暂停" if not _at(row) else ""]
 	if event.environment_kind != "fragments" and _site(row): text += "\n" + str(environment().message)
+	var belt: String = g.mobile_belts.detail(event_id)
+	if not belt.is_empty(): text += "\n" + belt
 	return text
 
 func hazard_phase(row: D.ExplorationInstanceStateDto) -> String:
@@ -332,14 +335,16 @@ func tick(delta: float) -> void:
 		if row.phase in ["claimed", "failed", "withdrawn"]:
 			row.cooldown_remaining_s = maxf(0, row.cooldown_remaining_s - delta)
 			if not local: _clear_actors(row)
-			if row.cooldown_remaining_s <= 0.0 and not local:
+			if row.cooldown_remaining_s <= 0.0 and not local and g.mobile_belts.can_renew(row.event_id):
 				row.generation += 1; row.variant_seed = (str(row.variant_seed) + ":" + str(row.generation)).sha256_text().substr(0, 8).hex_to_int()
 				assign_variant(row, g.catalog); row.phase = "clue"; row.choice_id = ""; row.evidence_units = 0; row.elapsed_s = 0; row.stabilized = false; row.hazard_clock_s = 0; row.outcome = ""
+				g.mobile_belts.renew(row)
 			continue
 		if row.phase == "ready":
 			if not local: _clear_actors(row)
 			continue
 		if row.phase != "clue": row.elapsed_s += delta
+		g.mobile_belts.tick(row, local)
 		if g.state.ship().status == T.ShipStatus.DESTROYED and row.phase != "clue":
 			_finish(row, "partial" if row.evidence_units > 0 else "failed"); continue
 		if row.elapsed_s >= float(spec.duration_s):

@@ -380,6 +380,7 @@ func simulate_npcs(delta: float) -> void:
 		row.quat_w = body.quaternion.w
 
 func anchor_position(id: String) -> Vector3:
+	if gameplay != null and gameplay.mobile_belts != null: id = gameplay.mobile_belts.resolve(id)
 	var anchor: Dictionary = definitions.get(id, catalog.one("anchor_defs", "anchor_id", id))
 	return Vector3(float(anchor.get("x_m", 0.0)), float(anchor.get("y_m", 0.0)), float(anchor.get("z_m", 0.0)))
 
@@ -417,6 +418,7 @@ func in_safe_zone(point: Vector3) -> bool:
 	return false
 
 func _target(id: String, title: String, kind: String, node: Node3D, anchor_id: String) -> void:
+	if gameplay != null and gameplay.mobile_belts != null: anchor_id = gameplay.mobile_belts.resolve(anchor_id)
 	# All target nodes have reached their final spawn transform here. Initializing
 	# the interpolation pump now prevents a first-frame trail from the origin.
 	node.get_global_transform_interpolated()

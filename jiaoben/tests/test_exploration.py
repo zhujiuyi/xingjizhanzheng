@@ -48,7 +48,7 @@ class ExplorationData(unittest.TestCase):
                 self.assertEqual(before, after, table)
             else:
                 key = next(i for i, row in enumerate(old.execute(f'PRAGMA table_info("{table}")')) if row[5] == 1)
-                self.assertTrue(all(row[key].startswith("exp_") for row in after - before), table)
+                self.assertTrue(all(row[key].startswith(("exp_", "belt_")) for row in after - before), table)
         self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(), self.source.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
 
     def test_managed_actors_have_no_free_bounty_or_respawn(self):
@@ -58,7 +58,7 @@ class ExplorationData(unittest.TestCase):
 
     def test_migration015_failure_retains_format11_then_retries(self):
         db = p.connect(); self.addCleanup(db.close)
-        with mock.patch.object(p, "MIGRATIONS", p.MIGRATIONS[:-1]), mock.patch.object(p, "FORMAT_VERSION", 11):
+        with mock.patch.object(p, "MIGRATIONS", p.MIGRATIONS[:14]), mock.patch.object(p, "FORMAT_VERSION", 11):
             p.apply_migrations(db)
         p.insert(db, "profile", {"profile_id": "retained", "display_name": "旧资料", "created_utc": p.utc_now()})
         before = db.execute("SELECT type,name,sql FROM sqlite_schema ORDER BY type,name").fetchall()
@@ -67,7 +67,7 @@ class ExplorationData(unittest.TestCase):
         self.assertEqual(before, db.execute("SELECT type,name,sql FROM sqlite_schema ORDER BY type,name").fetchall())
         self.assertEqual(db.execute("SELECT format_version FROM database_meta").fetchone(), (11,))
         p.apply_migrations(db)
-        self.assertEqual(db.execute("SELECT format_version FROM database_meta").fetchone(), (12,))
+        self.assertEqual(db.execute("SELECT format_version FROM database_meta").fetchone(), (p.FORMAT_VERSION,))
         self.assertEqual(db.execute("SELECT display_name FROM profile WHERE profile_id='retained'").fetchone(), ("旧资料",))
 
 

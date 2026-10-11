@@ -25,6 +25,9 @@ func qualify(event_id: String, hull_id: String = "battleship_forge_ironwall") ->
 		check(business.act("fit_module", item, 1, "work").phase == T.ActionPhase.APPLIED, "explicit qualified miner receives a legal compatible mining head")
 	var event: D.ExplorationInstanceStateDto = business.exploration.instance(event_id)
 	event.variant_id = event_id + "_v1" # Named easier variant is an explicit test precondition.
+	if XJRuntimeState.TABLES.has("exploration_belt_state"):
+		var belt: RefCounted = candidate.find("exploration_belt_state", "event_id", event_id)
+		if belt != null: belt.set("initial_units", int(business.exploration.variant(event).mineral_units))
 	var spec: Dictionary = business.exploration.definition(event_id)
 	place(candidate, business, spec.entry_anchor_id)
 	candidate.ship().pos_x -= 500.0

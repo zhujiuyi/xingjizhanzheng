@@ -214,8 +214,8 @@ class ContentTests(unittest.TestCase):
         builder.validate_database(db)
         self.assertEqual(set(builder.CONTENT_COLUMNS), set(builder.CONTENT_TABLES))
         metadata = self.c.rows("catalog_meta")[0]
-        self.assertEqual(metadata["content_version"], "v0.11-exploration")
-        self.assertEqual(metadata["ruleset_version"], "singleplayer_exploration_v1")
+        self.assertEqual(metadata["content_version"], "v0.12-mobile-belts")
+        self.assertEqual(metadata["ruleset_version"], "singleplayer_mobile_belts_v1")
         self.assertEqual(metadata["schema_version"], self.c.db.execute("PRAGMA user_version").fetchone()[0])
         self.assertEqual(metadata["content_hash"], builder.logical_content_hash(db))
         self.assertEqual(len(builder.content_views(db)), 4)

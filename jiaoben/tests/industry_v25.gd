@@ -243,7 +243,7 @@ func _real_legacy_upgrade() -> void:
 	faulty.failure = ""
 	if not check(store.open(), "retry migrates actual format9 database to format10: " + store.last_error): return
 	check(FileAccess.file_exists(directory.path_join("migration-format9-backup.db")), "format upgrade creates a closed old-format backup")
-	check(int(store._records("SELECT format_version FROM database_meta")[0].format_version) == 12, "actual legacy database reaches current format12")
+	check(int(store._records("SELECT format_version FROM database_meta")[0].format_version) == 13, "actual legacy database reaches current format13")
 	var slot: Dictionary
 	for entry: Dictionary in store.list_slots():
 		if entry.slot_kind == "manual": slot = entry; break

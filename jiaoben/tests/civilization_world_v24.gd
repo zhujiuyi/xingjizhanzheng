@@ -127,7 +127,7 @@ func state_signature() -> String:
 	return JSON.stringify(values)
 
 func place(candidate: XJRuntimeState, business: Gameplay, anchor_id: String, station: String = "") -> void:
-	var anchor: Dictionary = host.store.catalog.one("anchor_defs", "anchor_id", anchor_id)
+	var anchor: Dictionary = business.definition("anchor_defs", "anchor_id", anchor_id)
 	var ship: D.ShipStateDto = candidate.ship()
 	ship.sector_id = anchor.sector_id; ship.pos_x = anchor.x_m; ship.pos_y = anchor.y_m; ship.pos_z = anchor.z_m
 	ship.vel_x = 0; ship.vel_y = 0; ship.vel_z = 0
@@ -138,6 +138,7 @@ func place(candidate: XJRuntimeState, business: Gameplay, anchor_id: String, sta
 		if container.has_ship_instance_id and container.ship_instance_id == ship.ship_instance_id: container.sector_id = ship.sector_id
 	business.assign_anchor_site("ship", ship.ship_instance_id, anchor_id)
 	if not station.is_empty(): business.inventory.warehouse(station)
+	candidate.find("sector_state", "sector_id", ship.sector_id).visited = true
 
 func activate(candidate: XJRuntimeState) -> bool:
 	if not check(host._stage_candidate(candidate, host.store.catalog), "actual Main stages fixture world and ship geometry"): return false

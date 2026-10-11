@@ -54,6 +54,8 @@ func _ready() -> void:
 	for v18_contract: Dictionary in [
 		{"flag": "--xj-verify-exploration-world-v27", "file": "exploration_world_v27.gd", "prefix": "exploration-world-v27", "env": "XJ_EXPLORATION_WORLD_V27", "meta": "xj_exploration_world_v27_diagnostic"},
 		{"flag": "--xj-verify-exploration-v27", "file": "exploration_v27.gd", "prefix": "exploration-v27", "env": "XJ_EXPLORATION_V27", "meta": "xj_exploration_v27_diagnostic"},
+		{"flag": "--xj-verify-mobile-belts-v28", "file": "mobile_belts_v28.gd", "prefix": "mobile-belts-v28", "env": "XJ_MOBILE_BELTS_V28", "meta": "xj_mobile_belts_v28_diagnostic"},
+		{"flag": "--xj-verify-mobile-belts-world-v28", "file": "mobile_belts_world_v28.gd", "prefix": "mobile-belts-world-v28", "env": "XJ_MOBILE_BELTS_WORLD_V28", "meta": "xj_mobile_belts_world_v28_diagnostic"},
 		{"flag": "--xj-verify-resource-intel-world-v26", "file": "resource_intel_world_v26.gd", "prefix": "resource-intel-world-v26", "env": "XJ_RESOURCE_INTEL_WORLD_V26", "meta": "xj_resource_intel_world_v26_diagnostic"},
 		{"flag": "--xj-verify-resource-intel-v26", "file": "resource_intel_v26.gd", "prefix": "resource-intel-v26", "env": "XJ_RESOURCE_INTEL_V26", "meta": "xj_resource_intel_v26_diagnostic"},
 		{"flag": "--xj-verify-industry-v25", "file": "industry_v25.gd", "prefix": "industry-v25", "env": "XJ_INDUSTRY_V25", "meta": "xj_industry_v25_diagnostic"},

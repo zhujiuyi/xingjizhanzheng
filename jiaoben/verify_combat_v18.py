@@ -11,6 +11,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "mobile-belts-world": ("mobile_belts_world_v28.gd", "XJ_MOBILE_BELTS_WORLD_V28", "mobile-belts-world-v28", "MOBILE_BELTS_WORLD_V28", "--xj-verify-mobile-belts-world-v28"),
+    "mobile-belts": ("mobile_belts_v28.gd", "XJ_MOBILE_BELTS_V28", "mobile-belts-v28", "MOBILE_BELTS_V28", "--xj-verify-mobile-belts-v28"),
     "exploration-world": ("exploration_world_v27.gd", "XJ_EXPLORATION_WORLD_V27", "exploration-world-v27", "EXPLORATION_WORLD_V27", "--xj-verify-exploration-world-v27"),
     "exploration": ("exploration_v27.gd", "XJ_EXPLORATION_V27", "exploration-v27", "EXPLORATION_V27", "--xj-verify-exploration-v27"),
     "resource-intel-world": ("resource_intel_world_v26.gd", "XJ_RESOURCE_INTEL_WORLD_V26", "resource-intel-world-v26", "RESOURCE_INTEL_WORLD_V26", "--xj-verify-resource-intel-world-v26"),
@@ -167,6 +169,15 @@ def run_suite():
             assert record["summary"]["checks"] >= 249 and record["summary"]["cases"] == 18 and len(captures) == 0
             if os.environ.get("XJ_EXPLORATION_LEGACY_DATABASE"):
                 assert record["summary"]["legacy_checked"] and record["summary"]["checks"] >= 260
+        if name == "mobile-belts":
+            assert record["summary"]["checks"] >= 150 and record["summary"]["cases"] == 6 and len(captures) == 0
+            if os.environ.get("XJ_MOBILE_BELTS_LEGACY_DATABASE"):
+                assert record["summary"]["legacy_checked"] and record["summary"]["checks"] >= 170
+        if name == "mobile-belts-world":
+            assert args.native and record["summary"]["checks"] >= 110 and record["summary"]["routes"] == 3 and len(captures) == 7
+            routes = [row for row in record["summary"]["observations"] if row["kind"] == "route"]
+            assert [row["index"] for row in routes] == [0, 1, 2] and all(row["from"] != row["to"] for row in routes)
+            assert all(row["ore"] > 0 for row in routes) and all(a["ore"] < b["ore"] for a, b in zip(routes, routes[1:]))
         if name == "exploration-world":
             assert args.native and record["summary"]["checks"] >= 80 and len(captures) == 8
             escort = next(row for row in record["summary"]["observations"] if row["kind"] == "escort")

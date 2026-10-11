@@ -20,6 +20,7 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	if not _validate_civilizations(state, catalog): return false
 	if not _validate_industry(state, catalog): return false
 	if not _validate_exploration(state, catalog): return false
+	if not _validate_mobile_belts(state, catalog): return false
 	for ship in state.rows("ship_state"):
 		var norm: float = ship.quat_x * ship.quat_x + ship.quat_y * ship.quat_y + ship.quat_z * ship.quat_z + ship.quat_w * ship.quat_w
 		if abs(norm - 1.0) >= 0.00001: return _fail("Invalid normalized ship quaternion")
@@ -104,6 +105,31 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 			if volume > capacity: return _fail("Cargo volume exceeded")
 		if payload > definition.max_payload_mass_kg + 0.0000001: return _fail("Shared payload mass exceeded")
 	return true
+
+func _validate_mobile_belts(state: State, catalog: XJCatalog) -> bool:
+	if not catalog.table_names.has("exploration_belt_route_defs"):
+		return state.rows("exploration_belt_state").is_empty() or _fail("Mobile belts in legacy rules")
+	var events: Dictionary = {}
+	for route: Dictionary in catalog.rows("exploration_belt_route_defs"): events[route.event_id] = true
+	var seen: Dictionary = {}
+	for row: RefCounted in state.rows("exploration_belt_state"):
+		var route: Dictionary = catalog.one("exploration_belt_route_defs", "route_id", row.route_id)
+		var event: RefCounted = state.find("exploration_instance_state", "event_id", row.event_id)
+		if route.is_empty() or event == null or route.event_id != row.event_id or seen.has(row.event_id): return _fail("Invalid mobile belt route context")
+		seen[row.event_id] = true
+		var variant: Dictionary = catalog.one("exploration_variant_defs", "variant_id", event.variant_id)
+		if row.stage_index < 0 or row.stage_index > 3 or row.warning_stage_index < 0 or row.warning_stage_index > 3 or not is_finite(row.start_elapsed_s) or row.start_elapsed_s < 0 or row.initial_units < 0 or row.initial_units > int(variant.mineral_units): return _fail("Mobile belt limits invalid")
+		if event.phase != "mineral": continue
+		if row.start_elapsed_s >= float(variant.duration_s): return _fail("Mobile belt window exhausted")
+		var expected_stage: int = 0
+		for stage: Dictionary in catalog.rows("exploration_belt_stage_defs"):
+			if event.elapsed_s >= row.start_elapsed_s + (float(variant.duration_s) - row.start_elapsed_s) * float(stage.threshold_bp) / 10000.0: expected_stage = maxi(expected_stage, int(stage.stage_index))
+		if row.stage_index != expected_stage or row.warning_stage_index < row.stage_index: return _fail("Mobile belt stage differs from saved window")
+		var cap_bp: int = 10000 if row.stage_index == 0 else int(catalog.one("exploration_belt_stage_defs", "stage_index", row.stage_index).remaining_cap_bp)
+		var cap: int = int(floor(float(row.initial_units) * float(cap_bp) / 10000.0))
+		for node: Dictionary in catalog.rows("exploration_resource_defs"):
+			if node.event_id == row.event_id and state.find("resource_state", "node_id", node.node_id).remaining_units > cap: return _fail("Dispersed mineral regenerated")
+	return seen.size() == events.size() or _fail("Incomplete mobile belt coverage")
 
 func _validate_exploration(state: State, catalog: XJCatalog) -> bool:
 	var tables: Array[String] = ["exploration_instance_state", "exploration_actor_state", "exploration_claim_state", "exploration_progress_state", "exploration_research_state"]
@@ -295,7 +321,8 @@ func _validate_space(state: State, catalog: XJCatalog) -> bool:
 		if row.entity_kind == "npc":
 			var npc: RefCounted = state.find("npc_state", "npc_instance_id", row.entity_id)
 			var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", npc.spawn_id)
-			if catalog.one("anchor_site_defs", "anchor_id", str(spawn.get("anchor_id", ""))).get("site_id") != row.site_id: return _fail("NPC site differs from its frozen spawn")
+			var anchor_id: String = preload("res://runtime/gameplay/mobile_belts.gd").resolved_anchor(catalog, state, str(spawn.get("anchor_id", "")))
+			if catalog.one("anchor_site_defs", "anchor_id", anchor_id).get("site_id") != row.site_id: return _fail("NPC site differs from its frozen spawn/route")
 		if row.entity_kind == "ship":
 			var ship: RefCounted = state.find("ship_state", "ship_instance_id", row.entity_id)
 			if ship.status == Types.ShipStatus.DOCKED:

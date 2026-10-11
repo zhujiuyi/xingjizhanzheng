@@ -219,6 +219,7 @@ func _station_location(station_id: String) -> Dictionary:
 func _anchor_location(anchor_id: String, target_id: String, kind: String, title: String) -> Dictionary:
 	var anchor: Dictionary = g.definition("anchor_defs", "anchor_id", anchor_id)
 	if anchor.is_empty(): return {}
+	anchor_id = str(anchor.anchor_id)
 	return {"target_id": target_id, "target_kind": kind, "target_title": title, "anchor_id": anchor_id, "site_id": Space.site_for_anchor(g.catalog, anchor_id), "sector_id": str(anchor.sector_id), "position": Vector3(float(anchor.x_m), float(anchor.y_m), float(anchor.z_m)), "required_page": ""}
 
 func _route_location(location: Dictionary, origin_sector: String) -> Dictionary:

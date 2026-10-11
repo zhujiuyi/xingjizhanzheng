@@ -22,10 +22,10 @@ sys.path.insert(0, str(ROOT / "jiaoben"))
 import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
-MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql")
-FORMAT_VERSION = 12
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_11.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_11"
+MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql")
+FORMAT_VERSION = 13
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_12.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_12"
 REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_3": PROGRESS_DIR / "catalog_adapter_v0_3.sql",
     "frozen_catalog_v0_4": PROGRESS_DIR / "catalog_adapter_v0_4.sql",
@@ -36,9 +36,10 @@ REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_8": PROGRESS_DIR / "catalog_adapter_v0_8.sql",
     "frozen_catalog_v0_9": PROGRESS_DIR / "catalog_adapter_v0_9.sql",
     "frozen_catalog_v0_10": PROGRESS_DIR / "catalog_adapter_v0_10.sql",
-    "frozen_catalog_v0_11": ADAPTER,
+    "frozen_catalog_v0_11": PROGRESS_DIR / "catalog_adapter_v0_11.sql",
+    "frozen_catalog_v0_12": ADAPTER,
 }
-RULE_CODE_VERSION = "singleplayer_exploration_v1"
+RULE_CODE_VERSION = "singleplayer_mobile_belts_v1"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
 STATE_TABLES = (
@@ -55,6 +56,7 @@ STATE_TABLES = (
     "industry_job_state", "industry_input_state", "station_demand_state",
     "exploration_instance_state", "exploration_actor_state", "exploration_claim_state",
     "exploration_progress_state", "exploration_research_state",
+    "exploration_belt_state",
 )
 
 
@@ -365,6 +367,12 @@ def initial_state(connection, snapshot, world, content):
         insert(connection, "exploration_instance_state", {**ctx, "event_id": event["event_id"], "generation": 1, "variant_id": variants[variant_seed % len(variants)]["variant_id"], "variant_seed": variant_seed, "phase": "clue", "choice_id": "", "operation_kind": "", "operation_remaining_s": 0.0, "elapsed_s": 0.0, "cooldown_remaining_s": 0.0, "evidence_units": 0, "stabilized": 0, "hazard_clock_s": 0.0, "outcome": ""})
     if events:
         insert(connection, "exploration_progress_state", {**ctx, "player_id": player_id, "insight_available": 0, "insight_earned": 0})
+    for route in frozen("exploration_belt_route_defs"):
+        if route["route_index"] != 0:
+            continue
+        event = rows(connection, "exploration_instance_state", "snapshot_id=? AND event_id=?", (snapshot, route["event_id"]))[0]
+        variant = next(r for r in frozen("exploration_variant_defs") if r["variant_id"] == event["variant_id"])
+        insert(connection, "exploration_belt_state", {**ctx, "event_id": route["event_id"], "route_id": route["route_id"], "stage_index": 0, "warning_stage_index": 0, "start_elapsed_s": 0.0, "initial_units": variant["mineral_units"]})
     mask64 = (1 << 64) - 1
     increment = (54 << 1) | 1
     state = ((increment + (seed & mask64)) * 6364136223846793005 + increment) & mask64

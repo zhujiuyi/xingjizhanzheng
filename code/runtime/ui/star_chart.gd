@@ -742,7 +742,8 @@ func _update_information() -> void:
 	var resources: Array[String] = []
 	_resource_nodes.clear()
 	for location: Dictionary in catalog.rows("resource_node_locations"):
-		var anchor: Dictionary = catalog.one("anchor_defs", "anchor_id", location.anchor_id)
+		if business != null and not business.exploration.resource_visible(location.node_id): continue
+		var anchor: Dictionary = business.definition("anchor_defs", "anchor_id", location.anchor_id) if business != null else catalog.one("anchor_defs", "anchor_id", location.anchor_id)
 		if anchor.get("sector_id", "") != selected_sector: continue
 		var node: Dictionary = catalog.one("resource_node_defs", "node_id", location.node_id)
 		var item: Dictionary = catalog.one("item_defs", "item_id", node.get("item_id", ""))
