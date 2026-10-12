@@ -21,6 +21,7 @@ from honors_catalog import COLUMNS as HONOR_COLUMNS, TABLES as HONOR_TABLES, val
 from frontier_catalog import COLUMNS as FRONTIER_COLUMNS, TABLES as FRONTIER_TABLES, validate as validate_frontier
 from campaign_catalog import COLUMNS as CAMPAIGN_COLUMNS, TABLES as CAMPAIGN_TABLES, validate as validate_campaign
 from scenario_catalog import COLUMNS as SCENARIO_COLUMNS, TABLES as SCENARIO_TABLES, validate as validate_scenarios
+from fleet_catalog import COLUMNS as FLEET_COLUMNS, TABLES as FLEET_TABLES, validate as validate_fleet
 from situational_catalog import COLUMNS as SITUATIONAL_COLUMNS, TABLES as SITUATIONAL_TABLES, validate as validate_situational
 from hire_catalog import COLUMNS as HIRE_COLUMNS, TABLES as HIRE_TABLES, validate as validate_hire
 from operations_catalog import COLUMNS as OPERATIONS_COLUMNS, TABLES as OPERATIONS_TABLES, validate as validate_operations
@@ -62,6 +63,8 @@ CAMPAIGN_THEME = ROOT / "code/database/campaign_theme_seed.sql"
 CAMPAIGN_SEED = ROOT / "code/database/campaign_seed.sql"
 SCENARIO_SCHEMA = ROOT / "code/database/scenario_schema.sql"
 SCENARIO_SEED = ROOT / "code/database/scenario_seed.sql"
+FLEET_SCHEMA = ROOT / "code/database/fleet_schema.sql"
+FLEET_SEED = ROOT / "code/database/fleet_seed.sql"
 HASH_ALGORITHM = "catalog_hash_v1"
 CONTENT_VIEWS = ("effective_connection_defs", "module_full_defs", "npc_full_defs", "mission_summary_defs")
 # Explicit table registry; column order and PK order come from the reviewed DDL.
@@ -297,6 +300,8 @@ CONTENT_TABLES += CAMPAIGN_TABLES
 CONTENT_COLUMNS.update(CAMPAIGN_COLUMNS)
 CONTENT_TABLES += SCENARIO_TABLES
 CONTENT_COLUMNS.update(SCENARIO_COLUMNS)
+CONTENT_TABLES += FLEET_TABLES
+CONTENT_COLUMNS.update(FLEET_COLUMNS)
 
 
 def identifier(name: str) -> str:
@@ -589,6 +594,7 @@ def validate_content_graph(connection: sqlite3.Connection) -> None:
     validate_situational(connection)
     validate_campaign(connection)
     validate_scenarios(connection)
+    validate_fleet(connection)
 
 
 def validate_space_content(connection: sqlite3.Connection) -> None:
@@ -803,7 +809,7 @@ def build_catalog(output: Path = DEFAULT_OUTPUT) -> dict[str, object]:
         connection.execute("PRAGMA journal_mode=DELETE")
         connection.execute("PRAGMA synchronous=EXTRA")
         # One explicit transaction: schema, seed, checks and logical hash.
-        source = "BEGIN IMMEDIATE;\n" + "\n".join(path.read_text(encoding="utf-8") for path in (SCHEMA, SEED, SPACE, CIVILIZATION_SCHEMA, CIVILIZATION_SEED, INDUSTRY_SCHEMA, INDUSTRY_SEED, RESOURCE_INTEL_SCHEMA, RESOURCE_INTEL_SEED, EXPLORATION_SCHEMA, EXPLORATION_SEED, MOBILE_BELTS_SCHEMA, MOBILE_BELTS_SEED, TACTICS_SCHEMA, TACTICS_SEED, OPERATIONS_SCHEMA, OPERATIONS_SEED, FITTING_SCHEMA, FITTING_SEED, ROLE_SCHEMA, ROLE_SEED, HONOR_SCHEMA, HONOR_SEED, FRONTIER_SCHEMA, FRONTIER_SEED, HIRE_SCHEMA, HIRE_SEED, SITUATIONAL_SCHEMA, SITUATIONAL_SEED, CAMPAIGN_SCHEMA, CAMPAIGN_THEME, CAMPAIGN_SEED, SCENARIO_SCHEMA, SCENARIO_SEED))
+        source = "BEGIN IMMEDIATE;\n" + "\n".join(path.read_text(encoding="utf-8") for path in (SCHEMA, SEED, SPACE, CIVILIZATION_SCHEMA, CIVILIZATION_SEED, INDUSTRY_SCHEMA, INDUSTRY_SEED, RESOURCE_INTEL_SCHEMA, RESOURCE_INTEL_SEED, EXPLORATION_SCHEMA, EXPLORATION_SEED, MOBILE_BELTS_SCHEMA, MOBILE_BELTS_SEED, TACTICS_SCHEMA, TACTICS_SEED, OPERATIONS_SCHEMA, OPERATIONS_SEED, FITTING_SCHEMA, FITTING_SEED, ROLE_SCHEMA, ROLE_SEED, HONOR_SCHEMA, HONOR_SEED, FRONTIER_SCHEMA, FRONTIER_SEED, HIRE_SCHEMA, HIRE_SEED, SITUATIONAL_SCHEMA, SITUATIONAL_SEED, CAMPAIGN_SCHEMA, CAMPAIGN_THEME, CAMPAIGN_SEED, SCENARIO_SCHEMA, SCENARIO_SEED, FLEET_SCHEMA, FLEET_SEED))
         connection.executescript(source)
         validate_database(connection)
         content_hash = logical_content_hash(connection)

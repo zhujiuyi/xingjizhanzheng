@@ -121,7 +121,7 @@ func _trial_finish(id: String,phase: String,reason: String) -> void:
 	if row.phase not in ["accepted","active","ready"]:return
 	row.phase=phase;row.remaining_s=0;_clear("trial",id)
 	if phase!="ready":_trial_result(id,phase,reason)
-	changed.emit("挑战："+reason);g.request_autosave()
+	changed.emit("挑战："+g.journal.reason_label(reason));g.request_autosave()
 func _award(id: String) -> void:
 	if g.state.find("tactical_award_state","award_id",id)!=null:return
 	var row: RefCounted=D.TacticalAwardStateDto.new();row.award_id=id;row.earned_tick=g.state.snapshot.meta.simulation_tick;g.state.add("tactical_award_state",row)
@@ -413,7 +413,7 @@ func _blockade_finish(id: String,reached: bool,reason: String) -> void:
 	row.phase="ready" if row.completed_units>0 else "withdrawn" if reason=="manual" else "failed"
 	row.cooldown_remaining_s=float(definition("blockade",id).cooldown_s);_clear("blockade",id)
 	if row.phase!="ready":_blockade_result(id,row.phase,reason)
-	changed.emit("封锁行动："+reason);g.request_autosave()
+	changed.emit("封锁行动："+g.journal.reason_label(reason));g.request_autosave()
 func damaged(amount: float) -> void:
 	if not supported() or amount<=0:return
 	for row: RefCounted in g.state.rows("blockade_state"):

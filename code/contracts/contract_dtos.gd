@@ -1375,7 +1375,121 @@ class ActivityTotalStateDto extends RefCounted:
 
 
 
+class CrewMemberStateDto extends RefCounted:
+	var profile_id: String = ""
+	var phase: String = ""
+	var has_station_id: bool = false
+	var station_id: String = ""
+	var generation: int = 0
+	var experience: int = 0
+	var contribution_total: float = 0.0
+	var contribution_remainder: float = 0.0
+	var loyalty: int = 0
+	var salary_elapsed_s: float = 0.0
+	var salary_period_credit: int = 0
+	var arrears_credit: int = 0
+	var unpaid_periods: int = 0
+	var recovery_remaining_s: float = 0.0
+	var revision: int = 0
+	var hire_paid_credit: int = 0
+	var salary_paid_credit: int = 0
+	var treatment_paid_credit: int = 0
+	var rest_paid_credit: int = 0
+	var salary_periods: int = 0
+
+class CrewAssignmentStateDto extends RefCounted:
+	var profile_id: String = ""
+	var ship_instance_id: String = ""
+	var profession_id: String = ""
+	var assigned_tick: int = 0
+
+class FleetDeploymentStateDto extends RefCounted:
+	var ship_instance_id: String = ""
+	var generation: int = 0
+	var phase: String = ""
+	var has_npc_instance_id: bool = false
+	var npc_instance_id: String = ""
+	var origin_station_id: String = ""
+	var has_return_station_id: bool = false
+	var return_station_id: String = ""
+	var sector_id: String = ""
+	var site_id: String = ""
+	var order_kind: String = ""
+	var has_focus_target_id: bool = false
+	var focus_target_id: String = ""
+	var order_revision: int = 0
+	var goal_x: float = 0.0
+	var goal_y: float = 0.0
+	var goal_z: float = 0.0
+	var retreat_origin_x: float = 0.0
+	var retreat_origin_y: float = 0.0
+	var retreat_origin_z: float = 0.0
+	var retreat_remaining_s: float = 0.0
+	var return_remaining_s: float = 0.0
+	var deploy_paid_credit: int = 0
+	var created_tick: int = 0
+	var finished_tick: int = 0
+	var end_reason: String = ""
+
+class FleetReceiptStateDto extends RefCounted:
+	var source_token: String = ""
+	var ship_instance_id: String = ""
+	var generation: int = 0
+	var event_kind: String = ""
+	var paid_credit: int = 0
+	var event_tick: int = 0
+
+class CrewReceiptStateDto extends RefCounted:
+	var source_token: String = ""
+	var profile_id: String = ""
+	var event_kind: String = ""
+	var paid_credit: int = 0
+	var event_tick: int = 0
+	var revision: int = 0
+
+class FleetTotalStateDto extends RefCounted:
+	var singleton: int = 0
+	var deployments: int = 0
+	var returns: int = 0
+	var losses: int = 0
+	var paid_credit: int = 0
+
+class AuxiliaryBayStateDto extends RefCounted:
+	var item_instance_id: String = ""
+	var stock_units: int = 0
+	var deployed_units: int = 0
+	var lost_units: int = 0
+	var replenished_units: int = 0
+	var paid_credit_total: int = 0
+	var material_units_total: int = 0
+	var command_kind: String = ""
+	var revision: int = 0
+	var sorties: int = 0
+	var repaired_hp: float = 0.0
+
+class AuxiliaryIntelStateDto extends RefCounted:
+	var owner_ship_id: String = ""
+	var module_id: String = ""
+	var target_kind: String = ""
+	var target_id: String = ""
+	var sector_id: String = ""
+	var site_id: String = ""
+	var target_generation: int = 0
+	var observed_tick: int = 0
+	var pos_x: float = 0.0
+	var pos_y: float = 0.0
+	var pos_z: float = 0.0
+	var remaining_units: int = 0
+
 class WorldSnapshotDto extends RefCounted:
+	var auxiliary_intel_state_rows: Array[AuxiliaryIntelStateDto] = []
+	var auxiliary_bay_state_rows: Array[AuxiliaryBayStateDto] = []
+	var fleet_total_state_rows: Array[FleetTotalStateDto] = []
+	var crew_receipt_state_rows: Array[CrewReceiptStateDto] = []
+	var fleet_receipt_state_rows: Array[FleetReceiptStateDto] = []
+	var fleet_deployment_state_rows: Array[FleetDeploymentStateDto] = []
+	var crew_assignment_state_rows: Array[CrewAssignmentStateDto] = []
+	var crew_member_state_rows: Array[CrewMemberStateDto] = []
 	var activity_total_state_rows: Array[ActivityTotalStateDto] = []
 	var telemetry_timing_state_rows: Array[TelemetryTimingStateDto] = []
 	var telemetry_menu_state_rows: Array[TelemetryMenuStateDto] = []
