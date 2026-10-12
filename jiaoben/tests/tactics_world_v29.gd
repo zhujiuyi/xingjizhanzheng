@@ -3,6 +3,26 @@ extends "civilization_world_v24.gd"
 var role_actor: String = ""
 var victim_actor: String = ""
 var bay_id: String = ""
+var trace_page: String = ""
+
+func _input(event: InputEvent) -> void:
+	if OS.get_environment("XJ_TACTICS_UI_TRACE")!="1":return
+	if event is InputEventKey and event.pressed and event.keycode in [KEY_J,KEY_M,KEY_ESCAPE]:
+		print("TACTICS_UI_TRACE navigation_key=",event.keycode)
+
+func _process(_delta: float) -> void:
+	if OS.get_environment("XJ_TACTICS_UI_TRACE")!="1" or not is_instance_valid(host) or host.ui==null:return
+	if host.ui.page!=trace_page:
+		print("TACTICS_UI_TRACE page ",trace_page," -> ",host.ui.page," tick=",host.state.snapshot.meta.simulation_tick if host.state!=null else -1)
+		trace_page=host.ui.page
+	if not host.ui.mission_guide_button.has_meta("tactics_trace"):
+		host.ui.mission_guide_button.set_meta("tactics_trace",true)
+		host.ui.mission_guide_button.pressed.connect(func():print("TACTICS_UI_TRACE hud_guide_pressed"))
+
+func trace_controls(label: String) -> void:
+	if OS.get_environment("XJ_TACTICS_UI_TRACE")!="1":return
+	var button: Button=host.ui.body.find_child("DroneOrder_recall",true,false)
+	print("TACTICS_UI_TRACE ",label," page=",host.ui.page," recall=",button!=null," visible=",button.is_visible_in_tree() if button!=null else false," disabled=",button.disabled if button!=null else false," busy=",host.busy)
 func _ready() -> void:
 	get_tree().set_meta("xj_tactics_world_v29_diagnostic",true)
 	get_tree().create_timer(540.0).timeout.connect(func():check(false,"native tactics watchdog");finish())
@@ -213,10 +233,12 @@ func loss_and_replenishment() -> void:
 	var enemy: CharacterBody3D = host.world.npcs[role_actor]
 	var bay: RefCounted = host.gameplay.drone_control.bay(bay_id)
 	var stock: int = bay.stock_units
+	trace_controls("before physical loss")
 	# Qualified clear firing origin next to the drone isolates the real ray/collider route.
 	var origin: Vector3 = node.global_position+Vector3(0,20,0)
 	host.world.projectiles.fire(role_actor,enemy.get_rid(),origin,origin.direction_to(node.global_position),0.0,40.0,Vector3(1000,0,0),{"family_id":"thermal","fire_mode":"ray"})
 	check(not host.gameplay.drone_control.live.has(id) and bay.stock_units==stock-1 and bay.lost_units>0,"real hostile physics ray creates persistent player-drone loss")
+	trace_controls("after physical loss")
 	await click(host.ui.body.find_child("DroneOrder_recall",true,false),"recover surviving units after physical loss")
 	await run_for(3.0)
 	# Declared boundary pose, then real simulation must detect communication loss.

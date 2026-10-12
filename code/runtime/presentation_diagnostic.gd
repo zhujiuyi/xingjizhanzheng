@@ -735,6 +735,12 @@ static func _mineral_checks(host: Node, evidence: Dictionary, output_dir: String
 	var info := XJResourceStatus.inspect(host.state, host.store.catalog, node_id)
 	var context := XJInteractionContext.inspect(host.world, host.state, host.store.catalog, host.gameplay, node_id)
 	_check(evidence, info.available and info.remaining_units == int(definition.capacity_units) and context.ready and not host.ui.interaction_button.disabled, "packed resource_state supplies actual full mineral pool and usable interaction")
+	if host.gameplay.situational.supported():
+		# This paused fixture moves instantaneously. Record the legitimate near
+		# measurement before testing historical intelligence outside sensor range.
+		host.gameplay.situational.observe()
+		var reading: Dictionary=host.gameplay.situational.resource_reading(node_id)
+		_check(evidence,reading.known and reading.live and host.state.find("resource_intel_state","node_id",node_id)!=null,"packed near mineral fixture records an actual local measurement")
 	host.world.flight.global_position += Vector3.UP * maxf(range_m * 4.0, float(host.store.catalog.rule("target_marker_detection_range_m")) * 2.0)
 	host.world.flight.write_back()
 	host.world.flight.get_global_transform_interpolated()
@@ -747,7 +753,9 @@ static func _mineral_checks(host: Node, evidence: Dictionary, output_dir: String
 	host.ui.show_page("map")
 	await host.get_tree().process_frame
 	var chart: Node = host.ui.body.find_child("StarChart", true, false)
-	_check(evidence, chart != null and chart.resource_information.text.contains(str(definition.capacity_units)) and host.ui.map_resource_readouts.any(func(row: Dictionary): return row.node_id == node_id and row.label.text.contains(str(definition.capacity_units))), "packed star chart and sector cards show real mineral reserve")
+	var observed_reserve: bool=chart!=null and chart.resource_information.text.contains(str(definition.capacity_units)) and host.ui.map_resource_readouts.any(func(row: Dictionary):return row.node_id==node_id and row.label.text.contains(str(definition.capacity_units)))
+	if host.gameplay.situational.supported():observed_reserve=observed_reserve and chart.resource_information.text.contains("上次") and not host.gameplay.situational.resource_reading(node_id).live
+	_check(evidence,observed_reserve,"packed star chart and sector cards show the last measured reserve with correct remote provenance")
 	host.ui._back()
 	host.world.flight.global_position = position
 	host.world.flight.velocity = Vector3.ZERO

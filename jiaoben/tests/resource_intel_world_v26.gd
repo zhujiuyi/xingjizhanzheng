@@ -79,6 +79,7 @@ func run() -> void:
 		if host.local_navigation.warp_active() and not host.gameplay.situational.spatial_active:observation_boundary_seen=true
 	check(not host.local_navigation.active() and host.ui.target_id == info.waypoint_id, "real navigation reaches the selected transit gate")
 	host.get_viewport().warp_mouse(root.get_visible_rect().get_center())
+	print("SOURCE_INPUT_CONTEXT ",JSON.stringify({"focus":root.has_focus(),"busy":host.busy,"page":host.ui.page,"keyboard_blocked":host.ui.keyboard_blocked(),"travel":host.travel.active(),"warp":host.local_navigation.warp_active()}))
 	await key(KEY_F)
 	deadline = Time.get_ticks_msec() + 50000
 	var location: Dictionary = host.store.catalog.one("resource_node_locations", "node_id", node.node_id)

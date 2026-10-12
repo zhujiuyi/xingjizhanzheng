@@ -217,3 +217,5 @@ v0.12.0最终source仓储813headless、827Metal/CoreAudio/6图，6相关1498+旧
 
 
 v0.13.0实际交付`0.13.0-afdc5e1d-20261005-002457`来自干净已推送源`afdc5e1d`：实际Mac独立6+110+462+605+827+5,351项、49图通过，严格16份构建日志诊断0；资源248/8包、签名及ZIP/PNG/源码/日志摘要复核通过。最新独立汇总为`logs/row-v17-delivery-final.json`，完整源回归见44，实际包身份、链接及Windows原生边界见26。无SQL/数值或个人档案变更。
+
+诊断独立变更时，`compare_pck_components_v36.py --before <旧候选EXE> --after <新候选EXE>`独占审计锁，以各自实际EXE运行`tests/pck_manifest_v36.gd`，只读取包内资源，生成UUID清单；仅允许表现诊断及其编译/重定向文件不同，其他全部虚拟文件和EXE/DLL必须一致。该证明不替代变化组件的实际检查，不允许以源码摘要代替包内字节。
