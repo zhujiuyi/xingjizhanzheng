@@ -15,8 +15,12 @@ def sha(path):
 def inventory(executable,directory,label):
  output=directory/(label+'.json');log=directory/(label+'.log');engine=directory/(label+'-engine.log')
  env=os.environ.copy();env.pop('XJ_TEST_DATABASE',None)
- args=[str(executable),'--headless','--audio-driver','WASAPI','--log-file',str(engine),'--script',str(ROOT/'jiaoben/tests/pck_manifest_v36.gd'),'--','--xj-pck-manifest-out='+output.as_posix()]
- r=subprocess.run(args,cwd=executable.parent,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=120)
+ scope=ROOT/'jiaoben/tmp/situational-v36'/str(uuid.uuid4());scope.mkdir(parents=True)
+ env.update(XJ_SITUATIONAL_V36_SCRIPT=(ROOT/'jiaoben/tests/situational_v36.gd').as_posix(),XJ_SITUATIONAL_V36_DIRECTORY=scope.as_posix(),XJ_PCK_MANIFEST_ONLY='1')
+ args=[str(executable),'--headless','--audio-driver','WASAPI','--log-file',str(engine),'--','--xj-verify-situational-v36','--xj-pck-manifest-out='+output.as_posix()]
+ try:r=subprocess.run(args,cwd=executable.parent,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=120)
+ except subprocess.TimeoutExpired as error:
+  log.write_bytes(error.output or b'');raise
  log.write_bytes(r.stdout)
  text=r.stdout.decode('utf-8')+'\n'+engine.read_text('utf-8')
  assert r.returncode==0 and 'PCK_MANIFEST_V36_RESULT PASS' in text,log

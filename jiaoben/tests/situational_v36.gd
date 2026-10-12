@@ -4,6 +4,10 @@ extends "hire_v35.gd"
 var cue_signals: int = 0
 func _ready() -> void:
 	get_tree().set_meta("xj_situational_v36_diagnostic",true)
+	if OS.get_environment("XJ_PCK_MANIFEST_ONLY")=="1":
+		var probe: Node=(load(get_script().resource_path.get_base_dir().path_join("pck_manifest_v36.gd")) as Script).new()
+		get_tree().root.add_child(probe)
+		return
 	get_tree().create_timer(420.0).timeout.connect(func():print("SITUATIONAL_V36_RESULT FAIL watchdog");get_tree().quit(2))
 	_run.call_deferred()
 func _run() -> void:
