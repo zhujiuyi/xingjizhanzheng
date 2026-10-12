@@ -1,6 +1,9 @@
 extends "exploration_v27.gd"
 ## Explicit funds/hull/equipment fixtures; actual fits, payment cycles and all 56 groups.
 func _ready() -> void:
+	if OS.get_environment("XJ_FLEET_UPGRADE_FIXTURE")=="1":
+		var fixture: Node=(load(get_script().resource_path.get_base_dir().path_join("fleet_upgrade_fixture_v42.gd")) as Script).new()
+		get_tree().root.add_child(fixture);return
 	if OS.get_environment("XJ_SCENARIOS_UPGRADE_FIXTURE")=="1":
 		var fixture: Node=(load(get_script().resource_path.get_base_dir().path_join("scenarios_upgrade_fixture_v39.gd")) as Script).new()
 		get_tree().root.add_child(fixture);return

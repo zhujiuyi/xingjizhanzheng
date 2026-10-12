@@ -61,7 +61,7 @@ func build() -> void:
 		var hulls: PackedStringArray=[]
 		for allowed: Dictionary in u.catalog.rows("trial_hull_defs"):
 			if allowed.trial_id==selected:hulls.append(u._ship_name(allowed.ship_id))
-		u._text_to(self,"参考预算 %d / %d 信用点 · 服务费 %d" % [service().budget(),spec.budget_credit,spec.fee_credit],15).tooltip_text="包含舰体、已装设备、作战耗材、无人机储备及已雇佣僚舰的舰体参考造价；雇佣关系变化也会改变本次绑定。"
+		u._text_to(self,"参考预算 %d / %d 信用点 · 服务费 %d" % [service().budget(),spec.budget_credit,spec.fee_credit],15).tooltip_text="计入主舰与自有僚舰的舰体、设备、耗材、机库存量和已指派船员，以及雇佣舰参考造价。受领后绑定编队、岗位和设备；结算保留作战期间最高合法预算。"
 		u._text_to(self,"舰型："+"、".join(hulls),14)
 		if spec.objective_kind=="precision":u._text_to(self,"计分距离 %.1f–%.1f km · 有效伤害 %.0f HP" % [spec.min_range_m/1000.0,spec.max_range_m/1000.0,spec.target_hp],14)
 		elif spec.objective_kind=="support":u._text_to(self,"有效远修 %.0f HP · 保护友舰抵达出口" % spec.target_hp,14)

@@ -8,6 +8,8 @@ S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增S
 
 向实际EXE执行`owned-fleet*`或`auxiliary-world`前，工具只读检查文件版本并拒绝低于0.31.0的客户端。已验证正式0.30.0.0在启动前被拒绝。旧包升级夹具须选择其已经存在的固定诊断入口，不能把新版参数交给旧EXE尝试。
 
+编队关联批次：`prepare_fleet_upgrade_v42.py --legacy-executable <已核v0.30正式EXE>`只用旧包原有fitting入口产出关闭的format24夹具；不传通用`--script`，不读取用户库。将输出的database及JSON路径分别设为`XJ_FLEET_LEGACY_DATABASE`、`XJ_FLEET_LEGACY_PROVENANCE`，运行`verify_combat_v18.py --only fleet-integration fleet-upgrade`。源码45/23项、原场景86项与辅助机原生85项合计239项/6图通过，汇总`logs/v42-integration-checkpoint.json`。升级严格比较原99组与RNG，只允许四种新增辅助产品的商店行；工程报价桩与贡献/工资边界不当作物理或自然流程。新两个入口也受启动前客户端版本检查保护。下一批范围见66。
+
 ## 临时产物保留与清理
 
 每个联合开发阶段验收后清理重复候选包、过期UUID运行库/迁移副本、旧截图、下载缓存、一次性修改脚本及Python缓存。`tests/`、`art/`、`probes/`和构建/迁移生成器是维护中的源码，不能因为用于开发就作为垃圾删除。删除前核对Git忽略状态、实际引用和运行锁；只能操作已确认的工作区临时路径。

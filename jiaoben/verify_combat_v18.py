@@ -11,6 +11,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "fleet-integration": ("fleet_integration_v42.gd", "XJ_FLEET_INTEGRATION_V42", "fleet-integration-v42", "FLEET_INTEGRATION_V42", "--xj-verify-fleet-integration-v42"),
+    "fleet-upgrade": ("fleet_upgrade_v42.gd", "XJ_FLEET_UPGRADE_V42", "fleet-upgrade-v42", "FLEET_UPGRADE_V42", "--xj-verify-fleet-upgrade-v42"),
     "auxiliary-world": ("auxiliary_world_v41.gd", "XJ_AUXILIARY_WORLD_V41", "auxiliary-world-v41", "AUXILIARY_WORLD_V41", "--xj-verify-auxiliary-world-v41"),
     "owned-fleet": ("owned_fleet_v40.gd", "XJ_OWNED_FLEET_V40", "owned-fleet-v40", "OWNED_FLEET_V40", "--xj-verify-owned-fleet-v40"),
     "owned-fleet-travel": ("owned_fleet_travel_v40.gd", "XJ_OWNED_FLEET_TRAVEL_V40", "owned-fleet-travel-v40", "OWNED_FLEET_TRAVEL_V40", "--xj-verify-owned-fleet-travel-v40"),
@@ -79,7 +81,7 @@ def sha(path):
 
 def require_supported_diagnostics(binary, names):
     """Read PE metadata before launching flags absent from older clients."""
-    if not set(names).intersection({"owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world"}):
+    if not set(names).intersection({"owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade"}):
         return
     env = os.environ.copy()
     env["XJ_DIAGNOSTIC_VERSION_FILE"] = str(binary)
@@ -219,6 +221,8 @@ def run_suite():
         assert all(path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n" for path in captures)
         if name == "owned-fleet":
             assert record["summary"]["checks"] >= 34 and not captures
+        if name in ("fleet-integration", "fleet-upgrade"):
+            assert record["summary"]["checks"] >= (45 if name == "fleet-integration" else 20) and record["summary"]["groups"] == 108 and not captures
         if name == "owned-fleet-travel":
             assert record["summary"]["checks"] >= 100 and record["summary"]["groups"] == 108 and not captures
         if name == "owned-fleet-world":
@@ -231,7 +235,8 @@ def run_suite():
             assert summary["intercepted"] and summary["frozen_intel"] and summary["restored"]
             assert summary["comm_returned"] and summary["blocked_sensing"]
         if name in ("measurements","scenarios","scenarios-upgrade"):
-            assert record["summary"]["checks"] >= {"measurements":30,"scenarios":80,"scenarios-upgrade":20}[name] and record["summary"]["groups"] == 99 and not captures
+            expected_groups = 108 if name == "scenarios" and record["summary"].get("fleet_rules") else 99
+            assert record["summary"]["checks"] >= {"measurements":30,"scenarios":80,"scenarios-upgrade":20}[name] and record["summary"]["groups"] == expected_groups and not captures
         if name == "scenarios-world":
             assert record["summary"]["checks"] >= 100 and len(captures) == 8 and record["summary"]["precision_hp"] >= 180 and record["summary"]["escort_m"] > 5000 and record["summary"]["repair_hp"] >= 120
         if name == "blockades-world":

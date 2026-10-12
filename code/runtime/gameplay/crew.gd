@@ -61,6 +61,11 @@ func reason(id: String,action: String,ship_id: String="") -> String:
 	if row==null:return "船员不存在"
 	if not local(row):return "需在船员或指派舰船所在站办理"
 	if not g.unlocked(str(balance.required_unlock_id)):return "完成航路教学后开放船员招募"
+	if action in ["assign","unassign"]:
+		var prior: RefCounted=assignment(id)
+		var blocked: String=g.scenarios.party_change_reason(ship_id) if not ship_id.is_empty() else ""
+		if blocked.is_empty() and prior!=null:blocked=g.scenarios.party_change_reason(prior.ship_instance_id)
+		if not blocked.is_empty():return blocked
 	if action=="hire":
 		if row.phase!="available":return "该船员已经受雇"
 		if g.state.rows("crew_member_state").filter(func(c: RefCounted):return c.phase!="available").size()>=int(balance.max_recruited_crew):return "船员名额已满"

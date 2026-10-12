@@ -2,6 +2,7 @@ extends RefCounted
 ## Limited-budget objectives and real corridor cargo share physical NPC authority.
 const D=preload("res://contracts/contract_dtos.gd")
 const T=preload("res://contracts/contract_types.gd")
+const Loadout=preload("res://runtime/data/loadout_rules.gd")
 var g: RefCounted
 var actor_definitions: Dictionary={}
 var spatial_active: bool=true
@@ -28,36 +29,23 @@ func _at(kind: String,id: String,anchor_id: String) -> bool:
 	return spatial_active and g.state.ship().status==T.ShipStatus.FLYING and g.same_anchor_site(g.state.ship(),anchor) and g.anchor_distance(g.state.ship(),anchor)<=float(definition(kind,id).interaction_radius_m)
 func _same_site(kind: String,id: String) -> bool:return g.same_anchor_site(g.state.ship(),g.definition("anchor_defs","anchor_id",definition(kind,id).entry_anchor_id))
 func budget(ship: RefCounted=null) -> int:
-	var hull: RefCounted=g.state.ship() if ship==null else ship
-	var amount: int=int(g.definition("ship_defs","ship_id",hull.ship_def_id).base_ask_credit)
-	for gear: RefCounted in g.equipped(hull):amount+=int(g.definition("item_defs","item_id",gear.module_def_id).base_ask_credit)
-	for gear: RefCounted in g.equipped(hull):
-		var bay: RefCounted=g.state.find("drone_bay_state","item_instance_id",gear.item_instance_id)
-		var rule: Dictionary=g.definition("drone_management_defs","module_id",gear.module_def_id)
-		if bay!=null and not rule.is_empty():amount+=(bay.stock_units+bay.deployed_units)*(int(rule.credit_per_unit)+int(rule.material_per_unit)*int(g.definition("item_defs","item_id",rule.material_id).base_ask_credit))
-	var supplies: Dictionary={}
-	for rule: Dictionary in g.rows("weapon_defs"):
-		if rule.ammo_item_id!=null:supplies[str(rule.ammo_item_id)]=true
-	for rule: Dictionary in g.rows("repair_defs"):
-		if rule.consumable_item_id!=null:supplies[str(rule.consumable_item_id)]=true
-	for item: Dictionary in g.rows("item_defs"):
-		if item.item_type in ["ammo","consumable"]:supplies[item.item_id]=true
-	for container: RefCounted in g.state.rows("container_state"):
-		if not container.has_ship_instance_id or container.ship_instance_id!=hull.ship_instance_id or container.kind==T.ContainerKind.SLOT:continue
-		for stack: RefCounted in g.state.rows("inventory_stack_state"):
-			if stack.container_id==container.container_id and supplies.has(stack.item_def_id):amount+=stack.quantity*int(g.definition("item_defs","item_id",stack.item_def_id).base_ask_credit)
-		for item: RefCounted in g.state.rows("item_instance_state"):
-			if item.container_id==container.container_id and supplies.has(item.item_def_id):amount+=int(g.definition("item_defs","item_id",item.item_def_id).base_ask_credit)
-	var hired: RefCounted=g.hired.active()
-	if hired!=null:amount+=int(g.definition("ship_defs","ship_id",g.hired.profile(hired.profile_id).hull_id).base_ask_credit)
-	return amount
+	return Loadout.budget(g.state,g.catalog,ship)
 func fingerprint(ship: RefCounted=null) -> String:
-	var hull: RefCounted=g.state.ship() if ship==null else ship
-	var pieces: Array[String]=[hull.ship_def_id]
-	for gear: RefCounted in g.equipped(hull):pieces.append(gear.slot_container_id+":"+gear.item_instance_id+":"+gear.module_def_id)
-	var hired: RefCounted=g.hired.active()
-	if hired!=null:pieces.append("hired:"+hired.contract_id+":"+hired.profile_id)
-	pieces.sort();return "|".join(pieces).sha256_text()
+	return Loadout.fingerprint(g.state,g.catalog,ship)
+func party_change_reason(ship_id: String="",adding: bool=false) -> String:
+	var trial: Dictionary=pending()
+	if trial.is_empty() or trial.kind!="trial":return ""
+	if adding or ship_id.is_empty() or trial.row.ship_instance_id==ship_id or g.owned_fleet.friendly(ship_id):return "挑战已绑定编队与岗位，完成或撤回后再调整"
+	return ""
+func refresh_bound_trials() -> void:
+	if not supported():return
+	for row: RefCounted in g.state.rows("trial_state"):
+		if row.phase not in ["accepted","active","ready"]:continue
+		var hull: RefCounted=g.state.find("ship_state","ship_instance_id",row.ship_instance_id)
+		if hull==null or fingerprint(hull)!=row.loadout_signature:_trial_finish(row.trial_id,"failed","loadout_changed");continue
+		var actual: int=budget(hull);var limit: int=int(definition("trial",row.trial_id).budget_credit)
+		if actual<=limit:row.reference_cost=maxi(row.reference_cost,actual)
+		elif row.phase=="active":_trial_finish(row.trial_id,"failed","loadout_changed")
 func _trial_fit(id: String,bound: bool=false) -> String:
 	var spec: Dictionary=definition("trial",id);var row: RefCounted=instance("trial",id);var ship: RefCounted=g.state.ship()
 	if ship.policy_id!="normal_owned":return "挑战需要普通自有舰船"
@@ -100,6 +88,7 @@ func trial_action(id: String,action: String,expected: String) -> bool:
 			g.state.player().credit-=int(spec.fee_credit);row.paid_credit_total+=int(spec.fee_credit)
 			g.journal.begin("trial",id+":"+str(row.generation))
 		"start":
+			row.reference_cost=maxi(row.reference_cost,budget())
 			row.phase="active";row.remaining_s=float(spec.duration_s)
 			_spawn("trial",id,row.generation)
 		"withdraw":_trial_finish(id,"withdrawn","manual")
@@ -286,6 +275,7 @@ func destroyed(npc_id: String) -> void:
 		if node!=null:node.completed=true;changed.emit("封锁中继已拆除")
 func tick(delta: float) -> void:
 	if not supported():return
+	refresh_bound_trials()
 	for row: RefCounted in g.state.rows("trial_state"):
 		row.cooldown_remaining_s=maxf(0,row.cooldown_remaining_s-delta)
 		if row.phase!="active":continue

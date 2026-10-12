@@ -285,6 +285,8 @@ func move_item(item_id: String, destination: String) -> bool:
 
 func fit(item_id: String, _quantity_index: int, target_slot: String) -> bool:
 	if not g.allowed_service("fitting"): return false
+	var bound: String=g.scenarios.party_change_reason(g.state.ship().ship_instance_id)
+	if not bound.is_empty():return g.fail(bound)
 	var item: D.ItemInstanceStateDto = g.state.find("item_instance_state", "item_instance_id", item_id)
 	if item == null or not accessible(item.container_id) or g.state.find("equipment_state","item_instance_id",item_id) != null: return g.fail("模块不可安装")
 	if item.policy_id == "normal_owned" and g.state.ship().policy_id != "normal_owned": return g.fail("保障或借船仅使用保护设备；普通自有设备请安装到自有舰船")
@@ -329,6 +331,8 @@ func fit(item_id: String, _quantity_index: int, target_slot: String) -> bool:
 
 func unfit(item_id: String) -> bool:
 	if not g.allowed_service("fitting"): return false
+	var bound: String=g.scenarios.party_change_reason(g.state.ship().ship_instance_id)
+	if not bound.is_empty():return g.fail(bound)
 	var e: D.EquipmentStateDto = g.state.find("equipment_state","item_instance_id",item_id)
 	if e == null or not g.equipped(g.state.ship()).has(e): return g.fail("模块未安装到当前舰船")
 	g.ship_roles.stop_support(item_id)

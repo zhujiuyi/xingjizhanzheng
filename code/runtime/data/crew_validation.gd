@@ -1,10 +1,11 @@
 extends RefCounted
 const T=preload("res://contracts/contract_types.gd")
+const TABLES: Array[String]=["crew_member_state","crew_assignment_state","crew_receipt_state","crew_support_quote_state"]
 var last_error: String=""
 func fail(message: String) -> bool:last_error=message;return false
 func validate(state: XJRuntimeState,catalog: XJCatalog) -> bool:
 	if not catalog.table_names.has("crew_profile_defs"):
-		for table: String in ["crew_member_state","crew_assignment_state","crew_receipt_state","crew_support_quote_state"]:
+		for table: String in TABLES:
 			if not state.rows(table).is_empty():return fail("Crew rows under legacy rules")
 		return true
 	var balance: Dictionary=catalog.rows("fleet_balance_defs")[0]

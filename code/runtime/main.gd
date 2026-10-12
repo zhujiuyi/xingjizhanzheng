@@ -53,6 +53,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-fleet-integration-v42","file":"fleet_integration_v42.gd","prefix":"fleet-integration-v42","env":"XJ_FLEET_INTEGRATION_V42","meta":"xj_fleet_integration_v42_diagnostic"},
+		{"flag":"--xj-verify-fleet-upgrade-v42","file":"fleet_upgrade_v42.gd","prefix":"fleet-upgrade-v42","env":"XJ_FLEET_UPGRADE_V42","meta":"xj_fleet_upgrade_v42_diagnostic"},
 		{"flag":"--xj-verify-auxiliary-world-v41","file":"auxiliary_world_v41.gd","prefix":"auxiliary-world-v41","env":"XJ_AUXILIARY_WORLD_V41","meta":"xj_auxiliary_world_v41_diagnostic"},
 		{"flag":"--xj-verify-owned-fleet-v40","file":"owned_fleet_v40.gd","prefix":"owned-fleet-v40","env":"XJ_OWNED_FLEET_V40","meta":"xj_owned_fleet_v40_diagnostic"},
 		{"flag":"--xj-verify-owned-fleet-travel-v40","file":"owned_fleet_travel_v40.gd","prefix":"owned-fleet-travel-v40","env":"XJ_OWNED_FLEET_TRAVEL_V40","meta":"xj_owned_fleet_travel_v40_diagnostic"},

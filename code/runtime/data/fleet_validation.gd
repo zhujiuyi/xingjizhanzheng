@@ -68,6 +68,10 @@ func validate(state: XJRuntimeState,catalog: XJCatalog) -> bool:
 	if active>int(balance.max_owned_companions) or total.deployments<generations or total.paid_credit<paid:return fail("Owned fleet capacity/totals mismatch")
 	for npc: RefCounted in state.rows("npc_state"):
 		if not catalog.one("fleet_hull_defs","spawn_id",npc.spawn_id).is_empty() and not actor_binding(state,catalog,npc.npc_instance_id):return fail("Unbound owned actor")
+	for trial: RefCounted in state.rows("trial_state"):
+		if trial.phase not in ["accepted","active","ready"]:continue
+		var hull: RefCounted=state.find("ship_state","ship_instance_id",trial.ship_instance_id)
+		if hull==null or trial.loadout_signature!=preload("res://runtime/data/loadout_rules.gd").fingerprint(state,catalog,hull):return fail("Challenge party or crew binding mismatch")
 	var bays: Dictionary={}
 	for row: RefCounted in state.rows("auxiliary_bay_state"):
 		var item: RefCounted=state.find("item_instance_state","item_instance_id",row.item_instance_id)

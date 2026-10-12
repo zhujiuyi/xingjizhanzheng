@@ -1,5 +1,6 @@
 extends "campaign_v37.gd"
 ## Explicit wealth, gear, arrivals and hit vectors; native suite owns physical proof.
+var v42_fleet_rules: bool=false
 func _ready() -> void:
 	get_tree().set_meta("xj_scenarios_v39_diagnostic",true)
 	get_tree().create_timer(600).timeout.connect(func():print("SCENARIOS_V39_RESULT FAIL watchdog");get_tree().quit(2))
@@ -14,10 +15,11 @@ func _run() -> void:
 	if not check(directory.is_absolute_path() and directory.contains("/jiaoben/tmp/scenarios-v39/") and not FileAccess.file_exists(directory.path_join("progress.db")),"fresh isolated scenario world"):get_tree().quit(2);return
 	store=Store.new(directory.path_join("progress.db"))
 	if not check(store.open(),"format24 and reviewed adapter open "+store.last_error):await finish();return
+	v42_fleet_rules=store.catalog.table_names.has("fleet_balance_defs")
 	state=store.new_world("战术与行为记录",3901)
-	if not check(state!=null,"new99-group world seals "+store.last_error):await finish();return
+	if not check(state!=null,"new active-rules world seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==99 and state.rows("trial_state").size()==3 and state.rows("blockade_state").size()==3 and state.rows("blockade_node_state").size()==12,"all tactical definitions have unique initial state")
+	check(XJRuntimeState.TABLES.size()==(108 if v42_fleet_rules else 99) and state.rows("trial_state").size()==3 and state.rows("blockade_state").size()==3 and state.rows("blockade_node_state").size()==12 and (not v42_fleet_rules or (state.rows("crew_member_state").size()==8 and state.rows("fleet_total_state").size()==1)),"all tactical definitions and current ABI have unique initial state")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)
 	state.player().credit=1000000;g.telemetry.wallet()
 	hull("frigate_kestrel");fit("module_kinetic_needle_ii","weapon:0");at_station("station_anchor_port")
@@ -137,6 +139,6 @@ func finish() -> void:
 	if g!=null:g.dispose();g=null
 	if store!=null:store.close();store=null
 	state=null
-	var summary: Dictionary={"result":"PASS" if failures.is_empty() else "FAIL","checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"groups":XJRuntimeState.TABLES.size()}
+	var summary: Dictionary={"result":"PASS" if failures.is_empty() else "FAIL","checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"groups":XJRuntimeState.TABLES.size(),"fleet_rules":v42_fleet_rules}
 	print("SCENARIOS_V39_FINAL_JSON ",JSON.stringify(summary));print("SCENARIOS_V39_RESULT ",summary.result," checks=",checks," failures=",failures.size())
 	await get_tree().process_frame;get_tree().quit(0 if failures.is_empty() else 1)

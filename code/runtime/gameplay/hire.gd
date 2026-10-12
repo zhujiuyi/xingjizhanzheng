@@ -40,6 +40,7 @@ func connected(row: RefCounted=null) -> bool:
 	return npc!=null and npc.alive and g.same_entity_site("ship",g.state.ship(),"npc",npc) and g.position(npc).distance_to(g.position(g.state.ship()))<=float(balance.communication_m)
 func hire_reason(id: String) -> String:
 	if not supported():return "当前世界尚未升级雇佣规则"
+	if g.scenarios!=null and not g.scenarios.party_change_reason("",true).is_empty():return g.scenarios.party_change_reason("",true)
 	var spec: Dictionary=profile(id)
 	if spec.is_empty():return "未知雇佣配置"
 	if active()!=null:return "已有僚舰合同；归港或结算后再雇佣"
@@ -49,6 +50,7 @@ func hire_reason(id: String) -> String:
 	if g.state.player().credit<int(spec.hire_fee_credit)+int(spec.deposit_credit):return "信用点不足 · 需雇佣费与押金"
 	return ""
 func order_reason(order: String,focus_id: String="") -> String:
+	if order in ["dismiss","retreat"] and not g.scenarios.party_change_reason().is_empty():return g.scenarios.party_change_reason()
 	var row: RefCounted=active()
 	if row==null:return "没有进行中的僚舰合同"
 	if row.phase!="deployed":return "僚舰正在脱离或返航"

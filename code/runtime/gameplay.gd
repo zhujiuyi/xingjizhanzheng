@@ -370,6 +370,7 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 		state.ship().state_version += 1
 		missions.refresh()
 		if action in ["accept_mission", "abandon_mission", "deliver_mission", "claim_loan", "handoff_loan", "request_rescue"]: _sync_spawns()
+		scenarios.refresh_bound_trials()
 		if action != "open_salvage": status_text = "操作完成：" + action
 	else: status_text = last_error
 	telemetry.wallet()
@@ -679,6 +680,7 @@ func finish_step(delta: float) -> void:
 	scenarios.spatial_active=situational.spatial_active;scenarios.tick(delta)
 	crew.tick(delta)
 	owned_fleet.spatial_active=situational.spatial_active;owned_fleet.tick(delta)
+	scenarios.refresh_bound_trials()
 
 func _tick_repairs(owner_ship: D.ShipStateDto=null) -> void:
 	var repair_ship: D.ShipStateDto=state.ship() if owner_ship==null else owner_ship

@@ -60,6 +60,7 @@ func restore_departure(poses: Array[Dictionary]) -> void:Party.restore_owned(g.s
 func follow_arrival() -> void:Party.arrive_owned(g.state,g.catalog)
 func deploy_reason(id: String) -> String:
 	if not supported():return "当前世界尚未升级自有舰队规则"
+	if g.scenarios!=null and not g.scenarios.party_change_reason(id,true).is_empty():return g.scenarios.party_change_reason(id,true)
 	if g.station().is_empty() or g.state.ship().status!=T.ShipStatus.DOCKED:return "停靠空间站后部署自有舰"
 	if not g.unlocked(str(balance.required_unlock_id)):return "完成航路教学后开放自有编队"
 	var hull: RefCounted=ship(id);var value: RefCounted=row(id)
@@ -82,6 +83,7 @@ func deploy_reason(id: String) -> String:
 			if task.get("has_"+field)==true and task.get(field)==id and task.phase in ["accepted","active","ready"]:return "该舰正被任务或运输锁定"
 	return ""
 func order_reason(id: String,order: String,focus_id: String="",focus_generation: int=0) -> String:
+	if order in ["retreat","recover"] and not g.scenarios.party_change_reason(id).is_empty():return g.scenarios.party_change_reason(id)
 	var value: RefCounted=row(id);var npc: RefCounted=actor(value)
 	if value==null or value.phase!="deployed" or npc==null:return "该舰尚未部署或正在返航"
 	if not spatial_active:return "等待编队航行转移完成"
