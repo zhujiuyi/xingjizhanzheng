@@ -30,9 +30,9 @@ INSERT INTO scenario_anchors
 INSERT INTO scenario_anchors
  SELECT id||'_exit',id,'signal',0,0,6000,600,180 FROM scenario_places WHERE id LIKE 'blockade_%';
 INSERT INTO scenario_anchors
- SELECT id||'_survey_0',id,'signal',2400,100,-2800,500,100 FROM scenario_places WHERE id LIKE 'blockade_%';
+ SELECT id||'_survey_0',id,'signal',-2800,100,-3600,500,100 FROM scenario_places WHERE id LIKE 'blockade_%';
 INSERT INTO scenario_anchors
- SELECT id||'_survey_1',id,'signal',2800,-100,2200,500,100 FROM scenario_places WHERE id LIKE 'blockade_%';
+ SELECT id||'_survey_1',id,'signal',2800,-100,-3000,500,100 FROM scenario_places WHERE id LIKE 'blockade_%';
 INSERT INTO scenario_anchors
  SELECT id||'_relay_0_anchor',id,'npc_spawn',-800,0,0,100,80 FROM scenario_places WHERE id LIKE 'blockade_%';
 INSERT INTO scenario_anchors
@@ -77,7 +77,7 @@ INSERT INTO anchor_site_defs SELECT spawn||'_patrol',owner||'_site' FROM scenari
 INSERT INTO npc_patrol_points SELECT spawn,0,spawn||'_patrol' FROM scenario_npcs;
 INSERT INTO trial_actor_defs SELECT spawn,owner,role,model,speed,armor_bp FROM scenario_npcs WHERE owner LIKE 'trial_%';
 INSERT INTO blockade_defs
- SELECT id,title,station,id||'_entry',id||'_exit','unlock_open_routes','award_'||id,500,360,12,10000,60,600,2400,2000,80,8,2,45,90,700,4,300,
+ SELECT id,title,station,id||'_entry',id||'_exit','unlock_open_routes','award_'||id,500,360,12,10000,60,600,2400,2000,80,8,2,120,90,700,4,300,
  '调查两个侧路节点获得通行窗口，或拆除两个中继解除局部封锁；按实际送达数量结算。'
  FROM scenario_places WHERE id LIKE 'blockade_%';
 INSERT INTO blockade_node_defs SELECT id,0,'survey',id||'_survey_0' FROM scenario_places WHERE id LIKE 'blockade_%';

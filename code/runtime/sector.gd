@@ -230,6 +230,8 @@ func sync_entities() -> bool:
 			elif gameplay.civilizations.fleet_member(row.npc_instance_id) != null: targets[row.npc_instance_id].title = "中立守军 · Lv.%d" % int(definition.level)
 			var companion: RefCounted=gameplay.hired.contract_for(row.npc_instance_id)
 			if companion!=null:targets[row.npc_instance_id].title="友军 · "+str(gameplay.hired.profile(companion.profile_id).display_name)
+			var scenario_name: String=gameplay.scenarios.actor_label(row.npc_instance_id)
+			if not scenario_name.is_empty():targets[row.npc_instance_id].title=scenario_name
 		var group_id: String = gameplay.get("encounters").group_for_spawn(row.spawn_id)
 		targets[row.npc_instance_id]["group_target_id"] = "group:" + group_id if not group_id.is_empty() else "encounter:" + row.spawn_id if row.has_mission_instance_id else ""
 	for id: String in targets.keys():

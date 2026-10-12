@@ -52,6 +52,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-measurements-v39","file":"measurements_v39.gd","prefix":"measurements-v39","env":"XJ_MEASUREMENTS_V39","meta":"xj_measurements_v39_diagnostic"},
+		{"flag":"--xj-verify-blockades-world-v39","file":"blockades_world_v39.gd","prefix":"blockades-world-v39","env":"XJ_BLOCKADES_WORLD_V39","meta":"xj_blockades_world_v39_diagnostic"},
 		{"flag":"--xj-verify-scenarios-upgrade-v39","file":"scenarios_upgrade_v39.gd","prefix":"scenarios-upgrade-v39","env":"XJ_SCENARIOS_UPGRADE_V39","meta":"xj_scenarios_upgrade_v39_diagnostic"},
 		{"flag":"--xj-verify-scenarios-world-v39","file":"scenarios_world_v39.gd","prefix":"scenarios-world-v39","env":"XJ_SCENARIOS_WORLD_V39","meta":"xj_scenarios_world_v39_diagnostic"},
 		{"flag":"--xj-verify-scenarios-v39","file":"scenarios_v39.gd","prefix":"scenarios-v39","env":"XJ_SCENARIOS_V39","meta":"xj_scenarios_v39_diagnostic"},

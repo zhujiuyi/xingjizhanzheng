@@ -82,7 +82,7 @@ func run() -> void:
 		if file.ends_with(".csv"):csv_found=bytes.size()>3 and bytes[0]==239 and bytes[1]==187 and bytes[2]==191 and bytes.get_string_from_utf8().contains("record_type") and bytes.get_string_from_utf8().contains("lifetime")
 		if file.ends_with(".json"):
 			var payload: Variant=JSON.parse_string(bytes.get_string_from_utf8())
-			json_found=payload is Dictionary and payload.format_version==2 and payload.reports is Array and payload.totals is Dictionary and payload.totals.has("materials_used") and payload.totals.has("repair_hp")
+			json_found=payload is Dictionary and payload.format_version==3 and payload.reports is Array and payload.totals is Dictionary and payload.totals.has("materials_used") and payload.totals.has("repair_hp") and payload.measurements is Dictionary and payload.measurements.has("sources") and payload.measurements.has("activity_totals")
 			check(not bytes.get_string_from_utf8().contains("Users/") and not bytes.get_string_from_utf8().contains("user://"),"export contains game metrics without operating-system paths")
 	exported=json_found and csv_found;check(exported,"both real exported files use expected UTF-8 and data envelope")
 	await capture("campaign-reports")

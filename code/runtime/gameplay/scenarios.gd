@@ -48,11 +48,15 @@ func budget(ship: RefCounted=null) -> int:
 			if stack.container_id==container.container_id and supplies.has(stack.item_def_id):amount+=stack.quantity*int(g.definition("item_defs","item_id",stack.item_def_id).base_ask_credit)
 		for item: RefCounted in g.state.rows("item_instance_state"):
 			if item.container_id==container.container_id and supplies.has(item.item_def_id):amount+=int(g.definition("item_defs","item_id",item.item_def_id).base_ask_credit)
+	var hired: RefCounted=g.hired.active()
+	if hired!=null:amount+=int(g.definition("ship_defs","ship_id",g.hired.profile(hired.profile_id).hull_id).base_ask_credit)
 	return amount
 func fingerprint(ship: RefCounted=null) -> String:
 	var hull: RefCounted=g.state.ship() if ship==null else ship
 	var pieces: Array[String]=[hull.ship_def_id]
 	for gear: RefCounted in g.equipped(hull):pieces.append(gear.slot_container_id+":"+gear.item_instance_id+":"+gear.module_def_id)
+	var hired: RefCounted=g.hired.active()
+	if hired!=null:pieces.append("hired:"+hired.contract_id+":"+hired.profile_id)
 	pieces.sort();return "|".join(pieces).sha256_text()
 func _trial_fit(id: String,bound: bool=false) -> String:
 	var spec: Dictionary=definition("trial",id);var row: RefCounted=instance("trial",id);var ship: RefCounted=g.state.ship()
@@ -147,7 +151,9 @@ func hud_text() -> String:
 	var row: RefCounted=current.row;var spec: Dictionary=definition(current.kind,current.id)
 	var line: String="前往入口 · 抵达后开始行动" if row.phase=="accepted" else "返回签发站交付成果" if row.phase=="ready" else ""
 	if row.phase=="active":
-		if current.kind=="blockade":line="货物 %d/%d · %s" % [row.cargo_units,row.loaded_units,"侧路通行中" if row.bypass_remaining_s>0 else "已警戒" if row.alerted else "保持低速或处理节点"]
+		if current.kind=="blockade":
+			var stage: String="调查 %.1f秒" % row.scan_remaining_s if row.has_scan_node_index else "侧路 %.0f秒" % row.bypass_remaining_s if row.bypass_remaining_s>0 else "已警戒" if row.alerted else "静默 ≤%.0f m/s" % spec.quiet_speed_mps
+			line="货物 %d/%d · %s" % [row.cargo_units,row.loaded_units,stage]
 		elif spec.objective_kind=="precision":line="有效伤害 %.0f/%.0f · 距离 %.1f–%.1f km" % [row.effective_hp,spec.target_hp,spec.min_range_m/1000.0,spec.max_range_m/1000.0]
 		elif spec.objective_kind=="support":line="有效远修 %.0f/%.0f · 保护伤舰抵达出口" % [row.effective_hp,spec.target_hp]
 		else:line="保护运输舰抵达出口 · 无需清场"
@@ -178,10 +184,16 @@ func guidance(kind: String,id: String,node_index: int=-1) -> Dictionary:
 	var anchor: String=spec.entry_anchor_id
 	var label: String="行动入口"
 	if row.phase=="active" and (kind=="blockade" or spec.objective_kind!="precision"):anchor=spec.exit_anchor_id;label="行动出口"
+	if kind=="blockade" and row.phase=="active" and node_index<0 and row.bypass_remaining_s<=0 and not relays_open(id):
+		var fighting: bool=false
+		for node: Dictionary in g.rows("blockade_node_defs"):
+			if node.blockade_id==id and node.node_kind=="relay" and _node(id,int(node.node_index)).completed:fighting=true
+		for node: Dictionary in g.rows("blockade_node_defs"):
+			if node.blockade_id==id and node.node_kind==("relay" if fighting else "survey") and not _node(id,int(node.node_index)).completed:node_index=int(node.node_index);break
 	if kind=="blockade" and node_index>=0:
 		var node: Dictionary=node_definition(id,node_index)
 		if node.is_empty():return {}
-		anchor=node.anchor_id;label="调查节点" if node.node_kind=="survey" else "封锁中继"
+		anchor=node.anchor_id;label=node_label(id,node_index)
 	var target: String="scenario:"+kind+":"+id+":"+anchor
 	return g.missions._route_location(g.missions._anchor_location(anchor,target,"encounter",label),"")
 func waypoints(sector_id: String) -> Array[Dictionary]:
@@ -197,10 +209,27 @@ func waypoints(sector_id: String) -> Array[Dictionary]:
 				for node: Dictionary in g.rows("blockade_node_defs"):
 					if node.blockade_id==id:anchors.append(str(node.anchor_id))
 			for anchor: String in anchors:
-				result.append({"id":"scenario:"+kind+":"+id+":"+anchor,"title":spec.display_name+(" · 入口" if anchor==spec.entry_anchor_id else " · 出口" if anchor==spec.exit_anchor_id else " · 节点"),"kind":"encounter","anchor_id":anchor,"remaining_count":0,"total_count":0,"respawn_remaining_s":0.0,"level":0,"mission_target":true,"reveal_range_m":spec.interaction_radius_m,"warp_arrival_m":spec.interaction_radius_m})
+				var suffix: String="入口" if anchor==spec.entry_anchor_id else "出口"
+				if kind=="blockade":
+					for node: Dictionary in g.rows("blockade_node_defs"):
+						if node.blockade_id==id and node.anchor_id==anchor:suffix=node_label(id,int(node.node_index));break
+				var role: String="调查节点" if suffix.begins_with("调查") else "中继位置" if suffix.begins_with("封锁中继") else "行动"+suffix
+				result.append({"id":"scenario:"+kind+":"+id+":"+anchor,"title":spec.display_name+" · "+suffix,"kind":"encounter","presentation_kind":"marker","type_title":role,"anchor_id":anchor,"remaining_count":0,"total_count":0,"respawn_remaining_s":0.0,"level":0,"mission_target":true,"reveal_range_m":spec.interaction_radius_m,"warp_arrival_m":spec.interaction_radius_m})
 	return result
 func handles(spawn_id: String) -> bool:return actor_definitions.has(spawn_id)
 func actor(npc_id: String) -> RefCounted:return g.state.find("scenario_actor_state","npc_instance_id",npc_id)
+func actor_label(npc_id: String) -> String:
+	var member: RefCounted=actor(npc_id)
+	if member==null:return ""
+	if member.actor_role=="relay":return node_label(member.scenario_id,int(actor_definitions[member.spawn_id].definition.node_index)).replace("封锁中继","封锁中继舰")
+	var names: Dictionary={"target":"校准靶舰","escort":"护航运输舰","patient":"待维修友舰","raider":"拦截舰"}
+	var label: String=str(names[member.actor_role])
+	if member.actor_role=="raider":
+		var ordinal: int=0
+		for def: Dictionary in g.rows(member.scenario_kind+"_actor_defs"):
+			if def.get(member.scenario_kind+"_id")==member.scenario_id and def.actor_role==member.actor_role and str(def.spawn_id)<=member.spawn_id:ordinal+=1
+		label+=" "+str(ordinal)
+	return str(definition(member.scenario_kind,member.scenario_id).display_name)+" · "+label
 func friendly(npc_id: String) -> bool:
 	var member: RefCounted=actor(npc_id)
 	return member!=null and member.actor_role in ["escort","patient"]
@@ -284,6 +313,13 @@ func node_definition(id: String,index: int) -> Dictionary:
 	for row: Dictionary in g.rows("blockade_node_defs"):
 		if row.blockade_id==id and int(row.node_index)==index:return row
 	return {}
+func node_label(id: String,index: int) -> String:
+	var node: Dictionary=node_definition(id,index)
+	if node.is_empty():return "未知节点"
+	var ordinal: int=0
+	for candidate: Dictionary in g.rows("blockade_node_defs"):
+		if candidate.blockade_id==id and candidate.node_kind==node.node_kind and int(candidate.node_index)<=index:ordinal+=1
+	return ("调查节点 " if node.node_kind=="survey" else "封锁中继 ")+str(ordinal)
 func relays_open(id: String) -> bool:
 	for def: Dictionary in g.rows("blockade_node_defs"):
 		if def.blockade_id==id and def.node_kind=="relay" and not _node(id,int(def.node_index)).completed:return false
@@ -318,6 +354,7 @@ func blockade_reason(id: String,action: String,index: int=-1) -> String:
 	if action=="claim":return "" if row.phase=="ready" and g.state.ship().status==T.ShipStatus.DOCKED and g.station()==spec.station_id else "需返回签发站交付实际送达货物"
 	if action=="start":
 		if row.phase!="accepted" or not _at("blockade",id,spec.entry_anchor_id):return "需实际抵达入口"
+		if g.state.ship().policy_id!="normal_owned":return "运输需要普通自有舰船"
 		return "" if load_capacity(id)>0 else "货舱或载荷空余不足"
 	if row.phase!="active" or not row.has_payload_ship_id or row.payload_ship_id!=g.state.ship().ship_instance_id or not spatial_active or not _same_site("blockade",id):return "需驾驶本次承运舰留在行动空域"
 	if action=="exit":return "" if _at("blockade",id,spec.exit_anchor_id) else "需实际抵达航路出口"
@@ -390,7 +427,8 @@ func _tick_blockades(delta: float) -> void:
 		row.cooldown_remaining_s=maxf(0,row.cooldown_remaining_s-delta)
 		if row.phase!="active":continue
 		if not spatial_active or not _same_site("blockade",row.blockade_id):_blockade_finish(row.blockade_id,false,"departed");continue
-		if g.state.ship().status!=T.ShipStatus.FLYING or row.payload_ship_id!=g.state.ship().ship_instance_id:_blockade_finish(row.blockade_id,false,"ship_destroyed");continue
+		if row.payload_ship_id!=g.state.ship().ship_instance_id or g.state.ship().policy_id!="normal_owned":_blockade_finish(row.blockade_id,false,"loadout_changed");continue
+		if g.state.ship().status!=T.ShipStatus.FLYING:_blockade_finish(row.blockade_id,false,"ship_destroyed" if g.state.ship().status==T.ShipStatus.DESTROYED else "departed");continue
 		var spec: Dictionary=definition("blockade",row.blockade_id);row.remaining_s=maxf(0,row.remaining_s-delta);row.elapsed_s+=delta;row.bypass_remaining_s=maxf(0,row.bypass_remaining_s-delta)
 		if row.has_scan_node_index:
 			var node: Dictionary=node_definition(row.blockade_id,row.scan_node_index)

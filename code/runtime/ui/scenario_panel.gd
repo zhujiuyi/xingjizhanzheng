@@ -43,6 +43,9 @@ func build() -> void:
 	if not defs.any(func(d: Dictionary):return d.get(kind+"_id")==selected):
 		var pending: Dictionary=service().pending()
 		selected=pending.id if not pending.is_empty() and pending.kind==kind else defs[0].get(kind+"_id")
+		if pending.is_empty():
+			for def: Dictionary in defs:
+				if def.station_id==u.gameplay.station():selected=def.get(kind+"_id");break
 	u.set(kind+"_selected_id",selected)
 	var choices: HFlowContainer=HFlowContainer.new();add_child(choices)
 	for def: Dictionary in defs:
@@ -55,12 +58,14 @@ func build() -> void:
 		var hulls: PackedStringArray=[]
 		for allowed: Dictionary in u.catalog.rows("trial_hull_defs"):
 			if allowed.trial_id==selected:hulls.append(u._ship_name(allowed.ship_id))
-		u._text_to(self,"预算 %d / %d 信用点 · 服务费 %d" % [service().budget(),spec.budget_credit,spec.fee_credit],15)
+		u._text_to(self,"参考预算 %d / %d 信用点 · 服务费 %d" % [service().budget(),spec.budget_credit,spec.fee_credit],15).tooltip_text="包含舰体、已装设备、作战耗材、无人机储备及已雇佣僚舰的舰体参考造价；雇佣关系变化也会改变本次绑定。"
 		u._text_to(self,"舰型："+"、".join(hulls),14)
 		if spec.objective_kind=="precision":u._text_to(self,"计分距离 %.1f–%.1f km · 有效伤害 %.0f HP" % [spec.min_range_m/1000.0,spec.max_range_m/1000.0,spec.target_hp],14)
 		elif spec.objective_kind=="support":u._text_to(self,"有效远修 %.0f HP · 保护友舰抵达出口" % spec.target_hp,14)
 		if row.best_elapsed_s>0:u._text_to(self,"最佳 %.1f 秒 · 最低参考造价 %d" % [row.best_elapsed_s,row.best_cost],14)
-	else:u._text_to(self,"签发：%s · 服务费 %d · 送达每批 %d 信用点" % [u._station_name(spec.station_id),spec.fee_credit,spec.credit_per_unit],14)
+	else:
+		u._text_to(self,"签发：%s · 服务费 %d · 送达每批 %d 信用点" % [u._station_name(spec.station_id),spec.fee_credit,spec.credit_per_unit],14)
+		u._text_to(self,"侦测 %.1f km · 静默 ≤%.0f m/s · 侧路 %.0f 秒" % [spec.detection_radius_m/1000.0,spec.quiet_speed_mps,spec.bypass_window_s],14)
 	u._text_to(self,spec.description,14)
 	status_label=u._text_to(self,"",15);status_label.name="ScenarioStatus"
 	var nav: HFlowContainer=HFlowContainer.new();add_child(nav);route(nav)
@@ -79,7 +84,7 @@ func build() -> void:
 		for node: Dictionary in u.catalog.rows("blockade_node_defs"):
 			if node.blockade_id!=selected:continue
 			var index: int=int(node.node_index);var progress: RefCounted=service()._node(selected,index)
-			u._text_to(self,("调查节点" if node.node_kind=="survey" else "封锁中继")+str(index+1)+(" · 已完成" if progress.completed else " · 未处理"),14)
+			u._text_to(self,service().node_label(selected,index)+(" · 已完成" if progress.completed else " · 未处理"),14)
 			var tools: HFlowContainer=HFlowContainer.new();add_child(tools);route(tools,index)
 			if node.node_kind=="survey":
 				var scan: Button=button(tools,"付费调查节点","blockade_action","survey|"+str(row.generation)+"|"+str(index));scan.name="BlockadeSurvey_"+str(index)

@@ -40,6 +40,7 @@ func _run() -> void:
 	place("blockade_echo_entry");check(scenario("blockade","blockade_echo","start"),"actual entrance loads bounded task cargo")
 	var block: RefCounted=g.scenarios.instance("blockade","blockade_echo")
 	check(block.loaded_units==12 and g.scenarios.cargo(state.ship().ship_instance_id).volume==720,"task cargo contributes its real volume")
+	check(g.scenarios.guidance("blockade","blockade_echo").waypoint_id.ends_with("blockade_echo_survey_0"),"new corridor guidance begins at the first safe survey node")
 	if not preserve(2,"active finite blockade cargo"):await finish();return
 	block=g.scenarios.instance("blockade","blockade_echo")
 	for index: int in [0,1]:
@@ -49,6 +50,8 @@ func _run() -> void:
 		step(20)
 		check(g.scenarios._node("blockade_echo",index).completed,"actual node completes within paid cycle")
 	check(block.bypass_remaining_s>0,"two independent surveys open a finite route window")
+	check(g.scenarios.guidance("blockade","blockade_echo").waypoint_id.ends_with("blockade_echo_exit"),"opened survey route guides directly to the actual exit")
+	check(g.scenarios.node_label("blockade_echo",2)=="封锁中继 1" and g.scenarios.node_label("blockade_echo",3)=="封锁中继 2","relay numbering is readable independently from survey numbering")
 	place("blockade_echo_exit");check(scenario("blockade","blockade_echo","exit"),"physical exit banks actual cargo")
 	at_station("station_echo_depot");check(scenario("blockade","blockade_echo","claim"),"real signing station pays actual delivered units")
 	check(state.rows("blockade_result_state").size()==1 and state.rows("tactical_award_state").size()==2,"full delivery awards once")

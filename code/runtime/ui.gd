@@ -1717,6 +1717,7 @@ func _refresh_targets() -> void:
 			var npc: Dtos.NpcStateDto = state.find("npc_state", "npc_instance_id", str(entry.id))
 			if npc != null and not npc.alive: continue
 		var record: Dictionary = {"id": str(entry.id), "title": _target_title(entry), "kind": kind, "type_title": _target_type(kind), "distance_m": distance, "navigation_only": bool(entry.get("navigation_only", false)), "remote_site": not sector.target_is_local(str(entry.id)), "known": kind != "npc"}
+		if entry.has("presentation_kind"):record.kind=entry.presentation_kind;record.type_title=entry.type_title
 		if entry.get("operation_id") != null: record.type_title = "撤离点" if str(entry.id).ends_with(":exit") else "行动起点"
 		record["friendly"] = bool(entry.get("friendly", false))
 		if record.friendly: record.type_title = "友军"
@@ -1750,6 +1751,7 @@ func _selected_details() -> Dictionary:
 	var node: Variant = entry.get("node")
 	if not is_instance_valid(node) or not node is Node3D: return {}
 	var details: Dictionary = {"id": target_id, "title": _target_title(entry), "kind": str(entry.kind), "type_title": _target_type(str(entry.kind)), "distance_m": sector.target_distance(target_id), "navigation_only": bool(entry.get("navigation_only", false)), "remote_site": not sector.target_is_local(target_id)}
+	if entry.has("presentation_kind"):details.kind=entry.presentation_kind;details.type_title=entry.type_title
 	details["friendly"]=bool(entry.get("friendly",false))
 	if bool(entry.get("friendly", false)): details.type_title = "友军"
 	if str(entry.kind) == "drone" and gameplay.drone_control.live.has(target_id):
@@ -1759,7 +1761,7 @@ func _selected_details() -> Dictionary:
 		details["resource_info"] = ResourceStatus.inspect(state, catalog, target_id)
 		details["resource_forecast"] = gameplay.resource_intel.forecast(target_id)
 	if entry.get("operation_id") != null: details.type_title = "撤离点" if target_id.ends_with(":exit") else "行动起点"
-	elif str(entry.kind) == "encounter":
+	elif str(entry.kind) == "encounter" and not entry.has("presentation_kind"):
 		details["encounter_info"] = _encounter_summary(entry)
 		details["type_title"] = _encounter_summary(entry)
 	return details
@@ -2467,7 +2469,7 @@ func _target_title(target: Dictionary) -> String:
 	if friendly_names.has(id):
 		return str(friendly_names[id])
 	var title: String = _friendly(str(target.get("title", "未知目标"))).replace("Lv.", "等级 ")
-	if str(target.get("kind", "")) == "encounter":
+	if str(target.get("kind", "")) == "encounter" and not target.has("presentation_kind"):
 		title += " · %d/%d" % [int(target.get("remaining_count", 0)), int(target.get("total_count", 0))]
 		if int(target.get("remaining_count", 0)) == 0:
 			var remaining: float = float(target.get("respawn_remaining_s", 0.0))
@@ -2868,6 +2870,8 @@ func _update_npc_target() -> void:
 	var spawn: Dictionary = _one("npc_spawn_defs", "spawn_id", npc.spawn_id)
 	var definition: Dictionary = _one("npc_full_defs", "npc_id", str(spawn.get("npc_id", "")))
 	npc_title.text = str(definition.get("display_name", "敌方舰船"))
+	var scenario_name: String=gameplay.scenarios.actor_label(target_id)
+	if not scenario_name.is_empty():npc_title.text=scenario_name
 	var tactic_status: String = gameplay.tactics.status(target_id)
 	if not tactic_status.is_empty(): npc_title.text += "\n" + tactic_status
 	for index: int in range(3):

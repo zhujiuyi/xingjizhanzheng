@@ -2,6 +2,8 @@
 
 S24/S27/S28联合批次：`verify_combat_v18.py --only scenarios`检查三类挑战、货物/封锁/结果及99组恢复；`--native --only scenarios-world`使用真实Main、焦点/指针、物理武器、护航与移动远修、HUD和JSON3导出，实际包加`--executable`。`prepare_scenarios_upgrade_v39.py --legacy-executable <已验证v0.29 EXE>`仅经旧包固定fitting入口创建关闭的format23测试库；传`XJ_SCENARIOS_LEGACY_DATABASE`运行`--only scenarios-upgrade`，核027/内容分支失败回滚、原87组和旧手动档。全部使用fresh UUID和共用审计锁；不得用通用`--script`启动导出EXE。SQL及旧定义字节保护在`tests/test_scenarios.py`，当前边界见[65](../doc/65-配装挑战航路封锁与行为记录.md)。
 
+同批`--only measurements`直接验证采购、制造领取、矿点采集、组件回收、仓储不重复、任务耗时/弃约、僚舰预算、环境致命伤害/救援；`--native --only blockades-world`实际飞行两条完整路线，使用付费调查或真实交战拆除，检查120吨货物/完整及部分送达。两路线共用900秒看门狗与960秒外层有界等待，不能提高船速、减轻质量、降低敌方耐久或把玩家移动至各节点来代替物理证据。发行包门槛核实际路程/送达数量和必要截图。
+
 远征建设与实耗指标批次：025追加远征/建设/报告，026追加实际材料/维修四组，共format23/87组；历史001–025不重生成。`campaign-extension`运行完整三段路线、新两矿带的六个真实AU位置，以及实际扣料、返料、维修和报告裁剪；`campaign-world`使用独立临时库验证真实UI、战术、导出和失效回调。关联功能合并后统一检查，规则和接受证据见[64](../doc/64-远征建设与主题行动.md)。
 
 状态反馈/情报批次：`store_generate_situational.py`仅生成024/v0.20适配器，两组观测追加至format21；旧001–023、适配器及145表/四视图保持。S20/S21功能合并完成后再统一专项、适用回归与实际包验收；开发中仅做必要编译/故障定位。规则见[63](../doc/63-状态反馈与航行情报.md)。

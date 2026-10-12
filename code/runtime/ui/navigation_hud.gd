@@ -192,7 +192,7 @@ func refresh() -> void:
 		var bearing: bool = bool(target.get("navigation_only", false)) or not _target_is_local(id)
 		var relative: Vector3 = render_ship.basis.inverse() * _target_direction(id, node) if bearing else render_ship.basis.inverse() * (_render_target_position(node, id) - render_ship.origin)
 		if not bearing and distance > minf(radius_m(), sensor_limit): continue
-		contacts.append({"id": id, "title": str(target.title), "kind": "ally" if bool(target.get("friendly", false)) else str(target.kind), "relative": relative, "height_m": float(relative.y) * distance if bearing else float(relative.y), "distance_m": distance, "bearing": bearing})
+		contacts.append({"id": id, "title": str(target.title), "kind": "ally" if bool(target.get("friendly", false)) else str(target.get("presentation_kind",target.kind)), "relative": relative, "height_m": float(relative.y) * distance if bearing else float(relative.y), "distance_m": distance, "bearing": bearing})
 	if is_instance_valid(range_label): range_label.text = ("雷达 " if size.x < 950 else "局部态势 · ") + XJSpaceUnits.distance(radius_m())
 	if is_instance_valid(radar): radar.queue_redraw()
 	_update_selection()

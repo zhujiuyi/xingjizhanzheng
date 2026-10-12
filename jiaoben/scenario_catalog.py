@@ -28,4 +28,12 @@ def validate(db):
  for key,quota in db.execute('SELECT blockade_id,survey_count FROM blockade_defs'):
   require(db.execute("SELECT count(*) FROM blockade_node_defs WHERE blockade_id=? AND node_kind='survey'",(key,)).fetchone()[0]==quota,'Survey quota must match actual independent nodes')
   require(db.execute("SELECT count(*) FROM blockade_actor_defs WHERE blockade_id=? AND actor_role='relay'",(key,)).fetchone()[0]==2,'Each blockade needs two destructible relay nodes')
+  entry,exit=db.execute('SELECT entry_anchor_id,exit_anchor_id FROM blockade_defs WHERE blockade_id=?',(key,)).fetchone()
+  start=db.execute('SELECT x_m,y_m,z_m FROM anchor_defs WHERE anchor_id=?',(entry,)).fetchone()
+  end=db.execute('SELECT x_m,y_m,z_m FROM anchor_defs WHERE anchor_id=?',(exit,)).fetchone()
+  direction=[b-a for a,b in zip(start,end)];length2=sum(v*v for v in direction)
+  require(length2>0,'Corridor endpoints must differ')
+  for point in db.execute("SELECT a.x_m,a.y_m,a.z_m FROM blockade_node_defs n JOIN anchor_defs a USING(anchor_id) WHERE n.blockade_id=? AND n.node_kind='survey'",(key,)):
+   along=sum((p-a)*v for p,a,v in zip(point,start,direction))/length2
+   require(0<=along<0.5,'Survey clues must be reachable on the entrance side before crossing the blockade')
  require(db.execute('SELECT count(*) FROM npc_spawn_defs WHERE (spawn_id LIKE ? OR spawn_id LIKE ?) AND (bounty_enabled!=0 OR loot_enabled!=0)',('trial_%','blockade_%')).fetchone()[0]==0,'Scenario actors may not create bounty/loot farms')
