@@ -25,6 +25,12 @@ func _ready() -> void:
 	get_tree().set_meta("xj_fitting_v31_diagnostic",true)
 	get_tree().create_timer(420.0).timeout.connect(func():print("FITTING_V31_RESULT FAIL watchdog");get_tree().quit(2))
 	_run.call_deferred()
+const CAMPAIGN_STATE_ADDITIONS: Array[String]=["construction_state","construction_input_state","construction_receipt_state","construction_evidence_state","expedition_route_state","expedition_run_state","expedition_stage_state","expedition_receipt_state","campaign_director_state","flight_record_state","telemetry_total_state","flight_material_state","telemetry_material_state","flight_repair_state","telemetry_repair_state"]
+func campaign_added_row(table: String,row: RefCounted) -> bool:
+	if table in ["exploration_instance_state","exploration_belt_state"]:return str(row.event_id).begins_with("exp_theme_")
+	if table=="resource_state":return str(row.node_id).begins_with("exp_theme_")
+	if table=="tactical_site_state":return str(row.site_id).begins_with("tac_exp_theme_")
+	return false
 func full_signature(value: XJRuntimeState,receipts: bool=true) -> String:
 	var data: Dictionary={}
 	for table: String in XJRuntimeState.TABLES:
@@ -184,9 +190,11 @@ func _sources(home: Dictionary) -> void:
 func previous_signature(value: XJRuntimeState) -> String:
 	var data: Dictionary={}
 	for table: String in XJRuntimeState.TABLES:
+		if table in CAMPAIGN_STATE_ADDITIONS:continue
 		if table.begins_with("specialization_"):continue
 		var rows: Array=[]
 		for row: RefCounted in value.rows(table):
+			if campaign_added_row(table,row):continue
 			if table=="shop_stock_state" and str(row.item_def_id).begins_with("module_spec_"):continue
 			rows.append(Codec.new().encode_row(table,row))
 		rows.sort_custom(func(a: Dictionary,b: Dictionary)->bool:return JSON.stringify(a)<JSON.stringify(b));data[table]=rows

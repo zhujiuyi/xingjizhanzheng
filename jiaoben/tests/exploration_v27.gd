@@ -81,16 +81,20 @@ func _run() -> void:
 	state = store.new_world("Exploration matrix", 2701)
 	if not check(state != null, "frozen six-structure world creates " + store.last_error): store.close(); get_tree().quit(1); return
 	g = Gameplay.new(); g.setup(state, store.catalog)
-	check(state.rows("exploration_instance_state").size() == 6 and state.rows("exploration_actor_state").is_empty(), "six clues initialize without free actors or goods")
+	var expected_events: int=12 if store.catalog.table_names.has("campaign_balance_defs") else 6
+	check(state.rows("exploration_instance_state").size()==expected_events and state.rows("exploration_instance_state").filter(func(r: RefCounted):return not r.event_id.begins_with("exp_theme_")).size()==6 and state.rows("exploration_actor_state").is_empty(), "six original clues and explicit theme additions initialize without free actors or goods")
 	if OS.get_environment("XJ_EXPLORATION_FIXTURE_ONLY") == "1":
 		_legacy_mineral_fixture()
 		return
 	for unlock: Dictionary in g.rows("unlock_defs"): g.grant_unlock(unlock.unlock_id)
 	state.player().credit = 1000000
+	# Align the declared wealth fixture before asserting rejected actions are pure.
+	if g.get("telemetry")!=null:g.get("telemetry").wallet()
 	var station: String = g.station()
 	var battle: D.ShipStateDto = g.inventory.create_ship("battleship_forge_ironwall", station)
 	var miner: D.ShipStateDto = g.inventory.create_ship("miner_anvil", station)
 	for variant: Dictionary in g.rows("exploration_variant_defs"):
+		if str(variant.event_id).begins_with("exp_theme_"):continue # New routes have their dedicated campaign matrix.
 		var row: D.ExplorationInstanceStateDto = g.exploration.instance(variant.event_id)
 		var event: Dictionary = g.exploration.definition(row.event_id)
 		var hull: D.ShipStateDto = miner if event.event_kind == "mineral" else battle

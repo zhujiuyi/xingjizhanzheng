@@ -113,9 +113,11 @@ func _run() -> void:
 func prior_hire_signature(value: XJRuntimeState) -> String:
 	var data: Dictionary={}
 	for table: String in XJRuntimeState.TABLES:
+		if table in CAMPAIGN_STATE_ADDITIONS:continue
 		if table in ["hire_contract_state","hire_receipt_state"]:continue
 		var rows: Array=[]
-		for row: RefCounted in value.rows(table):rows.append(Codec.new().encode_row(table,row))
+		for row: RefCounted in value.rows(table):
+			if not campaign_added_row(table,row):rows.append(Codec.new().encode_row(table,row))
 		rows.sort_custom(func(a: Dictionary,b: Dictionary)->bool:return JSON.stringify(a)<JSON.stringify(b));data[table]=rows
 	return JSON.stringify(data)
 func legacy_hire() -> void:

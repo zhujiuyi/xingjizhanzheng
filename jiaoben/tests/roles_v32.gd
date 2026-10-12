@@ -198,9 +198,11 @@ func _freight() -> void:
 func prior_role_signature(value: XJRuntimeState) -> String:
 	var data: Dictionary={}
 	for table: String in XJRuntimeState.TABLES:
+		if table in CAMPAIGN_STATE_ADDITIONS:continue
 		if table in ["remote_support_state","consignment_state","consignment_receipt_state","civilization_command_state","civilization_honor_evidence_state"] or table.begins_with("frontier_"):continue
 		var values: Array=[]
-		for row: RefCounted in value.rows(table):values.append(Codec.new().encode_row(table,row))
+		for row: RefCounted in value.rows(table):
+			if not campaign_added_row(table,row):values.append(Codec.new().encode_row(table,row))
 		values.sort_custom(func(a: Dictionary,b: Dictionary)->bool:return JSON.stringify(a)<JSON.stringify(b));data[table]=values
 	return JSON.stringify(data)
 func legacy_roles() -> void:

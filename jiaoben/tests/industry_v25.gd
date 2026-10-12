@@ -211,8 +211,11 @@ func _hulls_and_protection() -> void:
 		if not spec.is_empty(): check(not act("manufacture", spec.hull_recipe_id) and fingerprint() == before, "neutral player cannot queue exclusive hull " + str(recipe.ship_id))
 
 func _upgrade() -> void:
-	store = Store.new(directory.path_join("legacy.db"))
-	store.catalog_path = "res://data/catalog_civilizations_v8.db"
+	for archive: String in ["res://data/catalog_space_v7.db","res://data/catalog_civilizations_v8.db"]:_upgrade_from(archive)
+func _upgrade_from(archive: String) -> void:
+	var legacy_path: String=directory.path_join(archive.get_file().get_basename()+".db")
+	store = Store.new(legacy_path)
+	store.catalog_path = archive
 	if not check(store.open(), "create historical frozen civilization world"): return
 	state = store.new_world("Legacy industry upgrade", 25)
 	if not check(state != null, "legacy world created"): store.close(); return
@@ -220,7 +223,7 @@ func _upgrade() -> void:
 	var old_credit: int = state.player().credit
 	var old_ship: String = state.ship().ship_instance_id
 	store.close()
-	store = Store.new(directory.path_join("legacy.db"))
+	store = Store.new(legacy_path)
 	if not check(store.open(), "new store opens legacy content without replacing it"): return
 	var old_slot: Dictionary
 	for row: Dictionary in store.list_slots():
@@ -230,6 +233,8 @@ func _upgrade() -> void:
 	var upgraded: XJRuntimeState = store.upgrade_content(state)
 	if check(upgraded != null, "reviewed industry branch upgrade: " + store.last_error):
 		check(upgraded.player().credit == old_credit and upgraded.ship().ship_instance_id == old_ship and upgraded.rows("industry_job_state").is_empty(), "upgrade preserves existing assets and invents no paid orders")
+		if store.catalog.table_names.has("campaign_balance_defs"):
+			check(upgraded.rows("exploration_belt_state").size()==4 and upgraded.rows("tactical_site_state").size()==9,"early upgrade initializes every belt and tactical site exactly once")
 		check(upgraded.rows("station_demand_state").size() == store.catalog.rows("station_demand_defs").size(), "upgrade initializes only new region needs")
 		check(store.upgrade_content(upgraded) == upgraded, "repeated upgrade reuses current rules")
 	state = store.load(old_slot.slot_id)

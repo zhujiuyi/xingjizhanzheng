@@ -34,11 +34,12 @@ func _run() -> void:
 	store = Store.new(directory.path_join("progress.db"))
 	if not check(store.open(), "format13 and all reviewed adapters open " + store.last_error): get_tree().quit(1); return
 	state = store.new_world("移动矿带矩阵", 2801); g = Gameplay.new(); g.setup(state, store.catalog); connect_warnings()
-	check(state.rows("exploration_belt_state").size() == 2, "both belts initialize without goods or extra RNG draws")
+	check(state.rows("exploration_belt_state").size()==(4 if store.catalog.table_names.has("campaign_balance_defs") else 2) and state.rows("exploration_belt_state").filter(func(r: RefCounted):return not r.event_id.begins_with("exp_theme_")).size()==2, "both original belts and explicit theme additions initialize without goods or extra RNG draws")
 	for unlock: Dictionary in g.rows("unlock_defs"): g.grant_unlock(unlock.unlock_id)
 	state.player().credit = 1000000
 	var miner: RefCounted = g.inventory.create_ship("miner_anvil", g.station()); state.player().controlled_ship_id = miner.ship_instance_id
 	for belt: RefCounted in state.rows("exploration_belt_state"):
+		if belt.event_id.begins_with("exp_theme_"):continue # Six new AU paths run in campaign-extension.
 		for route_index: int in range(3): await cycle(belt.event_id, route_index)
 	check(cases == 6, "both events execute all three actual frozen routes")
 	if not OS.get_environment("XJ_MOBILE_BELTS_LEGACY_DATABASE").is_empty(): legacy_mobile()

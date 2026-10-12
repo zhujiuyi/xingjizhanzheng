@@ -360,9 +360,11 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 		for table: String in initial:
 			for row: RefCounted in initial[table]:candidate.add(table,row)
 	if mobile_upgrade and not catalog.table_names.has("exploration_belt_route_defs"):
-		for row: RefCounted in preload("res://runtime/gameplay/mobile_belts.gd").initial_rows(_source, candidate): candidate.add("exploration_belt_state", row)
+		for row: RefCounted in preload("res://runtime/gameplay/mobile_belts.gd").initial_rows(_source, candidate):
+			if candidate.find("exploration_belt_state","event_id",row.event_id)==null:candidate.add("exploration_belt_state",row)
 	if tactics_upgrade and not catalog.table_names.has("npc_tactic_defs"):
-		for row: RefCounted in preload("res://runtime/gameplay/tactics.gd").initial_sites(_source): candidate.add("tactical_site_state", row)
+		for row: RefCounted in preload("res://runtime/gameplay/tactics.gd").initial_sites(_source):
+			if candidate.find("tactical_site_state","site_id",row.site_id)==null:candidate.add("tactical_site_state",row)
 		for row: RefCounted in preload("res://runtime/gameplay/drone_control.gd").initial_bays(_source, candidate): candidate.add("drone_bay_state", row)
 	if operations_upgrade and not catalog.table_names.has("operation_defs"):
 		for row: RefCounted in preload("res://runtime/gameplay/operations.gd").initial_rows(_source): candidate.add("operation_state", row)

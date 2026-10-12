@@ -80,6 +80,10 @@ func _invalid_future_observation() -> XJRuntimeState:
 func old_signature(value: XJRuntimeState) -> String:
 	var copy: XJRuntimeState=store.clone_state(value)
 	copy.rows("resource_intel_state").clear();copy.rows("demand_intel_state").clear()
+	for table: String in CAMPAIGN_STATE_ADDITIONS:copy.rows(table).clear()
+	for table: String in XJRuntimeState.TABLES:
+		for row: RefCounted in copy.rows(table).duplicate():
+			if campaign_added_row(table,row):copy.remove(table,row)
 	return full_signature(copy)
 func legacy_situational() -> void:
 	if g!=null:g.dispose();g=null

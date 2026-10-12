@@ -35,7 +35,7 @@ func _run() -> void:
 	store = Store.new(directory.path_join("progress.db"))
 	if not check(store.open(),"format14 opens " + store.last_error): get_tree().quit(1); return
 	state = store.new_world("四类战术与无人机",2901); g = Gameplay.new(); g.setup(state,store.catalog)
-	check(state.rows("tactical_site_state").size()==3 and state.rows("npc_tactic_state").is_empty(),"locked new sites do not silently spawn enemies")
+	check(state.rows("tactical_site_state").size()==(9 if store.catalog.table_names.has("campaign_balance_defs") else 3) and state.rows("tactical_site_state").filter(func(r: RefCounted):return not r.site_id.begins_with("tac_exp_theme_")).size()==3 and state.rows("npc_tactic_state").is_empty(),"three original sites and explicit locked theme sites never spawn free enemies")
 	for unlock: Dictionary in g.rows("unlock_defs"): g.grant_unlock(unlock.unlock_id)
 	g.tactics.sync()
 	check(state.rows("npc_tactic_state").size()==9,"three mixed sites create nine real doctrine actors")
