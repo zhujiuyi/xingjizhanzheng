@@ -26,11 +26,14 @@ func module_live(owner_id: String, item_id: String) -> bool:
 		var item: RefCounted = g.state.find("item_instance_state", "item_instance_id", item_id)
 		return equipment != null and equipment.enabled and item != null and item.durability > 0.0 and g.equipped(g.state.ship()).has(equipment)
 	var npc: RefCounted = g.state.find("npc_state", "npc_instance_id", owner_id)
+	if g.owned_fleet.friendly(owner_id):
+		var hull: RefCounted=g.owned_fleet.ship(owner_id);var equipment: RefCounted=g.state.find("equipment_state","item_instance_id",item_id);var item: RefCounted=g.state.find("item_instance_state","item_instance_id",item_id)
+		return hull!=null and equipment!=null and item!=null and equipment.enabled and item.durability>0 and g.equipped(hull).has(equipment)
 	var tactic: RefCounted = g.tactics.instance(owner_id)
 	return npc != null and npc.alive and tactic != null and g.tactics.definition(owner_id).tactic_kind == "carrier" and item_id == "npc_bay_" + owner_id
 func stock(owner_id: String, item_id: String) -> int:
 	if not supported(): return 0
-	if owner_id == g.state.ship().ship_instance_id:
+	if owner_id == g.state.ship().ship_instance_id or g.owned_fleet.friendly(owner_id):
 		var row: RefCounted = bay(item_id); return row.stock_units if row != null else 0
 	var tactic: RefCounted = g.tactics.instance(owner_id)
 	return tactic.drone_stock if tactic != null else 0

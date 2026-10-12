@@ -4,7 +4,7 @@ var last_error: String=""
 func fail(message: String) -> bool:last_error=message;return false
 func validate(state: XJRuntimeState,catalog: XJCatalog) -> bool:
 	if not catalog.table_names.has("crew_profile_defs"):
-		for table: String in ["crew_member_state","crew_assignment_state","crew_receipt_state"]:
+		for table: String in ["crew_member_state","crew_assignment_state","crew_receipt_state","crew_support_quote_state"]:
 			if not state.rows(table).is_empty():return fail("Crew rows under legacy rules")
 		return true
 	var balance: Dictionary=catalog.rows("fleet_balance_defs")[0]
@@ -61,4 +61,13 @@ func validate(state: XJRuntimeState,catalog: XJCatalog) -> bool:
 	for receipt: RefCounted in state.rows("crew_receipt_state"):
 		var row: RefCounted=members.get(receipt.profile_id)
 		if row==null or receipt.event_kind not in ["hire","dismiss","salary","arrears","injury","treatment","rest"] or receipt.paid_credit<0 or receipt.revision>row.revision or receipt.revision<0 or receipt.event_tick<0 or receipt.event_tick>tick:return fail("Crew receipt identity/time invalid")
+	for quote: RefCounted in state.rows("crew_support_quote_state"):
+		var member: RefCounted=members.get(quote.profile_id);var support: RefCounted=state.find("remote_support_state","item_instance_id",quote.item_instance_id)
+		var job: Dictionary=catalog.one("crew_profession_defs","profession_id",quote.profession_id);var rank: Dictionary={}
+		for definition: Dictionary in catalog.rows("crew_rank_defs"):
+			if definition.profession_id==quote.profession_id and int(definition.rank)==quote.rank_at_payment:rank=definition;break
+		if member==null or support==null or support.phase!="cycling" or job.get("effect_stat","")!="remote_repair_multiplier" or rank.is_empty() or member.experience<int(rank.experience_required) or quote.paid_tick<0 or quote.paid_tick>tick or quote.loyalty_at_payment<int(balance.loyalty_ready_min) or quote.loyalty_at_payment>100:return fail("Crew support quote identity or qualification invalid")
+		var assignment: RefCounted=assignments.get(quote.profile_id)
+		if assignment==null or assignment.ship_instance_id!=support.ship_instance_id or assignment.profession_id!=quote.profession_id:return fail("Crew support quote lacks its actual engineering assignment")
+		if not is_finite(quote.restore_multiplier) or absf(quote.restore_multiplier-(1.0+float(rank.effect_value)*quote.loyalty_at_payment/100.0))>0.000001:return fail("Crew support quote exceeds its paid rank/loyalty")
 	return true

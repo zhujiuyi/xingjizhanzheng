@@ -57,6 +57,8 @@ var honors: RefCounted
 var consignments: RefCounted
 var operations: RefCounted
 var drone_control: RefCounted
+var crew: RefCounted
+var owned_fleet: RefCounted
 var events: Array[D.EventDto] = []
 var pending_autosave_request_id: String = ""
 var status_text: String = ""
@@ -95,6 +97,8 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog, preview: bool = 
 	mobile_belts = MobileBelts.new(self)
 	tactics = Tactics.new(self)
 	drone_control = DroneControl.new(self)
+	crew=preload("res://runtime/gameplay/crew.gd").new(self)
+	owned_fleet=preload("res://runtime/gameplay/owned_fleet.gd").new(self)
 	operations = Operations.new(self)
 	specializations = Specializations.new(self)
 	fitting_analysis = FittingAnalysis.new(self)
@@ -250,6 +254,12 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 		fail("数量超出合法范围")
 	else:
 		match action:
+			"owned_fleet_action":
+				var parts: PackedStringArray=extra.split("|",true,3)
+				ok=owned_fleet.execute(target,parts[0],parts[1],parts[2] if parts.size()>2 else "",int(parts[3]) if parts.size()>3 else 0) if parts.size()>=2 else fail("自有舰队请求格式无效")
+			"crew_action":
+				var parts: PackedStringArray=extra.split("|",true,2)
+				ok=crew.execute(target,parts[0],parts[1],parts[2] if parts.size()==3 else "") if parts.size()>=2 else fail("船员请求格式无效")
 			"trial_action":
 				var parts: PackedStringArray=extra.split("|",true,1)
 				ok=scenarios.trial_action(target,parts[0],parts[1]) if parts.size()==2 else fail("挑战请求格式无效")
@@ -455,6 +465,11 @@ func metrics(ship: D.ShipStateDto) -> Dictionary:
 		if container.kind == T.ContainerKind.MINERAL: m.mineral_used_l += totals.volume
 		elif container.kind == T.ContainerKind.CARGO: m.cargo_used_l += totals.volume
 	m.total_mass_kg = def.dry_mass_kg + m.installed_mass_kg + m.payload_mass_kg
+	var crew_rules: Script=preload("res://runtime/crew_effects.gd")
+	m.turn_rad_s*=1.0+crew_rules.amount(state,catalog,ship.ship_instance_id,"turn_rad_s")
+	m.cooling_hu_s*=1.0+crew_rules.amount(state,catalog,ship.ship_instance_id,"cooling_hu_s")
+	m.heat_cooling*=1.0+crew_rules.amount(state,catalog,ship.ship_instance_id,"cooling_hu_s")
+	m.scan_strength+=crew_rules.amount(state,catalog,ship.ship_instance_id,"scan_strength")
 	var mass_factor: float = def.dry_mass_kg / m.total_mass_kg
 	m.speed_mps = m.max_speed_mps * sqrt(mass_factor)
 	m.acceleration_mps2 *= mass_factor
@@ -488,8 +503,9 @@ func _set_enabled(item_id: String, enabled: bool) -> bool:
 		state.ship().energy = minf(state.ship().energy, limits.energy_max)
 	return true
 
-func pay_cycle(equipment: D.EquipmentStateDto) -> bool:
-	var ship: D.ShipStateDto = state.ship()
+func pay_cycle(equipment: D.EquipmentStateDto,owner_ship: D.ShipStateDto=null) -> bool:
+	var ship: D.ShipStateDto = state.ship() if owner_ship==null else owner_ship
+	if ship!=state.ship() and (not owned_fleet.friendly(ship.ship_instance_id) or not equipped(ship).has(equipment)):return fail("设备没有绑定有效的自有僚舰")
 	var mod: Dictionary = specializations.weapon_spec(equipment,ship)
 	if mod.is_empty(): mod=definition("module_defs", "module_id", equipment.module_def_id)
 	var item: D.ItemInstanceStateDto = state.find("item_instance_state", "item_instance_id", equipment.item_instance_id)
@@ -517,6 +533,11 @@ func weapon_profile(module_id: String) -> Dictionary:
 	# Historical frozen catalogs retain their own physical speed and firing cone.
 	return {"module_id": module_id, "family_id": weapon.damage_type, "size_class": 1, "fire_mode": "ray" if weapon.projectile_speed_mps == null else "projectile", "projectile_speed_mps": 0.0 if weapon.projectile_speed_mps == null else float(weapon.projectile_speed_mps), "fire_cone_half_angle_rad": rule("player_weapon_fire_cone_half_angle_rad")}
 
+func npc_metrics(npc: RefCounted) -> Dictionary:
+	if owned_fleet!=null and owned_fleet.friendly(npc.npc_instance_id):return owned_fleet.stats(npc.npc_instance_id)
+	var spawn: Dictionary=definition("npc_spawn_defs","spawn_id",npc.spawn_id)
+	return definition("npc_full_defs","npc_id",spawn.npc_id)
+
 func weapon_fit_reason(ship: D.ShipStateDto, module_id: String, ignore_item_id: String = "") -> String:
 	if not catalog.table_names.has("ship_weapon_permissions"): return ""
 	var weapon: Dictionary = definition("weapon_defs", "module_id", module_id)
@@ -538,27 +559,28 @@ func weapon_fit_reason(ship: D.ShipStateDto, module_id: String, ignore_item_id: 
 	if installed >= int(permission.max_installed): return "此舰种该武器家族挂载数量已满"
 	return ""
 
-func consume_weapon_cycle(item_id: String) -> Dictionary:
+func consume_weapon_cycle(item_id: String,owner_ship: D.ShipStateDto=null) -> Dictionary:
 	last_error = ""
+	var firing_ship: D.ShipStateDto=state.ship() if owner_ship==null else owner_ship
 	var e: D.EquipmentStateDto = state.find("equipment_state", "item_instance_id", item_id)
-	if e == null or not equipped(state.ship()).has(e): return {}
+	if e == null or not equipped(firing_ship).has(e): return {}
 	var weapon: Dictionary = definition("weapon_defs", "module_id", e.module_def_id)
 	var mod: Dictionary = definition("module_defs", "module_id", e.module_def_id)
 	if weapon.is_empty(): return {}
-	var compatible: String = weapon_fit_reason(state.ship(), e.module_def_id, item_id)
+	var compatible: String = weapon_fit_reason(firing_ship, e.module_def_id, item_id)
 	if not compatible.is_empty(): fail(compatible); return {}
-	var profile: Dictionary = specializations.weapon_spec(e,state.ship())
+	var profile: Dictionary = specializations.weapon_spec(e,firing_ship)
 	if profile.is_empty(): fail("缺少武器行为定义"); return {}
-	if profile.fire_mode == "drone" and drone_control.supported() and drone_control.stock(state.ship().ship_instance_id, item_id) <= 0: fail("无人机舱已空，需在空间站补充"); return {}
-	var hold: String = inventory.hold(state.ship(), T.ContainerKind.CARGO)
+	if profile.fire_mode == "drone" and drone_control.supported() and drone_control.stock(firing_ship.ship_instance_id, item_id) <= 0: fail("无人机舱已空，需在空间站补充"); return {}
+	var hold: String = inventory.hold(firing_ship, T.ContainerKind.CARGO)
 	if weapon.ammo_item_id != null and inventory.count(hold, weapon.ammo_item_id, false) < weapon.ammo_per_cycle:
 		fail("弹药不足"); return {}
-	if not pay_cycle(e): return {}
+	if not pay_cycle(e,firing_ship): return {}
 	if weapon.ammo_item_id != null: inventory.consume(hold, weapon.ammo_item_id, weapon.ammo_per_cycle, false)
 	mark_hostile_attempt()
 	var raw: Vector3 = Vector3.ZERO; raw[damage_index(weapon.damage_type)] = profile.raw_damage
-	event(T.EventKind.WEAPON_FIRED, state.ship().ship_instance_id, "", item_id)
-	telemetry.stat("weapon_cycles")
+	event(T.EventKind.WEAPON_FIRED, firing_ship.ship_instance_id, "", item_id)
+	if firing_ship==state.ship():telemetry.stat("weapon_cycles")
 	return {"damage_vector":raw,"speed":profile.projectile_speed_mps,"range":profile.range_m,"cycle":profile.cycle_s,"damage_type":weapon.damage_type,"module_id":e.module_def_id,"profile":profile}
 
 func mark_hostile_attempt() -> void:
@@ -607,18 +629,22 @@ func begin_step(delta: float) -> void:
 
 func activate_repairs() -> void:
 	_tick_repairs()
+	for deployment: RefCounted in owned_fleet.active():
+		if deployment.phase in ["deployed","retreating"]:_tick_repairs(owned_fleet.ship(deployment.ship_instance_id))
 
 func finish_step(delta: float) -> void:
 	# Must run after engine/repair/weapon activation and aggregated hits.
 	for repair in _pending_repairs.duplicate():
 		var item:D.ItemInstanceStateDto=state.find("item_instance_state","item_instance_id",repair.item_id)
-		if state.ship().ship_instance_id!=repair.ship_id or state.ship().status!=T.ShipStatus.FLYING or item==null:
+		var target_ship: D.ShipStateDto=state.find("ship_state","ship_instance_id",repair.ship_id)
+		if target_ship==null or target_ship.status!=T.ShipStatus.FLYING or (target_ship!=state.ship() and not owned_fleet.friendly(repair.ship_id)) or item==null:
 			_pending_repairs.erase(repair);continue
 		if repair.remaining_s>0:continue
-		var m:Dictionary=metrics(state.ship())
-		var before: float=float(state.ship().get(repair.layer))
-		state.ship().set(repair.layer,minf(m[repair.layer+"_max"],state.ship().get(repair.layer)+repair.amount))
-		telemetry.repair("self",float(state.ship().get(repair.layer))-before)
+		var m:Dictionary=metrics(target_ship)
+		var before: float=float(target_ship.get(repair.layer))
+		target_ship.set(repair.layer,minf(m[repair.layer+"_max"],target_ship.get(repair.layer)+repair.amount))
+		if target_ship==state.ship():telemetry.repair("self",float(target_ship.get(repair.layer))-before)
+		else:owned_fleet.sync_actor_health(target_ship.ship_instance_id)
 		_pending_repairs.erase(repair)
 	missions.tick(delta)
 	work.tick(delta)
@@ -641,10 +667,13 @@ func finish_step(delta: float) -> void:
 	expeditions.tick(delta)
 	telemetry.tick(delta,not situational.spatial_active)
 	scenarios.spatial_active=situational.spatial_active;scenarios.tick(delta)
+	crew.tick(delta)
+	owned_fleet.spatial_active=situational.spatial_active;owned_fleet.tick(delta)
 
-func _tick_repairs() -> void:
-	if state.ship().status != T.ShipStatus.FLYING: return
-	for e in equipped(state.ship()):
+func _tick_repairs(owner_ship: D.ShipStateDto=null) -> void:
+	var repair_ship: D.ShipStateDto=state.ship() if owner_ship==null else owner_ship
+	if repair_ship.status != T.ShipStatus.FLYING: return
+	for e in equipped(repair_ship):
 		var repair: Dictionary = definition("repair_defs", "module_id", e.module_def_id)
 		if repair.is_empty() or not e.enabled or e.cooldown_remaining_s > 0: continue
 		if ship_roles.reserved(e.item_instance_id): continue
@@ -652,13 +681,13 @@ func _tick_repairs() -> void:
 		for cycle in _pending_repairs:
 			if cycle.item_id==e.item_instance_id:pending=true;break
 		if pending:continue
-		var m: Dictionary = metrics(state.ship())
-		if state.ship().get(repair.layer_id) >= m[repair.layer_id + "_max"]: continue
-		var hold: String = inventory.hold(state.ship(), T.ContainerKind.CARGO)
+		var m: Dictionary = metrics(repair_ship)
+		if repair_ship.get(repair.layer_id) >= m[repair.layer_id + "_max"]: continue
+		var hold: String = inventory.hold(repair_ship, T.ContainerKind.CARGO)
 		if repair.consumable_item_id != null and inventory.count(hold, repair.consumable_item_id, false) < repair.consumable_per_cycle: continue
-		if not pay_cycle(e): continue
+		if not pay_cycle(e,repair_ship): continue
 		if repair.consumable_item_id != null: inventory.consume(hold, repair.consumable_item_id, repair.consumable_per_cycle, false)
-		_pending_repairs.append({"ship_id":state.ship().ship_instance_id,"item_id":e.item_instance_id,"layer":repair.layer_id,"amount":repair.restore_amount,"remaining_s":definition("module_defs","module_id",e.module_def_id).cycle_s})
+		_pending_repairs.append({"ship_id":repair_ship.ship_instance_id,"item_id":e.item_instance_id,"layer":repair.layer_id,"amount":repair.restore_amount,"remaining_s":definition("module_defs","module_id",e.module_def_id).cycle_s})
 
 func _tick_resources(delta: float) -> void:
 	for node in state.rows("resource_state"):
@@ -704,9 +733,10 @@ func damage_contribution(victim: RefCounted,raw: Vector3,resist: Dictionary,cred
 		var remainder: float=1.0-used/amount;raw*=remainder;credited*=remainder
 	return total
 
-func damage_npc(instance_id: String, raw_vector: Vector3,credited_raw: Vector3=Vector3.ZERO) -> float:
+func damage_npc(instance_id: String, raw_vector: Vector3,credited_raw: Vector3=Vector3.ZERO,owned_sources: Dictionary={}) -> float:
 	var npc: D.NpcStateDto = state.find("npc_state", "npc_instance_id", instance_id)
 	if npc == null or not npc.alive or not raw_vector.is_finite() : return 0.0
+	if owned_fleet.friendly(instance_id):return owned_fleet.damage_actor(instance_id,raw_vector)
 	if operations.handles(npc.spawn_id) and not operations.structure_active(npc): return 0.0
 	if Space.supported(catalog) and not same_entity_site("ship", state.ship(), "npc", npc): return 0.0
 	var spawn: Dictionary = definition("npc_spawn_defs", "spawn_id", npc.spawn_id)
@@ -715,8 +745,13 @@ func damage_npc(instance_id: String, raw_vector: Vector3,credited_raw: Vector3=V
 	for r in rows("npc_resistances"):
 		if r.archetype_id == def.archetype_id: resist[r.layer_id][damage_index(r.damage_type)] = r.resistance
 	var contribution: float=damage_contribution(npc,raw_vector.max(Vector3.ZERO),resist,credited_raw)
+	for owner_id: String in owned_sources:
+		if owned_fleet.row(owner_id)==null:continue
+		var earned: float=damage_contribution(npc,raw_vector.max(Vector3.ZERO),resist,owned_sources[owner_id])
+		crew.contribute(owner_id,"damage",earned);owned_fleet.total().damage_dealt+=earned
 	var amount: float = apply_damage(npc, raw_vector.max(Vector3.ZERO), resist)
 	telemetry.stat("damage_dealt",contribution)
+	crew.contribute(state.ship().ship_instance_id,"damage",contribution)
 	mark_hostile_attempt()
 	if npc.hull <= 0:
 		if contribution>0.0:telemetry.stat("kills")
@@ -762,6 +797,8 @@ func damage_ship(raw_vector: Vector3,cause: String="combat") -> float:
 		telemetry.finish(true)
 		hired.controlled_ship_lost()
 		ship_roles.stop_support()
+		owned_fleet.controlled_ship_lost()
+		if crew.supported():crew.ship_lost(ship.ship_instance_id,owned_fleet.nearest_station(ship.sector_id,position(ship)))
 		work.stop_scan(); work.stop_mining()
 		inventory.ship_destroyed(ship)
 		missions.ship_destroyed(ship)
@@ -772,6 +809,7 @@ func _sync_spawns(delta: float = 0.0) -> void:
 	encounters.tick(delta)
 	tactics.sync(delta)
 	for spawn in rows("npc_spawn_defs"):
+		if catalog.table_names.has("fleet_hull_defs") and not definition("fleet_hull_defs","spawn_id",spawn.spawn_id).is_empty():continue
 		if tactics.handles(spawn.spawn_id) or operations.handles(spawn.spawn_id) or scenarios.handles(spawn.spawn_id): continue
 		if exploration.managed_spawns.has(spawn.spawn_id): continue
 		if civilizations.handles_spawn(spawn.spawn_id): continue
@@ -872,11 +910,12 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired,situational,projects,expeditions,telemetry,journal,scenarios]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired,situational,projects,expeditions,telemetry,journal,scenarios,crew,owned_fleet]:
 		if service != null: service.g = null
 	specializations = null; fitting_analysis = null
 	ship_roles = null; consignments = null; honors = null; frontier = null; hired = null; situational = null; projects = null; expeditions = null; telemetry = null
 	operations = null; journal = null; scenarios = null
+	crew=null;owned_fleet=null
 	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null; mobile_belts = null
 	tactics = null; drone_control = null
 	pending_autosave_request_id=""; events.clear(); _pending_repairs.clear(); _definition_cache.clear(); _index_cache.clear(); _rules.clear()

@@ -69,7 +69,7 @@ CREATE TABLE auxiliary_drone_defs(
  turn_rad_s REAL NOT NULL CHECK(turn_rad_s>0),work_range_m REAL NOT NULL CHECK(work_range_m>0),
  sortie_timeout_s REAL NOT NULL CHECK(sortie_timeout_s>0),return_radius_m REAL NOT NULL CHECK(return_radius_m>0),
  hull_hp REAL NOT NULL CHECK(hull_hp>0),restore_amount REAL NOT NULL CHECK(restore_amount>=0),
- sensor_range_m REAL NOT NULL CHECK(sensor_range_m>=0),observation_ttl_s REAL NOT NULL CHECK(observation_ttl_s>0),
+ sensor_range_m REAL NOT NULL CHECK(sensor_range_m>=0),observe_cycle_s REAL NOT NULL CHECK(observe_cycle_s>0),observation_ttl_s REAL NOT NULL CHECK(observation_ttl_s>observe_cycle_s),
  consumable_item_id TEXT REFERENCES item_defs(item_id),consumable_per_sortie INTEGER NOT NULL CHECK(consumable_per_sortie>=0),
  material_id TEXT NOT NULL REFERENCES item_defs(item_id),material_per_unit INTEGER NOT NULL CHECK(material_per_unit>0),
  credit_per_unit INTEGER NOT NULL CHECK(credit_per_unit>0),

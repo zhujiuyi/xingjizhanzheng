@@ -25,6 +25,7 @@ var fire_held: bool = false
 var last_destroyed_ship: String = ""
 var pending_damage: Dictionary = {}
 var player_damage_targets: Dictionary = {}
+var owned_damage_targets: Dictionary = {}
 var deferred_save: Dictionary = {}
 var autosave_elapsed: float = 0.0
 var auto_slot: int = 0
@@ -384,6 +385,7 @@ func _physics_process(delta: float) -> void:
 	gameplay.call("begin_step", delta)
 	gameplay.ship_roles.spatial_active = not travel.active() and not local_navigation.warp_active()
 	gameplay.hired.spatial_active = not travel.active() and not local_navigation.warp_active()
+	gameplay.owned_fleet.spatial_active = not travel.active() and not local_navigation.warp_active()
 	gameplay.situational.spatial_active = not travel.active() and not local_navigation.warp_active()
 	world.flight.metrics = gameplay.call("metrics", ship)
 	if _manual_navigation_override(): source_goal.clear()
@@ -411,10 +413,13 @@ func _physics_process(delta: float) -> void:
 	elif not warping and not auto_fire_target.is_empty():
 		_tick_auto_fire()
 	world.flight.blocked = travel.active() if travel != null else false
+	var crew_distance_origin: Vector3=world.flight.position
 	if local_navigation != null and local_navigation.active():
 		local_navigation.tick(delta)
 	else:
 		world.flight.simulate(delta)
+	if not warping and not travel.active() and state.ship().status==Types.ShipStatus.FLYING:
+		gameplay.crew.contribute(state.ship().ship_instance_id,"distance",crew_distance_origin.distance_to(world.flight.position))
 	if not warping:
 		if world.enforce_local_boundary() and local_boundary_warning_s <= 0.0:
 			ui.notify("已到达当前地点的局部航行边界；选择其他地点并跃迁继续航行。")
@@ -670,6 +675,9 @@ func _fire_weapons(automatic: bool = false, target_override: String = "") -> voi
 func _weapon_hit(target_id: String, damage: Vector3, point: Vector3, owner_id: String) -> void:
 	if not gameplay.civilizations.hostile_to(owner_id, target_id): return
 	if owner_id == state.ship().ship_instance_id: player_damage_targets[target_id] = (player_damage_targets.get(target_id,Vector3.ZERO) as Vector3)+damage
+	elif gameplay.owned_fleet.row(owner_id)!=null and gameplay.owned_fleet.row(owner_id).phase in ["deployed","retreating","lost"]:
+		if not owned_damage_targets.has(target_id):owned_damage_targets[target_id]={}
+		owned_damage_targets[target_id][owner_id]=(owned_damage_targets[target_id].get(owner_id,Vector3.ZERO) as Vector3)+damage
 	if target_id == state.ship().ship_instance_id and owner_id != target_id:
 		if presentation != null: presentation.hit(target_id, state.ship().shield > 0.0, point, damage)
 		pending_damage[target_id] = (pending_damage.get(target_id, Vector3.ZERO) as Vector3) + damage
@@ -690,12 +698,15 @@ func _flush_damage() -> void:
 		if id == state.ship().ship_instance_id:
 			gameplay.call("damage_ship", raw)
 		else:
-			gameplay.call("damage_npc", id, raw,player_damage_targets.get(id,Vector3.ZERO))
+			gameplay.call("damage_npc", id, raw,player_damage_targets.get(id,Vector3.ZERO),owned_damage_targets.get(id,{}))
 			if player_damage_targets.has(id):
 				gameplay.call("record_event", "weapon_hit", id, 1)
 				ui.notify("命中敌舰 · %.0f" % (raw.x + raw.y + raw.z))
 	pending_damage.clear()
-	player_damage_targets.clear()
+	player_damage_targets.clear(); owned_damage_targets.clear()
+
+func _owned_attacks_pending(owner_id: String) -> bool:
+	return world!=null and is_instance_valid(world.projectiles) and world.projectiles.owner_busy(owner_id)
 
 func interaction_context(target_id: String = "") -> Dictionary:
 	var context = preload("res://runtime/interaction_context.gd")
@@ -1338,6 +1349,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	world.projectiles.hit.connect(_weapon_hit)
 	world.projectiles.surface_impact.connect(_surface_impact)
 	gameplay.call("set_spatial_validator", _spatial_valid)
+	gameplay.owned_fleet.pending_attacks=_owned_attacks_pending
 	travel = XJTravel.new()
 	travel.setup(state, store, _prepare_travel, _record_arrival, _travel_stable)
 	travel.changed.connect(_travel_changed)
@@ -1381,7 +1393,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	brake_hold.clear()
 	pending_damage.clear()
 	autosave_elapsed = 0.0
-	player_damage_targets.clear()
+	player_damage_targets.clear(); owned_damage_targets.clear()
 	_release_controls()
 	_center_steering()
 	_sync_presentation_stage()

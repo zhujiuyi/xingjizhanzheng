@@ -24,6 +24,10 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	if not _validate_tactics(state, catalog): return false
 	if not _validate_operations(state, catalog): return false
 	if not _validate_specializations(state,catalog): return false
+	var crew_check: RefCounted=preload("res://runtime/data/crew_validation.gd").new()
+	if not crew_check.validate(state,catalog):return _fail(crew_check.last_error)
+	var owned_check: RefCounted=preload("res://runtime/data/fleet_validation.gd").new()
+	if not owned_check.validate(state,catalog):return _fail(owned_check.last_error)
 	var role_check: RefCounted=preload("res://runtime/data/role_validation.gd").new()
 	if not role_check.validate(state,catalog): return _fail(role_check.last_error)
 	var honor_check: RefCounted=preload("res://runtime/data/honor_validation.gd").new()
@@ -472,7 +476,7 @@ func _validate_space(state: State, catalog: XJCatalog) -> bool:
 			var npc: RefCounted = state.find("npc_state", "npc_instance_id", row.entity_id)
 			var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", npc.spawn_id)
 			var anchor_id: String = preload("res://runtime/gameplay/mobile_belts.gd").resolved_anchor(catalog, state, str(spawn.get("anchor_id", "")))
-			if catalog.one("anchor_site_defs", "anchor_id", anchor_id).get("site_id") != row.site_id and not preload("res://runtime/data/hire_validation.gd").actor_binding(state,catalog,npc.npc_instance_id): return _fail("NPC site differs from its frozen spawn/route")
+			if catalog.one("anchor_site_defs", "anchor_id", anchor_id).get("site_id") != row.site_id and not preload("res://runtime/data/hire_validation.gd").actor_binding(state,catalog,npc.npc_instance_id) and not preload("res://runtime/data/fleet_validation.gd").actor_binding(state,catalog,npc.npc_instance_id): return _fail("NPC site differs from its frozen spawn/route")
 		if row.entity_kind == "ship":
 			var ship: RefCounted = state.find("ship_state", "ship_instance_id", row.entity_id)
 			if ship.status == Types.ShipStatus.DOCKED:

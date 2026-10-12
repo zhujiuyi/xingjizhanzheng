@@ -378,7 +378,7 @@ INSERT INTO item_defs VALUES('module_aux_repair_i','缝翼维修机库 I','modul
 INSERT INTO module_defs VALUES('module_aux_repair_i','work',55.0,55.0,12.0,3000.0,24.0,12.0,1);
 INSERT INTO module_tech_defs VALUES('module_aux_repair_i','faction_neutral',1,'unlock_exploration_equipment');
 INSERT INTO module_activation_priority VALUES('module_aux_repair_i',20);
-INSERT INTO auxiliary_drone_defs VALUES('module_aux_repair_i','repair',2,650.0,350.0,3.0,100.0,30.0,32.0,70.0,20.0,0.0,120.0,'repair_kit_i',1,'material_structural_stock',2,180);
+INSERT INTO auxiliary_drone_defs VALUES('module_aux_repair_i','repair',2,650.0,350.0,3.0,100.0,30.0,32.0,70.0,20.0,0.0,1.0,120.0,'repair_kit_i',1,'material_structural_stock',2,180);
 INSERT INTO recipe_defs VALUES('recipe_aux_repair_i','module_aux_repair_i',1,600,0.0);
 INSERT INTO industry_recipe_defs VALUES('recipe_aux_repair_i','recipe_aux_repair_i',NULL,24.0);
 INSERT INTO module_salvage_recipe_defs VALUES('module_aux_repair_i','recipe_aux_repair_i');
@@ -501,7 +501,7 @@ INSERT INTO item_defs VALUES('module_aux_repair_ii','缝翼维修机库 II','mod
 INSERT INTO module_defs VALUES('module_aux_repair_ii','work',110.0,90.0,12.0,4500.0,36.0,20.0,1);
 INSERT INTO module_tech_defs VALUES('module_aux_repair_ii','faction_neutral',2,'unlock_tech_ii');
 INSERT INTO module_activation_priority VALUES('module_aux_repair_ii',20);
-INSERT INTO auxiliary_drone_defs VALUES('module_aux_repair_ii','repair',3,800.0,450.0,3.0,100.0,30.0,32.0,95.0,24.0,0.0,120.0,'repair_kit_i',1,'material_structural_stock',4,360);
+INSERT INTO auxiliary_drone_defs VALUES('module_aux_repair_ii','repair',3,800.0,450.0,3.0,100.0,30.0,32.0,95.0,24.0,0.0,1.0,120.0,'repair_kit_i',1,'material_structural_stock',4,360);
 INSERT INTO recipe_defs VALUES('recipe_aux_repair_ii','module_aux_repair_ii',1,1200,0.0);
 INSERT INTO industry_recipe_defs VALUES('recipe_aux_repair_ii','recipe_aux_repair_ii',NULL,48.0);
 INSERT INTO module_salvage_recipe_defs VALUES('module_aux_repair_ii','recipe_aux_repair_ii');
@@ -625,7 +625,7 @@ INSERT INTO item_defs VALUES('module_aux_recon_i','远瞳侦察机库 I','module
 INSERT INTO module_defs VALUES('module_aux_recon_i','work',55.0,55.0,12.0,8000.0,24.0,12.0,1);
 INSERT INTO module_tech_defs VALUES('module_aux_recon_i','faction_neutral',1,'unlock_exploration_equipment');
 INSERT INTO module_activation_priority VALUES('module_aux_recon_i',10);
-INSERT INTO auxiliary_drone_defs VALUES('module_aux_recon_i','recon',2,900.0,350.0,3.0,100.0,40.0,32.0,70.0,0.0,2500.0,120.0,NULL,0,'material_structural_stock',2,180);
+INSERT INTO auxiliary_drone_defs VALUES('module_aux_recon_i','recon',2,900.0,350.0,3.0,100.0,40.0,32.0,70.0,0.0,2500.0,1.0,120.0,NULL,0,'material_structural_stock',2,180);
 INSERT INTO recipe_defs VALUES('recipe_aux_recon_i','module_aux_recon_i',1,600,0.0);
 INSERT INTO industry_recipe_defs VALUES('recipe_aux_recon_i','recipe_aux_recon_i',NULL,24.0);
 INSERT INTO module_salvage_recipe_defs VALUES('module_aux_recon_i','recipe_aux_recon_i');
@@ -748,7 +748,7 @@ INSERT INTO item_defs VALUES('module_aux_recon_ii','远瞳侦察机库 II','modu
 INSERT INTO module_defs VALUES('module_aux_recon_ii','work',110.0,90.0,12.0,12000.0,36.0,20.0,1);
 INSERT INTO module_tech_defs VALUES('module_aux_recon_ii','faction_neutral',2,'unlock_tech_ii');
 INSERT INTO module_activation_priority VALUES('module_aux_recon_ii',10);
-INSERT INTO auxiliary_drone_defs VALUES('module_aux_recon_ii','recon',3,1200.0,450.0,3.0,100.0,40.0,32.0,95.0,0.0,4000.0,120.0,NULL,0,'material_structural_stock',4,360);
+INSERT INTO auxiliary_drone_defs VALUES('module_aux_recon_ii','recon',3,1200.0,450.0,3.0,100.0,40.0,32.0,95.0,0.0,4000.0,1.0,120.0,NULL,0,'material_structural_stock',4,360);
 INSERT INTO recipe_defs VALUES('recipe_aux_recon_ii','module_aux_recon_ii',1,1200,0.0);
 INSERT INTO industry_recipe_defs VALUES('recipe_aux_recon_ii','recipe_aux_recon_ii',NULL,48.0);
 INSERT INTO module_salvage_recipe_defs VALUES('module_aux_recon_ii','recipe_aux_recon_ii');

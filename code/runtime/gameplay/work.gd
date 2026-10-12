@@ -192,6 +192,7 @@ func _scan_tick(delta:float)->void:
 	var target:String=scan_target
 	if def.occurrence_mode=="fixed" and g.state.find("discovery_state","signal_id",target)==null:
 		var row:D.DiscoveryStateDto=D.DiscoveryStateDto.new();row.player_id=g.state.player().player_id;row.discovery_id=g.id("discovery");row.sector_id=anchor.sector_id;row.kind=T.DiscoveryKind.SIGNAL;row.has_signal_id=true;row.signal_id=target;row.discovered_tick=g.state.snapshot.meta.simulation_tick;g.state.add("discovery_state",row)
+		g.crew.contribute(g.state.ship().ship_instance_id,"survey",1.0)
 	for reward in g.rows("signal_unlock_rewards"):
 		if reward.signal_id==target:g.grant_unlock(reward.unlock_id)
 	g.record_event("scan_signal",target,1);stop_scan();g.request_autosave();g.status_text="信号解析完成"

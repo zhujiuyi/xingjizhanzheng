@@ -1,6 +1,6 @@
 # 测试与辅助文件
 
-S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增SQL；`build_catalog.py --output jiaoben/tmp/fleet-candidate.db`执行数据闭合和经济校验。`fleet_state_spec.py`声明八组新状态，船员运行时尚待028迁移、主流程/物理和UI接线。当前仅有数据及解析证据，不启动开发源码处理个人档；功能联通后统一验收，详见[66](../doc/66-自有舰队船员与辅助无人机.md)。
+S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增SQL；`build_catalog.py --output jiaoben/tmp/fleet-candidate.db`执行数据闭合和经济校验。`store_generate_fleet.py`仅生成028/固定v0.23适配器和九组新状态（共108组），保护旧历史文件。`tests/owned_fleet_v40.gd`通过显式fresh UUID的`XJ_OWNED_FLEET_V40_DIRECTORY`运行源码业务，当前34项涵盖船员、已有舰部署/成本/损失及SQLite；资格/资产/贡献/工资边界/直接伤害是夹具，不证明自然成长或物理AI。编队旅行、UI和辅助机尚待联通，不正常启动开发源码处理个人档；功能联通后统一原生/旧PCK/发行验收，详见[66](../doc/66-自有舰队船员与辅助无人机.md)。
 
 ## 临时产物保留与清理
 

@@ -110,6 +110,9 @@ func create(catalog: XJCatalog, seed_value: int) -> State:
 	var scenario_rows: Dictionary=preload("res://runtime/data/scenario_initial.gd").rows(catalog,result)
 	for table: String in scenario_rows:
 		for row: RefCounted in scenario_rows[table]:result.add(table,row)
+	var fleet_rows: Dictionary=preload("res://runtime/data/fleet_initial.gd").rows(catalog,result)
+	for table: String in fleet_rows:
+		for row: RefCounted in fleet_rows[table]:result.add(table,row)
 	return result
 
 func _add(table: String, values: Dictionary) -> void:

@@ -91,6 +91,8 @@ func sell_ship(ship_id: String) -> bool:
 	if ship==null or ship.status!=T.ShipStatus.DOCKED or ship.station_id!=g.station() or ship.owner_player_id!=g.state.player().player_id:return g.fail("只能出售同站点自己的舰船")
 	if not g.definition("asset_policy_defs","policy_id",ship.policy_id).may_sell:return g.fail("保障或借船不能出售")
 	if g.state.player().controlled_ship_id==ship_id:return g.fail("先切换到另一艘船")
+	var fleet_reason: String=g.owned_fleet.removal_reason(ship_id)
+	if not fleet_reason.is_empty():return g.fail(fleet_reason)
 	var stock: D.ShopShipStockStateDto = _ship_stock(ship.ship_def_id)
 	var stockdef: Dictionary = {}
 	for row in g.rows("station_ship_stock_defs"):
@@ -106,6 +108,7 @@ func sell_ship(ship_id: String) -> bool:
 		var item: D.ItemInstanceStateDto = g.state.find("item_instance_state","item_instance_id",e.item_instance_id)
 		if item.policy_id!="normal_owned":return g.fail("船上仍有绑定设备")
 		item.container_id=dest;g.state.remove("equipment_state",e)
+	g.owned_fleet.remove_ship_records(ship_id)
 	g.inventory.retire(ship)
 	stock.quantity+=1;_budget().buyback_remaining_credit-=price;g.state.player().credit+=price
 	return true

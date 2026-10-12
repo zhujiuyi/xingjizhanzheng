@@ -1453,6 +1453,9 @@ class FleetTotalStateDto extends RefCounted:
 	var returns: int = 0
 	var losses: int = 0
 	var paid_credit: int = 0
+	var damage_dealt: float = 0.0
+	var damage_taken: float = 0.0
+	var provided_repair_hp: float = 0.0
 
 class AuxiliaryBayStateDto extends RefCounted:
 	var item_instance_id: String = ""
@@ -1466,6 +1469,9 @@ class AuxiliaryBayStateDto extends RefCounted:
 	var revision: int = 0
 	var sorties: int = 0
 	var repaired_hp: float = 0.0
+	var energy_paid_total: float = 0.0
+	var heat_paid_total: float = 0.0
+	var consumable_paid_units: int = 0
 
 class AuxiliaryIntelStateDto extends RefCounted:
 	var owner_ship_id: String = ""
@@ -1481,7 +1487,20 @@ class AuxiliaryIntelStateDto extends RefCounted:
 	var pos_z: float = 0.0
 	var remaining_units: int = 0
 
+
+class CrewSupportQuoteStateDto extends RefCounted:
+	var item_instance_id: String = ""
+	var profile_id: String = ""
+	var profession_id: String = ""
+	var rank_at_payment: int = 0
+	var loyalty_at_payment: int = 0
+	var restore_multiplier: float = 0.0
+	var paid_tick: int = 0
+
+
+
 class WorldSnapshotDto extends RefCounted:
+	var crew_support_quote_state_rows: Array[CrewSupportQuoteStateDto] = []
 	var auxiliary_intel_state_rows: Array[AuxiliaryIntelStateDto] = []
 	var auxiliary_bay_state_rows: Array[AuxiliaryBayStateDto] = []
 	var fleet_total_state_rows: Array[FleetTotalStateDto] = []

@@ -33,8 +33,7 @@ func reserved(item_id: String) -> bool:
 func support_range(equipment: RefCounted) -> float:
 	return maxf(float(balance.remote_range_floor_m),float(g.definition("module_defs","module_id",equipment.module_def_id).range_m))*float(capability().remote_range_multiplier)
 func target_limits(npc: RefCounted) -> Dictionary:
-	var spawn: Dictionary = g.definition("npc_spawn_defs","spawn_id",npc.spawn_id)
-	return g.definition("npc_full_defs","npc_id",spawn.npc_id)
+	return g.npc_metrics(npc)
 func _equipment(item_id: String) -> RefCounted:
 	var equipment: RefCounted = g.state.find("equipment_state","item_instance_id",item_id)
 	return equipment if equipment != null and g.equipped(g.state.ship()).has(equipment) else null
@@ -79,6 +78,7 @@ func stop_support(item_id: String = "",quiet: bool = true) -> bool:
 	if changed and not quiet: warning_changed.emit("远程维修已停止 · 已支付周期不退还")
 	return changed
 func _clear_payment(row: RefCounted) -> void:
+	g.crew.clear_support_quote(row.item_instance_id)
 	var equipment: RefCounted = g.state.find("equipment_state","item_instance_id",row.item_instance_id)
 	if equipment != null: equipment.active_remaining_s = 0.0; equipment.cycle_paid = false
 	row.phase = "armed"; row.remaining_s = 0.0; row.paid_restore = 0.0
@@ -91,7 +91,7 @@ func _pay(row: RefCounted) -> bool:
 	if repair.consumable_item_id != null: g.inventory.consume(hold,repair.consumable_item_id,int(repair.consumable_per_cycle),true)
 	var item: RefCounted = g.state.find("item_instance_state","item_instance_id",row.item_instance_id)
 	row.phase = "cycling"; row.remaining_s = float(g.definition("module_defs","module_id",equipment.module_def_id).cycle_s)
-	row.paid_restore = float(repair.restore_amount) * item.quality_multiplier * float(capability()["remote_"+str(repair.layer_id)+"_multiplier"])
+	row.paid_restore = float(repair.restore_amount) * item.quality_multiplier * float(capability()["remote_"+str(repair.layer_id)+"_multiplier"]) * g.crew.support_quote(row.item_instance_id,row.ship_instance_id)
 	equipment.cycle_paid = true
 	return true
 func tick(delta: float) -> void:
@@ -116,6 +116,8 @@ func tick(delta: float) -> void:
 		var before: float=float(npc.get(row.layer_id))
 		npc.set(row.layer_id,minf(maximum,before+row.paid_restore))
 		g.telemetry.repair("provided",float(npc.get(row.layer_id))-before)
+		if g.owned_fleet.friendly(row.target_npc_id):g.owned_fleet.sync_health(row.target_npc_id)
+		g.crew.contribute(g.state.ship().ship_instance_id,"repair",float(npc.get(row.layer_id))-before)
 		g.scenarios.repaired(npc.npc_instance_id,float(npc.get(row.layer_id))-before)
 		_clear_payment(row)
 func options(target_id: String) -> Array[Dictionary]:

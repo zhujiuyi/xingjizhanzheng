@@ -106,7 +106,7 @@ def main():
                 insert("auxiliary_drone_defs", [module, role, 2 if tier == 1 else 3,
                        (650.0 + 150.0 * (tier-1)) if role == "repair" else (900.0 + 300.0 * (tier-1)), 350.0 + 100.0 * (tier-1), 3.0, 100.0,
                        30.0 if role == "repair" else 40.0, 32.0, 70.0 + 25.0 * (tier-1), (20.0 + 4.0 * (tier-1)) if role == "repair" else 0.0,
-                       (2500.0 + 1500.0 * (tier-1)) if role == "recon" else 0.0, 120.0,
+                       (2500.0 + 1500.0 * (tier-1)) if role == "recon" else 0.0, 1.0, 120.0,
                        "repair_kit_i" if role == "repair" else None, 1 if role == "repair" else 0,
                        "material_structural_stock", 2 * tier, 180 * tier])
                 inputs = {"component_power_cell": 2 * tier, "component_thruster_cluster": tier,

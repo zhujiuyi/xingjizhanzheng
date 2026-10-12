@@ -26,6 +26,7 @@ func _support(state: XJRuntimeState,catalog: XJCatalog) -> bool:
 		var actor: RefCounted=state.find("exploration_actor_state","npc_instance_id",row.target_npc_id)
 		var member: RefCounted=state.find("war_fleet_state","npc_instance_id",row.target_npc_id)
 		var friendly: bool=(actor!=null and actor.actor_role=="escort") or (member!=null and member.side=="ally") or (catalog.table_names.has("frontier_campaign_defs") and preload("res://runtime/data/frontier_validation.gd").new().friendly(state,row.target_npc_id)) or preload("res://runtime/data/hire_validation.gd").actor_binding(state,catalog,row.target_npc_id)
+		friendly=friendly or preload("res://runtime/data/fleet_validation.gd").actor_binding(state,catalog,row.target_npc_id)
 		var scenario: RefCounted=state.find("scenario_actor_state","npc_instance_id",row.target_npc_id)
 		if scenario!=null and scenario.scenario_kind=="trial" and scenario.actor_role in ["escort","patient"]:
 			var trial: RefCounted=state.find("trial_state","trial_id",scenario.scenario_id)
@@ -36,6 +37,8 @@ func _support(state: XJRuntimeState,catalog: XJCatalog) -> bool:
 		elif row.phase=="cycling":
 			var module: Dictionary=catalog.one("module_defs","module_id",equipment.module_def_id)
 			var amount: float=float(repair.restore_amount)*item.quality_multiplier*float(cap["remote_"+row.layer_id+"_multiplier"])
+			var crew_quote: RefCounted=state.find("crew_support_quote_state","item_instance_id",row.item_instance_id)
+			if crew_quote!=null:amount*=crew_quote.restore_multiplier
 			if row.remaining_s<=0.0 or row.remaining_s>float(module.cycle_s)+0.000001 or not equipment.cycle_paid or absf(equipment.active_remaining_s-row.remaining_s)>0.000001 or absf(row.paid_restore-amount)>0.000001: return _fail("Support paid cycle invalid")
 		else: return _fail("Unknown support phase")
 	return true

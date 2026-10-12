@@ -30,11 +30,21 @@ func pilot(ship_id: String) -> RefCounted:
 		if profession(a.profile_id).duty_kind=="pilot" and ready(member(a.profile_id)):return member(a.profile_id)
 	return null
 func effect(ship_id: String,stat: String) -> float:
-	var result: float=0.0
+	return preload("res://runtime/crew_effects.gd").amount(g.state,g.catalog,ship_id,stat)
+func clear_support_quote(item_id: String) -> void:
+	var quote: RefCounted=g.state.find("crew_support_quote_state","item_instance_id",item_id)
+	if quote!=null:g.state.remove("crew_support_quote_state",quote)
+func support_quote(item_id: String,ship_id: String) -> float:
+	clear_support_quote(item_id)
+	if not supported():return 1.0
 	for a: RefCounted in assigned(ship_id):
-		var row: RefCounted=member(a.profile_id);var job: Dictionary=profession(a.profile_id)
-		if ready(row) and job.effect_stat==stat:result+=float(rank_for(row).effect_value)*float(row.loyalty)/100.0
-	return result
+		var row: RefCounted=member(a.profile_id)
+		if not ready(row) or profession(a.profile_id).effect_stat!="remote_repair_multiplier":continue
+		var rank: Dictionary=rank_for(row);var quote: RefCounted=D.CrewSupportQuoteStateDto.new()
+		quote.item_instance_id=item_id;quote.profile_id=row.profile_id;quote.profession_id=a.profession_id;quote.rank_at_payment=int(rank.rank);quote.loyalty_at_payment=row.loyalty
+		quote.restore_multiplier=1.0+float(rank.effect_value)*row.loyalty/100.0;quote.paid_tick=g.state.snapshot.meta.simulation_tick;g.state.add("crew_support_quote_state",quote)
+		return quote.restore_multiplier
+	return 1.0
 func token(id: String) -> String:
 	var row: RefCounted=member(id);var a: RefCounted=assignment(id)
 	return "%d:%d:%s:%s" % [row.generation,row.revision,row.phase,a.ship_instance_id if a!=null else ""] if row!=null else ""

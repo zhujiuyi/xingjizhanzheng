@@ -63,6 +63,13 @@ func module_busy(module_instance_id: String) -> bool:
 		if drone.module_instance_id == module_instance_id: return true
 	return false
 
+func owner_busy(owner_id: String) -> bool:
+	for shot: Projectile in active:
+		if shot.owner_id==owner_id:return true
+	for drone: Drone in drones:
+		if drone.owner_id==owner_id:return true
+	return false
+
 func recall_drones() -> void:
 	# Disarm future shots without deleting already launched projectiles.
 	var state: XJRuntimeState = get_parent().get("state") as XJRuntimeState

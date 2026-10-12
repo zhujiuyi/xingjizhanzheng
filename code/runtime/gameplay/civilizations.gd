@@ -196,6 +196,7 @@ func fleet_member(npc_id: String) -> D.WarFleetStateDto:
 	return g.state.find("war_fleet_state", "npc_instance_id", npc_id) as D.WarFleetStateDto
 
 func friendly(npc_id: String) -> bool:
+	if g.owned_fleet!=null and g.owned_fleet.owns(npc_id):return true
 	if g.scenarios!=null and g.scenarios.friendly(npc_id):return true
 	if g.drone_control != null:
 		var owner: String = g.drone_control.owner(npc_id)
@@ -207,6 +208,7 @@ func friendly(npc_id: String) -> bool:
 	return member != null and member.side == "ally"
 
 func escort_hull(npc_id: String) -> String:
+	if g.owned_fleet!=null and g.owned_fleet.friendly(npc_id):return g.owned_fleet.model(npc_id)
 	if g.scenarios!=null:
 		var scenario_model: String=g.scenarios.model(npc_id)
 		if not scenario_model.is_empty():return scenario_model

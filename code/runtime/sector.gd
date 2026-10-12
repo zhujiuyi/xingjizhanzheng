@@ -207,7 +207,7 @@ func sync_entities() -> bool:
 			continue
 		if not npcs.has(row.npc_instance_id):
 			var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", row.spawn_id)
-			var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)
+			var definition: Dictionary = gameplay.npc_metrics(row)
 			var escort_hull: String = gameplay.civilizations.escort_hull(row.npc_instance_id)
 			if escort_hull.is_empty(): escort_hull = gameplay.tactics.model(row.npc_instance_id)
 			var body: CharacterBody3D = preload("res://runtime/operation_visual.gd").generator() if gameplay.operations.handles(row.spawn_id) or gameplay.frontier.is_structure(row.spawn_id) else factory.scene(escort_hull) if not escort_hull.is_empty() else factory.enemy_scene(str(definition.archetype_id))
@@ -304,6 +304,7 @@ func simulate_npcs(delta: float) -> void:
 		if XJScenarioPilot.step(self,row,body,delta):continue
 		if gameplay.operations.handles(row.spawn_id): body.velocity = Vector3.ZERO; continue
 		if XJHirePilot.step(self,row,body,delta):continue
+		if XJOwnedFleetPilot.step(self,row,body,delta):continue
 		if XJFrontierPilot.step(self,row,body,delta):continue
 		if WarFleetPilot.step(self, row, body, delta): continue
 		if XJTacticalPilot.step(self, row, body, delta): continue
@@ -320,6 +321,16 @@ func simulate_npcs(delta: float) -> void:
 		var distance := body.position.distance_to(victim.position)
 		var visible := line_of_sight(body.position, victim.position, body.get_rid(), victim_id)
 		var can_acquire := (victim!=flight or flight.record.status == Types.ShipStatus.FLYING) and not in_safe_zone(victim.position) and not in_safe_zone(body.position)
+		# A docked flagship cannot shield a deployed fleet from all threat AI.
+		# Choose a real hostile body among owned ships, hired escorts and allies.
+		for candidate_id: String in npcs:
+			var candidate_record: RefCounted=state.find("npc_state","npc_instance_id",candidate_id)
+			if candidate_record==null or not candidate_record.alive or not gameplay.civilizations.hostile_to(row.npc_instance_id,candidate_id):continue
+			var candidate: Node3D=npcs[candidate_id]
+			if in_safe_zone(candidate.position):continue
+			var candidate_distance: float=body.position.distance_to(candidate.position)
+			if not can_acquire or candidate_distance<distance:
+				victim=candidate;victim_id=candidate_id;distance=candidate_distance;visible=line_of_sight(body.position,victim.position,body.get_rid(),victim_id);can_acquire=not in_safe_zone(body.position)
 		var destination := home
 		var should_move := true
 		row.cooldown_remaining_s = maxf(0.0, row.cooldown_remaining_s - delta)
