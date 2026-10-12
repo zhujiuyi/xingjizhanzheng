@@ -9,9 +9,11 @@ COLUMNS={
 TABLES=tuple(COLUMNS)
 def validate(db):
     if {r[0] for r in db.execute('SELECT tactic_kind FROM npc_tactic_defs')}!={'support','interceptor','siege','carrier'}:raise ValueError('Four actual tactical kinds required')
-    if db.execute('SELECT count(*) FROM npc_tactic_bindings').fetchone()[0]!=9:raise ValueError('Three complete mixed tactical encounters required')
+    linked = db.execute("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='campaign_tactical_links'").fetchone()
+    campaign_sites = db.execute('SELECT count(*) FROM campaign_tactical_links').fetchone()[0] if linked else 0
+    if db.execute('SELECT count(*) FROM npc_tactic_bindings').fetchone()[0] != 9 + campaign_sites * 3:raise ValueError('Static and campaign tactical actor coverage incomplete')
     if db.execute('SELECT count(*) FROM drone_management_defs').fetchone()!=db.execute('SELECT count(*) FROM drone_defs').fetchone():raise ValueError('Every bay needs real health and replacement costs')
-    if db.execute("SELECT count(*) FROM tactical_site_defs").fetchone()[0]!=3:raise ValueError('Three independently navigable tactical sites required')
+    if db.execute("SELECT count(*) FROM tactical_site_defs").fetchone()[0]!=3+campaign_sites:raise ValueError('Static and campaign tactical sites incomplete')
     for (site,) in db.execute('SELECT site_id FROM tactical_site_defs'):
         if [r[0] for r in db.execute('SELECT member_index FROM npc_tactic_bindings WHERE site_id=? ORDER BY member_index',(site,))]!=[0,1,2]:raise ValueError('Tactical site membership must be complete')
     if db.execute("SELECT count(*) FROM npc_tactic_defs n JOIN tactical_balance_defs b WHERE n.tactic_kind='interceptor' AND n.duration_s>b.jam_max_duration_s").fetchone()[0]:raise ValueError('Jam duration exceeds minimum-control policy')

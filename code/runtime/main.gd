@@ -52,6 +52,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-campaign-world-v37","file":"campaign_world_v37.gd","prefix":"campaign-world-v37","env":"XJ_CAMPAIGN_WORLD_V37","meta":"xj_campaign_world_v37_diagnostic"},
+		{"flag":"--xj-verify-campaign-v37","file":"campaign_v37.gd","prefix":"campaign-v37","env":"XJ_CAMPAIGN_V37","meta":"xj_campaign_v37_diagnostic"},
 		{"flag":"--xj-verify-situational-v36","file":"situational_v36.gd","prefix":"situational-v36","env":"XJ_SITUATIONAL_V36","meta":"xj_situational_v36_diagnostic"},
 		{"flag":"--xj-verify-situational-world-v36","file":"situational_world_v36.gd","prefix":"situational-world-v36","env":"XJ_SITUATIONAL_WORLD_V36","meta":"xj_situational_world_v36_diagnostic"},
 		{"flag":"--xj-verify-hire-v35","file":"hire_v35.gd","prefix":"hire-v35","env":"XJ_HIRE_V35","meta":"xj_hire_v35_diagnostic"},
@@ -657,7 +659,7 @@ func _fire_weapons(automatic: bool = false, target_override: String = "") -> voi
 
 func _weapon_hit(target_id: String, damage: Vector3, point: Vector3, owner_id: String) -> void:
 	if not gameplay.civilizations.hostile_to(owner_id, target_id): return
-	if owner_id == state.ship().ship_instance_id: player_damage_targets[target_id] = true
+	if owner_id == state.ship().ship_instance_id: player_damage_targets[target_id] = (player_damage_targets.get(target_id,Vector3.ZERO) as Vector3)+damage
 	if target_id == state.ship().ship_instance_id and owner_id != target_id:
 		if presentation != null: presentation.hit(target_id, state.ship().shield > 0.0, point, damage)
 		pending_damage[target_id] = (pending_damage.get(target_id, Vector3.ZERO) as Vector3) + damage
@@ -678,7 +680,7 @@ func _flush_damage() -> void:
 		if id == state.ship().ship_instance_id:
 			gameplay.call("damage_ship", raw)
 		else:
-			gameplay.call("damage_npc", id, raw)
+			gameplay.call("damage_npc", id, raw,player_damage_targets.get(id,Vector3.ZERO))
 			if player_damage_targets.has(id):
 				gameplay.call("record_event", "weapon_hit", id, 1)
 				ui.notify("命中敌舰 · %.0f" % (raw.x + raw.y + raw.z))
@@ -728,6 +730,10 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		if action == "set_combat_option": _sync_combat_automation()
 		return
 	match action:
+		"campaign_map","campaign_navigate":
+			_campaign_navigation(action,target,extra)
+		"export_flight_report":
+			_export_flight_report(target)
 		"drone_command":
 			_drone_order(extra, target)
 		"frontier_open":
@@ -1071,6 +1077,7 @@ func _source_after_arrival() -> void:
 		elif source_goal.has("operation"): _operation_navigation("operation_nav",source_goal.operation,str(source_goal.generation))
 		elif source_goal.has("event"): _exploration_navigation("exploration_nav", source_goal.event, str(source_goal.generation))
 		elif source_goal.has("demand"): _demand_navigation(source_goal.demand)
+		elif source_goal.has("campaign"):_campaign_navigation("campaign_navigate",source_goal.campaign,source_goal.token)
 		else: _source_navigation("source_travel", source_goal.key, source_goal.item)
 
 func _drone_order(kind: String, target: String) -> void:
@@ -1174,6 +1181,48 @@ func _tactical_feedback(kind: String, message: String) -> void:
 
 func _situational_cue(cue: Dictionary) -> void:
 	if presentation != null: presentation.situational_cue(cue)
+
+func _campaign_navigation(action: String,target: String,expected: String) -> void:
+	if state==null or gameplay==null or busy or travel.active():return
+	var parts: PackedStringArray=target.split(":",true,1)
+	if parts.size()!=2:return
+	var info: Dictionary={}
+	if parts[0]=="expedition":
+		var run: RefCounted=gameplay.expeditions.active()
+		if run==null or run.run_id!=parts[1] or gameplay.expeditions.token(run.run_id)!=expected:ui.notify("远征阶段已变化，请刷新",true);return
+		info=gameplay.expeditions.guidance()
+	elif parts[0]=="project":
+		if gameplay.projects.token(parts[1])!=expected:ui.notify("工程阶段已变化，请刷新",true);return
+		var def: Dictionary=gameplay.projects.definition(parts[1])
+		if not def.is_empty():info=gameplay.missions._route_location(gameplay.missions._station_location(def.station_id),"")
+	elif parts[0]=="station":info=gameplay.missions._route_location(gameplay.missions._station_location(parts[1]),"")
+	if info.is_empty():return
+	if action=="campaign_map":
+		ui.show_page("map");ui.resource_chart.select_sector(info.sector_id);return
+	if state.ship().status!=Types.ShipStatus.FLYING:ui.notify("出港后可前往当前目标");return
+	if not str(info.route_reason).is_empty():ui.notify(info.route_reason,true);return
+	source_goal={"world":state.world_id,"campaign":target,"token":expected}
+	_navigate_guidance(info,true,true,true)
+
+func _export_flight_report(format: String) -> void:
+	if gameplay==null or not gameplay.telemetry.supported() or format not in ["csv","json"]:return
+	var directory: String=ProjectSettings.globalize_path(store.path).get_base_dir().path_join("reports")
+	if DirAccess.make_dir_recursive_absolute(directory)!=OK:ui.notify("无法创建报告目录",true);return
+	var stamp: String=Time.get_datetime_string_from_system(true).replace(":","")
+	var filename: String="flight-report-"+stamp+"-"+Crypto.new().generate_random_bytes(4).hex_encode()+"."+format
+	var output: FileAccess=FileAccess.open(directory.path_join(filename),FileAccess.WRITE)
+	if output==null:ui.notify("无法写入报告",true);return
+	var reports: Array[Dictionary]=gameplay.telemetry.export_rows()
+	if format=="json":output.store_string(JSON.stringify({"format_version":1,"reports":reports},"\t"))
+	else:
+		output.store_buffer(PackedByteArray([239,187,191]))
+		var columns: PackedStringArray=["sequence","hull","status","partial_baseline","elapsed_s","combat_s","transit_s","flight_income","flight_spent","return_income","return_spent","mined_units","kills","damage_dealt","damage_taken","weapon_cycles","drone_losses","activity_count"]
+		output.store_csv_line(columns)
+		for report: Dictionary in reports:
+			var values: PackedStringArray=[]
+			for column: String in columns:values.append(str(report.get(column,"")))
+			output.store_csv_line(values)
+	output.close();ui.notify("已导出游戏报告："+directory.path_join(filename))
 
 func _demand_navigation(id: String) -> void:
 	if state == null or gameplay == null or busy or travel.active(): return
@@ -1285,6 +1334,8 @@ func _activate(candidate: XJRuntimeState) -> void:
 	gameplay.tactics.feedback_changed.connect(_tactical_feedback)
 	gameplay.drone_control.warning_changed.connect(_tactical_warning)
 	gameplay.situational.cue_started.connect(_situational_cue)
+	gameplay.projects.changed.connect(_tactical_warning)
+	gameplay.expeditions.changed.connect(_tactical_warning)
 	combat_automation = CombatAutomation.new()
 	combat_automation.changed.connect(_sync_combat_automation)
 	combat_automation.acquired.connect(_combat_acquired)

@@ -19,7 +19,17 @@ FITTING_NAMES = {
     'industry_recipe_defs': ('blueprint_id', 'recipe_spec_'),
 }
 
+def without_campaign_extensions(connection,table,rows):
+    """Only explicit namespace additions; test_campaign protects every v0.28 row."""
+    from campaign_catalog import EXTENSIONS
+    if table not in EXTENSIONS:return rows
+    columns=[r[1] for r in connection.execute('PRAGMA table_info("'+table+'")')]
+    key=next(r[1] for r in connection.execute('PRAGMA table_info("'+table+'")') if r[5]==1)
+    index=columns.index(key)
+    return {r for r in rows if not str(r[index]).startswith(('exp_theme_','tac_exp_theme_'))}
+
 def without_fitting_extensions(connection, table, rows):
+    rows=without_campaign_extensions(connection,table,rows)
     if table not in FITTING_NAMES:
         return rows
     column, prefix = FITTING_NAMES[table]
@@ -29,6 +39,7 @@ def without_fitting_extensions(connection, table, rows):
 
 def without_hire_extensions(connection,table,rows):
     """Only eight reviewed additive tables; test_hire protects all v0.26 rows."""
+    rows=without_campaign_extensions(connection,table,rows)
     columns_by_table={'anchor_defs':'anchor_id','anchor_site_defs':'anchor_id','npc_archetype_defs':'archetype_id','npc_resistances':'archetype_id','npc_behavior_defs':'behavior_id','npc_defs':'npc_id','npc_spawn_defs':'spawn_id','npc_patrol_points':'spawn_id'}
     if table not in columns_by_table:return rows
     columns=[r[1] for r in connection.execute(f'PRAGMA table_info("{table}")')]

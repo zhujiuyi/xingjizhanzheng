@@ -239,7 +239,7 @@ func tick(delta: float) -> void:
 		if budget.refresh_remaining_s==0:
 			var station: Dictionary = g.definition("station_defs","station_id",budget.station_id);budget.refresh_remaining_s=station.stock_refresh_s;budget.buyback_remaining_credit=station.buyback_budget_credit
 	for stock in g.state.rows("shop_stock_state"):
-		stock.refresh_remaining_s=maxf(0,stock.refresh_remaining_s-delta*g.frontier.restock_rate(stock.station_id))
+		stock.refresh_remaining_s=maxf(0,stock.refresh_remaining_s-delta*g.frontier.restock_rate(stock.station_id)*g.projects.factor(stock.station_id,"stock_refresh"))
 		if stock.refresh_remaining_s>0:continue
 		for def in g.rows("station_stock_defs"):
 			if def.station_id==stock.station_id and def.item_id==stock.item_def_id:
@@ -247,7 +247,7 @@ func tick(delta: float) -> void:
 				stock.buyback_remaining_units=def.buyback_units_per_refresh
 		stock.refresh_remaining_s=g.definition("station_defs","station_id",stock.station_id).stock_refresh_s
 	for stock in g.state.rows("shop_ship_stock_state"):
-		stock.refresh_remaining_s=maxf(0,stock.refresh_remaining_s-delta*g.frontier.restock_rate(stock.station_id))
+		stock.refresh_remaining_s=maxf(0,stock.refresh_remaining_s-delta*g.frontier.restock_rate(stock.station_id)*g.projects.factor(stock.station_id,"stock_refresh"))
 		if stock.refresh_remaining_s>0:continue
 		for def in g.rows("station_ship_stock_defs"):
 			if def.station_id==stock.station_id and def.ship_id==stock.ship_def_id:stock.quantity=mini(def.target_units,stock.quantity+def.restock_units_per_refresh) if stock.quantity<def.target_units else stock.quantity
@@ -273,7 +273,7 @@ func repair_requirements() -> Dictionary:
 	for e in g.equipped(ship):
 		var item: D.ItemInstanceStateDto = g.state.find("item_instance_state","item_instance_id",e.item_instance_id)
 		fee += int(ceil(maxf(0,g.rule("module_durability_max")-item.durability)*g.rule("station_module_credit_per_durability")))
-	return {"credit":int(ceil(fee*g.frontier.station_factor(g.station(),"repair")/base_factor("repair"))),"structural_units":int(ceil(hull/g.rule("station_hull_hp_per_structural_unit")))}
+	return {"credit":int(ceil(fee*g.frontier.station_factor(g.station(),"repair")*g.projects.factor(g.station(),"repair_fee")/base_factor("repair"))),"structural_units":int(ceil(hull/g.rule("station_hull_hp_per_structural_unit")))}
 
 func quote_repair() -> int:
 	return repair_requirements().credit
@@ -282,4 +282,4 @@ func quote_manufacture(recipe_id: String, batches: int = 1) -> int:
 	var def: Dictionary = g.definition("recipe_defs","recipe_id",recipe_id)
 	if def.is_empty():def=g.definition("hull_recipe_defs","hull_recipe_id",recipe_id)
 	var discount: float = g.industry.discount(g.station()) if g.industry != null else 1.0
-	return int(ceil(def.service_fee_credit*batches*discount/base_factor("industry"))) if not def.is_empty() else 0
+	return int(ceil(def.service_fee_credit*batches*discount*g.projects.factor(g.station(),"manufacture_fee")/base_factor("industry"))) if not def.is_empty() else 0

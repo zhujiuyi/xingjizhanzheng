@@ -15,8 +15,8 @@ class TacticDefinitions(unittest.TestCase):
     def test_all_four_doctrines_have_real_models_and_actual_mixed_sites(self):
         build_catalog.validate_database(self.db)
         self.assertEqual({r[0] for r in self.db.execute('SELECT tactic_kind FROM npc_tactic_defs')},{'support','interceptor','siege','carrier'})
-        self.assertEqual(self.db.execute('SELECT count(*) FROM tactical_site_defs').fetchone(),(3,))
-        self.assertEqual(self.db.execute('SELECT count(*) FROM npc_tactic_bindings').fetchone(),(9,))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM tactical_site_defs WHERE site_id NOT LIKE 'tac_exp_theme_%'").fetchone(),(3,))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM npc_tactic_bindings WHERE spawn_id NOT LIKE 'exp_theme_%'").fetchone(),(9,))
     def test_previous_120_tables_keep_every_old_row_and_schema(self):
         old=sqlite3.connect((ROOT/'code/data/catalog_mobile_v12.db').as_uri()+'?mode=ro',uri=True);self.addCleanup(old.close)
         self.assertEqual(p.adapter_hash(old),'450ca2a4b020e01d97b2e433b7f682114be3f871d6756146d2794c3791b07f9c')

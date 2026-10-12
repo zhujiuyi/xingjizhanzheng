@@ -13,7 +13,9 @@ TABLES = tuple(COLUMNS)
 
 def validate(db):
     events = db.execute("SELECT event_id,event_kind,entry_anchor_id,exit_anchor_id FROM exploration_event_defs").fetchall()
-    if len(events) != 6 or db.execute("SELECT count(*) FROM exploration_variant_defs").fetchone()[0] != 18:
+    campaign = db.execute("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='campaign_event_defs'").fetchone() is not None
+    expected = 12 if campaign else 6
+    if len(events) != expected or db.execute("SELECT count(*) FROM exploration_variant_defs").fetchone()[0] != expected * 3:
         raise ValueError("Exploration requires six authored structures and eighteen fixed variants")
     for event, kind, entry, exit_ in events:
         if [r[0] for r in db.execute("SELECT variant_index FROM exploration_variant_defs WHERE event_id=? ORDER BY variant_index", (event,))] != [1, 2, 3]:

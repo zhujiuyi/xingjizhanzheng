@@ -25,7 +25,7 @@ class ExplorationData(unittest.TestCase):
 
     def test_six_structures_eighteen_variants_and_real_choices(self):
         build_catalog.validate_database(self.source)
-        events = p.rows(self.source, "exploration_event_defs")
+        events = [e for e in p.rows(self.source, "exploration_event_defs") if not e["event_id"].startswith("exp_theme_")]
         self.assertEqual(len(events), 6)
         self.assertEqual({e["event_kind"] for e in events}, {"rescue", "relic", "mineral"})
         self.assertEqual({e["environment_kind"] for e in events}, {"fragments", "em", "solar"})
@@ -54,7 +54,7 @@ class ExplorationData(unittest.TestCase):
         self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(), self.source.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
 
     def test_managed_actors_have_no_free_bounty_or_respawn(self):
-        rows = self.source.execute("SELECT s.occurrence_mode,s.respawn_s,s.bounty_enabled,s.loot_enabled FROM exploration_actor_defs e JOIN npc_spawn_defs s USING(spawn_id)").fetchall()
+        rows = self.source.execute("SELECT s.occurrence_mode,s.respawn_s,s.bounty_enabled,s.loot_enabled FROM exploration_actor_defs e JOIN npc_spawn_defs s USING(spawn_id) WHERE e.event_id NOT LIKE 'exp_theme_%'").fetchall()
         self.assertEqual(len(rows), 20)
         self.assertTrue(all(row == ("mission_scoped", None, 0, 0) for row in rows))
 

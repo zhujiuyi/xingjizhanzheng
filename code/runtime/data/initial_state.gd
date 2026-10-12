@@ -104,6 +104,9 @@ func create(catalog: XJCatalog, seed_value: int) -> State:
 	var frontier_rows: Dictionary=preload("res://runtime/gameplay/frontier.gd").initial_rows(catalog,result)
 	for table: String in frontier_rows:
 		for row: RefCounted in frontier_rows[table]:result.add(table,row)
+	var campaign_rows: Dictionary=preload("res://runtime/data/campaign_initial.gd").rows(catalog,result,seed_value)
+	for table: String in campaign_rows:
+		for row: RefCounted in campaign_rows[table]:result.add(table,row)
 	return result
 
 func _add(table: String, values: Dictionary) -> void:

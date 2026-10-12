@@ -164,6 +164,7 @@ func _spawn(row: D.ExplorationInstanceStateDto, spec: Dictionary) -> void:
 	var member: D.ExplorationActorStateDto = D.ExplorationActorStateDto.new()
 	member.npc_instance_id = npc.npc_instance_id; member.event_id = row.event_id; member.generation = row.generation; member.actor_role = spec.actor_role
 	g.state.add("exploration_actor_state", member)
+	g.tactics.register_existing(npc)
 
 func _spawn_enemies(row: D.ExplorationInstanceStateDto) -> void:
 	for spec: Dictionary in managed_spawns.values():
@@ -304,6 +305,9 @@ func _claim(row: D.ExplorationInstanceStateDto) -> bool:
 	g.state.add("exploration_claim_state", receipt); row.phase = "claimed"
 	g.specializations.exploration_claimed(receipt)
 	g.honors.exploration_claimed(receipt)
+	g.projects.exploration_claimed(receipt)
+	g.expeditions.exploration_claimed(receipt)
+	g.telemetry.activity()
 	return true
 
 func research(research_id: String) -> bool:

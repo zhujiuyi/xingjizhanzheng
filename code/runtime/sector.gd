@@ -302,8 +302,8 @@ func simulate_npcs(delta: float) -> void:
 		if XJHirePilot.step(self,row,body,delta):continue
 		if XJFrontierPilot.step(self,row,body,delta):continue
 		if WarFleetPilot.step(self, row, body, delta): continue
-		if XJExplorationPilot.step(self, row, body, delta): continue
 		if XJTacticalPilot.step(self, row, body, delta): continue
+		if XJExplorationPilot.step(self, row, body, delta): continue
 		var spawn: Dictionary = catalog.one("npc_spawn_defs", "spawn_id", row.spawn_id)
 		var behavior: Dictionary = catalog.one("npc_behavior_defs", "behavior_id", spawn.behavior_id)
 		var definition: Dictionary = catalog.one("npc_full_defs", "npc_id", spawn.npc_id)

@@ -18,6 +18,9 @@ const Specializations = preload("res://runtime/gameplay/specializations.gd")
 const FittingAnalysis = preload("res://runtime/gameplay/fitting_analysis.gd")
 const ShipRoles = preload("res://runtime/gameplay/ship_roles.gd")
 const Frontier = preload("res://runtime/gameplay/frontier.gd")
+const Projects = preload("res://runtime/gameplay/projects.gd")
+const Expeditions = preload("res://runtime/gameplay/expeditions.gd")
+const Telemetry = preload("res://runtime/gameplay/telemetry.gd")
 const Situational = preload("res://runtime/gameplay/situational.gd")
 const Hired = preload("res://runtime/gameplay/hire.gd")
 const Honors = preload("res://runtime/gameplay/honors.gd")
@@ -43,6 +46,9 @@ var specializations: RefCounted
 var fitting_analysis: RefCounted
 var ship_roles: RefCounted
 var frontier: RefCounted
+var projects: RefCounted
+var expeditions: RefCounted
+var telemetry: RefCounted
 var situational: RefCounted
 var hired: RefCounted
 var honors: RefCounted
@@ -96,6 +102,9 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog, preview: bool = 
 	frontier = Frontier.new(self)
 	hired = Hired.new(self)
 	situational = Situational.new(self)
+	projects = Projects.new(self)
+	expeditions = Expeditions.new(self)
+	telemetry = Telemetry.new(self)
 	if preview: return
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
@@ -225,6 +234,8 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 	if action == "honor_action": command.action_kind = T.ActionKind.HONOR_ACTION
 	if action == "frontier_action":command.action_kind=T.ActionKind.FRONTIER_ACTION
 	if action == "hire_action":command.action_kind=T.ActionKind.HIRE_ACTION
+	if action == "construction_action":command.action_kind=T.ActionKind.CONSTRUCTION_ACTION
+	if action == "expedition_action":command.action_kind=T.ActionKind.EXPEDITION_ACTION
 	if action == "operation_action": command.action_kind = T.ActionKind.OPERATION_ACTION
 	if action == "drone_command": command.action_kind = T.ActionKind.DRONE_COMMAND
 	if action == "drone_replenish": command.action_kind = T.ActionKind.DRONE_REPLENISH
@@ -235,6 +246,12 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 		fail("数量超出合法范围")
 	else:
 		match action:
+			"construction_action":
+				var parts: PackedStringArray=extra.split("|",true,2)
+				ok=projects.execute(target,parts[0],quantity,parts[1],parts[2]) if parts.size()==3 else fail("工程请求格式无效")
+			"expedition_action":
+				var parts: PackedStringArray=extra.split("|",true,2)
+				ok=expeditions.execute(target,parts[0],parts[1],parts[2]) if parts.size()==3 else fail("远征请求格式无效")
 			"dock": ok = _dock(target)
 			"undock": ok = _undock()
 			"switch_ship": ok = _switch(target)
@@ -326,6 +343,7 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 		if action in ["accept_mission", "abandon_mission", "deliver_mission", "claim_loan", "handoff_loan", "request_rescue"]: _sync_spawns()
 		if action != "open_salvage": status_text = "操作完成：" + action
 	else: status_text = last_error
+	telemetry.wallet()
 	return result
 
 func _dock(station_id: String) -> bool:
@@ -529,6 +547,7 @@ func consume_weapon_cycle(item_id: String) -> Dictionary:
 	mark_hostile_attempt()
 	var raw: Vector3 = Vector3.ZERO; raw[damage_index(weapon.damage_type)] = profile.raw_damage
 	event(T.EventKind.WEAPON_FIRED, state.ship().ship_instance_id, "", item_id)
+	telemetry.stat("weapon_cycles")
 	return {"damage_vector":raw,"speed":profile.projectile_speed_mps,"range":profile.range_m,"cycle":profile.cycle_s,"damage_type":weapon.damage_type,"module_id":e.module_def_id,"profile":profile}
 
 func mark_hostile_attempt() -> void:
@@ -605,6 +624,9 @@ func finish_step(delta: float) -> void:
 	_sync_spawns(delta)
 	_tick_gate_lifetimes(delta)
 	situational.tick(delta)
+	projects.tick(delta)
+	expeditions.tick(delta)
+	telemetry.tick(delta,not situational.spatial_active)
 
 func _tick_repairs() -> void:
 	if state.ship().status != T.ShipStatus.FLYING: return
@@ -632,7 +654,10 @@ func _tick_resources(delta: float) -> void:
 		if node.respawn_remaining_s == 0: node.remaining_units = definition("resource_node_defs", "node_id", node.node_id).capacity_units
 
 func record_event(kind: String, target: String, quantity: int = 1) -> void:
-	missions.record(kind, target, quantity)
+	missions.record(kind,target,quantity)
+	if kind=="undock":telemetry.begin()
+	elif kind=="dock":telemetry.finish()
+	elif kind=="collect":telemetry.stat("mined_units",float(quantity))
 
 func damage_index(kind: String) -> int:
 	return ["kinetic","thermal","pulse"].find(kind)
@@ -650,7 +675,22 @@ func apply_damage(victim: RefCounted, raw: Vector3, resist: Dictionary) -> float
 		raw *= 1.0 - used / amount
 	return total
 
-func damage_npc(instance_id: String, raw_vector: Vector3) -> float:
+func damage_contribution(victim: RefCounted,raw: Vector3,resist: Dictionary,credited: Vector3) -> float:
+	# Same linear layer allocation as apply_damage, without changing combat.
+	var total: float=0.0
+	credited=credited.max(Vector3.ZERO).min(raw)
+	for layer: String in ["shield","armor","hull"]:
+		var effective: Vector3=raw*(Vector3.ONE-resist[layer])
+		var contribution: Vector3=credited*(Vector3.ONE-resist[layer])
+		var amount: float=effective.x+effective.y+effective.z
+		if amount<=0.0:break
+		var used: float=minf(float(victim.get(layer)),amount)
+		total+=used*(contribution.x+contribution.y+contribution.z)/amount
+		if amount<=float(victim.get(layer)):break
+		var remainder: float=1.0-used/amount;raw*=remainder;credited*=remainder
+	return total
+
+func damage_npc(instance_id: String, raw_vector: Vector3,credited_raw: Vector3=Vector3.ZERO) -> float:
 	var npc: D.NpcStateDto = state.find("npc_state", "npc_instance_id", instance_id)
 	if npc == null or not npc.alive or not raw_vector.is_finite() : return 0.0
 	if operations.handles(npc.spawn_id) and not operations.structure_active(npc): return 0.0
@@ -660,9 +700,12 @@ func damage_npc(instance_id: String, raw_vector: Vector3) -> float:
 	var resist: Dictionary = {"shield":Vector3.ZERO,"armor":Vector3.ZERO,"hull":Vector3.ZERO}
 	for r in rows("npc_resistances"):
 		if r.archetype_id == def.archetype_id: resist[r.layer_id][damage_index(r.damage_type)] = r.resistance
+	var contribution: float=damage_contribution(npc,raw_vector.max(Vector3.ZERO),resist,credited_raw)
 	var amount: float = apply_damage(npc, raw_vector.max(Vector3.ZERO), resist)
+	telemetry.stat("damage_dealt",contribution)
 	mark_hostile_attempt()
 	if npc.hull <= 0:
+		if contribution>0.0:telemetry.stat("kills")
 		npc.alive = false; npc.behavior_phase = T.NpcPhase.DEAD
 		tactics.destroyed(npc)
 		operations.destroyed(npc)
@@ -688,6 +731,7 @@ func damage_ship(raw_vector: Vector3) -> float:
 	var ship: D.ShipStateDto = state.ship()
 	if ship.status != T.ShipStatus.FLYING or not raw_vector.is_finite(): return 0
 	var amount: float = apply_damage(ship, raw_vector.max(Vector3.ZERO), metrics(ship).resistances)
+	telemetry.stat("damage_taken",amount)
 	operations.damaged(amount)
 	consignments.on_damage(amount)
 	ship.shield_delay_remaining_s = rule("shield_recharge_delay_s")
@@ -695,6 +739,7 @@ func damage_ship(raw_vector: Vector3) -> float:
 	ship.state_version += 1
 	if ship.hull <= 0:
 		ship.status = T.ShipStatus.DESTROYED
+		telemetry.finish(true)
 		hired.controlled_ship_lost()
 		ship_roles.stop_support()
 		work.stop_scan(); work.stop_mining()
@@ -807,10 +852,10 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired,situational]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired,situational,projects,expeditions,telemetry]:
 		if service != null: service.g = null
 	specializations = null; fitting_analysis = null
-	ship_roles = null; consignments = null; honors = null; frontier = null; hired = null; situational = null
+	ship_roles = null; consignments = null; honors = null; frontier = null; hired = null; situational = null; projects = null; expeditions = null; telemetry = null
 	operations = null
 	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null; mobile_belts = null
 	tactics = null; drone_control = null

@@ -11,13 +11,23 @@ static func step(world: Node3D, npc: D.NpcStateDto, body: CharacterBody3D, delta
 	var behavior: Dictionary = g.definition("npc_behavior_defs", "behavior_id", spawn.behavior_id)
 	var stats: Dictionary = g.definition("npc_full_defs", "npc_id", spawn.npc_id)
 	var player: Node3D = world.flight
+	var victim_id: String=g.state.ship().ship_instance_id
+	if g.tactics.campaign_site(g.tactics.bindings[npc.spawn_id].site_id) and spec.tactic_kind in ["siege","carrier"]:
+		var nearest: float=body.position.distance_to(player.position)
+		for id: String in world.npcs:
+			if not g.exploration.friendly(id):continue
+			var escort: RefCounted=g.state.find("npc_state","npc_instance_id",id)
+			if escort==null or not escort.alive:continue
+			var candidate: Node3D=world.npcs[id]
+			var distance: float=body.position.distance_to(candidate.position)
+			if distance<nearest:nearest=distance;player=candidate;victim_id=id
 	var home: Vector3 = world.anchor_position(spawn.anchor_id)
 	var player_distance: float = body.position.distance_to(player.position)
 	var detection: float = float(behavior.detection_range_m) if npc.behavior_phase in [T.NpcPhase.IDLE,T.NpcPhase.PATROL,T.NpcPhase.RETURN] else float(behavior.target_drop_range_m)
 	detection = maxf(detection, g.operations.detection_range())
 	var engaged: bool = g.state.ship().status == T.ShipStatus.FLYING and player_distance <= detection and body.position.distance_to(home) <= float(behavior.leash_radius_m) and not world.in_safe_zone(player.position)
 	var target: Node3D = player
-	var target_id: String = g.state.ship().ship_instance_id
+	var target_id: String = victim_id
 	var destination: Vector3 = home
 	var ability: bool = engaged
 	npc.cooldown_remaining_s = maxf(0.0, npc.cooldown_remaining_s - delta)

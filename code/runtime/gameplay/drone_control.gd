@@ -63,6 +63,7 @@ func retire(drone_id: String, lost: bool) -> void:
 	elif tactic != null: tactic.deployed_drones = maxi(0, tactic.deployed_drones - 1)
 	if not lost: return
 	if record != null:
+		g.telemetry.stat("drone_losses")
 		record.stock_units = maxi(0, record.stock_units - 1); record.lost_units += 1; record.revision += 1
 	else:
 		if tactic != null: tactic.drone_stock = maxi(0, tactic.drone_stock - 1); tactic.lost_drones += 1

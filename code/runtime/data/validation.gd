@@ -31,6 +31,8 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	var frontier_check: RefCounted=preload("res://runtime/data/frontier_validation.gd").new()
 	if not frontier_check.validate(state,catalog):return _fail(frontier_check.last_error)
 	var observation_check: RefCounted=preload("res://runtime/data/situational_validation.gd").new()
+	var campaign_check: RefCounted=preload("res://runtime/data/campaign_validation.gd").new()
+	if not campaign_check.validate(state,catalog):return _fail(campaign_check.last_error)
 	if not observation_check.validate(state,catalog):return _fail(observation_check.last_error)
 	var hire_check: RefCounted=preload("res://runtime/data/hire_validation.gd").new()
 	if not hire_check.validate(state,catalog):return _fail(hire_check.last_error)
@@ -317,6 +319,8 @@ func _validate_exploration(state: State, catalog: XJCatalog) -> bool:
 		spent += row.spent_insight
 	if state.rows("exploration_progress_state").size() != 1: return _fail("Exploration evidence balance missing")
 	var progress: RefCounted = state.rows("exploration_progress_state")[0]
+	for coordinated: RefCounted in state.rows("expedition_stage_state"):
+		if coordinated.settled:earned+=coordinated.bonus_insight
 	if progress.player_id != state.player().player_id or progress.insight_earned != earned or progress.insight_available != earned - spent or progress.insight_available < 0: return _fail("Exploration evidence ledger mismatch")
 	var actor_ids: Dictionary = {}
 	for member: RefCounted in state.rows("exploration_actor_state"):

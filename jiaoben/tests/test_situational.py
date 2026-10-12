@@ -4,6 +4,7 @@ import hashlib,sqlite3,subprocess,sys,unittest
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'jiaoben'))
 import progress_fixture as p
+from catalog_review import without_campaign_extensions
 
 class ObservationSql(unittest.TestCase):
  def setUp(self):
@@ -29,16 +30,16 @@ class ObservationSql(unittest.TestCase):
   for (table,) in old.execute("SELECT name FROM sqlite_schema WHERE type='table' AND name!='catalog_meta'"):
    with self.subTest(table=table):
     self.assertEqual(old.execute('SELECT sql FROM sqlite_schema WHERE name=?',(table,)).fetchone(),self.source.execute('SELECT sql FROM sqlite_schema WHERE name=?',(table,)).fetchone())
-    self.assertEqual(sorted(old.execute(f'SELECT * FROM "{table}"').fetchall(),key=repr),sorted(self.source.execute(f'SELECT * FROM "{table}"').fetchall(),key=repr))
+    self.assertEqual(sorted(old.execute(f'SELECT * FROM "{table}"').fetchall(),key=repr),sorted(without_campaign_extensions(self.source,table,set(self.source.execute(f'SELECT * FROM "{table}"').fetchall())),key=repr))
   self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.source.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
  def test_all_historical_migrations_and_adapters_keep_published_bytes(self):
   for path in (ROOT/'code/database/progress').glob('*.sql'):
-   if path.name.startswith('024_') or path.name=='catalog_adapter_v0_20.sql':continue
+   if path.name.startswith(('024_','025_')) or path.name in ('catalog_adapter_v0_20.sql','catalog_adapter_v0_21.sql'):continue
    published=subprocess.check_output(['git','show','52f91f0:'+path.relative_to(ROOT).as_posix()],cwd=ROOT)
    self.assertEqual(path.read_bytes(),published,path.name)
  def test_new_format_empty_observations_and_all_72_groups(self):
-  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(21,))
-  self.assertEqual(len(p.STATE_TABLES),72)
+  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(22,))
+  self.assertEqual(len(p.STATE_TABLES),83)
   self.assertEqual(self.db.execute('SELECT count(*) FROM resource_intel_state').fetchone(),(0,))
   self.assertEqual(self.db.execute('SELECT count(*) FROM demand_intel_state').fetchone(),(0,));self.seal()
  def test_previous_observation_survives_changed_live_resource(self):

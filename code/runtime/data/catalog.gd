@@ -23,6 +23,7 @@ const TACTICS_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0
 const OPERATIONS_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_14.sql"
 const FITTING_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_15.sql"
 const FRONTIER_ADAPTER_PATH: String="res://database/progress/catalog_adapter_v0_18.sql"
+const CAMPAIGN_ADAPTER_PATH: String="res://database/progress/catalog_adapter_v0_21.sql"
 const SITUATIONAL_ADAPTER_PATH: String="res://database/progress/catalog_adapter_v0_20.sql"
 const HIRE_ADAPTER_PATH: String="res://database/progress/catalog_adapter_v0_19.sql"
 const HONOR_ADAPTER_PATH: String = "res://database/progress/catalog_adapter_v0_17.sql"
@@ -44,6 +45,7 @@ func open(path: String = "res://data/catalog.db") -> bool:
 		return false
 	if not refresh(): return false
 	if int(rows("catalog_meta")[0].schema_version) <= 2: adapter_path = "res://database/progress/catalog_adapter_v0_3.sql"
+	elif table_names.has("campaign_balance_defs"):adapter_path=CAMPAIGN_ADAPTER_PATH
 	elif table_names.has("situational_balance_defs"):adapter_path=SITUATIONAL_ADAPTER_PATH
 	elif table_names.has("hire_profile_defs"):adapter_path=HIRE_ADAPTER_PATH
 	elif table_names.has("frontier_campaign_defs"):adapter_path=FRONTIER_ADAPTER_PATH

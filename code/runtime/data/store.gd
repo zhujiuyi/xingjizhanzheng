@@ -9,10 +9,10 @@ const Initial = preload("res://runtime/data/initial_state.gd")
 const Validation = preload("res://runtime/data/validation.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
 const Types = preload("res://contracts/contract_types.gd")
-const MIGRATIONS: Array[String] = ["001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql", "018_operations.sql", "019_fitting.sql", "020_roles.sql", "021_honors.sql", "022_frontier.sql", "023_hire.sql", "024_situational.sql"]
+const MIGRATIONS: Array[String] = ["001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql", "018_operations.sql", "019_fitting.sql", "020_roles.sql", "021_honors.sql", "022_frontier.sql", "023_hire.sql", "024_situational.sql", "025_campaign.sql"]
 const RULE_CODE_VERSION: String = "singleplayer_full_v1"
 const ADAPTER_VERSION: String = "frozen_catalog_v0_4_r2"
-const ADAPTERS: Dictionary = {"frozen_catalog_v0_3": "res://database/progress/catalog_adapter_v0_3.sql", "frozen_catalog_v0_4": "res://database/progress/catalog_adapter_v0_4.sql", "frozen_catalog_v0_4_r2": "res://database/progress/catalog_adapter_v0_4_r2.sql", "frozen_catalog_v0_5": "res://database/progress/catalog_adapter_v0_5.sql", "frozen_catalog_v0_6": "res://database/progress/catalog_adapter_v0_6.sql", "frozen_catalog_v0_7": "res://database/progress/catalog_adapter_v0_7.sql", "frozen_catalog_v0_8": "res://database/progress/catalog_adapter_v0_8.sql", "frozen_catalog_v0_9": "res://database/progress/catalog_adapter_v0_9.sql", "frozen_catalog_v0_10": "res://database/progress/catalog_adapter_v0_10.sql", "frozen_catalog_v0_11": "res://database/progress/catalog_adapter_v0_11.sql", "frozen_catalog_v0_12": "res://database/progress/catalog_adapter_v0_12.sql", "frozen_catalog_v0_13": "res://database/progress/catalog_adapter_v0_13.sql", "frozen_catalog_v0_14": "res://database/progress/catalog_adapter_v0_14.sql", "frozen_catalog_v0_15": "res://database/progress/catalog_adapter_v0_15.sql", "frozen_catalog_v0_16": "res://database/progress/catalog_adapter_v0_16.sql", "frozen_catalog_v0_17": "res://database/progress/catalog_adapter_v0_17.sql", "frozen_catalog_v0_18": "res://database/progress/catalog_adapter_v0_18.sql", "frozen_catalog_v0_19": "res://database/progress/catalog_adapter_v0_19.sql", "frozen_catalog_v0_20": "res://database/progress/catalog_adapter_v0_20.sql"}
+const ADAPTERS: Dictionary = {"frozen_catalog_v0_3": "res://database/progress/catalog_adapter_v0_3.sql", "frozen_catalog_v0_4": "res://database/progress/catalog_adapter_v0_4.sql", "frozen_catalog_v0_4_r2": "res://database/progress/catalog_adapter_v0_4_r2.sql", "frozen_catalog_v0_5": "res://database/progress/catalog_adapter_v0_5.sql", "frozen_catalog_v0_6": "res://database/progress/catalog_adapter_v0_6.sql", "frozen_catalog_v0_7": "res://database/progress/catalog_adapter_v0_7.sql", "frozen_catalog_v0_8": "res://database/progress/catalog_adapter_v0_8.sql", "frozen_catalog_v0_9": "res://database/progress/catalog_adapter_v0_9.sql", "frozen_catalog_v0_10": "res://database/progress/catalog_adapter_v0_10.sql", "frozen_catalog_v0_11": "res://database/progress/catalog_adapter_v0_11.sql", "frozen_catalog_v0_12": "res://database/progress/catalog_adapter_v0_12.sql", "frozen_catalog_v0_13": "res://database/progress/catalog_adapter_v0_13.sql", "frozen_catalog_v0_14": "res://database/progress/catalog_adapter_v0_14.sql", "frozen_catalog_v0_15": "res://database/progress/catalog_adapter_v0_15.sql", "frozen_catalog_v0_16": "res://database/progress/catalog_adapter_v0_16.sql", "frozen_catalog_v0_17": "res://database/progress/catalog_adapter_v0_17.sql", "frozen_catalog_v0_18": "res://database/progress/catalog_adapter_v0_18.sql", "frozen_catalog_v0_19": "res://database/progress/catalog_adapter_v0_19.sql", "frozen_catalog_v0_20": "res://database/progress/catalog_adapter_v0_20.sql", "frozen_catalog_v0_21": "res://database/progress/catalog_adapter_v0_21.sql"}
 const ASSET_PATH: String = "res://assets/manifest.json"
 const ASSET_MANIFESTS: Dictionary = {"art-full-v2": ASSET_PATH, "art-full-v1": "res://assets/legacy_art_full_v1/manifest.json", "placeholder-b-v1": "res://assets/placeholders/manifest.json"}
 const LEGACY_VISUAL_BYTES: Dictionary = {"res://runtime/visuals/visual_effects.gd": "res://assets/legacy_art_full_v1/visual_effects.gd.txt", "res://runtime/visuals/visual_effect_node.gd": "res://assets/legacy_art_full_v1/visual_effect_node.gd.txt"}
@@ -243,6 +243,7 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 	var resource_upgrade: bool = _source.table_names.has("resource_grade_defs")
 	var exploration_upgrade: bool = _source.table_names.has("exploration_event_defs")
 	var mobile_upgrade: bool = _source.table_names.has("exploration_belt_route_defs")
+	var campaign_upgrade: bool=_source.table_names.has("campaign_balance_defs")
 	var situational_upgrade: bool=_source.table_names.has("situational_balance_defs")
 	var hire_upgrade: bool=_source.table_names.has("hire_profile_defs")
 	var frontier_upgrade: bool=_source.table_names.has("frontier_campaign_defs")
@@ -252,7 +253,10 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 	var operations_upgrade: bool = _source.table_names.has("operation_defs")
 	var tactics_upgrade: bool = _source.table_names.has("npc_tactic_defs")
 	var rebalance: bool = _source.table_names.has("weapon_behavior_defs") and int(catalog.rows("catalog_meta")[0].schema_version) < 5
-	if situational_upgrade:
+	if campaign_upgrade:
+		if catalog.content_hash==_source.content_hash:return state
+		if not _reviewed_campaign_upgrade(catalog,_source):return null
+	elif situational_upgrade:
 		if catalog.content_hash==_source.content_hash:return state
 		if not _reviewed_situational_upgrade(catalog,_source):return null
 	elif hire_upgrade:
@@ -339,6 +343,22 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 		for row: RefCounted in exploration_service.initial_instances(_source, world_seed): candidate.add("exploration_instance_state", row)
 		var progress: Dtos.ExplorationProgressStateDto = Dtos.ExplorationProgressStateDto.new()
 		progress.player_id = candidate.player().player_id; candidate.add("exploration_progress_state", progress)
+	if campaign_upgrade and not catalog.table_names.has("campaign_balance_defs"):
+		var seed: int=int(_records("SELECT seed FROM world WHERE world_id=?",[state.world_id])[0].seed)
+		for row: RefCounted in preload("res://runtime/gameplay/exploration.gd").initial_instances(_source,seed):
+			if candidate.find("exploration_instance_state","event_id",row.event_id)==null:candidate.add("exploration_instance_state",row)
+		for row: RefCounted in preload("res://runtime/gameplay/mobile_belts.gd").initial_rows(_source,candidate):
+			if candidate.find("exploration_belt_state","event_id",row.event_id)==null:candidate.add("exploration_belt_state",row)
+		for row: RefCounted in preload("res://runtime/gameplay/tactics.gd").initial_sites(_source):
+			if candidate.find("tactical_site_state","site_id",row.site_id)==null:candidate.add("tactical_site_state",row)
+		for def: Dictionary in _source.rows("resource_node_defs"):
+			if candidate.find("resource_state","node_id",def.node_id)!=null:continue
+			var row: RefCounted=Dtos.ResourceStateDto.new();row.node_id=def.node_id
+			row.remaining_units=0 if not _source.one("exploration_resource_defs","node_id",def.node_id).is_empty() else int(def.capacity_units)
+			candidate.add("resource_state",row)
+		var initial: Dictionary=preload("res://runtime/data/campaign_initial.gd").rows(_source,candidate,seed)
+		for table: String in initial:
+			for row: RefCounted in initial[table]:candidate.add(table,row)
 	if mobile_upgrade and not catalog.table_names.has("exploration_belt_route_defs"):
 		for row: RefCounted in preload("res://runtime/gameplay/mobile_belts.gd").initial_rows(_source, candidate): candidate.add("exploration_belt_state", row)
 	if tactics_upgrade and not catalog.table_names.has("npc_tactic_defs"):
@@ -395,12 +415,43 @@ func upgrade_content(state: State, prepare: Callable = Callable()) -> State:
 		staging_catalog = null; frozen.close(); _rollback("CONTENT_UPGRADE_STAGING_FAILED"); return null
 	var selection: Array[Dictionary] = _records("SELECT generation FROM save_slot WHERE slot_id=?", [_slot_id(state.world_id, "auto", 0)])
 	var generation: int = 0 if selection.is_empty() else int(selection[0].generation)
-	if not _write_snapshot(candidate) or not _insert("snapshot_lineage", {"child_snapshot_id": candidate.snapshot.meta.snapshot_id, "parent_snapshot_id": source_snapshot}) or not _insert("content_upgrade_record", {"world_id": state.world_id, "source_snapshot_id": source_snapshot, "upgraded_snapshot_id": candidate.snapshot.meta.snapshot_id, "old_content_id": old_content, "new_content_id": content_id, "upgrade_kind": "situational_v1" if situational_upgrade else "hire_v1" if hire_upgrade else "frontier_v1" if frontier_upgrade else "honors_v1" if honor_upgrade else "roles_v1" if role_upgrade else "fitting_v1" if fitting_upgrade else "operations_v1" if operations_upgrade else "tactics_v1" if tactics_upgrade else "mobile_belts_v1" if mobile_upgrade else "exploration_v1" if exploration_upgrade else "resource_intel_v1" if resource_upgrade else "industry_v1" if industry_upgrade else "civilizations_v1" if civilization_upgrade else "strategic_space_v1" if spatial_upgrade else "combat_rebalance_v1" if rebalance else "additive_encounters_v1", "created_utc": _utc()}) or not _publish(candidate, "auto", 0, generation) or not _checkpoint("content_upgrade") or not _q("COMMIT"):
+	if not _write_snapshot(candidate) or not _insert("snapshot_lineage", {"child_snapshot_id": candidate.snapshot.meta.snapshot_id, "parent_snapshot_id": source_snapshot}) or not _insert("content_upgrade_record", {"world_id": state.world_id, "source_snapshot_id": source_snapshot, "upgraded_snapshot_id": candidate.snapshot.meta.snapshot_id, "old_content_id": old_content, "new_content_id": content_id, "upgrade_kind": "campaign_v1" if campaign_upgrade else "situational_v1" if situational_upgrade else "hire_v1" if hire_upgrade else "frontier_v1" if frontier_upgrade else "honors_v1" if honor_upgrade else "roles_v1" if role_upgrade else "fitting_v1" if fitting_upgrade else "operations_v1" if operations_upgrade else "tactics_v1" if tactics_upgrade else "mobile_belts_v1" if mobile_upgrade else "exploration_v1" if exploration_upgrade else "resource_intel_v1" if resource_upgrade else "industry_v1" if industry_upgrade else "civilizations_v1" if civilization_upgrade else "strategic_space_v1" if spatial_upgrade else "combat_rebalance_v1" if rebalance else "additive_encounters_v1", "created_utc": _utc()}) or not _publish(candidate, "auto", 0, generation) or not _checkpoint("content_upgrade") or not _q("COMMIT"):
 		staging_catalog = null; frozen.close(); _rollback("CONTENT_UPGRADE_FAILED: " + last_error); return null
 	if catalog != _source: catalog.close()
 	catalog = frozen; staging_catalog = null; active_state = candidate
 	_end_operation(true)
 	return candidate
+
+func _reviewed_campaign_upgrade(previous: Catalog,next: Catalog) -> bool:
+	var after: Dictionary=next.rows("catalog_meta")[0]
+	if int(after.schema_version)!=20 or after.content_version!="v0.21-campaign" or after.ruleset_version!="singleplayer_campaign_v1" or previous.rows("catalog_meta")[0].pack_id!=after.pack_id:return _fail("Unreviewed campaign content")
+	var baseline: Catalog=previous;var bridge: Catalog=null
+	if int(previous.rows("catalog_meta")[0].schema_version)<19:
+		bridge=Catalog.new()
+		if not bridge.open("res://data/catalog_situational_v20.db") or not bridge.verify_reviewed() or bridge.content_hash!="3c7e5a1a45065002b914e256266bfc2c28c02536e2992b52111c9ed1a3fbf236" or not _reviewed_situational_upgrade(previous,bridge):
+			bridge.close();return _fail("Campaign requires reviewed situational bridge")
+		baseline=bridge
+	var extensions: Array[String]=["site_defs","exploration_belt_route_defs","exploration_belt_anchor_defs","anchor_defs","anchor_site_defs","npc_defs","npc_spawn_defs","npc_patrol_points","exploration_event_defs","exploration_variant_defs","exploration_actor_defs","exploration_resource_defs","exploration_obstacle_defs","resource_node_defs","resource_node_locations","resource_grade_defs","tactical_site_defs","npc_tactic_bindings"]
+	var expected: Array[String]=baseline.table_names.duplicate()
+	expected.append_array(["campaign_balance_defs","construction_project_defs","construction_stage_defs","construction_input_defs","expedition_route_defs","expedition_option_defs","campaign_event_defs","campaign_tactical_links"]);expected.sort()
+	var ok: bool=expected==next.table_names and baseline.view_sql==next.view_sql
+	for table: String in baseline.table_names:
+		if not ok:break
+		if table=="catalog_meta":continue
+		if Catalog.schema_signature(baseline.column_info[table],table)!=Catalog.schema_signature(next.column_info[table],table):ok=false;break
+		var keys: Array[String]=[];var old: Dictionary={}
+		for col: Dictionary in baseline.column_info[table]:
+			if int(col.pk)>0:keys.append(str(col.name))
+		for row: Dictionary in baseline.rows(table):old[_content_key(row,keys)]=row
+		for row: Dictionary in next.rows(table):
+			var key: String=_content_key(row,keys)
+			if old.has(key):
+				if old[key]!=row:ok=false;break
+				old.erase(key)
+			elif table not in extensions or (not str(row[keys[0]]).begins_with("exp_theme_") and not str(row[keys[0]]).begins_with("tac_exp_theme_")):ok=false;break
+		if not old.is_empty():ok=false
+	if bridge!=null:bridge.close()
+	return true if ok else _fail("Campaign changes old definitions or adds unreviewed rows")
 
 func _reviewed_situational_upgrade(previous: Catalog, next: Catalog) -> bool:
 	var after: Dictionary = next.rows("catalog_meta")[0]
@@ -1070,7 +1121,7 @@ func _migrate() -> bool:
 	var existing: Array[Dictionary] = _records("SELECT name FROM sqlite_schema WHERE type='table'")
 	if not existing.is_empty():
 		var meta: Array[Dictionary] = _records("SELECT application_id,format_version FROM database_meta")
-		if meta.is_empty() or meta[0].application_id != "xingjizhanjian" or meta[0].format_version not in [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]: return _fail("Unsupported progress format; preserved")
+		if meta.is_empty() or meta[0].application_id != "xingjizhanjian" or meta[0].format_version not in [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22]: return _fail("Unsupported progress format; preserved")
 		var applied_count: int = int(meta[0].format_version) + 3
 		if int(_records("SELECT count(*) AS n FROM migration_history")[0].n) != applied_count: return _fail("Migration history/format mismatch; preserved")
 		for name in MIGRATIONS.slice(0, applied_count):
@@ -1309,6 +1360,7 @@ static func _rule_version(definitions: Catalog) -> String:
 	return "singleplayer_b_v1" if int(definitions.rows("catalog_meta")[0].schema_version) <= 2 else RULE_CODE_VERSION
 
 static func _adapter_version(definitions: Catalog) -> String:
+	if definitions.table_names.has("campaign_balance_defs"):return "frozen_catalog_v0_21"
 	if definitions.table_names.has("situational_balance_defs"):return "frozen_catalog_v0_20"
 	if definitions.table_names.has("hire_profile_defs"):return "frozen_catalog_v0_19"
 	if definitions.table_names.has("frontier_campaign_defs"):return "frozen_catalog_v0_18"

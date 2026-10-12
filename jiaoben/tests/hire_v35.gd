@@ -24,12 +24,12 @@ func _run() -> void:
 	directory=OS.get_environment("XJ_HIRE_V35_DIRECTORY").replace("\\","/")
 	if not check(directory.is_absolute_path() and directory.contains("/jiaoben/tmp/hire-v35/") and not FileAccess.file_exists(directory.path_join("progress.db")),"fresh scoped companion contract world"):get_tree().quit(2);return
 	store=Store.new(directory.path_join("progress.db"))
-	if not check(store.open(),"format21 opens "+store.last_error):await finish();return
-	check(int(store._records("PRAGMA user_version")[0].values()[0])==21 and int(store._records("SELECT format_version FROM database_meta")[0].format_version)==21,"fresh real SQLite has consistent format21 metadata and user version")
+	if not check(store.open(),"format22 opens "+store.last_error):await finish();return
+	check(int(store._records("PRAGMA user_version")[0].values()[0])==22 and int(store._records("SELECT format_version FROM database_meta")[0].format_version)==22,"fresh real SQLite has consistent format21 metadata and user version")
 	state=store.new_world("有限雇佣合同",3501)
 	if not check(state!=null,"new hire world seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==72 and state.rows("hire_contract_state").is_empty() and state.rows("hire_receipt_state").is_empty(),"new world receives no free companion or monetary receipts")
+	check(XJRuntimeState.TABLES.size()==83 and state.rows("hire_contract_state").is_empty() and state.rows("hire_receipt_state").is_empty(),"new world receives no free companion or monetary receipts")
 	var before: String=full_signature(state);g.hired.hire_reason("hire_escort");g.hired.status_text();g.hired.token()
 	check(full_signature(state)==before,"contract browsing changes no money, state or random stream")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)
@@ -130,7 +130,7 @@ func legacy_hire() -> void:
 	check(FileAccess.file_exists(directory.path_join("migration-format19-backup.db")),"format21 migration first creates the actual old database backup")
 	faulty.failure=""
 	if not check(store.open(),"migration retries to format21 "+store.last_error):return
-	check(int(store._records("PRAGMA user_version")[0].values()[0])==21 and int(store._records("SELECT format_version FROM database_meta")[0].format_version)==21,"actual migrated database has consistent format21 version markers")
+	check(int(store._records("PRAGMA user_version")[0].values()[0])==22 and int(store._records("SELECT format_version FROM database_meta")[0].format_version)==22,"actual migrated database has consistent format22 version markers")
 	var slot: Dictionary={}
 	for entry: Dictionary in store.list_slots():
 		if entry.slot_kind=="manual" and int(entry.slot_index)==2:slot=entry;break

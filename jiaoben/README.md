@@ -221,3 +221,5 @@ v0.13.0实际交付`0.13.0-afdc5e1d-20261005-002457`来自干净已推送源`afd
 诊断独立变更时，`compare_pck_components_v36.py --before <旧候选EXE> --after <新候选EXE>`独占审计锁，以各自实际EXE运行`tests/pck_manifest_v36.gd`，只通过固定`--xj-verify-situational-v36`隔离入口及显式`XJ_PCK_MANIFEST_ONLY=1`读取包内资源，生成UUID清单；仅允许表现诊断及其编译/重定向文件不同，其他全部虚拟文件和EXE/DLL必须一致。该证明不替代变化组件的实际检查，不允许以源码摘要代替包内字节。
 
 导出客户端不能使用通用`--script`来代替受审诊断入口；本机已观察到参数被忽略并进入默认初始化。包清单必须通过上述固定入口，临时目录/脚本路径检查保持；不启动默认进度库。v0.28最终覆盖及误初始化后的恢复记录见[63](../doc/63-状态反馈与航行情报.md)，最终汇总`logs/v36-delivery-verification.json`。
+
+远征建设合批：`build_campaign_theme.py`仅从v0.28归档追加受审主题命名空间；`store_generate_campaign.py`只生成025/v0.21，保留原015/016账本完整守卫并追加已验证协调来源。`--only campaign`验证联合业务，`--only campaign-upgrade`通过`XJ_CAMPAIGN_LEGACY_DATABASE`仅测实际旧包升级，`--native --only campaign-world`通过`XJ_CAMPAIGN_CORE_DATABASE`导入已关闭test-owned联合库。资金、资格、姿态和命名变体均需声明。`prepare_roles_upgrade_v32.py --campaign --legacy-executable <已核v0.28 EXE>`经旧包固定fitting入口创建旧21/72组数据；不得使用通用`--script`或用户档。当前源码证据及尚未验证范围见[64](../doc/64-远征建设与主题行动.md)，本批实际发行仍待后续统一验收。

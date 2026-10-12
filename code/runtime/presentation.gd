@@ -93,6 +93,7 @@ func consume(delta: float) -> void:
 			Types.EventKind.MINING_ENDED: _stop_loop("mining")
 			_: pass
 	events.clear()
+	preload("res://runtime/visuals/project_visuals.gd").refresh(world,gameplay)
 	beam_clock += delta
 	if beam_clock >= float(config.fx_beam_lifetime_s) * 0.5:
 		beam_clock = 0.0

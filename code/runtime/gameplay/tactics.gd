@@ -42,15 +42,28 @@ func remaining(site_id: String) -> int:
 func _spawn(member: Dictionary, generation: int) -> void:
 	g.encounters._spawn(member, generation)
 	var npc: RefCounted = g.state.find("npc_state", "spawn_id", member.spawn_id)
+	register_existing(npc)
+
+func register_existing(npc: RefCounted) -> void:
+	if npc==null or not handles(npc.spawn_id) or instance(npc.npc_instance_id)!=null:return
+	var member: Dictionary=bindings[npc.spawn_id]
 	var spec: Dictionary = g.definition("npc_tactic_defs", "tactic_id", member.tactic_id)
 	var row: D.NpcTacticStateDto = D.NpcTacticStateDto.new()
 	row.npc_instance_id = npc.npc_instance_id; row.tactic_id = member.tactic_id; row.energy = float(spec.energy_max); row.drone_stock = int(spec.drone_reserve)
 	g.state.add("npc_tactic_state", row)
+
+func campaign_site(id: String) -> bool:
+	return g.catalog.table_names.has("campaign_tactical_links") and not g.definition("campaign_tactical_links","site_id",id).is_empty()
 func sync(delta: float = 0.0) -> void:
 	if not supported(): return
 	for spec: Dictionary in g.rows("tactical_site_defs"):
 		var site: RefCounted = g.state.find("tactical_site_state", "site_id", spec.site_id)
 		if not g.unlocked(spec.required_unlock_id): continue
+		if campaign_site(spec.site_id):
+			# Exploration alone owns spawning, outcomes and renewal. Tactical
+			# registration must never create additional enemies or loot cycles.
+			for member: Dictionary in members(spec.site_id):register_existing(g.state.find("npc_state","spawn_id",member.spawn_id))
+			continue
 		var any_existing: bool = false
 		for member: Dictionary in members(spec.site_id):
 			if g.state.find("npc_state", "spawn_id", member.spawn_id) != null: any_existing = true
@@ -164,6 +177,7 @@ func waypoints(sector_id: String) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	if not supported(): return result
 	for spec: Dictionary in g.rows("tactical_site_defs"):
+		if campaign_site(spec.site_id):continue
 		if spec.sector_id != sector_id or not g.unlocked(spec.required_unlock_id): continue
 		var site: RefCounted = g.state.find("tactical_site_state", "site_id", spec.site_id)
 		var level: int = 0

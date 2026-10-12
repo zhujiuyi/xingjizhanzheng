@@ -6,6 +6,7 @@ ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'jiaoben'))
 import progress_fixture as p
 import hire_catalog
+from catalog_review import without_campaign_extensions
 
 class HireDefinitions(unittest.TestCase):
  def setUp(self):
@@ -17,6 +18,7 @@ class HireDefinitions(unittest.TestCase):
   for (table,) in old.execute("SELECT name FROM sqlite_schema WHERE type='table' AND name<>'catalog_meta'"):
    self.assertEqual(old.execute(f'PRAGMA table_info("{table}")').fetchall(),self.db.execute(f'PRAGMA table_info("{table}")').fetchall(),table)
    before=set(old.execute(f'SELECT * FROM "{table}"'));after=set(self.db.execute(f'SELECT * FROM "{table}"'));self.assertTrue(before<=after,table)
+   after=without_campaign_extensions(self.db,table,after)
    if table in hire_catalog.EXTENSIONS:self.assertTrue(all(str(row[0]).startswith('hire_') for row in after-before),table)
    else:self.assertEqual(before,after,table)
   self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.db.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
@@ -28,7 +30,7 @@ class HireDefinitions(unittest.TestCase):
   self.assertEqual(self.db.execute('SELECT count(*) FROM module_defs').fetchone(),(42,))
  def test_every_published_sql_and_adapter_keeps_v026_bytes(self):
   for path in sorted((ROOT/'code/database/progress').glob('*.sql')):
-   if path.name.startswith(('023_','024_')) or path.name in ('catalog_adapter_v0_19.sql','catalog_adapter_v0_20.sql'):continue
+   if path.name.startswith(('023_','024_','025_')) or path.name in ('catalog_adapter_v0_19.sql','catalog_adapter_v0_20.sql','catalog_adapter_v0_21.sql'):continue
    original=subprocess.check_output(['git','show','6e2323e625f542415f3cf959c2ebbf70602fbc3a:'+path.relative_to(ROOT).as_posix()],cwd=ROOT)
    self.assertEqual(path.read_bytes(),original,path.name)
  def test_023_failure_rolls_back_format19_and_entire_schema(self):
@@ -38,7 +40,7 @@ class HireDefinitions(unittest.TestCase):
   with self.assertRaises(sqlite3.OperationalError):p.apply_migrations(db,fault_after=23)
   self.assertEqual(db.execute('SELECT format_version FROM database_meta').fetchone(),(19,))
   self.assertEqual(before,db.execute('SELECT type,name,sql FROM sqlite_schema ORDER BY type,name').fetchall())
-  p.apply_migrations(db);self.assertEqual(db.execute('PRAGMA user_version').fetchone(),(21,))
+  p.apply_migrations(db);self.assertEqual(db.execute('PRAGMA user_version').fetchone(),(22,))
 
 class HireSealing(unittest.TestCase):
  def setUp(self):
@@ -62,7 +64,7 @@ class HireSealing(unittest.TestCase):
   p.insert(self.db,'hire_receipt_state',{**self.ctx,'source_token':id_+':hire','contract_id':id_,'event_kind':'hire','paid_credit':spec['hire_fee_credit']+spec['deposit_credit'],'event_tick':0})
   return npc
  def test_initial_world_has_70_groups_and_no_free_companions(self):
-  self.assertEqual(len(p.STATE_TABLES),72)
+  self.assertEqual(len(p.STATE_TABLES),83)
   self.assertEqual(self.db.execute("SELECT count(*) FROM hire_contract_state WHERE snapshot_id=?",(self.initial,)).fetchone(),(0,))
   self.assertEqual(self.db.execute("SELECT count(*) FROM npc_state WHERE snapshot_id=? AND spawn_id LIKE 'hire_%'",(self.initial,)).fetchone(),(0,))
   self.seal()

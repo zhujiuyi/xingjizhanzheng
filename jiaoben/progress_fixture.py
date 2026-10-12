@@ -22,10 +22,10 @@ sys.path.insert(0, str(ROOT / "jiaoben"))
 import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
-MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql", "018_operations.sql", "019_fitting.sql", "020_roles.sql", "021_honors.sql", "022_frontier.sql", "023_hire.sql", "024_situational.sql")
-FORMAT_VERSION = 21
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_20.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_20"
+MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql", "018_operations.sql", "019_fitting.sql", "020_roles.sql", "021_honors.sql", "022_frontier.sql", "023_hire.sql", "024_situational.sql", "025_campaign.sql")
+FORMAT_VERSION = 22
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_21.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_21"
 REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_3": PROGRESS_DIR / "catalog_adapter_v0_3.sql",
     "frozen_catalog_v0_4": PROGRESS_DIR / "catalog_adapter_v0_4.sql",
@@ -45,9 +45,10 @@ REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_17": PROGRESS_DIR / "catalog_adapter_v0_17.sql",
     "frozen_catalog_v0_18": PROGRESS_DIR / "catalog_adapter_v0_18.sql",
     "frozen_catalog_v0_19": PROGRESS_DIR / "catalog_adapter_v0_19.sql",
-    "frozen_catalog_v0_20": ADAPTER,
+    "frozen_catalog_v0_20": PROGRESS_DIR / "catalog_adapter_v0_20.sql",
+    "frozen_catalog_v0_21": ADAPTER,
 }
-RULE_CODE_VERSION = "singleplayer_situational_v1"
+RULE_CODE_VERSION = "singleplayer_campaign_v1"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
 STATE_TABLES = (
@@ -69,7 +70,7 @@ STATE_TABLES = (
     "remote_support_state", "consignment_state", "consignment_receipt_state",
     "civilization_command_state", "civilization_honor_evidence_state",
     "frontier_campaign_state", "frontier_actor_state", "frontier_campaign_receipt_state", "frontier_territory_state", "frontier_journal_state", "frontier_supply_order_state", "frontier_director_state",
-    "hire_contract_state", "hire_receipt_state", "resource_intel_state", "demand_intel_state",
+    "hire_contract_state", "hire_receipt_state", "resource_intel_state", "demand_intel_state", "construction_state", "construction_input_state", "construction_receipt_state", "construction_evidence_state", "expedition_route_state", "expedition_run_state", "expedition_stage_state", "expedition_receipt_state", "campaign_director_state", "flight_record_state", "telemetry_total_state",
     "operation_state",
     "tactical_site_state", "npc_tactic_state", "ship_tactical_effect_state", "drone_bay_state",
 )
@@ -396,6 +397,17 @@ def initial_state(connection, snapshot, world, content):
         insert(connection,"frontier_territory_state",{**ctx,"sector_id":spec["sector_id"]})
     if frozen("frontier_balance_defs"):
         insert(connection,"frontier_director_state",{**ctx,"player_id":player_id,"next_event_s":frozen("frontier_balance_defs")[0]["crisis_max_s"]})
+    if frozen("campaign_balance_defs"):
+        for project in frozen("construction_project_defs"):
+            insert(connection,"construction_state",{**ctx,"project_id":project["project_id"],"stage_index":1,"phase":"gathering"})
+        for spec in frozen("construction_input_defs"):
+            insert(connection,"construction_input_state",{**ctx,"project_id":spec["project_id"],"stage_index":spec["stage_index"],"item_id":spec["item_id"],"delivery_station_id":spec["delivery_station_id"]})
+        for route in frozen("expedition_route_defs"):
+            insert(connection,"expedition_route_state",{**ctx,"route_id":route["route_id"]})
+        index=int(hashlib.sha256(f"{seed}:campaign".encode()).hexdigest()[:8],16)%3
+        insert(connection,"campaign_director_state",{**ctx,"singleton":1,"focus_index":index,"generation":1,"remaining_s":frozen("campaign_balance_defs")[0]["director_period_s"]})
+        credit=connection.execute('SELECT credit FROM player_state WHERE snapshot_id=?',(snapshot,)).fetchone()[0]
+        insert(connection,"telemetry_total_state",{**ctx,"singleton":1,"next_sequence":1,"wallet_last":credit})
     for spec in frozen("civilization_command_defs"):
         insert(connection,"civilization_command_state",{**ctx,"player_id":player_id,"faction_id":spec["faction_id"]})
     for spec in frozen("consignment_defs"):

@@ -1092,6 +1092,142 @@ class HireReceiptStateDto extends RefCounted:
 	var refund_credit: int = 0
 	var event_tick: int = 0
 
+## Additive campaign snapshot row; values are supplied by catalog and services.
+class ConstructionStateDto extends RefCounted:
+	var project_id: String = ""
+	var stage_index: int = 0
+	var phase: String = ""
+	var paused: bool = false
+	var work_remaining_s: float = 0.0
+	var revision: int = 0
+	var paid_credit_total: int = 0
+	var completed_tick: int = 0
+
+## Additive campaign snapshot row; values are supplied by catalog and services.
+class ConstructionInputStateDto extends RefCounted:
+	var project_id: String = ""
+	var stage_index: int = 0
+	var item_id: String = ""
+	var delivery_station_id: String = ""
+	var delivered_units: int = 0
+
+## Additive campaign snapshot row; values are supplied by catalog and services.
+class ConstructionReceiptStateDto extends RefCounted:
+	var receipt_id: String = ""
+	var project_id: String = ""
+	var stage_index: int = 0
+	var action_kind: String = ""
+	var station_id: String = ""
+	var has_item_id: bool = false
+	var item_id: String = ""
+	var units: int = 0
+	var paid_credit: int = 0
+	var event_tick: int = 0
+
+## Additive campaign snapshot row; values are supplied by catalog and services.
+class ConstructionEvidenceStateDto extends RefCounted:
+	var project_id: String = ""
+	var player_id: String = ""
+	var event_id: String = ""
+	var generation: int = 0
+	var units: int = 0
+
+## Additive campaign snapshot row; values are supplied by catalog and services.
+class ExpeditionRouteStateDto extends RefCounted:
+	var route_id: String = ""
+	var cooldown_remaining_s: float = 0.0
+	var completed_runs: int = 0
+	var withdrawn_runs: int = 0
+
+## Additive campaign snapshot row; values are supplied by catalog and services.
+class ExpeditionRunStateDto extends RefCounted:
+	var run_id: String = ""
+	var route_id: String = ""
+	var stage_index: int = 0
+	var phase: String = ""
+	var withdraw_requested: bool = false
+	var focus_bonus_bp: int = 0
+	var fee_paid_credit: int = 0
+	var started_tick: int = 0
+	var finished_tick: int = 0
+	var bonus_credit_total: int = 0
+	var bonus_insight_total: int = 0
+
+## Additive campaign snapshot row; values are supplied by catalog and services.
+class ExpeditionStageStateDto extends RefCounted:
+	var run_id: String = ""
+	var stage_index: int = 0
+	var option_id: String = ""
+	var event_id: String = ""
+	var event_generation: int = 0
+	var outcome: String = ""
+	var settled: bool = false
+	var bonus_credit: int = 0
+	var bonus_insight: int = 0
+
+## Additive campaign snapshot row; values are supplied by catalog and services.
+class ExpeditionReceiptStateDto extends RefCounted:
+	var receipt_id: String = ""
+	var run_id: String = ""
+	var stage_index: int = 0
+	var action_kind: String = ""
+	var paid_credit: int = 0
+	var bonus_credit: int = 0
+	var bonus_insight: int = 0
+	var event_tick: int = 0
+
+## Additive campaign snapshot row; values are supplied by catalog and services.
+class CampaignDirectorStateDto extends RefCounted:
+	var singleton: int = 0
+	var focus_index: int = 0
+	var generation: int = 0
+	var remaining_s: float = 0.0
+
+## Additive campaign snapshot row; values are supplied by catalog and services.
+class FlightRecordStateDto extends RefCounted:
+	var record_id: String = ""
+	var sequence: int = 0
+	var ship_def_id: String = ""
+	var phase: String = ""
+	var partial_baseline: bool = false
+	var started_tick: int = 0
+	var finished_tick: int = 0
+	var elapsed_s: float = 0.0
+	var combat_s: float = 0.0
+	var transit_s: float = 0.0
+	var credit_start: int = 0
+	var credit_last: int = 0
+	var flight_income: int = 0
+	var flight_spent: int = 0
+	var return_income: int = 0
+	var return_spent: int = 0
+	var mined_units: int = 0
+	var kills: int = 0
+	var damage_dealt: float = 0.0
+	var damage_taken: float = 0.0
+	var weapon_cycles: int = 0
+	var drone_losses: int = 0
+	var activity_count: int = 0
+
+## Additive campaign snapshot row; values are supplied by catalog and services.
+class TelemetryTotalStateDto extends RefCounted:
+	var singleton: int = 0
+	var next_sequence: int = 0
+	var wallet_last: int = 0
+	var outings: int = 0
+	var lost_outings: int = 0
+	var elapsed_s: float = 0.0
+	var combat_s: float = 0.0
+	var transit_s: float = 0.0
+	var income_credit: int = 0
+	var spent_credit: int = 0
+	var mined_units: int = 0
+	var kills: int = 0
+	var damage_dealt: float = 0.0
+	var damage_taken: float = 0.0
+	var weapon_cycles: int = 0
+	var drone_losses: int = 0
+
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
 	var content: ContentRefDto = ContentRefDto.new()
@@ -1163,6 +1299,17 @@ class WorldSnapshotDto extends RefCounted:
 	var hire_receipt_state_rows: Array[HireReceiptStateDto] = []
 	var resource_intel_state_rows: Array[ResourceIntelStateDto] = []
 	var demand_intel_state_rows: Array[DemandIntelStateDto] = []
+	var construction_state_rows: Array[ConstructionStateDto] = []
+	var construction_input_state_rows: Array[ConstructionInputStateDto] = []
+	var construction_receipt_state_rows: Array[ConstructionReceiptStateDto] = []
+	var construction_evidence_state_rows: Array[ConstructionEvidenceStateDto] = []
+	var expedition_route_state_rows: Array[ExpeditionRouteStateDto] = []
+	var expedition_run_state_rows: Array[ExpeditionRunStateDto] = []
+	var expedition_stage_state_rows: Array[ExpeditionStageStateDto] = []
+	var expedition_receipt_state_rows: Array[ExpeditionReceiptStateDto] = []
+	var campaign_director_state_rows: Array[CampaignDirectorStateDto] = []
+	var flight_record_state_rows: Array[FlightRecordStateDto] = []
+	var telemetry_total_state_rows: Array[TelemetryTotalStateDto] = []
 	var tactical_site_state_rows: Array[TacticalSiteStateDto] = []
 	var npc_tactic_state_rows: Array[NpcTacticStateDto] = []
 	var ship_tactical_effect_state_rows: Array[ShipTacticalEffectStateDto] = []
