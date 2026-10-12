@@ -11,6 +11,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "auxiliary-world": ("auxiliary_world_v41.gd", "XJ_AUXILIARY_WORLD_V41", "auxiliary-world-v41", "AUXILIARY_WORLD_V41", "--xj-verify-auxiliary-world-v41"),
     "owned-fleet": ("owned_fleet_v40.gd", "XJ_OWNED_FLEET_V40", "owned-fleet-v40", "OWNED_FLEET_V40", "--xj-verify-owned-fleet-v40"),
     "owned-fleet-travel": ("owned_fleet_travel_v40.gd", "XJ_OWNED_FLEET_TRAVEL_V40", "owned-fleet-travel-v40", "OWNED_FLEET_TRAVEL_V40", "--xj-verify-owned-fleet-travel-v40"),
     "owned-fleet-world": ("owned_fleet_world_v40.gd", "XJ_OWNED_FLEET_WORLD_V40", "owned-fleet-world-v40", "OWNED_FLEET_WORLD_V40", "--xj-verify-owned-fleet-world-v40"),
@@ -76,6 +77,21 @@ def sha(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def require_supported_diagnostics(binary, names):
+    """Read PE metadata before launching flags absent from older clients."""
+    if not set(names).intersection({"owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world"}):
+        return
+    env = os.environ.copy()
+    env["XJ_DIAGNOSTIC_VERSION_FILE"] = str(binary)
+    version = subprocess.check_output(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+         "(Get-Item -LiteralPath $env:XJ_DIAGNOSTIC_VERSION_FILE).VersionInfo.FileVersion"],
+        env=env, text=True, encoding="utf-8").strip()
+    numbers = [int(value) for value in re.findall(r"\d+", version)[:4]]
+    if len(numbers) < 3 or tuple((numbers + [0] * 4)[:4]) < (0, 31, 0, 0):
+        raise RuntimeError(f"这些诊断需要 v0.31.0 及以上客户端，当前为 {version or '未知'}；未启动游戏。旧包升级须使用其原有固定入口。")
+
+
 def activate(process, ready_output=None):
     if ready_output is not None:
         # The built-in presentation endpoint announces when the real native
@@ -112,6 +128,7 @@ def run_suite():
     report_path = ROOT / f"jiaoben/logs/v18-{mode}-{run_id}.json"
     if args.executable:
         binary = args.executable.resolve()
+        require_supported_diagnostics(binary, args.only)
         identity = {"executable": str(binary), "exe_sha256": sha(binary), "pck_sha256": sha(binary.with_suffix(".pck"))}
     else:
         binary = args.engine.resolve()
@@ -207,6 +224,12 @@ def run_suite():
         if name == "owned-fleet-world":
             assert args.native and record["summary"]["checks"] >= 60 and len(captures) == 5
             assert record["summary"]["owned_moved_m"] > 50 and record["summary"]["owned_cancelled"] and record["summary"]["owned_arrived"]
+        if name == "auxiliary-world":
+            summary = record["summary"]
+            assert args.native and summary["checks"] >= 60 and len(captures) == 6
+            assert 0 < summary["repaired_hp"] <= 40 and summary["recon_distance_m"] > 1000
+            assert summary["intercepted"] and summary["frozen_intel"] and summary["restored"]
+            assert summary["comm_returned"] and summary["blocked_sensing"]
         if name in ("measurements","scenarios","scenarios-upgrade"):
             assert record["summary"]["checks"] >= {"measurements":30,"scenarios":80,"scenarios-upgrade":20}[name] and record["summary"]["groups"] == 99 and not captures
         if name == "scenarios-world":

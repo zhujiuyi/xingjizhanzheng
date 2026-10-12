@@ -2,7 +2,11 @@
 
 S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增SQL，`build_catalog.py --output jiaoben/tmp/fleet-candidate.db`执行闭合校验，`store_generate_fleet.py`只生成028/固定v0.23适配器和九组新状态（共108组），保护旧历史SQL。`verify_combat_v18.py --only owned-fleet owned-fleet-travel`使用fresh UUID库检查船员/部署业务和旅行事务；`--native --only owned-fleet-world`检查真实Main/GUI、故障连接活动世界绑定、物理跟随、AU取消/抵达及三种布局。实际包沿用固定`--xj-verify-owned-fleet[-travel|-world]-v40`入口，尚未执行包验收，禁止通用EXE `--script`。
 
-当前旅行103项、原生75项/5图通过，汇总`logs/v40-travel-ui-checkpoint.json`，规格和证据边界见[66](../doc/66-自有舰队船员与辅助无人机.md)。资金、舰体、许可、姿态和遭遇隔离为声明夹具；故障须实际命中一次，不能仅凭资金未改变声称SQL回滚。独立工作树执行时额外持有主工作区`E:\星际战舰\jiaoben\tmp\feature-audit.lock`，引擎导入/检查/原生运行保持串行。辅助机、真实旧PCK升级及最终发行仍待完成，不正常启动开发源码处理个人档。
+旅行103项、原生75项/5图的接线检查点见`logs/v40-travel-ui-checkpoint.json`，规格和证据边界见[66](../doc/66-自有舰队船员与辅助无人机.md)。资金、舰体、许可、姿态和遭遇隔离为声明夹具；故障须实际命中一次，不能仅凭资金未改变声称SQL回滚。独立工作树执行时额外持有主工作区`E:\星际战舰\jiaoben\tmp\feature-audit.lock`，引擎导入/检查/原生运行保持串行。剩余联合边界、真实旧PCK升级及最终发行仍待完成，不正常启动开发源码处理个人档。
+
+辅助机源码使用`verify_combat_v18.py --native --only auxiliary-world`，固定入口`--xj-verify-auxiliary-world-v41`、fresh `auxiliary-world-v41`目录；禁止默认初始化或通用导出EXE `--script`。最终84项/6图通过，覆盖真实修复/探测/遮挡/弹丸拦截/通信返航/补充及108组和RNG重开，证据`logs/v41-auxiliary-checkpoint.json`。损伤、初始资产、目标/母舰边界姿态、遮挡体、弹丸伤害与TTL时钟为明确夹具；不将其记为自然流程。旧回调须通过弱引用安全返回，机库展示的渲染帧相机使用正确插值并更新资源摘要，不忽略引擎警告。母舰损毁/超时、自有母舰联合和实际包仍待验，规格见66。
+
+向实际EXE执行`owned-fleet*`或`auxiliary-world`前，工具只读检查文件版本并拒绝低于0.31.0的客户端。已验证正式0.30.0.0在启动前被拒绝。旧包升级夹具须选择其已经存在的固定诊断入口，不能把新版参数交给旧EXE尝试。
 
 ## 临时产物保留与清理
 

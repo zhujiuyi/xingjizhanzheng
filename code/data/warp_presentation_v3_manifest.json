@@ -40,7 +40,7 @@
     },
     {
       "path": "res://runtime/station_hangar.gd",
-      "sha256": "1aa7dcf63ce2d18dc421d7720daf36bc32e16912be6639fd28fcdea1e3c526b4",
+      "sha256": "2ccd9d366428a3eeee4d116f7ecd9b00f671b0cfd966df6c420cc9a2aa2de17c",
       "role": "readonly_warp_and_celestial_presentation",
       "source": "Project authored SQL and renderer"
     }

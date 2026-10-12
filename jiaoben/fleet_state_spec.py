@@ -41,7 +41,7 @@ energy_paid_total REAL NOT NULL DEFAULT 0 CHECK(energy_paid_total>=0),heat_paid_
 repaired_hp REAL NOT NULL DEFAULT 0 CHECK(repaired_hp>=0)""",
      'FOREIGN KEY(snapshot_id,world_id,content_snapshot_id,item_instance_id) REFERENCES item_instance_state(snapshot_id,world_id,content_snapshot_id,item_instance_id)'),
     'auxiliary_intel_state': ('owner_ship_id,target_kind,target_id', """owner_ship_id TEXT NOT NULL,module_id TEXT NOT NULL,
-target_kind TEXT NOT NULL CHECK(target_kind IN('npc','resource','signal','marker')),target_id TEXT NOT NULL,
+target_kind TEXT NOT NULL CHECK(target_kind IN('npc','resource','signal','marker')),target_id TEXT NOT NULL,observed_label TEXT NOT NULL CHECK(length(observed_label) BETWEEN 1 AND 96),
 sector_id TEXT NOT NULL,site_id TEXT NOT NULL,target_generation INTEGER NOT NULL DEFAULT 0 CHECK(target_generation>=0),
 observed_tick INTEGER NOT NULL CHECK(observed_tick>=0),pos_x REAL NOT NULL,pos_y REAL NOT NULL,pos_z REAL NOT NULL,
 remaining_units INTEGER NOT NULL DEFAULT 0 CHECK(remaining_units>=0)""",

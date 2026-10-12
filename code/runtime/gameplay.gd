@@ -57,6 +57,7 @@ var honors: RefCounted
 var consignments: RefCounted
 var operations: RefCounted
 var drone_control: RefCounted
+var auxiliary_drones: RefCounted
 var crew: RefCounted
 var owned_fleet: RefCounted
 var events: Array[D.EventDto] = []
@@ -97,6 +98,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog, preview: bool = 
 	mobile_belts = MobileBelts.new(self)
 	tactics = Tactics.new(self)
 	drone_control = DroneControl.new(self)
+	auxiliary_drones=preload("res://runtime/gameplay/auxiliary_drones.gd").new(self)
 	crew=preload("res://runtime/gameplay/crew.gd").new(self)
 	owned_fleet=preload("res://runtime/gameplay/owned_fleet.gd").new(self)
 	operations = Operations.new(self)
@@ -247,6 +249,9 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 	if action == "operation_action": command.action_kind = T.ActionKind.OPERATION_ACTION
 	if action == "drone_command": command.action_kind = T.ActionKind.DRONE_COMMAND
 	if action == "drone_replenish": command.action_kind = T.ActionKind.DRONE_REPLENISH
+	if action == "auxiliary_launch":command.action_kind=T.ActionKind.AUXILIARY_LAUNCH
+	if action == "crew_action":command.action_kind=T.ActionKind.CREW_ACTION
+	if action == "owned_fleet_action":command.action_kind=T.ActionKind.OWNED_FLEET_ACTION
 	_active_action = command
 	_active_payload = _request_for(action, target, quantity, extra)
 	var ok: bool = false
@@ -338,6 +343,9 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 			"exploration_research": ok = exploration.research(target)
 			"drone_command": ok = drone_control.command(extra, target)
 			"drone_replenish": ok = drone_control.replenish(target, quantity, extra)
+			"auxiliary_launch":
+				var parts: PackedStringArray=extra.split("|",true,1)
+				ok=auxiliary_drones.launch(target,parts[0],parts[1]) if parts.size()==2 else fail("辅助出击请求缺少目标与机库代次")
 			"set_module_enabled": ok = _set_enabled(target, extra != "off")
 			"request_engine_cycle": ok = _engine_cycle()
 			_: fail("不支持的动作：" + action)
@@ -539,6 +547,8 @@ func npc_metrics(npc: RefCounted) -> Dictionary:
 	return definition("npc_full_defs","npc_id",spawn.npc_id)
 
 func weapon_fit_reason(ship: D.ShipStateDto, module_id: String, ignore_item_id: String = "") -> String:
+	var auxiliary_reason: String=auxiliary_drones.fit_reason(ship,module_id,ignore_item_id)
+	if not auxiliary_reason.is_empty():return auxiliary_reason
 	if not catalog.table_names.has("ship_weapon_permissions"): return ""
 	var weapon: Dictionary = definition("weapon_defs", "module_id", module_id)
 	if weapon.is_empty(): return ""
@@ -856,7 +866,7 @@ func in_combat() -> bool:
 
 func save_blocked() -> bool:
 	if drone_control != null and not drone_control.live.is_empty(): return true
-	for row: RefCounted in state.rows("drone_bay_state"):
+	for row: RefCounted in state.rows("drone_bay_state")+state.rows("auxiliary_bay_state"):
 		if row.deployed_units > 0: return true
 	for row: RefCounted in state.rows("npc_tactic_state"):
 		if row.deployed_drones > 0: return true
@@ -910,10 +920,10 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired,situational,projects,expeditions,telemetry,journal,scenarios,crew,owned_fleet]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,auxiliary_drones,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired,situational,projects,expeditions,telemetry,journal,scenarios,crew,owned_fleet]:
 		if service != null: service.g = null
 	specializations = null; fitting_analysis = null
-	ship_roles = null; consignments = null; honors = null; frontier = null; hired = null; situational = null; projects = null; expeditions = null; telemetry = null
+	ship_roles = null; auxiliary_drones=null; consignments = null; honors = null; frontier = null; hired = null; situational = null; projects = null; expeditions = null; telemetry = null
 	operations = null; journal = null; scenarios = null
 	crew=null;owned_fleet=null
 	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null; mobile_belts = null

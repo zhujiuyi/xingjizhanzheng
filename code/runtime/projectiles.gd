@@ -35,6 +35,7 @@ class Drone extends RefCounted:
 	var fired: bool = false
 	var owner_clearance_m: float = 0.0
 	var formation_index: float = 0.0
+	var observe_elapsed_s: float = 0.0
 var active: Array[Projectile] = []
 var drones: Array[Drone] = []
 var flashes: Array[Dictionary] = []
@@ -74,7 +75,7 @@ func recall_drones() -> void:
 	# Disarm future shots without deleting already launched projectiles.
 	var state: XJRuntimeState = get_parent().get("state") as XJRuntimeState
 	for drone in drones:
-		if drone.data != null and state != null and drone.owner_id != state.ship().ship_instance_id: continue
+		if drone.data != null and state != null and drone.owner_id != state.ship().ship_instance_id and not _control().g.owned_fleet.owns(drone.owner_id): continue
 		drone.returning = true
 		if drone.data != null: drone.data.returning = true
 
@@ -104,6 +105,7 @@ func fire(owner_id: String, excluded: RID, origin: Vector3, direction: Vector3, 
 
 func simulate(delta: float) -> void:
 	if paused or delta <= 0.0: return
+	if get_parent().has_method("expire_auxiliary_markers"):get_parent().expire_auxiliary_markers()
 	_simulate_drones(delta)
 	for shot: Projectile in active.duplicate():
 		var travel := minf(shot.range_left, shot.speed * delta)
@@ -222,6 +224,80 @@ func _launch_drones(owner_id: String, excluded: RID, origin: Vector3, direction:
 			drone.data.pos_x = drone.position.x; drone.data.pos_y = drone.position.y; drone.data.pos_z = drone.position.z
 		drones.append(drone)
 
+func auxiliary_target(id: String) -> Dictionary:
+	var world: Node3D=get_parent();var g: RefCounted=_control().g;var node: Node3D=null;var kind: String="";var generation: int=0;var site: String="";var units: int=0
+	if id==g.state.ship().ship_instance_id:
+		node=_entity_node(id);kind="ship";site=XJSpaceCoordinates.current_site(g.state)
+	elif world.targets.has(id) and world.target_is_local(id):
+		var entry: Dictionary=world.targets[id];node=entry.node;kind=entry.kind;site=world.target_site(id)
+		generation=int(entry.get("generation",0))
+		var npc: RefCounted=g.state.find("npc_state","npc_instance_id",id)
+		if npc!=null:generation=npc.generation
+		if kind=="resource":
+			for resource: RefCounted in g.state.rows("resource_state"):
+				if resource.node_id==id:units=resource.remaining_units;break
+	if not is_instance_valid(node):return {}
+	return {"id":id,"kind":kind,"generation":generation,"position":node.global_position,"site_id":site,"remaining_units":units,"title":str(world.targets.get(id,{}).get("title",g.definition("ship_defs","ship_id",g.state.ship().ship_def_id).display_name)),"synthetic":bool(world.targets.get(id,{}).get("auxiliary_record",false))}
+
+func auxiliary_sight(drone_id: String,target_id: String,range_m: float) -> bool:
+	var info: Dictionary=auxiliary_target(target_id)
+	if info.is_empty():return false
+	for drone: Drone in drones:
+		if drone.data==null or drone.data.drone_id!=drone_id or drone.returning or drone.data.returning:continue
+		if drone.position.distance_to(info.position)>range_m:return false
+		var world: Node3D=get_parent();var entry: Dictionary=world.targets.get(target_id,{})
+		var group: Dictionary=world.targets.get(str(entry.get("group_target_id","")),{})
+		if not group.is_empty():
+			var reveal: float=float(group.get("reveal_range_m",range_m))
+			if drone.position.distance_to(info.position)>reveal and drone.position.distance_to(group.node.global_position)>reveal:return false
+		return world.line_of_sight(drone.position,info.position,drone.excluded_rid,target_id)
+	return false
+
+func prepare_auxiliary(item_id: String,target_id: String) -> Array:
+	var control: RefCounted=_control();var service: RefCounted=control.g.auxiliary_drones;var hull: RefCounted=service.owner(item_id)
+	var owner: CollisionObject3D=_entity_node(hull.ship_instance_id) as CollisionObject3D if hull!=null else null;var info: Dictionary=auxiliary_target(target_id)
+	if owner==null or info.is_empty() or module_busy(item_id):return []
+	var result: Array=[];var definition: Dictionary=service.spec(item_id);var count: int=mini(control.stock(hull.ship_instance_id,item_id),int(definition.drone_count))
+	var direction: Vector3=owner.global_position.direction_to(info.position)
+	if direction.is_zero_approx():direction=-owner.global_basis.z
+	var right: Vector3=direction.cross(Vector3.UP).normalized()
+	if right.is_zero_approx():right=Vector3.RIGHT
+	for index: int in range(count):
+		var drone:=Drone.new();drone.owner_id=hull.ship_instance_id;drone.module_instance_id=item_id;drone.target_id=target_id;drone.direction=direction;drone.profile=definition.duplicate(true);drone.control_range_m=float(control.g.definition("module_defs","module_id",definition.module_id).range_m)
+		drone.excluded_rid=owner.get_rid();drone.owner_clearance_m=_owner_radius(owner);drone.formation_index=float(index)-float(count-1)*0.5;drone.raw_damage=Vector3.ZERO
+		drone.position=owner.global_position+direction*(drone.owner_clearance_m+float(config.projectile_initial_trail_m))+right*drone.formation_index*float(config.projectile_initial_trail_m)
+		drone.data=control.register_auxiliary(drone.owner_id,item_id,target_id)
+		if drone.data==null:discard_auxiliary(result);return []
+		drone.data.pos_x=drone.position.x;drone.data.pos_y=drone.position.y;drone.data.pos_z=drone.position.z
+		var body:=StaticBody3D.new();body.collision_layer=128;body.collision_mask=0;body.set_meta("entity_kind","drone");body.set_meta("entity_id",drone.data.drone_id)
+		var shape:=CollisionShape3D.new();var sphere:=SphereShape3D.new();sphere.radius=float(control.g.tactics.balance.drone_radius_m);shape.shape=sphere;body.add_child(shape);body.add_child(_visual("drone"));drone.visual=body;result.append(drone)
+	return result
+
+func discard_auxiliary(staged: Array) -> void:
+	for drone: Drone in staged:
+		_control().retire(drone.data.drone_id,false)
+		if is_instance_valid(drone.visual):drone.visual.free()
+
+func publish_auxiliary(staged: Array) -> void:
+	for drone: Drone in staged:
+		get_parent().add_child(drone.visual);_place(drone.visual,drone.position,drone.direction)
+		get_parent()._target(drone.data.drone_id,"维修无人机" if drone.data.role_kind=="repair" else "侦察无人机","drone",drone.visual,"");get_parent().targets[drone.data.drone_id]["friendly"]=true;drones.append(drone)
+
+func _auxiliary_work(drone: Drone,target: Node3D,delta: float) -> void:
+	if drone.returning or drone.data.command_kind=="follow" or drone.data.command_kind=="recall":return
+	var service: RefCounted=_control().g.auxiliary_drones;var info: Dictionary=auxiliary_target(drone.target_id)
+	if info.is_empty() or info.generation!=drone.data.target_generation or info.site_id!=drone.data.site_id:drone.returning=true;return
+	if drone.data.role_kind=="repair":
+		if drone.position.distance_to(target.global_position)<=float(drone.profile.work_range_m) and _drone_has_sight(drone,target):
+			var restored: float=service.repair(drone.data)
+			if restored>0:surface_impact.emit(target.global_position,Color("73e5c1"),drone.direction)
+			drone.fired=drone.data.fired;drone.returning=true
+	else:
+		drone.observe_elapsed_s+=delta
+		if drone.observe_elapsed_s>=float(drone.profile.observe_cycle_s):
+			drone.observe_elapsed_s=fmod(drone.observe_elapsed_s,float(drone.profile.observe_cycle_s))
+			for id: String in get_parent().targets:service.observe(drone.data,id)
+
 func _simulate_drones(delta: float) -> void:
 	for drone: Drone in drones.duplicate():
 		var control: RefCounted = _control()
@@ -232,6 +308,8 @@ func _simulate_drones(delta: float) -> void:
 		if owner == null: _retire_drone(drone, true); continue
 		drone.age_s += delta
 		var target: Node3D = _entity_node(drone.target_id)
+		var auxiliary: bool=drone.data!=null and drone.data.role_kind!="attack"
+		if auxiliary and target==null and get_parent().targets.has(drone.target_id) and get_parent().target_is_local(drone.target_id):target=get_parent().targets[drone.target_id].node
 		var follow_order: bool = drone.data != null and drone.data.command_kind == "follow"
 		if not _drone_module_live(drone) or (target == null and not follow_order) or drone.age_s >= float(drone.profile.sortie_timeout_s): drone.returning = true
 		var disconnected: bool = (not follow_order and target != null and owner.global_position.distance_to(target.global_position) > drone.control_range_m) or owner.global_position.distance_to(drone.position) > drone.control_range_m
@@ -245,11 +323,12 @@ func _simulate_drones(delta: float) -> void:
 		# The recovery window is finite. Recalled drones are already disarmed and
 		# expiration cannot erase a projectile in the independent active array.
 		if drone.age_s >= float(drone.profile.sortie_timeout_s) * 2.0: _retire_drone(drone, true); continue
+		if auxiliary:_auxiliary_work(drone,target,delta)
 		var destination: Vector3 = owner.global_position if drone.returning or follow_order else target.global_position
 		var follow: bool = drone.data != null and drone.data.command_kind == "follow" and not drone.returning
 		if follow: destination = owner.global_position + owner.global_basis.x * (drone.owner_clearance_m + float(drone.profile.return_radius_m) * 2.0) + owner.global_basis.z * drone.formation_index * float(drone.profile.return_radius_m)
 		var wanted: Vector3 = drone.position.direction_to(destination)
-		if wanted.is_zero_approx(): continue
+		if wanted.is_zero_approx():wanted=drone.direction
 		var turn: float = float(drone.profile.turn_rad_s) * delta
 		var angle: float = drone.direction.angle_to(wanted)
 		if angle <= turn: drone.direction = wanted
@@ -257,12 +336,13 @@ func _simulate_drones(delta: float) -> void:
 			var axis: Vector3 = drone.direction.cross(wanted).normalized()
 			if axis.is_zero_approx(): axis = drone.direction.cross(Vector3.UP if absf(drone.direction.y) < 0.99 else Vector3.RIGHT).normalized()
 			drone.direction = drone.direction.rotated(axis, turn).normalized()
-		if not follow and not drone.returning and not drone.fired and drone.position.distance_to(destination) <= float(drone.profile.attack_range_m) and drone.direction.angle_to(wanted) <= turn and _drone_has_sight(drone, target):
+		if not auxiliary and not follow and not drone.returning and not drone.fired and drone.position.distance_to(destination) <= float(drone.profile.attack_range_m) and drone.direction.angle_to(wanted) <= turn and _drone_has_sight(drone, target):
 			fire(drone.owner_id, drone.excluded_rid, drone.position, drone.direction, float(drone.profile.projectile_speed_mps), float(drone.profile.attack_range_m), drone.raw_damage, {"family_id": "kinetic", "fire_mode": "projectile"})
 			drone.fired = true
 			drone.returning = true
 		var speed: float = float(drone.profile.speed_mps)
 		if follow: speed = minf(speed, sqrt(2.0 * float(drone.profile.acceleration_mps2) * maxf(0.0, drone.position.distance_to(destination) - float(drone.profile.return_radius_m))))
+		if auxiliary and not drone.returning and not follow:speed=minf(speed,sqrt(2.0*float(drone.profile.acceleration_mps2)*maxf(0.0,drone.position.distance_to(destination)-float(drone.profile.work_range_m))))
 		if drone.returning:
 			var stopping_distance: float = maxf(0.0, drone.position.distance_to(owner.global_position) - float(drone.profile.return_radius_m))
 			speed = minf(speed, sqrt(2.0 * float(drone.profile.acceleration_mps2) * stopping_distance))

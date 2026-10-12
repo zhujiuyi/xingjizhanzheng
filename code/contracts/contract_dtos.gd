@@ -864,6 +864,11 @@ class DroneBayStateDto extends RefCounted:
 	var revision: int = 0
 	var command_kind: String = "attack"
 class DroneRuntimeDto extends RefCounted:
+	var role_kind: String = "attack"
+	var target_kind: String = "npc"
+	var target_generation: int = 0
+	var sector_id: String = ""
+	var site_id: String = ""
 	var drone_id: String = ""
 	var owner_id: String = ""
 	var module_instance_id: String = ""
@@ -1488,6 +1493,7 @@ class AuxiliaryIntelStateDto extends RefCounted:
 	var pos_z: float = 0.0
 	var remaining_units: int = 0
 
+	var observed_label: String = ""
 
 class CrewSupportQuoteStateDto extends RefCounted:
 	var item_instance_id: String = ""
@@ -1497,6 +1503,7 @@ class CrewSupportQuoteStateDto extends RefCounted:
 	var loyalty_at_payment: int = 0
 	var restore_multiplier: float = 0.0
 	var paid_tick: int = 0
+
 
 
 

@@ -53,6 +53,7 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-auxiliary-world-v41","file":"auxiliary_world_v41.gd","prefix":"auxiliary-world-v41","env":"XJ_AUXILIARY_WORLD_V41","meta":"xj_auxiliary_world_v41_diagnostic"},
 		{"flag":"--xj-verify-owned-fleet-v40","file":"owned_fleet_v40.gd","prefix":"owned-fleet-v40","env":"XJ_OWNED_FLEET_V40","meta":"xj_owned_fleet_v40_diagnostic"},
 		{"flag":"--xj-verify-owned-fleet-travel-v40","file":"owned_fleet_travel_v40.gd","prefix":"owned-fleet-travel-v40","env":"XJ_OWNED_FLEET_TRAVEL_V40","meta":"xj_owned_fleet_travel_v40_diagnostic"},
 		{"flag":"--xj-verify-owned-fleet-world-v40","file":"owned_fleet_world_v40.gd","prefix":"owned-fleet-world-v40","env":"XJ_OWNED_FLEET_WORLD_V40","meta":"xj_owned_fleet_world_v40_diagnostic"},
@@ -389,6 +390,7 @@ func _physics_process(delta: float) -> void:
 	gameplay.ship_roles.spatial_active = not travel.active() and not local_navigation.warp_active()
 	gameplay.hired.spatial_active = not travel.active() and not local_navigation.warp_active()
 	gameplay.owned_fleet.spatial_active = not travel.active() and not local_navigation.warp_active()
+	gameplay.auxiliary_drones.spatial_active = not travel.active() and not local_navigation.warp_active()
 	gameplay.situational.spatial_active = not travel.active() and not local_navigation.warp_active()
 	world.flight.metrics = gameplay.call("metrics", ship)
 	if _manual_navigation_override(): source_goal.clear()
@@ -1359,6 +1361,11 @@ func _activate(candidate: XJRuntimeState) -> void:
 	world.projectiles.surface_impact.connect(_surface_impact)
 	gameplay.call("set_spatial_validator", _spatial_valid)
 	gameplay.owned_fleet.pending_attacks=_owned_attacks_pending
+	gameplay.auxiliary_drones.prepare=world.projectiles.prepare_auxiliary
+	gameplay.auxiliary_drones.publish=world.projectiles.publish_auxiliary
+	gameplay.auxiliary_drones.discard=world.projectiles.discard_auxiliary
+	gameplay.auxiliary_drones.target_query=world.projectiles.auxiliary_target
+	gameplay.auxiliary_drones.sight_query=world.projectiles.auxiliary_sight
 	travel = XJTravel.new()
 	travel.setup(state, store, _prepare_travel, _record_arrival, _travel_stable)
 	travel.changed.connect(_travel_changed)
@@ -1536,6 +1543,7 @@ func _local_navigation_changed(_mode: String, phase: String, message: String) ->
 		gameplay.ship_roles.spatial_active = not local_navigation.warp_active()
 		gameplay.hired.spatial_active = not local_navigation.warp_active()
 		gameplay.owned_fleet.spatial_active = not local_navigation.warp_active()
+		gameplay.auxiliary_drones.spatial_active = not local_navigation.warp_active()
 		if local_navigation.warp_active(): gameplay.ship_roles.stop_support()
 	_sync_combat_automation()
 	if local_navigation.warp_active():

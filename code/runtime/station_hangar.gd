@@ -105,6 +105,9 @@ func _update_window_basis()->void:
 	_space_window_material.set_shader_parameter("stage_to_sector",stage_frame)
 
 func _ready()->void:
+	# The exhibition animates in render frames and remains active while menus
+	# pause the world. Its camera must not inherit physics interpolation.
+	physics_interpolation_mode=Node.PHYSICS_INTERPOLATION_MODE_OFF
 	var parsed:Variant=JSON.parse_string(FileAccess.get_file_as_string(ROOT+"layout.json"))
 	if not parsed is Dictionary:push_error("Missing hangar exhibition layout");return
 	_layout=parsed

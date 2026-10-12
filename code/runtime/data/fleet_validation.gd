@@ -78,12 +78,24 @@ func validate(state: XJRuntimeState,catalog: XJCatalog) -> bool:
 		if row.paid_credit_total!=row.replenished_units*int(spec.credit_per_unit) or row.material_units_total!=row.replenished_units*int(spec.material_per_unit) or row.revision<0 or row.sorties<0 or row.command_kind not in ["follow","recall"]:return fail("Auxiliary replenishment/payment mismatch")
 		var module: Dictionary=catalog.one("module_defs","module_id",item.item_def_id)
 		if not is_finite(row.energy_paid_total) or not is_finite(row.heat_paid_total) or absf(row.energy_paid_total-row.sorties*float(module.energy_eu))>0.00001 or absf(row.heat_paid_total-row.sorties*float(module.heat_hu))>0.00001 or row.consumable_paid_units!=row.sorties*int(spec.consumable_per_sortie):return fail("Auxiliary sortie lacks actual resource accounting")
-		if not is_finite(row.repaired_hp) or row.repaired_hp<0 or (spec.role_kind=="recon" and row.repaired_hp!=0):return fail("Auxiliary role contribution invalid")
+		if not is_finite(row.repaired_hp) or row.repaired_hp<0 or row.repaired_hp>row.sorties*int(spec.drone_count)*float(spec.restore_amount)*item.quality_multiplier+0.00001 or (spec.role_kind=="recon" and row.repaired_hp!=0):return fail("Auxiliary role contribution invalid")
 	for item: RefCounted in state.rows("item_instance_state"):
 		if not catalog.one("auxiliary_drone_defs","module_id",item.item_def_id).is_empty() and not bays.has(item.item_instance_id):return fail("Auxiliary stock is missing")
+	var roles: Dictionary={}
+	for equipment: RefCounted in state.rows("equipment_state"):
+		var definition: Dictionary=catalog.one("auxiliary_drone_defs","module_id",equipment.module_def_id)
+		if definition.is_empty():continue
+		var container: RefCounted=state.find("container_state","container_id",equipment.slot_container_id)
+		var owner: RefCounted=state.find("ship_state","ship_instance_id",container.ship_instance_id) if container!=null and container.has_ship_instance_id else null
+		var permission: Dictionary={}
+		for allowed: Dictionary in catalog.rows("ship_auxiliary_permissions"):
+			if owner!=null and allowed.ship_id==owner.ship_def_id and allowed.role_kind==definition.role_kind:permission=allowed;break
+		if permission.is_empty():return fail("Auxiliary hull permission missing")
+		var key: String=owner.ship_instance_id+":"+str(definition.role_kind);roles[key]=int(roles.get(key,0))+1
+		if int(roles[key])>int(permission.max_installed):return fail("Auxiliary hull installation limit exceeded")
 	for row: RefCounted in state.rows("auxiliary_intel_state"):
 		var spec: Dictionary=catalog.one("auxiliary_drone_defs","module_id",row.module_id);var site: Dictionary=catalog.one("site_defs","site_id",row.site_id)
-		if spec.get("role_kind","")!="recon" or state.find("ship_state","ship_instance_id",row.owner_ship_id)==null or site.get("sector_id","")!=row.sector_id or row.observed_tick<0 or row.observed_tick>tick or row.target_generation<0 or row.target_kind not in ["npc","resource","signal","marker"] or row.remaining_units<0:return fail("Auxiliary observation identity/location/time invalid")
+		if spec.get("role_kind","")!="recon" or row.observed_label.is_empty() or row.observed_label.length()>96 or state.find("ship_state","ship_instance_id",row.owner_ship_id)==null or site.get("sector_id","")!=row.sector_id or row.observed_tick<0 or row.observed_tick>tick or row.target_generation<0 or row.target_kind not in ["npc","resource","signal","marker"] or row.remaining_units<0:return fail("Auxiliary observation identity/location/time invalid")
 		for field: String in ["pos_x","pos_y","pos_z"]:
 			if not is_finite(row.get(field)):return fail("Auxiliary observation nonfinite position")
 	for table: String in ["fleet_receipt_state","auxiliary_intel_state"]:

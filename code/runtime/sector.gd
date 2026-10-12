@@ -426,6 +426,7 @@ func contact_visible(entry: Dictionary, distance: float) -> bool:
 	if str(entry.get("kind", "")) == "drone": return gameplay.drone_control.live.has(str(entry.get("id", ""))) and distance <= gameplay.ship_roles.detection_range()
 	if str(entry.get("kind", "")) != "npc": return true
 	var sensor: float = gameplay.ship_roles.detection_range()
+	if gameplay.auxiliary_drones.detected(str(entry.get("id",""))):return true
 	if gameplay.hired.friendly(str(entry.get("id",""))):sensor=maxf(sensor,float(gameplay.hired.balance.communication_m))
 	if distance > sensor: return false
 	var group_id: String = str(entry.get("group_target_id", ""))
@@ -468,11 +469,26 @@ func _target(id: String, title: String, kind: String, node: Node3D, anchor_id: S
 func target_site(id: String) -> String:
 	if not targets.has(id): return ""
 	var entry: Dictionary = targets[id]
+	if entry.get("auxiliary_record",false):return str(entry.site_id)
 	if entry.kind in ["npc", "wreck"]: return Space.site_for_entity(state, str(entry.kind), id)
 	if entry.kind == "drone":
 		var owner: String = gameplay.drone_control.owner(id)
 		return Space.site_for_entity(state, "ship" if owner == state.ship().ship_instance_id else "npc", owner)
 	return Space.site_for_anchor(catalog, str(entry.get("anchor_id", "")))
+
+func auxiliary_marker(record: RefCounted) -> String:
+	if not gameplay.auxiliary_drones.current(record):return ""
+	var id: String="auxiliary_record:"+record.owner_ship_id+":"+record.target_kind+":"+record.target_id
+	if targets.has(id):_remove_target(id)
+	var marker:=Node3D.new();add_child(marker);marker.position=Vector3(record.pos_x,record.pos_y,record.pos_z)
+	_target(id,"上次观测 · "+record.observed_label,"marker",marker,"");targets[id]["auxiliary_record"]=true;targets[id]["record"]=record;targets[id]["site_id"]=record.site_id;targets[id]["generation"]=record.observed_tick;targets[id]["module_id"]=record.module_id;apply_target_site(id);return id
+
+func expire_auxiliary_markers() -> void:
+	for id: String in targets.keys():
+		if not targets[id].get("auxiliary_record",false):continue
+		var age_s: float=float(state.snapshot.meta.simulation_tick-int(targets[id].generation))/float(catalog.rule("simulation_hz"))
+		var ttl: float=float(catalog.one("auxiliary_drone_defs","module_id",targets[id].module_id).observation_ttl_s)
+		if not state.rows("auxiliary_intel_state").has(targets[id].record) or targets[id].site_id!=Space.current_site(state) or age_s>=ttl:_remove_target(id)
 
 func target_is_local(id: String) -> bool:
 	return not Space.supported(catalog) or (not target_site(id).is_empty() and target_site(id) == Space.current_site(state))

@@ -282,7 +282,7 @@ CREATE TRIGGER auxiliary_bay_state_delete_immutable BEFORE DELETE ON auxiliary_b
 CREATE TRIGGER auxiliary_bay_state_finite BEFORE UPDATE OF status ON save_snapshot WHEN NEW.status='sealed' AND OLD.status='building' AND EXISTS(SELECT 1 FROM auxiliary_bay_state WHERE snapshot_id=NEW.snapshot_id AND (abs(energy_paid_total)>=1e100 OR abs(heat_paid_total)>=1e100 OR abs(repaired_hp)>=1e100)) BEGIN SELECT RAISE(ABORT,'nonfinite fleet scalar'); END;
 
 CREATE TABLE auxiliary_intel_state(snapshot_id TEXT NOT NULL,world_id TEXT NOT NULL,content_snapshot_id TEXT NOT NULL,owner_ship_id TEXT NOT NULL,module_id TEXT NOT NULL,
-target_kind TEXT NOT NULL CHECK(target_kind IN('npc','resource','signal','marker')),target_id TEXT NOT NULL,
+target_kind TEXT NOT NULL CHECK(target_kind IN('npc','resource','signal','marker')),target_id TEXT NOT NULL,observed_label TEXT NOT NULL CHECK(length(observed_label) BETWEEN 1 AND 96),
 sector_id TEXT NOT NULL,site_id TEXT NOT NULL,target_generation INTEGER NOT NULL DEFAULT 0 CHECK(target_generation>=0),
 observed_tick INTEGER NOT NULL CHECK(observed_tick>=0),pos_x REAL NOT NULL,pos_y REAL NOT NULL,pos_z REAL NOT NULL,
 remaining_units INTEGER NOT NULL DEFAULT 0 CHECK(remaining_units>=0),PRIMARY KEY(snapshot_id,world_id,content_snapshot_id,owner_ship_id,target_kind,target_id),FOREIGN KEY(snapshot_id,world_id,content_snapshot_id) REFERENCES save_snapshot(snapshot_id,world_id,content_snapshot_id) ON DELETE CASCADE,FOREIGN KEY(snapshot_id,world_id,content_snapshot_id,owner_ship_id) REFERENCES ship_state(snapshot_id,world_id,content_snapshot_id,ship_instance_id),FOREIGN KEY(content_snapshot_id,module_id) REFERENCES frozen_auxiliary_drone_defs(content_snapshot_id,module_id),FOREIGN KEY(content_snapshot_id,sector_id) REFERENCES frozen_sector_defs(content_snapshot_id,sector_id),FOREIGN KEY(content_snapshot_id,site_id) REFERENCES frozen_site_defs(content_snapshot_id,site_id)) STRICT;
@@ -411,6 +411,7 @@ BEGIN
  a.stock_units+a.lost_units<>d.drone_count+a.replenished_units OR a.deployed_units<>0 OR
  a.paid_credit_total<>a.replenished_units*d.credit_per_unit OR a.material_units_total<>a.replenished_units*d.material_per_unit OR
  abs(a.energy_paid_total-a.sorties*m.energy_eu)>0.00001 OR abs(a.heat_paid_total-a.sorties*m.heat_hu)>0.00001 OR a.consumable_paid_units<>a.sorties*d.consumable_per_sortie OR
+ a.repaired_hp>a.sorties*d.drone_count*d.restore_amount*i.quality_multiplier+0.00001 OR
  (d.role_kind='recon' AND a.repaired_hp<>0))) THEN RAISE(ABORT,'auxiliary stock cost or outstanding sortie invalid') END;
  SELECT CASE WHEN EXISTS(SELECT 1 FROM item_instance_state i JOIN frozen_auxiliary_drone_defs d ON d.content_snapshot_id=i.content_snapshot_id AND d.module_id=i.item_def_id
  WHERE i.snapshot_id=NEW.snapshot_id AND NOT EXISTS(SELECT 1 FROM auxiliary_bay_state a WHERE a.snapshot_id=i.snapshot_id AND a.item_instance_id=i.item_instance_id)) THEN RAISE(ABORT,'auxiliary bay stock is missing') END;
