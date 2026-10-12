@@ -52,6 +52,7 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-campaign-extension-v38","file":"campaign_extension_v38.gd","prefix":"campaign-extension-v38","env":"XJ_CAMPAIGN_EXTENSION_V38","meta":"xj_campaign_extension_v38_diagnostic"},
 		{"flag":"--xj-verify-campaign-world-v37","file":"campaign_world_v37.gd","prefix":"campaign-world-v37","env":"XJ_CAMPAIGN_WORLD_V37","meta":"xj_campaign_world_v37_diagnostic"},
 		{"flag":"--xj-verify-campaign-v37","file":"campaign_v37.gd","prefix":"campaign-v37","env":"XJ_CAMPAIGN_V37","meta":"xj_campaign_v37_diagnostic"},
 		{"flag":"--xj-verify-situational-v36","file":"situational_v36.gd","prefix":"situational-v36","env":"XJ_SITUATIONAL_V36","meta":"xj_situational_v36_diagnostic"},
@@ -1213,14 +1214,19 @@ func _export_flight_report(format: String) -> void:
 	var output: FileAccess=FileAccess.open(directory.path_join(filename),FileAccess.WRITE)
 	if output==null:ui.notify("无法写入报告",true);return
 	var reports: Array[Dictionary]=gameplay.telemetry.export_rows()
-	if format=="json":output.store_string(JSON.stringify({"format_version":1,"reports":reports},"\t"))
+	var total: Dictionary=gameplay.telemetry.export_total()
+	if format=="json":output.store_string(JSON.stringify({"format_version":2,"totals":total,"reports":reports},"\t"))
 	else:
 		output.store_buffer(PackedByteArray([239,187,191]))
-		var columns: PackedStringArray=["sequence","hull","status","partial_baseline","elapsed_s","combat_s","transit_s","flight_income","flight_spent","return_income","return_spent","mined_units","kills","damage_dealt","damage_taken","weapon_cycles","drone_losses","activity_count"]
+		var columns: PackedStringArray=["record_type","sequence","hull","status","partial_baseline","outings","lost_outings","income_credit","spent_credit","elapsed_s","combat_s","transit_s","flight_income","flight_spent","return_income","return_spent","mined_units","kills","damage_dealt","damage_taken","weapon_cycles","drone_losses","activity_count","materials_used","materials_returned","repair_hp"]
 		output.store_csv_line(columns)
-		for report: Dictionary in reports:
+		total["record_type"]="lifetime"
+		var rows: Array[Dictionary]=[total]
+		for report: Dictionary in reports:report["record_type"]="outing";rows.append(report)
+		for report: Dictionary in rows:
 			var values: PackedStringArray=[]
-			for column: String in columns:values.append(str(report.get(column,"")))
+			for column: String in columns:
+				var value: Variant=report.get(column,"");values.append(JSON.stringify(value) if value is Dictionary or value is Array else str(value))
 			output.store_csv_line(values)
 	output.close();ui.notify("已导出游戏报告："+directory.path_join(filename))
 

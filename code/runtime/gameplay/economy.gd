@@ -190,7 +190,9 @@ func repair(_target: String) -> bool:
 	var source: String = g.inventory.warehouse(g.station())
 	if g.state.player().credit<fee or g.inventory.count(source,"material_structural_stock",true)<structural:return g.fail("维修费用或结构料不足")
 	g.state.player().credit-=fee;g.inventory.consume(source,"material_structural_stock",structural,true)
+	var before: float=ship.armor+ship.hull+ship.shield
 	ship.armor=m.armor_max;ship.hull=m.hull_max;ship.shield=m.shield_max;ship.energy=m.energy_max;ship.heat=0
+	g.telemetry.repair("station",ship.armor+ship.hull+ship.shield-before)
 	for e in g.equipped(ship):g.state.find("item_instance_state","item_instance_id",e.item_instance_id).durability=g.rule("module_durability_max")
 	return true
 

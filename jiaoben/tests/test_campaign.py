@@ -33,10 +33,10 @@ class CampaignSql(unittest.TestCase):
   self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.source.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
  def test_published_001_024_and_adapters_are_byte_exact(self):
   for path in (ROOT/'code/database/progress').glob('*.sql'):
-   if path.name.startswith('025_') or path.name=='catalog_adapter_v0_21.sql':continue
+   if path.name.startswith(('025_','026_')) or path.name=='catalog_adapter_v0_21.sql':continue
    self.assertEqual(path.read_bytes(),subprocess.check_output(['git','show','f357712:'+path.relative_to(ROOT).as_posix()],cwd=ROOT),path.name)
  def test_new_initial_world_has_no_free_outcomes(self):
-  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(22,));self.assertEqual(len(p.STATE_TABLES),83)
+  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(23,));self.assertEqual(len(p.STATE_TABLES),87)
   for table in ['expedition_run_state','expedition_receipt_state','construction_receipt_state','construction_evidence_state','flight_record_state']:
    self.assertEqual(self.db.execute('SELECT count(*) FROM '+table).fetchone(),(0,))
   self.seal()

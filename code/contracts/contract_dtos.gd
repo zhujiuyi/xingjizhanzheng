@@ -1228,6 +1228,26 @@ class TelemetryTotalStateDto extends RefCounted:
 	var weapon_cycles: int = 0
 	var drone_losses: int = 0
 
+class FlightMaterialStateDto extends RefCounted:
+	var record_id: String = ""
+	var item_id: String = ""
+	var used_units: int = 0
+	var returned_units: int = 0
+
+class TelemetryMaterialStateDto extends RefCounted:
+	var item_id: String = ""
+	var used_units: int = 0
+	var returned_units: int = 0
+
+class FlightRepairStateDto extends RefCounted:
+	var record_id: String = ""
+	var repair_kind: String = ""
+	var restored_hp: float = 0.0
+
+class TelemetryRepairStateDto extends RefCounted:
+	var repair_kind: String = ""
+	var restored_hp: float = 0.0
+
 class WorldSnapshotDto extends RefCounted:
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
 	var content: ContentRefDto = ContentRefDto.new()
@@ -1310,6 +1330,10 @@ class WorldSnapshotDto extends RefCounted:
 	var campaign_director_state_rows: Array[CampaignDirectorStateDto] = []
 	var flight_record_state_rows: Array[FlightRecordStateDto] = []
 	var telemetry_total_state_rows: Array[TelemetryTotalStateDto] = []
+	var flight_material_state_rows: Array[FlightMaterialStateDto] = []
+	var telemetry_material_state_rows: Array[TelemetryMaterialStateDto] = []
+	var flight_repair_state_rows: Array[FlightRepairStateDto] = []
+	var telemetry_repair_state_rows: Array[TelemetryRepairStateDto] = []
 	var tactical_site_state_rows: Array[TacticalSiteStateDto] = []
 	var npc_tactic_state_rows: Array[NpcTacticStateDto] = []
 	var ship_tactical_effect_state_rows: Array[ShipTacticalEffectStateDto] = []

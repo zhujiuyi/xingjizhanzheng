@@ -123,6 +123,8 @@ func run() -> void:
 	lease=host.gameplay.hired.active();var cycles: int=lease.support_cycles_remaining;host.ui.show_page("");await run_for(7.0)
 	healed_cycles=cycles-lease.support_cycles_remaining
 	check(healed_cycles>=2 and host.state.ship().shield>0.0,"real support ship repairs the player with actual range LOS and finite supplies")
+	var measured_repair: RefCounted=host.state.find("telemetry_repair_state","repair_kind","received")
+	check(measured_repair!=null and measured_repair.restored_hp>0.0,"received repair records actual completed hired support cycles")
 	await capture("hire-real-support")
 	for layout: Dictionary in [{"size":Vector2i(3440,1188),"scale":1.0,"tag":"ultrawide"},{"size":Vector2i(1280,720),"scale":2.0,"tag":"compact-200"}]:
 		root.size=layout.size;root.content_scale_factor=1.0;root.content_scale_size=Vector2i(Vector2(layout.size)/float(layout.scale));await frames(5);await show("hire")

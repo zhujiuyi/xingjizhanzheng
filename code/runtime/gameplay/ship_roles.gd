@@ -113,7 +113,9 @@ func tick(delta: float) -> void:
 		row.remaining_s = maxf(0.0,row.remaining_s-delta)
 		equipment.active_remaining_s = row.remaining_s
 		if row.remaining_s > 0.0: continue
-		npc.set(row.layer_id,minf(maximum,float(npc.get(row.layer_id))+row.paid_restore))
+		var before: float=float(npc.get(row.layer_id))
+		npc.set(row.layer_id,minf(maximum,before+row.paid_restore))
+		g.telemetry.repair("provided",float(npc.get(row.layer_id))-before)
 		_clear_payment(row)
 func options(target_id: String) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []

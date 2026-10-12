@@ -174,7 +174,9 @@ func repair_step(row: RefCounted) -> String:
 	if ship.shield<float(metrics.shield_max):layer="shield"
 	elif ship.armor<float(metrics.armor_max):layer="armor"
 	if layer.is_empty():return ""
-	ship.set(layer,minf(float(metrics[layer+"_max"]),float(ship.get(layer))+float(balance["support_"+layer])))
+	var before: float=float(ship.get(layer))
+	ship.set(layer,minf(float(metrics[layer+"_max"]),before+float(balance["support_"+layer])))
+	g.telemetry.repair("received",float(ship.get(layer))-before)
 	row.support_cycles_remaining-=1;row.support_cooldown_s=float(balance.support_cycle_s);healed.emit(row.npc_instance_id,ship.ship_instance_id,layer)
 	if row.support_cycles_remaining==0:warning_changed.emit("僚舰维修储备耗尽 · 可归港重新雇佣")
 	return layer

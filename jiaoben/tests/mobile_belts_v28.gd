@@ -65,13 +65,19 @@ func cycle(event_id: String, route_index: int) -> void:
 	state.ship().energy = float(g.metrics(state.ship()).energy_max); state.ship().heat = 0.0; state.ship().overheated = false
 	check(g.exploration.guidance(event_id).site_id == g.definition("anchor_site_defs", "anchor_id", route.entry_anchor_id).site_id, "guidance resolves current AU route")
 	check(act("survey", event), "pay survey on current route")
-	advance(float(spec.survey_duration_s) + 0.2)
+	for _step: int in range(10000):
+		if event.operation_kind.is_empty():break
+		advance(0.1)
+	if not check(event.operation_kind.is_empty() and event.phase=="surveyed","survey finishes under the actual environment and hull rate"):return
 	check(act(choice, event), "open selected finite route mineral stock")
 	for member: RefCounted in state.rows("exploration_actor_state"):
 		if member.event_id == event_id: check(g.spatial_site("npc", member.npc_instance_id) == g.spatial_site("ship", state.ship().ship_instance_id), "real actor state occupies current route")
 	place(g.definition("resource_node_locations", "node_id", node_id).anchor_id)
-	check(g.act("start_mining", node_id).phase == T.ActionPhase.APPLIED, "actual extraction resolves mapped mineral anchor")
-	while event.evidence_units <= 0: advance(0.2)
+	if not check(g.act("start_mining",node_id).phase==T.ActionPhase.APPLIED,"actual extraction resolves mapped mineral anchor"):return
+	for _step: int in range(10000):
+		if event.evidence_units>0 or event.phase!="mineral":break
+		advance(0.2)
+	if not check(event.evidence_units>0,"bounded real extraction produces mineral evidence"):return
 	g.work.stop_mining()
 	var mined: int = cargo_units(ore)
 	var evidence: int = event.evidence_units

@@ -36,7 +36,12 @@ func begin(partial: bool=false) -> void:
 	var records: Array=g.state.rows("flight_record_state").duplicate()
 	records.sort_custom(func(a: RefCounted,b: RefCounted)->bool:return a.sequence<b.sequence)
 	var maximum: int=int(g.rows("campaign_balance_defs")[0].report_limit)
-	while records.size()>maximum:g.state.remove("flight_record_state",records.pop_front())
+	while records.size()>maximum:
+		var discarded: RefCounted=records.pop_front()
+		for table: String in ["flight_material_state","flight_repair_state"]:
+			for detail: RefCounted in g.state.rows(table).duplicate():
+				if detail.record_id==discarded.record_id:g.state.remove(table,detail)
+		g.state.remove("flight_record_state",discarded)
 func finish(lost: bool=false) -> void:
 	if not supported():return
 	wallet()
@@ -59,6 +64,31 @@ func activity() -> void:
 	if not supported():return
 	var row: RefCounted=latest()
 	if row!=null:row.activity_count+=1
+func material(item_id: String,units: int,returned: bool=false) -> void:
+	if not supported() or units<=0:return
+	var total: RefCounted=g.state.find("telemetry_material_state","item_id",item_id)
+	if total==null:total=D.TelemetryMaterialStateDto.new();total.item_id=item_id;g.state.add("telemetry_material_state",total)
+	var column: String="returned_units" if returned else "used_units"
+	total.set(column,int(total.get(column))+units)
+	var outing: RefCounted=latest()
+	if outing==null:return
+	var detail: RefCounted=null
+	for row: RefCounted in g.state.rows("flight_material_state"):
+		if row.record_id==outing.record_id and row.item_id==item_id:detail=row;break
+	if detail==null:detail=D.FlightMaterialStateDto.new();detail.record_id=outing.record_id;detail.item_id=item_id;g.state.add("flight_material_state",detail)
+	detail.set(column,int(detail.get(column))+units)
+func repair(kind: String,amount: float) -> void:
+	if not supported() or kind not in ["self","provided","received","station"] or not is_finite(amount) or amount<=0.0:return
+	var total: RefCounted=g.state.find("telemetry_repair_state","repair_kind",kind)
+	if total==null:total=D.TelemetryRepairStateDto.new();total.repair_kind=kind;g.state.add("telemetry_repair_state",total)
+	total.restored_hp+=amount
+	var outing: RefCounted=latest()
+	if outing==null:return
+	var detail: RefCounted=null
+	for row: RefCounted in g.state.rows("flight_repair_state"):
+		if row.record_id==outing.record_id and row.repair_kind==kind:detail=row;break
+	if detail==null:detail=D.FlightRepairStateDto.new();detail.record_id=outing.record_id;detail.repair_kind=kind;g.state.add("flight_repair_state",detail)
+	detail.restored_hp+=amount
 func tick(delta: float,transit: bool=false) -> void:
 	if not supported():return
 	wallet()
@@ -76,6 +106,24 @@ func export_rows() -> Array[Dictionary]:
 	for row: RefCounted in g.state.rows("flight_record_state"):
 		var view: Dictionary={"sequence":row.sequence,"hull":g.definition("ship_defs","ship_id",row.ship_def_id).display_name,"status":row.phase,"partial_baseline":row.partial_baseline}
 		for key: String in ["elapsed_s","combat_s","transit_s","flight_income","flight_spent","return_income","return_spent","mined_units","kills","damage_dealt","damage_taken","weapon_cycles","drone_losses","activity_count"]:view[key]=row.get(key)
+		view["materials_used"]={};view["materials_returned"]={};view["repair_hp"]={}
+		for detail: RefCounted in g.state.rows("flight_material_state"):
+			if detail.record_id!=row.record_id:continue
+			view.materials_used[detail.item_id]=detail.used_units;view.materials_returned[detail.item_id]=detail.returned_units
+		for detail: RefCounted in g.state.rows("flight_repair_state"):
+			if detail.record_id==row.record_id:view.repair_hp[detail.repair_kind]=detail.restored_hp
 		result.append(view)
 	result.sort_custom(func(a: Dictionary,b: Dictionary)->bool:return a.sequence>b.sequence)
+	return result
+func export_total() -> Dictionary:
+	var result: Dictionary={}
+	if not supported():return result
+	var total: RefCounted=totals()
+	for key: String in ["outings","lost_outings","elapsed_s","combat_s","transit_s","income_credit","spent_credit"]:result[key]=total.get(key)
+	for key: String in COUNTERS:result[key]=total.get(key)
+	result["materials_used"]={};result["materials_returned"]={};result["repair_hp"]={}
+	for row: RefCounted in g.state.rows("telemetry_material_state"):
+		if row.used_units>0:result.materials_used[row.item_id]=row.used_units
+		if row.returned_units>0:result.materials_returned[row.item_id]=row.returned_units
+	for row: RefCounted in g.state.rows("telemetry_repair_state"):result.repair_hp[row.repair_kind]=row.restored_hp
 	return result

@@ -225,16 +225,20 @@ func grant(container_id: String, item_id: String, quantity: int, policy: String 
 				var asset: D.LoanAssetStateDto = D.LoanAssetStateDto.new(); asset.loan_id = loan_id; asset.item_instance_id = item.item_instance_id; g.state.add("loan_asset_state",asset)
 	return ids
 
-func consume(container_id: String, item_id: String, quantity: int, normal_only: bool = true, mission_id: String = "") -> bool:
+func consume(container_id: String, item_id: String, quantity: int, normal_only: bool = true, mission_id: String = "",measure_use: bool=true) -> bool:
+	if quantity<0:return false
+	if quantity==0:return true
 	if count(container_id,item_id,normal_only,mission_id) < quantity: return false
 	var left: int = quantity
 	for s in g.state.rows("inventory_stack_state").duplicate():
 		if s.container_id != container_id or s.item_def_id != item_id or (normal_only and s.policy_id != "normal_owned") or (not mission_id.is_empty() and s.bound_mission_instance_id != mission_id): continue
 		var used: int = mini(left,s.quantity); s.quantity -= used; left -= used
+		if measure_use and s.policy_id=="normal_owned" and g.telemetry!=null:g.telemetry.material(item_id,used)
 		if s.quantity == 0: g.state.remove("inventory_stack_state",s)
 		if left == 0: return true
 	for item in g.state.rows("item_instance_state").duplicate():
 		if item.container_id == container_id and item.item_def_id == item_id and (not normal_only or item.policy_id == "normal_owned"):
+			if measure_use and item.policy_id=="normal_owned" and g.telemetry!=null:g.telemetry.material(item_id,1)
 			erase_item(item); left -= 1
 			if left == 0: return true
 	return left == 0

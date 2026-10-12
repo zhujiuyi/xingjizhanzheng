@@ -243,6 +243,8 @@ func run() -> void:
 	check(target.armor==before and host.gameplay.ship_roles.channel(remote_patch).remaining_s>0.0,"actual unfinished cycle does not heal early")
 	await run_for(3.2)
 	check(target.armor>before,"native physics completes a real friendly repair")
+	var measured_repair: RefCounted=host.state.find("telemetry_repair_state","repair_kind","provided")
+	check(measured_repair!=null and is_equal_approx(float(measured_repair.restored_hp),float(target.armor-before)),"provided repair measurement equals actual restored friendly HP")
 	await capture("roles-remote-healed")
 	host.ui.tick(1.0);await frames(3)
 	await click(host.ui.overview.support_buttons[remote_patch],"native stops armor support")

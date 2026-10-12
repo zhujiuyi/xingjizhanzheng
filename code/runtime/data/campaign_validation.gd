@@ -1,7 +1,7 @@
 extends RefCounted
 ## Check pure snapshots before scene staging; SQL sealing repeats durable guards.
 var last_error: String=""
-const TABLES: Array[String]=["construction_state","construction_input_state","construction_receipt_state","construction_evidence_state","expedition_route_state","expedition_run_state","expedition_stage_state","expedition_receipt_state","campaign_director_state","flight_record_state","telemetry_total_state"]
+const TABLES: Array[String]=["construction_state","construction_input_state","construction_receipt_state","construction_evidence_state","expedition_route_state","expedition_run_state","expedition_stage_state","expedition_receipt_state","campaign_director_state","flight_record_state","telemetry_total_state","flight_material_state","telemetry_material_state","flight_repair_state","telemetry_repair_state"]
 func _fail(message: String) -> bool:last_error=message;return false
 func validate(state: XJRuntimeState,catalog: XJCatalog) -> bool:
 	if not catalog.table_names.has("campaign_balance_defs"):
@@ -117,4 +117,25 @@ func validate(state: XJRuntimeState,catalog: XJCatalog) -> bool:
 			if not is_finite(row.get(key)) or float(row.get(key))<0:return _fail("Invalid measured scalar")
 		if row.combat_s>row.elapsed_s or row.transit_s>row.elapsed_s:return _fail("Measured activity time exceeds outing")
 	if active_count>1:return _fail("Multiple measured active outings")
+	var material_totals: Dictionary={};var material_seen: Dictionary={}
+	for row: RefCounted in state.rows("telemetry_material_state"):
+		if material_totals.has(row.item_id) or catalog.one("item_defs","item_id",row.item_id).is_empty() or row.used_units<0 or row.returned_units<0:return _fail("Invalid measured material total")
+		material_totals[row.item_id]=row
+	var used: Dictionary={};var returned: Dictionary={}
+	for row: RefCounted in state.rows("flight_material_state"):
+		var key: String=row.record_id+"|"+row.item_id
+		if not record_seen.has(row.record_id) or not material_totals.has(row.item_id) or material_seen.has(key) or row.used_units<0 or row.returned_units<0:return _fail("Invalid outing material record")
+		material_seen[key]=true;used[row.item_id]=int(used.get(row.item_id,0))+row.used_units;returned[row.item_id]=int(returned.get(row.item_id,0))+row.returned_units
+	for id: String in material_totals:
+		if material_totals[id].used_units<int(used.get(id,0)) or material_totals[id].returned_units<int(returned.get(id,0)):return _fail("Material totals below retained outings")
+	var repair_totals: Dictionary={};var repair_seen: Dictionary={};var measured: Dictionary={}
+	for row: RefCounted in state.rows("telemetry_repair_state"):
+		if row.repair_kind not in ["self","provided","received","station"] or repair_totals.has(row.repair_kind) or not is_finite(row.restored_hp) or row.restored_hp<=0:return _fail("Invalid measured repair total")
+		repair_totals[row.repair_kind]=row.restored_hp
+	for row: RefCounted in state.rows("flight_repair_state"):
+		var key: String=row.record_id+"|"+row.repair_kind
+		if not record_seen.has(row.record_id) or not repair_totals.has(row.repair_kind) or repair_seen.has(key) or not is_finite(row.restored_hp) or row.restored_hp<=0:return _fail("Invalid outing repair record")
+		repair_seen[key]=true;measured[row.repair_kind]=float(measured.get(row.repair_kind,0.0))+row.restored_hp
+	for kind: String in measured:
+		if float(measured[kind])>float(repair_totals[kind])+0.00001:return _fail("Repair totals below retained outings")
 	return true

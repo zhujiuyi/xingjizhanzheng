@@ -22,8 +22,8 @@ sys.path.insert(0, str(ROOT / "jiaoben"))
 import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
-MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql", "018_operations.sql", "019_fitting.sql", "020_roles.sql", "021_honors.sql", "022_frontier.sql", "023_hire.sql", "024_situational.sql", "025_campaign.sql")
-FORMAT_VERSION = 22
+MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql", "018_operations.sql", "019_fitting.sql", "020_roles.sql", "021_honors.sql", "022_frontier.sql", "023_hire.sql", "024_situational.sql", "025_campaign.sql", "026_metrics.sql")
+FORMAT_VERSION = 23
 ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_21.sql"
 ADAPTER_VERSION = "frozen_catalog_v0_21"
 REVIEWED_ADAPTERS = {
@@ -70,7 +70,7 @@ STATE_TABLES = (
     "remote_support_state", "consignment_state", "consignment_receipt_state",
     "civilization_command_state", "civilization_honor_evidence_state",
     "frontier_campaign_state", "frontier_actor_state", "frontier_campaign_receipt_state", "frontier_territory_state", "frontier_journal_state", "frontier_supply_order_state", "frontier_director_state",
-    "hire_contract_state", "hire_receipt_state", "resource_intel_state", "demand_intel_state", "construction_state", "construction_input_state", "construction_receipt_state", "construction_evidence_state", "expedition_route_state", "expedition_run_state", "expedition_stage_state", "expedition_receipt_state", "campaign_director_state", "flight_record_state", "telemetry_total_state",
+    "hire_contract_state", "hire_receipt_state", "resource_intel_state", "demand_intel_state", "construction_state", "construction_input_state", "construction_receipt_state", "construction_evidence_state", "expedition_route_state", "expedition_run_state", "expedition_stage_state", "expedition_receipt_state", "campaign_director_state", "flight_record_state", "telemetry_total_state", "flight_material_state", "telemetry_material_state", "flight_repair_state", "telemetry_repair_state",
     "operation_state",
     "tactical_site_state", "npc_tactic_state", "ship_tactical_effect_state", "drone_bay_state",
 )

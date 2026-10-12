@@ -5,6 +5,37 @@ var project_visual_checked: bool=false
 var physical_tactics: bool=false
 var actual_damage: float=0.0
 var exported: bool=false
+func click(control: Control,label: String) -> bool:
+	# Page refreshes may replace controls while an actual native pointer settles.
+	# Resolve the same named action again; visibility, enabled state and focus
+	# remain mandatory, and no click is synthesized through a signal.
+	if not check(is_instance_valid(control),"native named control exists "+label):return false
+	var control_name: String=control.name
+	var stable: int=0;var ready: bool=false;var deadline: int=Time.get_ticks_msec()+5000
+	await reveal(control)
+	while Time.get_ticks_msec()<deadline:
+		if not is_instance_valid(control):
+			control=host.ui.body.find_child(control_name,true,false);stable=0
+			if is_instance_valid(control):await reveal(control)
+			else:await frames(1)
+			continue
+		if not control.is_visible_in_tree() or (control is BaseButton and control.disabled):break
+		if not root.has_focus():root.grab_focus()
+		var center: Vector2=control.get_global_rect().get_center()
+		host.get_viewport().warp_mouse(center)
+		var motion: InputEventMouseMotion=InputEventMouseMotion.new();motion.position=center;motion.global_position=center
+		host.get_viewport().push_input(motion,true);await frames(1)
+		if not is_instance_valid(control):stable=0;continue
+		var hover: Control=host.get_viewport().gui_get_hovered_control()
+		var reached: bool=is_instance_valid(hover) and (hover==control or control.is_ancestor_of(hover))
+		stable=stable+1 if reached and root.has_focus() and control.get_global_rect().has_point(control.get_global_mouse_position()) else 0
+		if stable>=2:ready=true;break
+	if not check(ready,"real native pointer reaches enabled named action "+label):return false
+	var center: Vector2=control.get_global_rect().get_center()
+	for down: bool in [true,false]:
+		var event: InputEventMouseButton=InputEventMouseButton.new();event.position=center;event.global_position=center;event.button_index=MOUSE_BUTTON_LEFT;event.pressed=down
+		host.get_viewport().push_input(event,true)
+	await settle();return true
 func _ready() -> void:
 	get_tree().set_meta("xj_campaign_world_v37_diagnostic",true)
 	get_tree().create_timer(420.0).timeout.connect(func():check(false,"campaign native watchdog");finish())
@@ -31,6 +62,15 @@ func run() -> void:
 		var paused: bool=host.gameplay.projects.instance("project_frontier_02").paused
 		if await click(host.ui.body.find_child("ProjectPause",true,false),"pause unfinished construction"):
 			check(host.gameplay.projects.instance("project_frontier_02").paused!=paused,"actual command changes only selected project's pause")
+	var stale_button: Button=host.ui.body.find_child("ProjectPause",true,false)
+	var stale_panel: Control=stale_button.get_parent().get_parent()
+	stale_panel.get_parent().remove_child(stale_panel)
+	await show("reports");await show("projects")
+	host.ui.add_child(stale_panel);stale_panel.hide()
+	var stale_signature: String=state_signature()
+	stale_button.pressed.emit();await frames(3)
+	check(state_signature()==stale_signature,"retained old project button cannot mutate the new page context")
+	stale_panel.queue_free()
 	await show("reports")
 	var before: String=state_signature()
 	if await click(host.ui.body.find_child("ReportExportCSV",true,false),"export measured CSV report"):
@@ -39,10 +79,10 @@ func run() -> void:
 	var report_dir: String=directory.path_join("reports");var json_found: bool=false;var csv_found: bool=false
 	for file: String in DirAccess.get_files_at(report_dir):
 		var bytes: PackedByteArray=FileAccess.get_file_as_bytes(report_dir.path_join(file))
-		if file.ends_with(".csv"):csv_found=bytes.size()>3 and bytes[0]==239 and bytes[1]==187 and bytes[2]==191
+		if file.ends_with(".csv"):csv_found=bytes.size()>3 and bytes[0]==239 and bytes[1]==187 and bytes[2]==191 and bytes.get_string_from_utf8().contains("record_type") and bytes.get_string_from_utf8().contains("lifetime")
 		if file.ends_with(".json"):
 			var payload: Variant=JSON.parse_string(bytes.get_string_from_utf8())
-			json_found=payload is Dictionary and payload.format_version==1 and payload.reports is Array
+			json_found=payload is Dictionary and payload.format_version==2 and payload.reports is Array and payload.totals is Dictionary and payload.totals.has("materials_used") and payload.totals.has("repair_hp")
 			check(not bytes.get_string_from_utf8().contains("Users/") and not bytes.get_string_from_utf8().contains("user://"),"export contains game metrics without operating-system paths")
 	exported=json_found and csv_found;check(exported,"both real exported files use expected UTF-8 and data envelope")
 	await capture("campaign-reports")
@@ -52,6 +92,17 @@ func run() -> void:
 	project_visual_checked=upgrades!=null and int(upgrades.get_meta("completed_stages",0))==3 and upgrades.get_child_count()==3
 	check(project_visual_checked,"completed construction creates three actual station attachments")
 	await capture("campaign-station-upgrades")
+	await show("projects")
+	await click(host.ui.body.find_child("ProjectSelect_project_frontier_01",true,false),"select completed project before authority-loss fixture")
+	var territory: RefCounted=host.state.find("territory_state","sector_id",host.gameplay.projects.definition("project_frontier_01").sector_id)
+	territory.has_faction_id=false # Temporary authority fixture; no save while altered.
+	await show("projects");await frames(20)
+	check(host.gameplay.projects.factor("station_frontier_01","repair_fee")==1.0 and host.ui.body.find_child("ProjectStatus",true,false).text.contains("等待收复"),"native lost authority disables service benefit and reports preserved investment")
+	station=host.world.targets.get("station_frontier_01",{}).get("node")
+	upgrades=station.get_node_or_null("ProjectUpgrades") if is_instance_valid(station) else null
+	check(is_instance_valid(upgrades) and upgrades.get_child_count()==3,"authority loss retains all built station attachments")
+	territory.has_faction_id=true
+	check(host.gameplay.projects.factor("station_frontier_01","repair_fee")<1.0,"restored authority reactivates completed service benefit")
 	var candidate: XJRuntimeState=host.store.clone_state(host.state);var g: Gameplay=Gameplay.new();g.setup(candidate,host.store.catalog)
 	var mirror: Dictionary=g.definition("station_defs","station_id","station_mirror_hub")
 	place(candidate,g,mirror.station_anchor_id,mirror.station_id);g.telemetry.finish()

@@ -605,7 +605,9 @@ func finish_step(delta: float) -> void:
 			_pending_repairs.erase(repair);continue
 		if repair.remaining_s>0:continue
 		var m:Dictionary=metrics(state.ship())
+		var before: float=float(state.ship().get(repair.layer))
 		state.ship().set(repair.layer,minf(m[repair.layer+"_max"],state.ship().get(repair.layer)+repair.amount))
+		telemetry.repair("self",float(state.ship().get(repair.layer))-before)
 		_pending_repairs.erase(repair)
 	missions.tick(delta)
 	work.tick(delta)

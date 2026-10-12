@@ -57,7 +57,7 @@ func _projects() -> void:
 	var pause: Button=_request(actions,"恢复工程" if row.paused else "暂停工程","construction_action",id,("resume" if row.paused else "pause")+"||"+token)
 	pause.name="ProjectPause"
 	pause.disabled=row.phase=="completed"
-	if row.phase=="completed":u._text_to(self,"制造费、维修费和补货改善已生效；失守保留已建阶段，收复后恢复使用。",14);return
+	if row.phase=="completed":u._text_to(self,"制造费、维修费与补货改善已生效。" if service.owned(id) else "已建阶段保留；收复后恢复服务收益。",14);return
 	var spec: Dictionary=service.stage(id,row.stage_index)
 	u._text_to(self,"施工 %s · 服务费 %d 信用点" % [ResourceStatus.countdown(spec.work_s),spec.fee_credit],14)
 	for input: Dictionary in service.inputs(id,row.stage_index):
@@ -128,7 +128,13 @@ func _update() -> void:
 			entry.label.text="累计出航 %d · 损毁 %d · 采集 %d单位\n收益 %d / 费用 %d信用点 · 分摊伤害 %.0f / 承伤 %.0f" % [total.outings,total.lost_outings,total.mined_units,total.income_credit,total.spent_credit,total.damage_dealt,total.damage_taken]
 		elif entry.kind=="report":
 			for report: Dictionary in u.gameplay.telemetry.export_rows():
-				if report.sequence==entry.sequence:entry.label.text="航行 %s · 交战 %s · 跃迁 %s\n飞行收支 +%d / −%d；返港收支 +%d / −%d\n参与击破 %d · 采集 %d · 无人机损失 %d · 分摊伤害 %.0f / 承伤 %.0f" % [ResourceStatus.countdown(report.elapsed_s),ResourceStatus.countdown(report.combat_s),ResourceStatus.countdown(report.transit_s),report.flight_income,report.flight_spent,report.return_income,report.return_spent,report.kills,report.mined_units,report.drone_losses,report.damage_dealt,report.damage_taken]
+				if report.sequence!=entry.sequence:continue
+				entry.label.text="航行 %s · 交战 %s · 跃迁 %s\n飞行收支 +%d / −%d；返港收支 +%d / −%d\n参与击破 %d · 采集 %d · 无人机损失 %d · 分摊伤害 %.0f / 承伤 %.0f" % [ResourceStatus.countdown(report.elapsed_s),ResourceStatus.countdown(report.combat_s),ResourceStatus.countdown(report.transit_s),report.flight_income,report.flight_spent,report.return_income,report.return_spent,report.kills,report.mined_units,report.drone_losses,report.damage_dealt,report.damage_taken]
+				var materials: PackedStringArray=[]
+				for id: String in report.materials_used:
+					materials.append("%s × %d（退回%d）" % [u._item_name(id),report.materials_used[id],report.materials_returned.get(id,0)])
+				entry.label.text+="\n材料投入："+("、".join(materials) if not materials.is_empty() else "无记录")
+				entry.label.text+="\n实际维修：自修 %.0f / 对友舰 %.0f / 支援 %.0f / 站内 %.0f HP" % [report.repair_hp.get("self",0),report.repair_hp.get("provided",0),report.repair_hp.get("received",0),report.repair_hp.get("station",0)]
 		elif entry.kind=="project":
 			var row: RefCounted=u.gameplay.projects.instance(entry.id)
 			entry.label.text="已暂停 · 投入保留" if row.paused else "等待收复 · 投入保留" if not u.gameplay.projects.owned(entry.id) else "施工剩余 "+ResourceStatus.countdown(row.work_remaining_s) if row.phase=="working" else "已完成" if row.phase=="completed" else "集货中 · 可分批交付"

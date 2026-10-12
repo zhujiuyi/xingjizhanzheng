@@ -11,6 +11,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "campaign-extension": ("campaign_extension_v38.gd", "XJ_CAMPAIGN_EXTENSION_V38", "campaign-extension-v38", "CAMPAIGN_EXTENSION_V38", "--xj-verify-campaign-extension-v38"),
     "campaign-world": ("campaign_world_v37.gd", "XJ_CAMPAIGN_WORLD_V37", "campaign-world-v37", "CAMPAIGN_WORLD_V37", "--xj-verify-campaign-world-v37"),
     "campaign-upgrade": ("campaign_v37.gd", "XJ_CAMPAIGN_V37", "campaign-v37", "CAMPAIGN_V37", "--xj-verify-campaign-v37"),
     "campaign": ("campaign_v37.gd", "XJ_CAMPAIGN_V37", "campaign-v37", "CAMPAIGN_V37", "--xj-verify-campaign-v37"),
@@ -154,7 +155,9 @@ def run_suite():
             if args.native and name != "base-store":
                 activate(process, output if name == "base-presentation" else None)
             try:
-                code = process.wait(timeout=600)
+                # Allow the role world's existing 900s watchdog to finish its
+                # real multi-gate freight trip and emit a definitive result.
+                code = process.wait(timeout=960 if name == "roles-world" else 660 if name == "hire-world" else 600)
             except subprocess.TimeoutExpired:
                 process.kill(); process.wait()
                 raise
@@ -196,20 +199,22 @@ def run_suite():
             assert record["summary"]["checks"] >= (200 if name == "civilizations" else 25) and len(captures) == 0
         if name == "frontier-governance-world":
             assert record["summary"]["checks"] >= 58 and len(captures) == 5 and record["summary"]["defended"] and record["summary"]["dispatched"] and record["summary"]["physical_damage"] > 0
+        if name == "campaign-extension":
+            assert record["summary"]["checks"] >= 60 and record["summary"]["groups"] == 87 and record["summary"]["routes_completed"] == 1 and record["summary"]["mineral_cycles"] == 6 and not captures
         if name == "campaign-world":
             assert record["summary"]["checks"] >= 40 and len(captures) >= 6 and record["summary"]["project_visual"] and record["summary"]["physical_tactics"] and record["summary"]["actual_damage"] > 0 and record["summary"]["exported"]
         if name == "campaign-upgrade":
-            assert record["summary"]["checks"] >= 20 and record["summary"]["groups"] == 83 and record["summary"]["legacy_checked"] and record["summary"]["upgrade_only"]
+            assert record["summary"]["checks"] >= 20 and record["summary"]["groups"] == 87 and record["summary"]["legacy_checked"] and record["summary"]["upgrade_only"]
         if name == "campaign":
-            assert record["summary"]["checks"] >= 60 and record["summary"]["groups"] == 83 and not captures
+            assert record["summary"]["checks"] >= 60 and record["summary"]["groups"] == 87 and not captures
         if name == "situational":
-            assert record["summary"]["checks"] >= 30 and record["summary"]["groups"] == 83 and not captures
+            assert record["summary"]["checks"] >= 30 and record["summary"]["groups"] == 87 and not captures
             if os.environ.get("XJ_SITUATIONAL_LEGACY_DATABASE"):
                 assert record["summary"]["legacy_checked"] is True
         if name == "situational-world":
             assert record["summary"]["checks"] >= 35 and len(captures) >= 5 and record["summary"]["physical_cues"] >= 2 and record["summary"]["audio_played"] and record["summary"]["pause_checked"]
         if name == "hire":
-            assert record["summary"]["checks"] >= 40 and set(record["summary"]["roles"]) == {"escort", "support"} and record["summary"]["groups"] == 83 and not captures
+            assert record["summary"]["checks"] >= 40 and set(record["summary"]["roles"]) == {"escort", "support"} and record["summary"]["groups"] == 87 and not captures
             if os.environ.get("XJ_HIRE_LEGACY_DATABASE"):
                 assert record["summary"]["checks"] >= 70 and record["summary"]["legacy_checked"] is True
         if name == "hire-world":

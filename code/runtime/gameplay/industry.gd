@@ -109,7 +109,9 @@ func cancel(job_id: String) -> bool:
 	for escrow: D.IndustryInputStateDto in g.state.rows("industry_input_state"):
 		if escrow.job_id != job_id: continue
 		var returned: int = int(floor(float(escrow.quantity) * bp / 10000.0))
-		if returned > 0: g.inventory.grant(g.inventory.warehouse(job.station_id), escrow.item_id, returned)
+		if returned > 0:
+			g.inventory.grant(g.inventory.warehouse(job.station_id), escrow.item_id, returned)
+			g.telemetry.material(escrow.item_id,returned,true)
 	if job.status == "queued": g.state.player().credit += job.paid_credit
 	job.status = "cancelled"; job.finished_tick = g.state.snapshot.meta.simulation_tick
 	_promote(job.station_id)
@@ -157,7 +159,7 @@ func deliver(demand_id: String, quantity: int, generation: String) -> bool:
 	if quantity < 1 or quantity > state.remaining_units: return g.fail("交付数量超过本轮缺额")
 	var warehouse: String = g.inventory.warehouse(g.station())
 	if g.inventory.count(warehouse, spec.item_id, true) < quantity: return g.fail("本站仓库缺少普通自有物资")
-	if not g.inventory.consume(warehouse, spec.item_id, quantity, true): return g.fail("交付扣料失败")
+	if not g.inventory.consume(warehouse, spec.item_id, quantity, true,"",false): return g.fail("交付扣料失败")
 	state.remaining_units -= quantity
 	g.state.player().credit += quantity * int(spec.unit_reward_credit)
 	if state.remaining_units == 0:

@@ -26,11 +26,11 @@ func _run() -> void:
 	directory=OS.get_environment("XJ_CAMPAIGN_V37_DIRECTORY").replace("\\","/")
 	if not check(directory.is_absolute_path() and directory.contains("/jiaoben/tmp/campaign-v37/") and not FileAccess.file_exists(directory.path_join("progress.db")),"fresh scoped campaign world"):get_tree().quit(2);return
 	store=Store.new(directory.path_join("progress.db"))
-	if not check(store.open(),"format22 opens "+store.last_error):await finish();return
+	if not check(store.open(),"format23 opens "+store.last_error):await finish();return
 	state=store.new_world("远征工程批次",3701)
-	if not check(state!=null,"new83-group world seals "+store.last_error):await finish();return
+	if not check(state!=null,"new87-group world seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==83 and state.rows("construction_state").size()==3 and state.rows("construction_input_state").size()==18,"finite projects and collection points initialize completely")
+	check(XJRuntimeState.TABLES.size()==87 and state.rows("construction_state").size()==3 and state.rows("construction_input_state").size()==18,"finite projects and collection points initialize completely")
 	check(state.rows("expedition_route_state").size()==3 and state.rows("expedition_run_state").is_empty() and state.rows("flight_record_state").is_empty(),"no free expedition or invented sortie history")
 	check(state.rows("exploration_instance_state").size()==12 and state.rows("tactical_site_state").size()==9 and state.rows("exploration_belt_state").size()==4,"six new exploration places retain tactical and migrating belt systems")
 	if OS.get_environment("XJ_CAMPAIGN_UPGRADE_ONLY")=="1":await legacy_campaign();await finish();return
@@ -89,6 +89,13 @@ func _run() -> void:
 		check(project(id,"pause"),"manual project pause accepted")
 		g.projects.tick(10.0);check(row.work_remaining_s==remaining,"paused construction preserves work and sunk inputs")
 		check(project(id,"resume"),"project resumes without repaying")
+		var territory: RefCounted=state.find("territory_state","sector_id",g.projects.definition(id).sector_id)
+		territory.has_faction_id=false # Explicit temporary authority-loss fixture; never saved.
+		var invested: int=row.paid_credit_total
+		g.projects.tick(remaining+1.0)
+		check(row.work_remaining_s==remaining and row.stage_index==index and row.paid_credit_total==invested,"authority loss suspends actual work and preserves paid inputs")
+		territory.has_faction_id=true
+		check(g.projects.owned(id),"restored authority resumes the preserved project")
 		state.snapshot.meta.simulation_tick+=int(ceil((remaining+1.0)*g.rule("simulation_hz")));g.projects.tick(remaining+1.0)
 		check(row.phase=="completed" if index==3 else row.stage_index==index+1,"construction advances only after real paid work duration")
 		if not preserve(3,"construction stage "+str(index)):await finish();return
@@ -123,9 +130,11 @@ func legacy_campaign() -> void:
 	check(DirAccess.copy_absolute(source,path)==OK,"old actual package world copied without modifying original")
 	var faulty: FaultStore=FaultStore.new(path);store=faulty;faulty.failure="migration:025_campaign.sql"
 	check(not store.open() and int(store._records("SELECT format_version FROM database_meta")[0].format_version)==21,"025 failure preserves real old format21")
+	faulty.failure="migration:026_metrics.sql"
+	check(not store.open() and int(store._records("SELECT format_version FROM database_meta")[0].format_version)==21 and store._records("SELECT name FROM sqlite_schema WHERE name='flight_material_state'").is_empty(),"026 interruption rolls back both pending migrations and preserves old format21")
 	check(FileAccess.file_exists(directory.path_join("migration-format21-backup.db")),"actual old database backed up before migration")
 	faulty.failure=""
-	if not check(store.open(),"appended migration retries to format22 "+store.last_error):return
+	if not check(store.open(),"appended migrations retry to format23 "+store.last_error):return
 	var slot: Dictionary={}
 	for item: Dictionary in store.list_slots():
 		if item.slot_kind=="manual" and int(item.slot_index)==2:slot=item;break

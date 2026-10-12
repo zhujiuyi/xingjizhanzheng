@@ -357,7 +357,7 @@ func claim(mission_id: String) -> bool:
 		var bound:bool=def.mission_kind=="tutorial"
 		for source in _delivery_sources(mission,obj):
 			var used:int=mini(left,g.inventory.count(source,obj.target_item_id,not bound,mission.mission_instance_id if bound else ""))
-			if used>0:g.inventory.consume(source,obj.target_item_id,used,not bound,mission.mission_instance_id if bound else "")
+			if used>0:g.inventory.consume(source,obj.target_item_id,used,not bound,mission.mission_instance_id if bound else "",false)
 			left-=used
 		progress(mission,obj.objective_index).progress_units=obj.required_count;mission.delivered_units+=obj.required_count
 	var reward:Dictionary=g.definition("mission_reward_defs","mission_id",mission.mission_def_id)
