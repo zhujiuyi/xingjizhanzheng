@@ -30,6 +30,8 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	if not honor_check.validate(state,catalog):return _fail(honor_check.last_error)
 	var frontier_check: RefCounted=preload("res://runtime/data/frontier_validation.gd").new()
 	if not frontier_check.validate(state,catalog):return _fail(frontier_check.last_error)
+	var observation_check: RefCounted=preload("res://runtime/data/situational_validation.gd").new()
+	if not observation_check.validate(state,catalog):return _fail(observation_check.last_error)
 	var hire_check: RefCounted=preload("res://runtime/data/hire_validation.gd").new()
 	if not hire_check.validate(state,catalog):return _fail(hire_check.last_error)
 	for ship in state.rows("ship_state"):

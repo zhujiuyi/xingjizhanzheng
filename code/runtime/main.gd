@@ -52,6 +52,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-situational-v36","file":"situational_v36.gd","prefix":"situational-v36","env":"XJ_SITUATIONAL_V36","meta":"xj_situational_v36_diagnostic"},
+		{"flag":"--xj-verify-situational-world-v36","file":"situational_world_v36.gd","prefix":"situational-world-v36","env":"XJ_SITUATIONAL_WORLD_V36","meta":"xj_situational_world_v36_diagnostic"},
 		{"flag":"--xj-verify-hire-v35","file":"hire_v35.gd","prefix":"hire-v35","env":"XJ_HIRE_V35","meta":"xj_hire_v35_diagnostic"},
 		{"flag":"--xj-verify-hire-world-v35","file":"hire_world_v35.gd","prefix":"hire-world-v35","env":"XJ_HIRE_WORLD_V35","meta":"xj_hire_world_v35_diagnostic"},
 		{"flag":"--xj-verify-hire-travel-world-v35","file":"hire_travel_world_v35.gd","prefix":"hire-travel-world-v35","env":"XJ_HIRE_TRAVEL_WORLD_V35","meta":"xj_hire_travel_world_v35_diagnostic"},
@@ -743,6 +745,8 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			_exploration_navigation(action, target, extra)
 		"source_map", "source_travel":
 			_source_navigation(action, target, extra)
+		"demand_navigate":
+			_demand_navigation(target)
 		"civilization_map", "war_navigate":
 			_civilization_navigation(action, target)
 		"set_combat_option":
@@ -1064,6 +1068,7 @@ func _source_after_arrival() -> void:
 		elif source_goal.has("consignment"): _consignment_navigation("consignment_navigate",source_goal.consignment,str(source_goal.generation))
 		elif source_goal.has("operation"): _operation_navigation("operation_nav",source_goal.operation,str(source_goal.generation))
 		elif source_goal.has("event"): _exploration_navigation("exploration_nav", source_goal.event, str(source_goal.generation))
+		elif source_goal.has("demand"): _demand_navigation(source_goal.demand)
 		else: _source_navigation("source_travel", source_goal.key, source_goal.item)
 
 func _drone_order(kind: String, target: String) -> void:
@@ -1157,11 +1162,34 @@ func _exploration_warning(message: String) -> void:
 	if presentation != null: presentation.ui_result(false)
 
 func _tactical_warning(message: String) -> void:
-	if ui != null: ui.notify(message, not message.contains("维修"))
-	if presentation != null: presentation.ui_result(message.contains("维修"))
+	# Important ongoing states have typed cues; prose is never a severity parser.
+	if ui != null: ui.notify(message)
+
+func _tactical_feedback(kind: String, message: String) -> void:
+	if gameplay.situational.supported() and kind in ["charging","jam"]:return
+	if ui!=null:ui.notify(message,kind!="interrupted")
+	if presentation!=null:presentation.ui_result(kind=="interrupted")
+
+func _situational_cue(cue: Dictionary) -> void:
+	if presentation != null: presentation.situational_cue(cue)
+
+func _demand_navigation(id: String) -> void:
+	if state == null or gameplay == null or busy or travel.active(): return
+	var spec: Dictionary = gameplay.definition("station_demand_defs","demand_id",id)
+	if spec.is_empty(): return
+	var info: Dictionary = gameplay.missions._route_location(gameplay.missions._station_location(spec.station_id),"")
+	if state.ship().status != Types.ShipStatus.FLYING: ui.notify("出港后可前往需求站；到站重新确认报价。"); return
+	if not str(info.get("route_reason","")).is_empty(): ui.notify(info.route_reason,true); return
+	source_goal = {"world":state.world_id,"demand":id}
+	_navigate_guidance(info,true,true,true)
 
 func _hire_warning(message: String) -> void:
-	var critical: bool=message.contains("损失") or message.contains("失联")
+	var critical: bool = false
+	if gameplay != null and state != null:
+		for row: RefCounted in state.rows("hire_contract_state"):
+			if row.phase=="lost" and row.finished_tick==state.snapshot.meta.simulation_tick: critical=true
+		var active: RefCounted = gameplay.hired.active()
+		if active!=null and active.phase in ["deployed","retreating"] and not gameplay.hired.connected(active): critical=true
 	if ui!=null:ui.notify(message,critical)
 	if presentation!=null:presentation.ui_result(not critical)
 func _hire_healed(npc_id: String,ship_id: String,layer: String) -> void:
@@ -1252,8 +1280,9 @@ func _activate(candidate: XJRuntimeState) -> void:
 	gameplay.hired.warning_changed.connect(_hire_warning)
 	gameplay.hired.healed.connect(_hire_healed)
 	gameplay.operations.warning_changed.connect(_tactical_warning)
-	gameplay.tactics.warning_changed.connect(_tactical_warning)
+	gameplay.tactics.feedback_changed.connect(_tactical_feedback)
 	gameplay.drone_control.warning_changed.connect(_tactical_warning)
+	gameplay.situational.cue_started.connect(_situational_cue)
 	combat_automation = CombatAutomation.new()
 	combat_automation.changed.connect(_sync_combat_automation)
 	combat_automation.acquired.connect(_combat_acquired)

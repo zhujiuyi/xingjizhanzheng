@@ -11,6 +11,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "situational": ("situational_v36.gd", "XJ_SITUATIONAL_V36", "situational-v36", "SITUATIONAL_V36", "--xj-verify-situational-v36"),
+    "situational-world": ("situational_world_v36.gd", "XJ_SITUATIONAL_WORLD_V36", "situational-world-v36", "SITUATIONAL_WORLD_V36", "--xj-verify-situational-world-v36"),
     "hire": ("hire_v35.gd", "XJ_HIRE_V35", "hire-v35", "HIRE_V35", "--xj-verify-hire-v35"),
     "hire-world": ("hire_world_v35.gd", "XJ_HIRE_WORLD_V35", "hire-world-v35", "HIRE_WORLD_V35", "--xj-verify-hire-world-v35"),
     "hire-travel-world": ("hire_travel_world_v35.gd", "XJ_HIRE_TRAVEL_WORLD_V35", "hire-travel-world-v35", "HIRE_TRAVEL_WORLD_V35", "--xj-verify-hire-travel-world-v35"),
@@ -189,8 +191,14 @@ def run_suite():
             assert record["summary"]["checks"] >= (200 if name == "civilizations" else 25) and len(captures) == 0
         if name == "frontier-governance-world":
             assert record["summary"]["checks"] >= 58 and len(captures) == 5 and record["summary"]["defended"] and record["summary"]["dispatched"] and record["summary"]["physical_damage"] > 0
+        if name == "situational":
+            assert record["summary"]["checks"] >= 30 and record["summary"]["groups"] == 72 and not captures
+            if os.environ.get("XJ_SITUATIONAL_LEGACY_DATABASE"):
+                assert record["summary"]["legacy_checked"] is True
+        if name == "situational-world":
+            assert record["summary"]["checks"] >= 35 and len(captures) >= 5 and record["summary"]["physical_cues"] >= 2 and record["summary"]["audio_played"] and record["summary"]["pause_checked"]
         if name == "hire":
-            assert record["summary"]["checks"] >= 40 and set(record["summary"]["roles"]) == {"escort", "support"} and record["summary"]["groups"] == 70 and not captures
+            assert record["summary"]["checks"] >= 40 and set(record["summary"]["roles"]) == {"escort", "support"} and record["summary"]["groups"] == 72 and not captures
             if os.environ.get("XJ_HIRE_LEGACY_DATABASE"):
                 assert record["summary"]["checks"] >= 70 and record["summary"]["legacy_checked"] is True
         if name == "hire-world":

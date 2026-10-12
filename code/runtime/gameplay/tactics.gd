@@ -1,5 +1,10 @@
 extends RefCounted
 signal warning_changed(message: String)
+signal feedback_changed(kind: String, message: String)
+
+func _feedback(kind: String, message: String) -> void:
+	warning_changed.emit(message)
+	feedback_changed.emit(kind,message)
 const D = preload("res://contracts/contract_dtos.gd")
 const T = preload("res://contracts/contract_types.gd")
 var g: RefCounted
@@ -112,7 +117,7 @@ func apply_jam(npc_id: String) -> bool:
 	effect.jam_remaining_s = minf(float(balance.jam_max_duration_s), float(definition(npc_id).duration_s)) * pow(float(balance.jam_repeat_multiplier), float(effect.repeat_count))
 	effect.repeat_count = mini(int(balance.jam_max_repeat), effect.repeat_count + 1); effect.repeat_window_s = float(balance.jam_repeat_window_s); effect.immunity_remaining_s = float(balance.jam_immunity_s)
 	effect.has_source_npc_id = true; effect.source_npc_id = npc_id
-	warning_changed.emit("推进受干扰 %.1f秒：转向和最低推进能力保留；击毁截击舰可立即解除。" % effect.jam_remaining_s)
+	_feedback("jam","推进受干扰 %.1f秒：转向和最低推进能力保留；击毁截击舰可立即解除。" % effect.jam_remaining_s)
 	return true
 func _finish(row: RefCounted) -> void:
 	row.phase = "cooldown"; row.remaining_s = 0.0; row.cooldown_remaining_s = float(definition(row.npc_instance_id).cooldown_s); row.has_target_entity_id = false; row.target_entity_id = ""
@@ -129,10 +134,10 @@ func step(npc_id: String, target_id: String, visible: bool, delta: float) -> Dic
 		row.energy -= float(spec.energy_cost); row.phase = "charging"; row.remaining_s = float(spec.charge_s); row.has_target_entity_id = true; row.target_entity_id = target_id
 		row.aim_x = target.pos_x; row.aim_y = target.pos_y; row.aim_z = target.pos_z; row.charge_start_hp = npc.shield + npc.armor + npc.hull
 		g.mark_hostile_attempt()
-		warning_changed.emit(str(spec.display_name) + "：" + str({"support":"正在准备维修同伴，优先压制支援舰。","interceptor":"短时干扰准备中，拉开距离或击毁来源。","siege":"蓄能齐射预告，机动、掩体或命中打断均可反制。","carrier":"即将投放无人机，压制母舰或射击无人机。"}[spec.tactic_kind]))
+		_feedback("charging",str(spec.display_name) + "：" + str({"support":"正在准备维修同伴，优先压制支援舰。","interceptor":"短时干扰准备中，拉开距离或击毁来源。","siege":"蓄能齐射预告，机动、掩体或命中打断均可反制。","carrier":"即将投放无人机，压制母舰或射击无人机。"}[spec.tactic_kind]))
 	if row.phase == "charging":
 		if float(spec.interrupt_hp) > 0.0 and row.charge_start_hp - (npc.shield + npc.armor + npc.hull) >= float(spec.interrupt_hp):
-			_finish(row); warning_changed.emit("敌方蓄能已被打断。")
+			_finish(row); _feedback("interrupted","敌方蓄能已被打断。")
 			return {}
 		row.remaining_s = maxf(0.0, row.remaining_s - delta)
 		if row.remaining_s > 0.0: return {}

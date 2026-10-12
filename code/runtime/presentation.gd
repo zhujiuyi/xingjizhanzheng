@@ -170,6 +170,11 @@ func impact(point: Vector3, color: Color, normal: Vector3 = Vector3.UP) -> void:
 func ui_result(success: bool) -> void:
 	_play("ui_confirm" if success else "ui_error", Vector3.ZERO, "UI")
 
+func situational_cue(cue: Dictionary) -> void:
+	# Audio remains available at zero VFX intensity and follows the user's UI bus.
+	var sound_id: String = str(cue.get("sound_id",""))
+	if not sound_id.is_empty(): _play(sound_id,Vector3.ZERO,"UI")
+
 func jump(charging: bool) -> void:
 	_play("jump_charge" if charging else "jump_arrival", world.flight.global_position, "SFX")
 

@@ -25,6 +25,10 @@ func forecast(node_id: String) -> Dictionary:
 	var result: Dictionary = {"rate_per_min": 0.0, "room_units": 0, "fill_seconds": 0.0, "reason": "", "grade": str(info.get("grade_name", "")), "remaining_known": false}
 	if node.is_empty(): result.reason = "资源地点不存在"; return result
 	result.remaining_known = _known(node.sector_id)
+	var observed: Dictionary = {}
+	if g.situational != null and g.situational.supported():
+		observed = g.situational.resource_reading(node_id)
+		result.remaining_known = bool(observed.get("known",false)) and bool(observed.get("live",false))
 	if g.definition("item_defs", "item_id", node.item_id).get("item_type", "") != "ore": result.reason = "组件使用近距离回收"; return result
 	if not g.work._loan_target_allowed(node_id): result.reason = "教学借船仅可采集当前任务指定矿点"; return result
 	var minimum_cycle: float = INF
@@ -65,6 +69,9 @@ func sources(item_id: String) -> Array[Dictionary]:
 		var known: bool = _known(node.sector_id)
 		var info: Dictionary = Status.inspect(g.state, g.catalog, node.node_id)
 		var detail: String = (Status.summary(info) if known else "矿量与再生未知 · " + str(info.grade_name))
+		if g.situational != null and g.situational.supported():
+			detail = g.situational.resource_text(node.node_id)
+			known = bool(g.situational.resource_reading(node.node_id).get("known",false))
 		if float(extraction.rate_per_min) > 0: detail += "\n当前配装理论 %.1f 单位/分钟；下一舱可装 %d，约 %.0f 秒。电容、热量、距离与视线另行校验。" % [extraction.rate_per_min, extraction.room_units, ceil(extraction.fill_seconds)]
 		result.append({"key": "node:" + str(node.node_id), "kind": "采矿" if item.item_type == "ore" else "组件回收", "id": node.node_id, "item_id": item_id, "sector_id": node.sector_id, "anchor_id": location.anchor_id, "target_id": node.node_id, "target_kind": "resource", "title": str(item.display_name) + " · " + str(extraction.grade), "reason": reason, "detail": detail, "known": known})
 	for stock: Dictionary in g.rows("station_stock_defs"):
@@ -75,6 +82,7 @@ func sources(item_id: String) -> Array[Dictionary]:
 		var reason: String = _unlock_reason(stock.required_unlock_id)
 		if reason.is_empty(): reason = str(facility.reason)
 		var known: bool = _known(station.sector_id)
+		if g.situational != null and g.situational.supported(): known = str(stock.station_id)==g.station()
 		var amount: int = -1
 		if known:
 			for row: D.ShopStockStateDto in g.state.rows("shop_stock_state"):

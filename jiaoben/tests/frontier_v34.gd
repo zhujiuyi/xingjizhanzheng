@@ -20,7 +20,7 @@ func tick(seconds: float) -> void:
 func materials(container: String,units: int) -> void:g.inventory.grant(container,g.frontier.balance.material_id,units)
 func preserve(index: int,label: String) -> bool:
 	var signature: String=full_signature(state)
-	if not check(store.save(state,"manual",index),label+" seals all 70 groups "+store.last_error):return false
+	if not check(store.save(state,"manual",index),label+" seals all 72 groups "+store.last_error):return false
 	var slot: String=saved_slot(index);g.dispose();g=null;state=store.load(slot)
 	if not check(state!=null,label+" loads "+store.last_error):return false
 	check(full_signature(state)==signature,label+" preserves every typed group and random stream")
@@ -101,7 +101,7 @@ func _run() -> void:
 	state=store.new_world("边疆完整阶段",3401)
 	if not check(state!=null,"full staged frontier world seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==70 and state.rows("frontier_campaign_state").size()==24 and state.rows("frontier_territory_state").size()==8,"all existing wars and only eight conquerable sectors receive new authority")
+	check(XJRuntimeState.TABLES.size()==72 and state.rows("frontier_campaign_state").size()==24 and state.rows("frontier_territory_state").size()==8,"all existing wars and only eight conquerable sectors receive new authority")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)
 	state.player().credit=1000000;g.missions.refresh();g._sync_spawns();hull("transport_caravan");fit("module_scanner_beacon_i","utility:0")
 	var faction: String="faction_route_council";qualified_faction(faction)

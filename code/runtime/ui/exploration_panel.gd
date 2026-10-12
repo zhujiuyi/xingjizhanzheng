@@ -53,6 +53,12 @@ func _build() -> void:
 	var go: Button = u._button(navigation, "前往当前目标", func(): _navigation("exploration_nav", current_event, generation)); go.name = "ExploreNavigate"
 	go.disabled = u.state.ship().status != T.ShipStatus.FLYING or not unlocked
 	go.tooltip_text = "出港后导航；过门仍按 F 确认，抵达后由你选择行动。" if unlocked else "完成新手教学并取得远域航路许可后开放。"
+	if u.gameplay.situational.supported():
+		var equipment: Dictionary=u.gameplay.situational.exploration_equipment(current_event)
+		if not str(equipment.note).is_empty():
+			u._text_to(self,str(equipment.note),14).name="ExploreEquipmentHint"
+			u._button(navigation,"检查配装",func():
+				if _current():u.show_page("fitting" if u.state.ship().status==T.ShipStatus.DOCKED else "fitting_analysis")).name="ExploreEquipmentGuide"
 	var actions: HFlowContainer = HFlowContainer.new(); add_child(actions)
 	if row.phase == "clue": _action(actions, "调查线索", "survey", row)
 	elif row.phase == "ready": _action(actions, "交付成果", "claim", row)

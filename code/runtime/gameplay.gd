@@ -18,6 +18,7 @@ const Specializations = preload("res://runtime/gameplay/specializations.gd")
 const FittingAnalysis = preload("res://runtime/gameplay/fitting_analysis.gd")
 const ShipRoles = preload("res://runtime/gameplay/ship_roles.gd")
 const Frontier = preload("res://runtime/gameplay/frontier.gd")
+const Situational = preload("res://runtime/gameplay/situational.gd")
 const Hired = preload("res://runtime/gameplay/hire.gd")
 const Honors = preload("res://runtime/gameplay/honors.gd")
 const Consignments = preload("res://runtime/gameplay/consignments.gd")
@@ -42,6 +43,7 @@ var specializations: RefCounted
 var fitting_analysis: RefCounted
 var ship_roles: RefCounted
 var frontier: RefCounted
+var situational: RefCounted
 var hired: RefCounted
 var honors: RefCounted
 var consignments: RefCounted
@@ -93,6 +95,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog, preview: bool = 
 	honors = Honors.new(self)
 	frontier = Frontier.new(self)
 	hired = Hired.new(self)
+	situational = Situational.new(self)
 	if preview: return
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
@@ -601,6 +604,7 @@ func finish_step(delta: float) -> void:
 	_tick_resources(delta)
 	_sync_spawns(delta)
 	_tick_gate_lifetimes(delta)
+	situational.tick(delta)
 
 func _tick_repairs() -> void:
 	if state.ship().status != T.ShipStatus.FLYING: return
@@ -803,10 +807,10 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired,situational]:
 		if service != null: service.g = null
 	specializations = null; fitting_analysis = null
-	ship_roles = null; consignments = null; honors = null; frontier = null; hired = null
+	ship_roles = null; consignments = null; honors = null; frontier = null; hired = null; situational = null
 	operations = null
 	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null; mobile_belts = null
 	tactics = null; drone_control = null

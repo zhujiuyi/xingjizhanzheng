@@ -742,7 +742,7 @@ func _update_information() -> void:
 	var resources: Array[String] = []
 	_resource_nodes.clear()
 	for location: Dictionary in catalog.rows("resource_node_locations"):
-		if business != null and not business.exploration.resource_visible(location.node_id): continue
+		if business != null and not business.exploration.resource_visible(location.node_id) and (not business.situational.supported() or state.find("resource_intel_state","node_id",location.node_id)==null): continue
 		var anchor: Dictionary = business.definition("anchor_defs", "anchor_id", location.anchor_id) if business != null else catalog.one("anchor_defs", "anchor_id", location.anchor_id)
 		if anchor.get("sector_id", "") != selected_sector: continue
 		var node: Dictionary = catalog.one("resource_node_defs", "node_id", location.node_id)
@@ -789,7 +789,9 @@ func refresh_resource_status(total_mass_kg: float = -1.0) -> void:
 	var lines: Array[String] = ["矿点情报 · 世界时间"]
 	for entry: Dictionary in _resource_nodes:
 		var status: String = "尚未到访 · 实时矿量未知"
-		if known:
+		if business != null and business.situational.supported():
+			status = business.situational.resource_text(str(entry.node_id))
+		elif known:
 			var info: Dictionary = ResourceStatus.inspect(state, catalog, str(entry.node_id))
 			status = ResourceStatus.summary(info)
 			if bool(info.get("available", false)) and int(info.get("capacity_units", 0)) > 0:
@@ -799,7 +801,7 @@ func refresh_resource_status(total_mass_kg: float = -1.0) -> void:
 	var text: String = "\n".join(lines)
 	if resource_information.text != text:
 		resource_information.text = text
-		resource_information.tooltip_text = text + "\n未到访星区只显示已知产出；矿量与再生时间以当前世界SQLite状态为准。暂停与退出不推进。"
+		resource_information.tooltip_text = text + "\n现场范围内才更新矿量；远程显示带时间的上次观测，超过有效期需复测。暂停与退出不推进情报年龄。"
 
 func _refresh_route_mass(total_mass_kg: float = -1.0) -> void:
 	if total_mass_kg >= 0.0:

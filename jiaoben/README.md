@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+状态反馈/情报批次：`store_generate_situational.py`仅生成024/v0.20适配器，两组观测追加至format21；旧001–023、适配器及145表/四视图保持。S20/S21功能合并完成后再统一专项、适用回归与实际包验收；开发中仅做必要编译/故障定位。规则见[63](../doc/63-状态反馈与航行情报.md)。
+
 雇佣支援v0.27.0已验收：`build_hire.py`追加2表及严格`hire_`前缀的NPC/锚点；`store_generate_hire.py`仅生成023/v0.19并保护完整旧守卫。`test_hire.py`验证原143表/四视图、历史SQL原字节、回滚和费用/演员负例；`verify_combat_v18.py --only hire`覆盖合同与真实旧v0.26升级，原生`hire-world hire-travel-world`覆盖物理协同、AU/跨门费用容量与失败恢复、高缩放。实际EXE/PCK29组6320项/179图、正式目录另6项及14文件一致性通过，汇总`logs/v35-delivery-verification.json`，规则/夹具边界见[62](../doc/62-雇佣支援与舰队指令.md)。后续按多个关联目标合并开发后统一适用验收，开发中仅做必要编译与故障定位。
 
 边疆阶段：`build_frontier.py`只追加五表及有明确前缀的NPC/锚点；`store_generate_frontier.py`仅生成022/v0.18，复制旧守卫并只放开有完整新历史的主权关联与有严格友方归属的补给舰/信标远修。`verify_combat_v18.py --only frontier`验证实际阶段支付、双目标、重建、主权循环、报价和68组恢复；资格/到达/长策略时间明确作为夹具。`prepare_roles_upgrade_v32.py --frontier --legacy-executable <已核验v0.25 EXE>`通过旧包固定fitting入口生成历史占领与活动战争、订单/研究/在途货物format18档；`XJ_FRONTIER_LEGACY_DATABASE`启用真实升级与失败回滚。原生`frontier-world`、`frontier-demolition-world`、`frontier-governance-world`验证真实物理护送/受击/远修、两类战斗与重建、支付/运输/防守/精确缩放；失守及回收的边界另有Core与SQL检查。规则和未完成验收见[61](../doc/61-边疆战争与重建争夺.md)。

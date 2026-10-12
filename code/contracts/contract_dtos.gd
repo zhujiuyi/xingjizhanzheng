@@ -1033,6 +1033,23 @@ class FrontierDirectorStateDto extends RefCounted:
 	var active_faction_id: String = ""
 
 ## 对应 progress.hire_contract_state；只有活动合同绑定实际NPC。
+class ResourceIntelStateDto extends RefCounted:
+	var node_id: String = ""
+	var sector_id: String = ""
+	var site_id: String = ""
+	var observed_tick: int = 0
+	var remaining_units: int = 0
+	var respawn_remaining_s: float = 0.0
+
+class DemandIntelStateDto extends RefCounted:
+	var demand_id: String = ""
+	var observed_tick: int = 0
+	var generation: int = 1
+	var phase: String = "active"
+	var remaining_units: int = 0
+	var phase_remaining_s: float = 0.0
+	var unit_credit: int = 0
+
 class HireContractStateDto extends RefCounted:
 	var contract_id: String = ""
 	var player_id: String = ""
@@ -1144,6 +1161,8 @@ class WorldSnapshotDto extends RefCounted:
 	var frontier_director_state_rows: Array[FrontierDirectorStateDto] = []
 	var hire_contract_state_rows: Array[HireContractStateDto] = []
 	var hire_receipt_state_rows: Array[HireReceiptStateDto] = []
+	var resource_intel_state_rows: Array[ResourceIntelStateDto] = []
+	var demand_intel_state_rows: Array[DemandIntelStateDto] = []
 	var tactical_site_state_rows: Array[TacticalSiteStateDto] = []
 	var npc_tactic_state_rows: Array[NpcTacticStateDto] = []
 	var ship_tactical_effect_state_rows: Array[ShipTacticalEffectStateDto] = []
