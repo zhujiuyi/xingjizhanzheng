@@ -241,6 +241,19 @@ func _upgrade_from(archive: String) -> void:
 	check(state != null and not store.catalog.table_names.has("industry_balance_defs") and state.player().credit == old_credit, "legacy manual is still independently restorable after branch upgrade")
 	store.close(); store = null; state = null
 
+func legacy_signature(value: XJRuntimeState) -> String:
+	# The actual v0.16 writer had 39 state groups; later service defaults are
+	# separate. Keep every original asset, action receipt and RNG row exact.
+	var data: Dictionary={}
+	for table: String in XJRuntimeState.TABLES.slice(0,39):
+		var rows: Array=[]
+		for row: RefCounted in value.rows(table):
+			if table=="resource_state" and str(row.node_id).begins_with("exp_"):continue
+			if table=="shop_stock_state" and row.item_def_id in ["module_spec_burst","module_spec_sustain","module_spec_range"]:continue
+			rows.append(Codec.new().encode_row(table,row))
+		rows.sort_custom(func(a: Dictionary,b: Dictionary)->bool:return JSON.stringify(a)<JSON.stringify(b));data[table]=rows
+	return JSON.stringify(data)
+
 func _real_legacy_upgrade() -> void:
 	var source: String = OS.get_environment("XJ_INDUSTRY_LEGACY_DATABASE").replace("\\", "/")
 	if not check(source.is_absolute_path() and source.contains("/jiaoben/tmp/") and not source.contains("..") and FileAccess.file_exists(source), "real legacy fixture stays in scoped tmp path"): return
@@ -254,7 +267,7 @@ func _real_legacy_upgrade() -> void:
 	faulty.failure = ""
 	if not check(store.open(), "retry migrates actual format9 database to format10: " + store.last_error): return
 	check(FileAccess.file_exists(directory.path_join("migration-format9-backup.db")), "format upgrade creates a closed old-format backup")
-	check(int(store._records("SELECT format_version FROM database_meta")[0].format_version) == 14, "actual legacy database reaches current format14")
+	check(int(store._records("SELECT format_version FROM database_meta")[0].format_version) == 24 and int(store._records("PRAGMA user_version")[0].values()[0])==24, "actual legacy database reaches consistent current format24")
 	var slot: Dictionary
 	for entry: Dictionary in store.list_slots():
 		if entry.slot_kind == "manual": slot = entry; break
@@ -263,14 +276,15 @@ func _real_legacy_upgrade() -> void:
 	var credit: int = state.player().credit
 	var ship: String = state.ship().ship_instance_id
 	var previous_rng: Dictionary = Codec.new().encode_row("rng_state", state.rows("rng_state")[0])
+	var original: String=legacy_signature(state)
 	var count: int = store._records("SELECT count(*) AS n FROM content_snapshot")[0].n
 	faulty.failure = "content_upgrade"
 	check(store.upgrade_content(state) == null, "failed industry branch publication is rejected")
-	check(store._records("SELECT count(*) AS n FROM content_snapshot")[0].n == count and store.active_state == state and state.player().credit == credit, "failed industry branch preserves old complete world and assets")
+	check(store._records("SELECT count(*) AS n FROM content_snapshot")[0].n == count and store.active_state == state and state.player().credit == credit and legacy_signature(state)==original, "failed industry branch preserves all39 original groups and assets")
 	faulty.failure = ""
 	var upgraded: XJRuntimeState = store.upgrade_content(state)
 	if check(upgraded != null, "actual v0.16 world branches to industrial rules: " + store.last_error):
-		check(upgraded.player().credit == credit and upgraded.ship().ship_instance_id == ship and previous_rng == Codec.new().encode_row("rng_state", upgraded.rows("rng_state")[0]), "actual old assets and RNG survive new industrial branch")
+		check(upgraded.player().credit == credit and upgraded.ship().ship_instance_id == ship and previous_rng == Codec.new().encode_row("rng_state", upgraded.rows("rng_state")[0]) and legacy_signature(upgraded)==original, "all39 actual old groups including assets receipts and RNG survive new industrial branch")
 	state = store.load(slot.slot_id)
-	check(state != null and not store.catalog.table_names.has("industry_balance_defs") and state.player().credit == credit, "actual old manual remains recoverable after upgrade")
+	check(state != null and not store.catalog.table_names.has("industry_balance_defs") and state.player().credit == credit and legacy_signature(state)==original, "actual old manual independently restores all39 original groups after upgrade")
 	store.close(); store = null; state = null
