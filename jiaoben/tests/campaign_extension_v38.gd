@@ -15,7 +15,7 @@ func _run() -> void:
 	state=store.new_world("完整路线与实耗",3801)
 	if not check(state!=null,"new87-group world seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==87 and state.rows("telemetry_material_state").is_empty() and state.rows("telemetry_repair_state").is_empty(),"no invented historic material or repair measurements")
+	check(XJRuntimeState.TABLES.size()==99 and state.rows("telemetry_material_state").is_empty() and state.rows("telemetry_repair_state").is_empty(),"no invented historic material or repair measurements")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)
 	state.player().credit=1000000;g.missions.refresh();g._sync_spawns();hull("transport_caravan");fit("module_scanner_beacon_i","utility:0");at_station("station_mirror_hub")
 	check(expedition("route_relief","start","relief"),"complete-route fixture pays normal preparation")

@@ -90,6 +90,7 @@ func accept(mission_id: String) -> bool:
 	for old in g.state.rows("mission_state"):
 		if old.mission_def_id==mission_id:attempt=maxi(attempt,old.attempt_number+1)
 	var row:D.MissionStateDto=D.MissionStateDto.new();row.mission_instance_id=g.id("mission");row.player_id=g.state.player().player_id;row.mission_def_id=mission_id;row.attempt_number=attempt;row.status="active";row.has_deadline_remaining_s=def.deadline_s!=null;row.deadline_remaining_s=float(def.deadline_s) if def.deadline_s!=null else 0.0;g.state.add("mission_state",row)
+	g.journal.begin("mission",row.mission_instance_id)
 	for obj in objectives(mission_id):
 		var p:D.MissionObjectiveStateDto=D.MissionObjectiveStateDto.new();p.mission_instance_id=row.mission_instance_id;p.mission_def_id=mission_id;p.objective_index=obj.objective_index
 		if obj.objective_kind=="scan_signal":
@@ -362,6 +363,7 @@ func claim(mission_id: String) -> bool:
 		progress(mission,obj.objective_index).progress_units=obj.required_count;mission.delivered_units+=obj.required_count
 	var reward:Dictionary=g.definition("mission_reward_defs","mission_id",mission.mission_def_id)
 	g.state.player().credit+=reward.reward_credit;mission.reward_claimed=true;mission.status="completed";mission.has_deadline_remaining_s=false;mission.deadline_remaining_s=0
+	g.journal.finish("mission",mission.mission_instance_id,"completed","completed")
 	mission.cooldown_remaining_s=def.repeat_cooldown_s
 	var claimrow:D.MissionClaimStateDto=D.MissionClaimStateDto.new();claimrow.mission_instance_id=mission.mission_instance_id;claimrow.action_id=g._active_action.action_id;g.state.add("mission_claim_state",claimrow)
 	var w:D.MissionWindowStateDto=window(mission.mission_def_id);w.completed_window_count+=1;w.has_last_settle_tick=true;w.last_settle_tick=g.state.snapshot.meta.simulation_tick
@@ -386,6 +388,7 @@ func abandon(mission_id: String) -> bool:
 	for loan in g.state.rows("loan_state"):
 		if loan.mission_instance_id==mission.mission_instance_id and loan.status in [T.LoanStatus.ACTIVE,T.LoanStatus.LOST]:_cleanup_loan(loan)
 	mission.status="abandoned";mission.has_deadline_remaining_s=false
+	g.journal.finish("mission",mission.mission_instance_id,"withdrawn","manual")
 	mission.cooldown_remaining_s=g.rule("contract_failure_retry_cooldown_s") if g.definition("mission_defs","mission_id",mission.mission_def_id).repeatable else 0.0
 	var w:D.MissionWindowStateDto=window(mission.mission_def_id);w.has_last_failure_tick=true;w.last_failure_tick=g.state.snapshot.meta.simulation_tick
 	refresh();return true
@@ -499,5 +502,6 @@ func tick(delta:float) -> void:
 				for loan in g.state.rows("loan_state"):
 					if loan.mission_instance_id==row.mission_instance_id and loan.status in [T.LoanStatus.ACTIVE,T.LoanStatus.LOST]:_cleanup_loan(loan)
 				row.status="failed";row.has_deadline_remaining_s=false;row.cooldown_remaining_s=g.rule("contract_failure_retry_cooldown_s")
+				g.journal.finish("mission",row.mission_instance_id,"failed","timeout")
 	for def in g.rows("mission_defs"):window(def.mission_id)
 	refresh()

@@ -30,6 +30,9 @@ func setup(runtime: XJRuntimeState, storage: XJGameStore, builder: Callable, arr
 	ready_candidate = null
 
 func begin(endpoint_id: String) -> bool:
+	if catalog.table_names.has("trial_defs"):
+		for table: String in ["trial_state","blockade_state"]:
+			if state.rows(table).any(func(row: RefCounted):return row.phase=="active"):return _fail("先从行动出口离开或撤回战术场景")
 	if active():
 		return _fail("虫洞传送正在进行")
 	endpoint = catalog.one("gate_endpoint_defs", "endpoint_id", endpoint_id)
@@ -123,6 +126,9 @@ func _mass(ship: Dtos.ShipStateDto) -> float:
 	if catalog.table_names.has("consignment_defs"):
 		for freight: RefCounted in state.rows("consignment_state"):
 			if freight.has_payload_ship_id and freight.payload_ship_id==ship.ship_instance_id:result+=freight.cargo_units*float(catalog.one("consignment_defs","contract_id",freight.contract_id).unit_mass_kg)
+	if catalog.table_names.has("blockade_defs"):
+		for payload: RefCounted in state.rows("blockade_state"):
+			if payload.has_payload_ship_id and payload.payload_ship_id==ship.ship_instance_id:result+=payload.cargo_units*float(catalog.one("blockade_defs","blockade_id",payload.blockade_id).cargo_mass_kg)
 	return result
 
 func _commit() -> void:

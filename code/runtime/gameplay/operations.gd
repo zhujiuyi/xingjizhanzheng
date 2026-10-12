@@ -78,6 +78,7 @@ func execute(id: String, action: String, generation: String) -> bool:
 	match action:
 		"accept":
 			row.generation += 1; row.phase = "accepted"; row.remaining_s = 0.0
+			g.journal.begin("operation",id+":"+str(row.generation))
 			row.loaded_units = 0; row.cargo_units = 0; row.completed_units = 0; row.lost_units = 0; row.jettisoned_units = 0
 			row.exposure_remaining_s = 0.0; row.damage_debt_hp = 0.0; row.has_payload_ship_id = false; row.payload_ship_id = ""
 			for spawn_id: String in structures:
@@ -105,6 +106,7 @@ func execute(id: String, action: String, generation: String) -> bool:
 			var reputation: RefCounted = g.state.find("reputation_state", "faction_id", station.faction_id)
 			if reputation != null: reputation.reputation += row.completed_units * int(spec.reputation_per_unit)
 			g.specializations.operation_claimed(row)
+			g.journal.finish("operation",id+":"+str(row.generation),"completed" if row.completed_units==int(spec.target_units) else "partial","completed" if row.completed_units==int(spec.target_units) else "partial")
 			g.honors.operation_claimed(row)
 			warning_changed.emit("行动成果已交付 · %d / %d · %d 信用点" % [row.completed_units, spec.target_units, credit])
 	g.request_autosave()
@@ -124,7 +126,7 @@ func destroyed(npc: D.NpcStateDto) -> void:
 	if row == null or row.phase != "active" or npc.generation != row.generation: return
 	row.completed_units += 1
 	warning_changed.emit("干扰装置已拆除 · %d / %d · 可以继续作战或带现有成果撤离" % [row.completed_units, definition(row.operation_id).target_units])
-func _finish(row: D.OperationStateDto, reached_exit: bool) -> void:
+func _finish(row: D.OperationStateDto, reached_exit: bool, reason: String="manual") -> void:
 	var spec: Dictionary = definition(row.operation_id)
 	if spec.operation_kind == "breakthrough":
 		row.completed_units = row.cargo_units if reached_exit else 0
@@ -133,6 +135,7 @@ func _finish(row: D.OperationStateDto, reached_exit: bool) -> void:
 	row.exposure_remaining_s = 0.0; row.damage_debt_hp = 0.0; row.remaining_s = 0.0
 	row.cooldown_remaining_s = float(spec.cooldown_s)
 	row.phase = "ready" if row.completed_units > 0 else "failed" if reached_exit else "withdrawn"
+	if row.phase!="ready":g.journal.finish("operation",row.operation_id+":"+str(row.generation),"withdrawn" if reason=="manual" else "failed",reason)
 	warning_changed.emit(("完整成功" if row.completed_units == int(spec.target_units) else "部分成功" if row.completed_units > 0 else "行动结束 · 无送达成果") + " · " + status_text(row.operation_id))
 func boosted() -> void:
 	if not supported(): return
@@ -144,7 +147,7 @@ func damaged(amount: float) -> void:
 	if not supported() or amount <= 0.0: return
 	for row: D.OperationStateDto in g.state.rows("operation_state"):
 		if row.phase != "active" or row.cargo_units <= 0 or row.payload_ship_id != g.state.ship().ship_instance_id: continue
-		if g.state.ship().hull <= 0.0: _finish(row, false); continue
+		if g.state.ship().hull <= 0.0: _finish(row, false,"ship_destroyed"); continue
 		if row.exposure_remaining_s <= 0.0: continue
 		var threshold: float = float(definition(row.operation_id).loss_damage_hp)
 		row.damage_debt_hp += amount
@@ -171,13 +174,13 @@ func tick(delta: float) -> void:
 	for row: D.OperationStateDto in g.state.rows("operation_state"):
 		row.cooldown_remaining_s = maxf(0.0, row.cooldown_remaining_s - delta)
 		if row.phase != "active": continue
-		if g.state.ship().status != T.ShipStatus.FLYING or not _site(row): _finish(row, false); continue
+		if g.state.ship().status != T.ShipStatus.FLYING or not _site(row): _finish(row, false,"ship_destroyed" if g.state.ship().status==T.ShipStatus.DESTROYED else "departed"); continue
 		row.remaining_s = maxf(0.0, row.remaining_s - delta)
 		var previous: float = row.exposure_remaining_s
 		row.exposure_remaining_s = maxf(0.0, row.exposure_remaining_s - delta)
 		if previous > 0.0 and row.exposure_remaining_s == 0.0:
 			row.damage_debt_hp = 0.0; warning_changed.emit("突破物资暴露已解除")
-		if row.remaining_s == 0.0: _finish(row, false)
+		if row.remaining_s == 0.0: _finish(row, false,"timeout")
 func status_text(id: String) -> String:
 	var row: D.OperationStateDto = instance(id); var spec: Dictionary = definition(id)
 	if row == null: return ""

@@ -44,7 +44,7 @@ class FrontierDefinitions(unittest.TestCase):
   p.apply_migrations(db);self.assertEqual(db.execute('PRAGMA user_version').fetchone(),(p.FORMAT_VERSION,))
  def test_all_published_migrations_and_adapters_preserve_v025_bytes(self):
   for path in sorted((ROOT/'code/database/progress').glob('*.sql')):
-   if path.name.startswith(('022_','023_','024_','025_','026_')) or path.name in ('catalog_adapter_v0_18.sql','catalog_adapter_v0_19.sql','catalog_adapter_v0_20.sql','catalog_adapter_v0_21.sql'):continue
+   if path.name.startswith(('022_','023_','024_','025_','026_','027_')) or path.name in ('catalog_adapter_v0_18.sql','catalog_adapter_v0_19.sql','catalog_adapter_v0_20.sql','catalog_adapter_v0_21.sql','catalog_adapter_v0_22.sql'):continue
    original=subprocess.check_output(['git','show','622e5c1b7fc99974dfd6636a27fe2a2f45eb1bac:'+path.relative_to(ROOT).as_posix()],cwd=ROOT)
    self.assertEqual(path.read_bytes(),original,path.name)
 
@@ -58,7 +58,7 @@ class FrontierSealing(unittest.TestCase):
   self.ctx=p.context('frontier-candidate','world-a',self.content)
  def seal(self):self.db.execute("UPDATE save_snapshot SET status='sealed' WHERE snapshot_id='frontier-candidate'")
  def test_initial_full_world_has_70_groups_without_free_governance_or_rewards(self):
-  self.assertEqual(len(p.STATE_TABLES),87)
+  self.assertEqual(len(p.STATE_TABLES),99)
   self.assertEqual(self.db.execute("SELECT count(*) FROM frontier_campaign_state WHERE snapshot_id='frontier-candidate' AND phase='idle'").fetchone(),(24,))
   self.assertEqual(self.db.execute("SELECT count(*),sum(reserve_units) FROM frontier_territory_state WHERE snapshot_id='frontier-candidate' AND phase='neutral'").fetchone(),(8,0))
   self.seal()

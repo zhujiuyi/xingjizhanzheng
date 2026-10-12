@@ -13,7 +13,7 @@ const TABLES: Array[String] = [
 	"civilization_state", "territory_state", "war_campaign_state", "war_fleet_state",
 	"industry_job_state", "industry_input_state", "station_demand_state",
 	"exploration_instance_state", "exploration_actor_state", "exploration_claim_state", "exploration_progress_state", "exploration_research_state", "exploration_belt_state",
-	"tactical_site_state", "npc_tactic_state", "ship_tactical_effect_state", "drone_bay_state", "operation_state", "specialization_progress_state", "specialization_evidence_state", "specialization_research_state", "remote_support_state", "consignment_state", "consignment_receipt_state", "civilization_command_state", "civilization_honor_evidence_state", "frontier_campaign_state", "frontier_actor_state", "frontier_campaign_receipt_state", "frontier_territory_state", "frontier_journal_state", "frontier_supply_order_state", "frontier_director_state", "hire_contract_state", "hire_receipt_state", "resource_intel_state", "demand_intel_state", "construction_state", "construction_input_state", "construction_receipt_state", "construction_evidence_state", "expedition_route_state", "expedition_run_state", "expedition_stage_state", "expedition_receipt_state", "campaign_director_state", "flight_record_state", "telemetry_total_state", "flight_material_state","telemetry_material_state","flight_repair_state","telemetry_repair_state"]
+	"tactical_site_state", "npc_tactic_state", "ship_tactical_effect_state", "drone_bay_state", "operation_state", "specialization_progress_state", "specialization_evidence_state", "specialization_research_state", "remote_support_state", "consignment_state", "consignment_receipt_state", "civilization_command_state", "civilization_honor_evidence_state", "frontier_campaign_state", "frontier_actor_state", "frontier_campaign_receipt_state", "frontier_territory_state", "frontier_journal_state", "frontier_supply_order_state", "frontier_director_state", "hire_contract_state", "hire_receipt_state", "resource_intel_state", "demand_intel_state", "construction_state", "construction_input_state", "construction_receipt_state", "construction_evidence_state", "expedition_route_state", "expedition_run_state", "expedition_stage_state", "expedition_receipt_state", "campaign_director_state", "flight_record_state", "telemetry_total_state", "flight_material_state","telemetry_material_state","flight_repair_state","telemetry_repair_state", "trial_state", "trial_result_state", "scenario_actor_state", "tactical_award_state", "blockade_state", "blockade_node_state", "blockade_result_state", "telemetry_source_state", "activity_record_state", "telemetry_menu_state", "telemetry_timing_state", "activity_total_state"]
 
 var snapshot: Dtos.WorldSnapshotDto = Dtos.WorldSnapshotDto.new()
 var world_id: String = ""
@@ -65,6 +65,18 @@ func current_sector() -> String:
 
 static func new_row(table: String) -> RefCounted:
 	match table:
+		"activity_total_state": return Dtos.ActivityTotalStateDto.new()
+		"telemetry_timing_state": return Dtos.TelemetryTimingStateDto.new()
+		"telemetry_menu_state": return Dtos.TelemetryMenuStateDto.new()
+		"activity_record_state": return Dtos.ActivityRecordStateDto.new()
+		"telemetry_source_state": return Dtos.TelemetrySourceStateDto.new()
+		"blockade_result_state": return Dtos.BlockadeResultStateDto.new()
+		"blockade_node_state": return Dtos.BlockadeNodeStateDto.new()
+		"blockade_state": return Dtos.BlockadeStateDto.new()
+		"tactical_award_state": return Dtos.TacticalAwardStateDto.new()
+		"scenario_actor_state": return Dtos.ScenarioActorStateDto.new()
+		"trial_result_state": return Dtos.TrialResultStateDto.new()
+		"trial_state": return Dtos.TrialStateDto.new()
 		"player_state": return Dtos.PlayerStateDto.new()
 		"ship_state": return Dtos.ShipStateDto.new()
 		"container_state": return Dtos.ContainerStateDto.new()

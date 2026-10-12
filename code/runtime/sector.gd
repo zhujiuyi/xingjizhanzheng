@@ -258,6 +258,7 @@ func _sync_waypoints() -> void:
 	var entries: Array[Dictionary] = gameplay.get("encounters").waypoints(state.current_sector())
 	entries.append_array(gameplay.tactics.waypoints(state.current_sector()))
 	entries.append_array(gameplay.operations.waypoints(state.current_sector()))
+	entries.append_array(gameplay.scenarios.waypoints(state.current_sector()))
 	entries.append_array(gameplay.frontier.waypoints(state.current_sector()))
 	# Task sites survive range filtering; only their actual enemies are sensor
 	# contacts. A site has no mesh or collider that could duplicate the ship.
@@ -298,6 +299,7 @@ func simulate_npcs(delta: float) -> void:
 		if row == null or not row.alive:
 			continue
 		var body: CharacterBody3D = npcs[id]
+		if XJScenarioPilot.step(self,row,body,delta):continue
 		if gameplay.operations.handles(row.spawn_id): body.velocity = Vector3.ZERO; continue
 		if XJHirePilot.step(self,row,body,delta):continue
 		if XJFrontierPilot.step(self,row,body,delta):continue

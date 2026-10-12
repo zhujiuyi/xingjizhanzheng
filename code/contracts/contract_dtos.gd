@@ -1248,7 +1248,146 @@ class TelemetryRepairStateDto extends RefCounted:
 	var repair_kind: String = ""
 	var restored_hp: float = 0.0
 
+class TrialStateDto extends RefCounted:
+	var trial_id: String = ""
+	var generation: int = 0
+	var phase: String = ""
+	var has_ship_instance_id: bool = false
+	var ship_instance_id: String = ""
+	var reference_cost: int = 0
+	var loadout_signature: String = ""
+	var remaining_s: float = 0.0
+	var elapsed_s: float = 0.0
+	var effective_hp: float = 0.0
+	var paid_credit_total: int = 0
+	var wins: int = 0
+	var best_elapsed_s: float = 0.0
+	var best_cost: int = 0
+	var cooldown_remaining_s: float = 0.0
+	var award_earned: bool = false
+
+class TrialResultStateDto extends RefCounted:
+	var trial_id: String = ""
+	var generation: int = 0
+	var outcome: String = ""
+	var reason_code: String = ""
+	var ship_def_id: String = ""
+	var reference_cost: int = 0
+	var paid_credit: int = 0
+	var elapsed_s: float = 0.0
+	var effective_hp: float = 0.0
+	var finished_tick: int = 0
+
+class ScenarioActorStateDto extends RefCounted:
+	var npc_instance_id: String = ""
+	var spawn_id: String = ""
+	var scenario_kind: String = ""
+	var scenario_id: String = ""
+	var generation: int = 0
+	var actor_role: String = ""
+
+class TacticalAwardStateDto extends RefCounted:
+	var award_id: String = ""
+	var selected: bool = false
+	var earned_tick: int = 0
+
+class BlockadeStateDto extends RefCounted:
+	var blockade_id: String = ""
+	var generation: int = 0
+	var phase: String = ""
+	var has_payload_ship_id: bool = false
+	var payload_ship_id: String = ""
+	var loaded_units: int = 0
+	var cargo_units: int = 0
+	var completed_units: int = 0
+	var lost_units: int = 0
+	var jettisoned_units: int = 0
+	var remaining_s: float = 0.0
+	var elapsed_s: float = 0.0
+	var alerted: bool = false
+	var bypass_remaining_s: float = 0.0
+	var damage_debt_hp: float = 0.0
+	var has_scan_node_index: bool = false
+	var scan_node_index: int = 0
+	var scan_remaining_s: float = 0.0
+	var paid_credit_total: int = 0
+	var reward_credit_total: int = 0
+	var rewarded_units_total: int = 0
+	var cooldown_remaining_s: float = 0.0
+	var award_earned: bool = false
+
+class BlockadeNodeStateDto extends RefCounted:
+	var blockade_id: String = ""
+	var node_index: int = 0
+	var generation: int = 0
+	var completed: bool = false
+
+class BlockadeResultStateDto extends RefCounted:
+	var blockade_id: String = ""
+	var generation: int = 0
+	var outcome: String = ""
+	var reason_code: String = ""
+	var loaded_units: int = 0
+	var delivered_units: int = 0
+	var lost_units: int = 0
+	var jettisoned_units: int = 0
+	var paid_credit: int = 0
+	var reward_credit: int = 0
+	var elapsed_s: float = 0.0
+	var finished_tick: int = 0
+
+class TelemetrySourceStateDto extends RefCounted:
+	var item_id: String = ""
+	var source_kind: String = ""
+	var units: int = 0
+
+class ActivityRecordStateDto extends RefCounted:
+	var record_id: String = ""
+	var activity_kind: String = ""
+	var object_id: String = ""
+	var phase: String = ""
+	var outcome: String = ""
+	var reason_code: String = ""
+	var partial_baseline: bool = false
+	var started_tick: int = 0
+	var finished_tick: int = 0
+	var elapsed_s: float = 0.0
+
+class TelemetryMenuStateDto extends RefCounted:
+	var page_id: String = ""
+	var duration_s: float = 0.0
+	var visits: int = 0
+
+class TelemetryTimingStateDto extends RefCounted:
+	var singleton: int = 0
+	var navigation_wait_s: float = 0.0
+
+class ActivityTotalStateDto extends RefCounted:
+	var activity_kind: String = ""
+	var outcome: String = ""
+	var reason_code: String = ""
+	var occurrences: int = 0
+	var elapsed_s: float = 0.0
+
+
+
+
+
+
+
 class WorldSnapshotDto extends RefCounted:
+	var activity_total_state_rows: Array[ActivityTotalStateDto] = []
+	var telemetry_timing_state_rows: Array[TelemetryTimingStateDto] = []
+	var telemetry_menu_state_rows: Array[TelemetryMenuStateDto] = []
+	var activity_record_state_rows: Array[ActivityRecordStateDto] = []
+	var telemetry_source_state_rows: Array[TelemetrySourceStateDto] = []
+	var blockade_result_state_rows: Array[BlockadeResultStateDto] = []
+	var blockade_node_state_rows: Array[BlockadeNodeStateDto] = []
+	var blockade_state_rows: Array[BlockadeStateDto] = []
+	var tactical_award_state_rows: Array[TacticalAwardStateDto] = []
+	var scenario_actor_state_rows: Array[ScenarioActorStateDto] = []
+	var trial_result_state_rows: Array[TrialResultStateDto] = []
+	var trial_state_rows: Array[TrialStateDto] = []
 	var meta: SnapshotMetaDto = SnapshotMetaDto.new()
 	var content: ContentRefDto = ContentRefDto.new()
 	var player_state_rows: Array[PlayerStateDto] = []

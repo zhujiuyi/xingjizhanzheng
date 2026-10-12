@@ -165,6 +165,7 @@ func open_package(package_id: String) -> bool:
 	var description: String = "%d 信用点" % int(reward.credit_units)
 	if reward.item_def_id != null and int(reward.quantity) > 0:
 		g.inventory.grant(destination, str(reward.item_def_id), int(reward.quantity), "normal_owned", "", "", T.ItemOrigin.LOOT)
+		g.journal.source(str(reward.item_def_id),int(reward.quantity),"salvage")
 		description += " · %s × %d（本地仓库）" % [g.definition("item_defs", "item_id", reward.item_def_id).display_name, int(reward.quantity)]
 	g.state.player().credit += int(reward.credit_units)
 	row.status = "opened"; row.has_host_container_id = false; row.host_container_id = ""

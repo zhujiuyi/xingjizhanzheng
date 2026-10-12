@@ -30,7 +30,7 @@ func _run() -> void:
 	state=store.new_world("远征工程批次",3701)
 	if not check(state!=null,"new87-group world seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==87 and state.rows("construction_state").size()==3 and state.rows("construction_input_state").size()==18,"finite projects and collection points initialize completely")
+	check(XJRuntimeState.TABLES.size()==99 and state.rows("construction_state").size()==3 and state.rows("construction_input_state").size()==18,"finite projects and collection points initialize completely")
 	check(state.rows("expedition_route_state").size()==3 and state.rows("expedition_run_state").is_empty() and state.rows("flight_record_state").is_empty(),"no free expedition or invented sortie history")
 	check(state.rows("exploration_instance_state").size()==12 and state.rows("tactical_site_state").size()==9 and state.rows("exploration_belt_state").size()==4,"six new exploration places retain tactical and migrating belt systems")
 	if OS.get_environment("XJ_CAMPAIGN_UPGRADE_ONLY")=="1":await legacy_campaign();await finish();return
@@ -112,7 +112,7 @@ func campaign_prior_signature(value: XJRuntimeState) -> String:
 	var data: Dictionary={}
 	var new_tables: Array[String]=preload("res://runtime/data/campaign_validation.gd").TABLES
 	for table: String in XJRuntimeState.TABLES:
-		if table in new_tables:continue
+		if table in new_tables or table in preload("res://runtime/data/scenario_validation.gd").TABLES:continue
 		var result: Array=[]
 		for row: RefCounted in value.rows(table):
 			if table in ["exploration_instance_state","exploration_belt_state"] and str(row.event_id).begins_with("exp_theme_"):continue

@@ -21,12 +21,13 @@ FITTING_NAMES = {
 
 def without_campaign_extensions(connection,table,rows):
     """Only explicit namespace additions; test_campaign protects every v0.28 row."""
+    from scenario_catalog import EXTENSIONS as SCENARIO_EXTENSIONS
     from campaign_catalog import EXTENSIONS
-    if table not in EXTENSIONS:return rows
+    if table not in set(EXTENSIONS)|set(SCENARIO_EXTENSIONS):return rows
     columns=[r[1] for r in connection.execute('PRAGMA table_info("'+table+'")')]
     key=next(r[1] for r in connection.execute('PRAGMA table_info("'+table+'")') if r[5]==1)
     index=columns.index(key)
-    return {r for r in rows if not str(r[index]).startswith(('exp_theme_','tac_exp_theme_'))}
+    return {r for r in rows if not str(r[index]).startswith(('exp_theme_','tac_exp_theme_','trial_','blockade_'))}
 
 def without_fitting_extensions(connection, table, rows):
     rows=without_campaign_extensions(connection,table,rows)

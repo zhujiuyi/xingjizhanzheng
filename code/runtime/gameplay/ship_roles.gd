@@ -116,6 +116,7 @@ func tick(delta: float) -> void:
 		var before: float=float(npc.get(row.layer_id))
 		npc.set(row.layer_id,minf(maximum,before+row.paid_restore))
 		g.telemetry.repair("provided",float(npc.get(row.layer_id))-before)
+		g.scenarios.repaired(npc.npc_instance_id,float(npc.get(row.layer_id))-before)
 		_clear_payment(row)
 func options(target_id: String) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []

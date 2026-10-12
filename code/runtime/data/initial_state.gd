@@ -107,6 +107,9 @@ func create(catalog: XJCatalog, seed_value: int) -> State:
 	var campaign_rows: Dictionary=preload("res://runtime/data/campaign_initial.gd").rows(catalog,result,seed_value)
 	for table: String in campaign_rows:
 		for row: RefCounted in campaign_rows[table]:result.add(table,row)
+	var scenario_rows: Dictionary=preload("res://runtime/data/scenario_initial.gd").rows(catalog,result)
+	for table: String in scenario_rows:
+		for row: RefCounted in scenario_rows[table]:result.add(table,row)
 	return result
 
 func _add(table: String, values: Dictionary) -> void:

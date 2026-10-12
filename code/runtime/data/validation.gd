@@ -33,6 +33,8 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 	var observation_check: RefCounted=preload("res://runtime/data/situational_validation.gd").new()
 	var campaign_check: RefCounted=preload("res://runtime/data/campaign_validation.gd").new()
 	if not campaign_check.validate(state,catalog):return _fail(campaign_check.last_error)
+	var scenario_check: RefCounted=preload("res://runtime/data/scenario_validation.gd").new()
+	if not scenario_check.validate(state,catalog):return _fail(scenario_check.last_error)
 	if not observation_check.validate(state,catalog):return _fail(observation_check.last_error)
 	var hire_check: RefCounted=preload("res://runtime/data/hire_validation.gd").new()
 	if not hire_check.validate(state,catalog):return _fail(hire_check.last_error)
@@ -128,6 +130,11 @@ func validate(state: State, catalog: XJCatalog, allow_legacy_capacity: bool = fa
 					if not freight.has_payload_ship_id or freight.payload_ship_id!=ship.ship_instance_id: continue
 					var spec: Dictionary=catalog.one("consignment_defs","contract_id",freight.contract_id)
 					volume+=freight.cargo_units*float(spec.unit_volume_l);payload+=freight.cargo_units*float(spec.unit_mass_kg)
+			if container.kind==Types.ContainerKind.CARGO and catalog.table_names.has("blockade_defs"):
+				for blockade: RefCounted in state.rows("blockade_state"):
+					if not blockade.has_payload_ship_id or blockade.payload_ship_id!=ship.ship_instance_id:continue
+					var spec: Dictionary=catalog.one("blockade_defs","blockade_id",blockade.blockade_id)
+					volume+=blockade.cargo_units*float(spec.cargo_volume_l);payload+=blockade.cargo_units*float(spec.cargo_mass_kg)
 			if volume > capacity: return _fail("Cargo volume exceeded")
 		if payload > definition.max_payload_mass_kg + 0.0000001: return _fail("Shared payload mass exceeded")
 	return true

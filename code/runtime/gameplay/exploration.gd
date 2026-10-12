@@ -143,6 +143,7 @@ func _start_operation(row: D.ExplorationInstanceStateDto, action: String) -> boo
 		if g.state.ship().energy < energy or g.state.ship().overheated or g.state.ship().heat + heat > float(g.metrics(g.state.ship()).heat_max): return g.fail("电容不足或热量过高，无法支付调查周期")
 		g.state.ship().energy -= energy; g.state.ship().heat += heat
 	row.operation_kind = action; row.operation_remaining_s = duration
+	if action=="survey":g.journal.begin("exploration",row.event_id+":"+str(row.generation))
 	if action == "rescue": row.phase = "rescue"; row.choice_id = "rescue"; _spawn_enemies(row)
 	elif action == "recover": row.choice_id = "recover"; _spawn_enemies(row)
 	elif action in ["stabilize", "deepen"]: row.phase = "relic"; _spawn_enemies(row)
@@ -178,6 +179,7 @@ func _complete_operation(row: D.ExplorationInstanceStateDto) -> void:
 		if g.inventory.room(cargo, spec.recovery_item_id, int(spec.recovery_units)) < int(spec.recovery_units):
 			g.status_text = "货舱不足，回收已暂停；整理后可继续"; return
 		g.inventory.grant(cargo, spec.recovery_item_id, int(spec.recovery_units))
+		g.journal.source(spec.recovery_item_id,int(spec.recovery_units),"salvage")
 		row.evidence_units = 1; row.phase = "extracting"
 	elif action == "survey":
 		row.phase = "surveyed"
@@ -259,9 +261,10 @@ func environment() -> Dictionary:
 		elif event.environment_kind == "solar": result.message = "恒星喷流 · " + str({"quiet": "等待窗口", "warning": "即将爆发，请避开中心", "active": "危险范围内持续热伤害"}[hazard_phase(row)])
 	return result
 
-func _finish(row: D.ExplorationInstanceStateDto, outcome: String) -> void:
+func _finish(row: D.ExplorationInstanceStateDto, outcome: String, reason: String="completed") -> void:
 	row.operation_kind = ""; row.operation_remaining_s = 0.0; row.outcome = outcome
 	row.phase = "ready" if outcome in ["full", "partial"] else "failed"
+	g.journal.finish("exploration",row.event_id+":"+str(row.generation),"completed" if outcome=="full" else outcome,reason if reason!="completed" else "completed" if outcome=="full" else "partial" if outcome=="partial" else "objective_failed")
 	row.cooldown_remaining_s = definition(row.event_id).cooldown_s
 	for node_id: String in managed_resources:
 		if managed_resources[node_id].event_id == row.event_id:
@@ -339,7 +342,7 @@ func tick(delta: float) -> void:
 			if event.environment_kind == "solar" and phase == "active":
 				var center: Dictionary = g.definition("anchor_defs", "anchor_id", event.entry_anchor_id)
 				var damage: float = float(balance.solar_damage_hp_s) * delta * (float(balance.stabilized_multiplier) if row.stabilized else 1.0)
-				if g.anchor_distance(g.state.ship(), center) <= float(balance.hazard_radius_m): g.damage_ship(Vector3(0, damage * perk("mitigation"), 0))
+				if g.anchor_distance(g.state.ship(), center) <= float(balance.hazard_radius_m): g.damage_ship(Vector3(0, damage * perk("mitigation"), 0),"environment")
 				for member: D.ExplorationActorStateDto in g.state.rows("exploration_actor_state"):
 					if member.event_id != row.event_id: continue
 					var npc: D.NpcStateDto = g.state.find("npc_state", "npc_instance_id", member.npc_instance_id)
@@ -358,9 +361,9 @@ func tick(delta: float) -> void:
 		if row.phase != "clue": row.elapsed_s += delta
 		g.mobile_belts.tick(row, local)
 		if g.state.ship().status == T.ShipStatus.DESTROYED and row.phase != "clue":
-			_finish(row, "partial" if row.evidence_units > 0 else "failed"); continue
+			_finish(row, "partial" if row.evidence_units > 0 else "failed","ship_destroyed"); continue
 		if row.elapsed_s >= float(spec.duration_s):
-			_finish(row, "partial" if row.evidence_units > 0 else "failed"); continue
+			_finish(row, "partial" if row.evidence_units > 0 else "failed","timeout"); continue
 		if not row.operation_kind.is_empty() and _at(row):
 			var rate: float = perk("scan") * float(environment().scan) if row.operation_kind in ["survey", "deepen"] else 1.0
 			row.operation_remaining_s = maxf(0.0, row.operation_remaining_s - delta * rate)
@@ -369,7 +372,7 @@ func tick(delta: float) -> void:
 			for member: D.ExplorationActorStateDto in g.state.rows("exploration_actor_state"):
 				if member.event_id != row.event_id or member.actor_role != "escort": continue
 				var npc: D.NpcStateDto = g.state.find("npc_state", "npc_instance_id", member.npc_instance_id)
-				if npc == null or not npc.alive: _finish(row, "failed"); break
+				if npc == null or not npc.alive: _finish(row, "failed","target_lost"); break
 				var exit_point: Dictionary = g.definition("anchor_defs", "anchor_id", event.exit_anchor_id)
 				if local and g.position(npc).distance_to(g.anchor_position(exit_point)) <= float(balance.extraction_radius_m) and g.position(npc).distance_to(g.position(g.state.ship())) <= float(balance.escort_follow_m):
 					row.evidence_units = int(spec.relic_layers); _finish(row, "full"); break

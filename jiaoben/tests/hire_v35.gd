@@ -29,7 +29,7 @@ func _run() -> void:
 	state=store.new_world("有限雇佣合同",3501)
 	if not check(state!=null,"new hire world seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==87 and state.rows("hire_contract_state").is_empty() and state.rows("hire_receipt_state").is_empty(),"new world receives no free companion or monetary receipts")
+	check(XJRuntimeState.TABLES.size()==99 and state.rows("hire_contract_state").is_empty() and state.rows("hire_receipt_state").is_empty(),"new world receives no free companion or monetary receipts")
 	var before: String=full_signature(state);g.hired.hire_reason("hire_escort");g.hired.status_text();g.hired.token()
 	check(full_signature(state)==before,"contract browsing changes no money, state or random stream")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)

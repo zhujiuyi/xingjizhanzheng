@@ -1,6 +1,9 @@
 extends "exploration_v27.gd"
 ## Explicit funds/hull/equipment fixtures; actual fits, payment cycles and all 56 groups.
 func _ready() -> void:
+	if OS.get_environment("XJ_SCENARIOS_UPGRADE_FIXTURE")=="1":
+		var fixture: Node=(load(get_script().resource_path.get_base_dir().path_join("scenarios_upgrade_fixture_v39.gd")) as Script).new()
+		get_tree().root.add_child(fixture);return
 	if OS.get_environment("XJ_CAMPAIGN_UPGRADE_FIXTURE")=="1":
 		var fixture: Node=(load(get_script().resource_path.get_base_dir().path_join("campaign_upgrade_fixture_v37.gd")) as Script).new()
 		get_tree().root.add_child(fixture);return
@@ -25,7 +28,7 @@ func _ready() -> void:
 	get_tree().set_meta("xj_fitting_v31_diagnostic",true)
 	get_tree().create_timer(420.0).timeout.connect(func():print("FITTING_V31_RESULT FAIL watchdog");get_tree().quit(2))
 	_run.call_deferred()
-const CAMPAIGN_STATE_ADDITIONS: Array[String]=["construction_state","construction_input_state","construction_receipt_state","construction_evidence_state","expedition_route_state","expedition_run_state","expedition_stage_state","expedition_receipt_state","campaign_director_state","flight_record_state","telemetry_total_state","flight_material_state","telemetry_material_state","flight_repair_state","telemetry_repair_state"]
+const CAMPAIGN_STATE_ADDITIONS: Array[String]=["construction_state","construction_input_state","construction_receipt_state","construction_evidence_state","expedition_route_state","expedition_run_state","expedition_stage_state","expedition_receipt_state","campaign_director_state","flight_record_state","telemetry_total_state","flight_material_state","telemetry_material_state","flight_repair_state","telemetry_repair_state","trial_state","trial_result_state","scenario_actor_state","tactical_award_state","blockade_state","blockade_node_state","blockade_result_state","telemetry_source_state","activity_record_state","telemetry_menu_state","telemetry_timing_state","activity_total_state"]
 func campaign_added_row(table: String,row: RefCounted) -> bool:
 	if table in ["exploration_instance_state","exploration_belt_state"]:return str(row.event_id).begins_with("exp_theme_")
 	if table=="resource_state":return str(row.node_id).begins_with("exp_theme_")

@@ -61,6 +61,9 @@ func totals(container_id: String) -> Dictionary:
 	if g.consignments != null and hold_row != null and hold_row.kind == T.ContainerKind.CARGO:
 		var freight: Dictionary = g.consignments.cargo(hold_row.ship_instance_id)
 		mass += float(freight.mass); volume += float(freight.volume)
+	if g.scenarios!=null and hold_row!=null and hold_row.kind==T.ContainerKind.CARGO:
+		var blockade: Dictionary=g.scenarios.cargo(hold_row.ship_instance_id)
+		mass+=float(blockade.mass);volume+=float(blockade.volume)
 	return {"mass":mass,"volume":volume}
 
 func room(container_id: String, item_id: String, requested: int, moved_mass_credit: float = 0.0) -> int:
@@ -254,13 +257,14 @@ func erase_item(item: D.ItemInstanceStateDto) -> void:
 
 func move_stack(stack_id: String, quantity: int, destination: String) -> bool:
 	var stack: D.InventoryStackStateDto = g.state.find("inventory_stack_state", "stack_id", stack_id)
-	if stack == null or not accessible(stack.container_id) or not accessible(destination) or stack.quantity < quantity: return g.fail("货物或容器不可用")
+	if quantity<=0 or stack == null or not accessible(stack.container_id) or not accessible(destination) or stack.quantity < quantity: return g.fail("货物或容器不可用")
 	if stack.container_id == destination: return g.fail("源与目标相同")
 	var source_container: RefCounted = g.state.find("container_state","container_id",stack.container_id)
 	var target_container: RefCounted = g.state.find("container_state","container_id",destination)
 	var mass_credit: float = quantity*g.definition("item_defs","item_id",stack.item_def_id).unit_mass_kg if source_container.has_ship_instance_id and source_container.ship_instance_id==target_container.ship_instance_id else 0.0
 	if room(destination,stack.item_def_id,quantity,mass_credit) < quantity: return g.fail("体积或总载荷不足")
 	grant(destination,stack.item_def_id,quantity,stack.policy_id,stack.bound_mission_instance_id,stack.loan_id)
+	if source_container.kind==T.ContainerKind.WRECK and target_container.kind in [T.ContainerKind.CARGO,T.ContainerKind.MINERAL] and stack.policy_id=="normal_owned":g.journal.source(stack.item_def_id,quantity,"salvage")
 	stack.quantity -= quantity
 	if stack.quantity == 0: g.state.remove("inventory_stack_state",stack)
 	remove_empty_wreck(str(source_container.container_id))
@@ -275,6 +279,7 @@ func move_item(item_id: String, destination: String) -> bool:
 	var mass_credit: float = g.definition("item_defs","item_id",item.item_def_id).unit_mass_kg if source_container.has_ship_instance_id and source_container.ship_instance_id==target_container.ship_instance_id else 0.0
 	if room(destination,item.item_def_id,1,mass_credit) < 1: return g.fail("载荷不足")
 	item.container_id = destination
+	if source_container.kind==T.ContainerKind.WRECK and target_container.kind in [T.ContainerKind.CARGO,T.ContainerKind.MINERAL]:g.journal.source(item.item_def_id,1,"salvage")
 	remove_empty_wreck(str(source_container.container_id))
 	return true
 
@@ -474,7 +479,9 @@ func pickup_wreck(container_id: String) -> bool:
 			var units: int = room(dest,stack.item_def_id,stack.quantity)
 			if units>0 and move_stack(stack.stack_id,units,dest): moved=true
 	for item in g.state.rows("item_instance_state"):
-		if item.container_id==container_id and room(dest,item.item_def_id,1)>0: item.container_id=dest;moved=true
+		if item.container_id==container_id and room(dest,item.item_def_id,1)>0:
+			item.container_id=dest;moved=true
+			if item.policy_id=="normal_owned":g.journal.source(item.item_def_id,1,"salvage")
 	var encounters: RefCounted = g.get("encounters")
 	for package: D.SalvagePackageStateDto in g.state.rows("salvage_package_state"):
 		if package.status != "sealed" or not package.has_host_container_id or package.host_container_id != container_id: continue

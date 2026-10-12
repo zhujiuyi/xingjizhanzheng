@@ -49,6 +49,8 @@ var frontier: RefCounted
 var projects: RefCounted
 var expeditions: RefCounted
 var telemetry: RefCounted
+var journal: RefCounted
+var scenarios: RefCounted
 var situational: RefCounted
 var hired: RefCounted
 var honors: RefCounted
@@ -105,6 +107,8 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog, preview: bool = 
 	projects = Projects.new(self)
 	expeditions = Expeditions.new(self)
 	telemetry = Telemetry.new(self)
+	journal = preload("res://runtime/gameplay/journal.gd").new(self)
+	scenarios = preload("res://runtime/gameplay/scenarios.gd").new(self)
 	if preview: return
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
@@ -246,6 +250,13 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 		fail("数量超出合法范围")
 	else:
 		match action:
+			"trial_action":
+				var parts: PackedStringArray=extra.split("|",true,1)
+				ok=scenarios.trial_action(target,parts[0],parts[1]) if parts.size()==2 else fail("挑战请求格式无效")
+			"blockade_action":
+				var parts: PackedStringArray=extra.split("|",true,2)
+				ok=scenarios.blockade_action(target,parts[0],parts[1],int(parts[2]) if parts.size()==3 else -1) if parts.size()>=2 else fail("封锁请求格式无效")
+			"select_tactical_award":ok=scenarios.select_award(target)
 			"construction_action":
 				var parts: PackedStringArray=extra.split("|",true,2)
 				ok=projects.execute(target,parts[0],quantity,parts[1],parts[2]) if parts.size()==3 else fail("工程请求格式无效")
@@ -629,6 +640,7 @@ func finish_step(delta: float) -> void:
 	projects.tick(delta)
 	expeditions.tick(delta)
 	telemetry.tick(delta,not situational.spatial_active)
+	scenarios.spatial_active=situational.spatial_active;scenarios.tick(delta)
 
 func _tick_repairs() -> void:
 	if state.ship().status != T.ShipStatus.FLYING: return
@@ -727,20 +739,26 @@ func damage_npc(instance_id: String, raw_vector: Vector3,credited_raw: Vector3=V
 		record_event("destroy_spawn", npc.spawn_id, 1)
 		event(T.EventKind.SHIP_DESTROYED, instance_id, "")
 		request_autosave()
+	scenarios.contributed(instance_id,contribution)
+	if not npc.alive:scenarios.destroyed(instance_id)
 	return amount
 
-func damage_ship(raw_vector: Vector3) -> float:
+func damage_ship(raw_vector: Vector3,cause: String="combat") -> float:
 	var ship: D.ShipStateDto = state.ship()
 	if ship.status != T.ShipStatus.FLYING or not raw_vector.is_finite(): return 0
 	var amount: float = apply_damage(ship, raw_vector.max(Vector3.ZERO), metrics(ship).resistances)
 	telemetry.stat("damage_taken",amount)
 	operations.damaged(amount)
 	consignments.on_damage(amount)
+	scenarios.damaged(amount)
 	ship.shield_delay_remaining_s = rule("shield_recharge_delay_s")
 	mark_hostile_attempt()
 	ship.state_version += 1
 	if ship.hull <= 0:
 		ship.status = T.ShipStatus.DESTROYED
+		scenarios.controlled_ship_lost()
+		journal.begin("ship_loss",ship.ship_def_id+":"+ship.ship_instance_id)
+		journal.finish("ship_loss",ship.ship_def_id+":"+ship.ship_instance_id,"destroyed",cause)
 		telemetry.finish(true)
 		hired.controlled_ship_lost()
 		ship_roles.stop_support()
@@ -754,7 +772,7 @@ func _sync_spawns(delta: float = 0.0) -> void:
 	encounters.tick(delta)
 	tactics.sync(delta)
 	for spawn in rows("npc_spawn_defs"):
-		if tactics.handles(spawn.spawn_id) or operations.handles(spawn.spawn_id): continue
+		if tactics.handles(spawn.spawn_id) or operations.handles(spawn.spawn_id) or scenarios.handles(spawn.spawn_id): continue
 		if exploration.managed_spawns.has(spawn.spawn_id): continue
 		if civilizations.handles_spawn(spawn.spawn_id): continue
 		if frontier.handles_spawn(spawn.spawn_id):continue
@@ -854,11 +872,11 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired,situational,projects,expeditions,telemetry]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired,situational,projects,expeditions,telemetry,journal,scenarios]:
 		if service != null: service.g = null
 	specializations = null; fitting_analysis = null
 	ship_roles = null; consignments = null; honors = null; frontier = null; hired = null; situational = null; projects = null; expeditions = null; telemetry = null
-	operations = null
+	operations = null; journal = null; scenarios = null
 	inventory = null; economy = null; missions = null; work = null; encounters = null; civilizations = null; industry = null; resource_intel = null; exploration = null; mobile_belts = null
 	tactics = null; drone_control = null
 	pending_autosave_request_id=""; events.clear(); _pending_repairs.clear(); _definition_cache.clear(); _index_cache.clear(); _rules.clear()

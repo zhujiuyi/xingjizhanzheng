@@ -79,6 +79,8 @@ var mission_status_filter: String = "all"
 var mission_location_filter: String = "local"
 var mission_page: int = 0
 var mission_focus_id: String = ""
+var trial_selected_id: String = ""
+var blockade_selected_id: String = ""
 var mission_navigation_row: HFlowContainer
 var mission_locate_button: Button
 var mission_travel_button: Button
@@ -426,7 +428,7 @@ func show_page(next_page: String) -> void:
 		_station()
 		_responsive()
 		return
-	_build_panel("边疆工程" if next_page=="projects" else "远征航线" if next_page=="expeditions" else "航行战报" if next_page=="reports" else "雇佣僚舰" if next_page=="hire" else "边疆战役与治理" if next_page=="frontier" else "承运合同" if next_page=="consignments" else "配装分析" if next_page=="fitting_analysis" else "舰船角色" if next_page=="ship_roles" else "战术行动" if next_page == "operations" else "无人机管理" if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
+	_build_panel("配装挑战" if next_page=="trials" else "航路封锁" if next_page=="blockades" else "边疆工程" if next_page=="projects" else "远征航线" if next_page=="expeditions" else "航行战报" if next_page=="reports" else "雇佣僚舰" if next_page=="hire" else "边疆战役与治理" if next_page=="frontier" else "承运合同" if next_page=="consignments" else "配装分析" if next_page=="fitting_analysis" else "舰船角色" if next_page=="ship_roles" else "战术行动" if next_page == "operations" else "无人机管理" if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
 	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
 		if next_page=="ships" and gameplay.fitting_analysis.supported():_button(body,"舰船定位",show_page.bind("ship_roles")).name="ShipRolesEntry"
 		if next_page=="ships" and gameplay.hired.supported():_button(body,"雇佣僚舰",show_page.bind("hire")).name="HireFleetEntry"
@@ -438,6 +440,8 @@ func show_page(next_page: String) -> void:
 			var hire_panel: VBoxContainer=preload("res://runtime/ui/hire_panel.gd").new();body.add_child(hire_panel);hire_panel.setup(self)
 		"frontier":
 			var frontier_panel: VBoxContainer=preload("res://runtime/ui/frontier_panel.gd").new();body.add_child(frontier_panel);frontier_panel.setup(self,frontier_selected_id)
+		"trials","blockades":
+			var scenario_panel: VBoxContainer=preload("res://runtime/ui/scenario_panel.gd").new();body.add_child(scenario_panel);scenario_panel.setup(self,next_page)
 		"projects","expeditions","reports":
 			var campaign_panel: VBoxContainer=CampaignPanel.new();body.add_child(campaign_panel);campaign_panel.setup(self,next_page)
 		"consignments":
@@ -515,7 +519,8 @@ func tick(delta: float) -> void:
 		health.text = "护盾 %.0f%% · 装甲 %.0f%% · 结构 %.0f%%\n电容 %.0f%% · 热量 %.0f%% %s\n速度 %s · 货 %.0f/%.0f L" % [ship.shield / maxf(metrics.shield_max, 1.0) * 100, ship.armor / maxf(metrics.armor_max, 1.0) * 100, ship.hull / maxf(metrics.hull_max, 1.0) * 100, ship.energy / maxf(metrics.energy_max, 1.0) * 100, ship.heat / maxf(metrics.heat_max, 1.0) * 100, "过热" if ship.overheated else "", XJSpaceUnits.speed(_display_speed()), metrics.cargo_used_l + metrics.mineral_used_l, metrics.cargo_capacity_l + metrics.mineral_capacity_l]
 	objective.text = _objective_text()
 	var operation: RefCounted = _hud_operation()
-	if not gameplay.frontier.focused_id().is_empty():objective.text=gameplay.frontier.status_text(gameplay.frontier.focused_id())
+	if not gameplay.scenarios.pending().is_empty():objective.text=gameplay.scenarios.hud_text()
+	elif not gameplay.frontier.focused_id().is_empty():objective.text=gameplay.frontier.status_text(gameplay.frontier.focused_id())
 	elif operation != null: objective.text = gameplay.operations.hud_text()
 	elif _hud_freight()!=null:objective.text=gameplay.consignments.hud_text(_hud_freight())
 	elif _hud_expedition()!=null:
@@ -949,6 +954,7 @@ func _salvage_rows(list: VBoxContainer, section: bool = true) -> int:
 
 func _fitting() -> void:
 	if gameplay.fitting_analysis.supported():_button(body,"比较配装与资源预算",show_page.bind("fitting_analysis")).name="FittingAnalysisEntry"
+	if gameplay.scenarios.supported():_button(body,"配装挑战",show_page.bind("trials")).name="FittingTrialEntry"
 	if gameplay.drone_control.supported(): _button(body, "无人机管理", show_page.bind("drones")).name = "FittingDroneManagement"
 	var metrics: Dictionary = gameplay.call("metrics", state.ship())
 	_text("供能 %.0f/%.0f · 算力 %.0f/%.0f · 总质量 %.2f kg" % [metrics.power_used, metrics.power_capacity, metrics.cpu_used, metrics.cpu_capacity, metrics.total_mass_kg])
@@ -1082,9 +1088,9 @@ func _industry() -> void:
 	_update_quotes()
 
 func _service_context_page() -> String:
-	if page == "fitting_analysis": return "fitting"
+	if page in ["fitting_analysis","trials"]: return "fitting"
 	if page in ["ship_roles","hire"]: return "ships"
-	if page in ["operations","expeditions"]: return "missions"
+	if page in ["operations","expeditions","blockades"]: return "missions"
 	if page=="projects":return "industry"
 	if page=="reports":return "pause"
 	if page=="frontier":return "civilizations"
@@ -1122,6 +1128,7 @@ func _source_button(parent: Node, blueprint_id: String) -> void:
 
 func _missions() -> void:
 	if gameplay.expeditions.supported():_button(body,"远征航线",show_page.bind("expeditions")).name="MissionExpeditions"
+	if gameplay.scenarios.supported():_button(body,"航路封锁",show_page.bind("blockades")).name="MissionBlockades"
 	if gameplay.consignments.supported():_button(body,"承运合同",show_page.bind("consignments")).name="MissionFreight"
 	if gameplay.operations.supported():
 		_button(body,"查看拆除与突破行动",func(): show_page("operations")).name = "MissionOperations"
@@ -1844,6 +1851,8 @@ func _hud_exploration() -> RefCounted:
 	return selected if selected!=null and selected.phase=="ready" else null
 
 func _hud_task_navigation(travel_to: bool) -> void:
+	var scenario: Dictionary=gameplay.scenarios.pending()
+	if not scenario.is_empty():requested.emit("scenario_navigate" if travel_to else "scenario_map",scenario.kind+":"+scenario.id,1,gameplay.scenarios.token(scenario.kind,scenario.id));return
 	var frontier_id: String=gameplay.frontier.focused_id()
 	if not frontier_id.is_empty():requested.emit("frontier_navigate" if travel_to else "frontier_map",frontier_id,1,gameplay.frontier.expected_token(frontier_id));return
 	var operation: RefCounted = _hud_operation()
@@ -1857,6 +1866,8 @@ func _hud_task_navigation(travel_to: bool) -> void:
 	else: requested.emit("mission_travel" if travel_to else "mission_locate","",1,"")
 
 func _hud_task_details() -> void:
+	var scenario: Dictionary=gameplay.scenarios.pending()
+	if not scenario.is_empty():set(scenario.kind+"_selected_id",scenario.id);show_page("trials" if scenario.kind=="trial" else "blockades");return
 	if not gameplay.frontier.focused_id().is_empty():frontier_selected_id=gameplay.frontier.focused_id();show_page("frontier");return
 	if _hud_operation() != null: show_page("operations"); return
 	if _hud_freight()!=null:show_page("consignments");return
@@ -1866,6 +1877,16 @@ func _hud_task_details() -> void:
 
 func _update_mission_guidance() -> void:
 	if not is_instance_valid(mission_navigation_row) or gameplay == null: return
+	var scenario: Dictionary=gameplay.scenarios.pending()
+	if not scenario.is_empty():
+		war_navigation_row.hide();mission_navigation_row.show();mission_locate_button.show();mission_travel_button.show();mission_guide_button.show()
+		mission_guide_button.text="挑战详情" if scenario.kind=="trial" else "封锁详情"
+		mission_locate_button.disabled=operation_blocks_flight;mission_travel_button.disabled=operation_blocks_flight or state.ship().status!=Types.ShipStatus.FLYING
+		mission_travel_button.text="返回交付" if scenario.row.phase=="ready" else "前往目标"
+		mission_locate_button.tooltip_text="定位本次行动的入口、出口或签发站。";mission_travel_button.tooltip_text="按本次行动的实际航路导航。"
+		mission_locate_button.set_meta("action","scenario_map");mission_locate_button.set_meta("target",scenario.kind+":"+scenario.id)
+		mission_travel_button.set_meta("action","scenario_navigate");mission_travel_button.set_meta("target",scenario.kind+":"+scenario.id)
+		return
 	var frontier_id: String=gameplay.frontier.focused_id()
 	if not frontier_id.is_empty():
 		war_navigation_row.hide();mission_navigation_row.show();mission_locate_button.show();mission_travel_button.show();mission_guide_button.show()
@@ -3298,6 +3319,8 @@ func update_camera_status() -> void:
 	var ship: Dtos.ShipStateDto = state.ship()
 	var view: String = ["跟随视角", "舰首视角（舰体隐藏）", "战术视角"][int(camera.mode)]
 	instrument_title.text = _ship_name(ship.ship_def_id) + "  /  " + view + " · V" + (" · 过热警报" if ship.overheated else "")
+	var earned_title: String=gameplay.scenarios.title() if gameplay!=null else ""
+	if not earned_title.is_empty():instrument_title.text+=" · "+earned_title
 	instrument_title.modulate = UISkin.AMBER if ship.overheated else Color.WHITE
 	instrument_title.tooltip_text = "V 循环切换跟随、舰首、战术视角。舰首视角从船头观察，不显示外部舰体；点击上方‘显示舰船’回到跟随视角。"
 	compact_speed_label.text = "%s · %s" % [XJSpaceUnits.speed(_display_speed()), ["跟随", "舰首隐藏", "战术"][int(camera.mode)]]

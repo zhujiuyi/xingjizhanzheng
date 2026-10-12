@@ -141,6 +141,7 @@ func _grant_output(node_id:String,item_id:String,units:int,destination:String,lo
 	# SQLite stack origins are exclusive: samples are mission_bound, while the
 	# borrowed hull/equipment remain loan assets. Quota belongs to the loan DTO.
 	g.inventory.grant(destination,item_id,units,policy,mission_id)
+	if policy=="normal_owned":g.journal.source(item_id,units,"mining")
 	g.record_event("collect",node_id,units)
 
 func recover_resource(node_id:String,quantity:int)->bool:

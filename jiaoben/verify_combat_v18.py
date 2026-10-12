@@ -11,6 +11,9 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "scenarios-upgrade": ("scenarios_upgrade_v39.gd", "XJ_SCENARIOS_UPGRADE_V39", "scenarios-upgrade-v39", "SCENARIOS_V39", "--xj-verify-scenarios-upgrade-v39"),
+    "scenarios-world": ("scenarios_world_v39.gd", "XJ_SCENARIOS_WORLD_V39", "scenarios-world-v39", "SCENARIOS_WORLD_V39", "--xj-verify-scenarios-world-v39"),
+    "scenarios": ("scenarios_v39.gd", "XJ_SCENARIOS_V39", "scenarios-v39", "SCENARIOS_V39", "--xj-verify-scenarios-v39"),
     "campaign-extension": ("campaign_extension_v38.gd", "XJ_CAMPAIGN_EXTENSION_V38", "campaign-extension-v38", "CAMPAIGN_EXTENSION_V38", "--xj-verify-campaign-extension-v38"),
     "campaign-world": ("campaign_world_v37.gd", "XJ_CAMPAIGN_WORLD_V37", "campaign-world-v37", "CAMPAIGN_WORLD_V37", "--xj-verify-campaign-world-v37"),
     "campaign-upgrade": ("campaign_v37.gd", "XJ_CAMPAIGN_V37", "campaign-v37", "CAMPAIGN_V37", "--xj-verify-campaign-v37"),

@@ -117,6 +117,10 @@ func _reports() -> void:
 	_request(actions,"导出CSV","export_flight_report","csv","").name="ReportExportCSV"
 	_request(actions,"导出JSON","export_flight_report","json","").name="ReportExportJSON"
 	u._text_to(self,"导出仅包含本地游戏指标；不含角色名称、凭据、输入内容或系统路径。飞行中升级的部分记录会明确标注。",13)
+	if u.gameplay.journal.supported():
+		u._text_to(self,"活动与物资",17)
+		var measured: Label=u._text_to(self,"",14);measured.name="ReportMeasurements";live_labels.append({"kind":"measurements","label":measured})
+		var recent: Label=u._text_to(self,"",14);recent.name="ReportRecentActivities";live_labels.append({"kind":"activities","label":recent})
 	for report: Dictionary in service.export_rows():
 		u._text_to(self,"#%d · %s · %s%s" % [report.sequence,report.hull,{"active":"出航中","docked":"已返港","lost":"损毁"}[report.status]," · 部分基线" if report.partial_baseline else ""],17)
 		var label: Label=u._text_to(self,"",13);live_labels.append({"kind":"report","sequence":report.sequence,"label":label})
@@ -135,6 +139,19 @@ func _update() -> void:
 					materials.append("%s × %d（退回%d）" % [u._item_name(id),report.materials_used[id],report.materials_returned.get(id,0)])
 				entry.label.text+="\n材料投入："+("、".join(materials) if not materials.is_empty() else "无记录")
 				entry.label.text+="\n实际维修：自修 %.0f / 对友舰 %.0f / 支援 %.0f / 站内 %.0f HP" % [report.repair_hp.get("self",0),report.repair_hp.get("provided",0),report.repair_hp.get("received",0),report.repair_hp.get("station",0)]
+		elif entry.kind=="measurements":
+			var data: Dictionary=u.gameplay.journal.export_data();var sources: Dictionary={};var outcomes: Dictionary={};var focused: float=0
+			for row: Dictionary in data.sources:sources[row.source]=int(sources.get(row.source,0))+row.units
+			for row: Dictionary in data.activity_totals:outcomes[row.outcome]=int(outcomes.get(row.outcome,0))+row.count
+			for row: Dictionary in data.menus:focused+=row.duration_s
+			entry.label.text="物资产出：采集 %d · 制造 %d · 任务 %d · 打捞 %d · 采购 %d 单位\n活动结果：完成 %d · 部分 %d · 失败 %d · 撤回 %d · 损毁 %d\n菜单停留 %s · 导航等待 %s（单独计时）" % [sources.get("mining",0),sources.get("manufacture",0),sources.get("mission",0),sources.get("salvage",0),sources.get("purchase",0),outcomes.get("completed",0),outcomes.get("partial",0),outcomes.get("failed",0),outcomes.get("withdrawn",0),outcomes.get("destroyed",0),ResourceStatus.countdown(focused),ResourceStatus.countdown(data.navigation_wait_s)]
+		elif entry.kind=="activities":
+			var records: Array=u.state.rows("activity_record_state").duplicate();records.sort_custom(func(a: RefCounted,b: RefCounted):return a.started_tick>b.started_tick or (a.started_tick==b.started_tick and a.record_id>b.record_id))
+			var lines: PackedStringArray=[]
+			for row: RefCounted in records.slice(0,6):
+				var elapsed_s: float=float(u.state.snapshot.meta.simulation_tick-row.started_tick)/u.gameplay.rule("simulation_hz") if row.phase=="active" else row.elapsed_s
+				lines.append("%s · %s · %s%s" % [u.gameplay.journal.activity_name(row.activity_kind,row.object_id),"进行中" if row.phase=="active" else u.gameplay.journal.reason_label(row.reason_code),ResourceStatus.countdown(elapsed_s)," · 部分基线" if row.partial_baseline else ""])
+			entry.label.text="最近活动\n"+("\n".join(lines) if not lines.is_empty() else "暂无记录")
 		elif entry.kind=="project":
 			var row: RefCounted=u.gameplay.projects.instance(entry.id)
 			entry.label.text="已暂停 · 投入保留" if row.paused else "等待收复 · 投入保留" if not u.gameplay.projects.owned(entry.id) else "施工剩余 "+ResourceStatus.countdown(row.work_remaining_s) if row.phase=="working" else "已完成" if row.phase=="completed" else "集货中 · 可分批交付"

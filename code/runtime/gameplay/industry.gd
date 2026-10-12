@@ -89,6 +89,7 @@ func claim(job_id: String) -> bool:
 		g.state.add("production_state", batch)
 		var count: int = int(recipe.output_quantity) * job.batches
 		var ids: Array[String] = g.inventory.grant(g.inventory.warehouse(job.station_id), recipe.output_item_id, count, "normal_owned", "", "", T.ItemOrigin.MANUFACTURE, recipe.recipe_id)
+		g.journal.source(recipe.output_item_id,count,"manufacture")
 		if not g.definition("module_defs", "module_id", recipe.output_item_id).is_empty():
 			for id: String in ids:
 				var item: D.ItemInstanceStateDto = g.state.find("item_instance_state", "item_instance_id", id)

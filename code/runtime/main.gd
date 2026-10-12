@@ -52,6 +52,9 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-scenarios-upgrade-v39","file":"scenarios_upgrade_v39.gd","prefix":"scenarios-upgrade-v39","env":"XJ_SCENARIOS_UPGRADE_V39","meta":"xj_scenarios_upgrade_v39_diagnostic"},
+		{"flag":"--xj-verify-scenarios-world-v39","file":"scenarios_world_v39.gd","prefix":"scenarios-world-v39","env":"XJ_SCENARIOS_WORLD_V39","meta":"xj_scenarios_world_v39_diagnostic"},
+		{"flag":"--xj-verify-scenarios-v39","file":"scenarios_v39.gd","prefix":"scenarios-v39","env":"XJ_SCENARIOS_V39","meta":"xj_scenarios_v39_diagnostic"},
 		{"flag":"--xj-verify-campaign-extension-v38","file":"campaign_extension_v38.gd","prefix":"campaign-extension-v38","env":"XJ_CAMPAIGN_EXTENSION_V38","meta":"xj_campaign_extension_v38_diagnostic"},
 		{"flag":"--xj-verify-campaign-world-v37","file":"campaign_world_v37.gd","prefix":"campaign-world-v37","env":"XJ_CAMPAIGN_WORLD_V37","meta":"xj_campaign_world_v37_diagnostic"},
 		{"flag":"--xj-verify-campaign-v37","file":"campaign_v37.gd","prefix":"campaign-v37","env":"XJ_CAMPAIGN_V37","meta":"xj_campaign_v37_diagnostic"},
@@ -320,6 +323,10 @@ func _exit_tree() -> void:
 		store.close()
 
 func _process(delta: float) -> void:
+	if state!=null and gameplay!=null and gameplay.journal!=null and not busy and ui!=null:
+		var navigating: bool=(local_navigation!=null and local_navigation.active()) or (travel!=null and travel.active())
+		var waiting: bool=navigating and not _paused() and state.ship()!=null and Vector3(state.ship().vel_x,state.ship().vel_y,state.ship().vel_z).length()<=float(gameplay.rows("telemetry_policy_defs")[0].navigation_wait_speed_mps) if gameplay.journal.supported() else false
+		gameplay.journal.presentation(delta,ui.page,get_tree().root.has_focus(),waiting)
 	if ui != null:
 		if not previous_page.is_empty() and ui.page.is_empty(): _center_steering()
 		previous_page = ui.page
@@ -731,6 +738,7 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		if action == "set_combat_option": _sync_combat_automation()
 		return
 	match action:
+		"scenario_map","scenario_navigate":_scenario_navigation(action,target,extra)
 		"campaign_map","campaign_navigate":
 			_campaign_navigation(action,target,extra)
 		"export_flight_report":
@@ -1079,6 +1087,7 @@ func _source_after_arrival() -> void:
 		elif source_goal.has("event"): _exploration_navigation("exploration_nav", source_goal.event, str(source_goal.generation))
 		elif source_goal.has("demand"): _demand_navigation(source_goal.demand)
 		elif source_goal.has("campaign"):_campaign_navigation("campaign_navigate",source_goal.campaign,source_goal.token)
+		elif source_goal.has("scenario"):_scenario_navigation("scenario_navigate",source_goal.scenario,source_goal.token)
 		else: _source_navigation("source_travel", source_goal.key, source_goal.item)
 
 func _drone_order(kind: String, target: String) -> void:
@@ -1183,6 +1192,18 @@ func _tactical_feedback(kind: String, message: String) -> void:
 func _situational_cue(cue: Dictionary) -> void:
 	if presentation != null: presentation.situational_cue(cue)
 
+func _scenario_navigation(action: String,target: String,expected: String) -> void:
+	if state==null or gameplay==null or busy or travel.active():return
+	var parts: PackedStringArray=target.split(":",true,2)
+	if parts.size()<2 or parts[0] not in ["trial","blockade"]:return
+	if expected!=gameplay.scenarios.token(parts[0],parts[1]):ui.notify("行动代次已变化，请刷新",true);return
+	var info: Dictionary=gameplay.scenarios.guidance(parts[0],parts[1],int(parts[2]) if parts.size()==3 else -1)
+	if info.is_empty():return
+	if action=="scenario_map":ui.show_page("map");ui.resource_chart.select_sector(info.sector_id);return
+	if state.ship().status!=Types.ShipStatus.FLYING:ui.notify("出港后可前往目标");return
+	if not str(info.route_reason).is_empty():ui.notify(info.route_reason,true);return
+	source_goal={"world":state.world_id,"scenario":target,"token":expected};_navigate_guidance(info,true,true,true)
+
 func _campaign_navigation(action: String,target: String,expected: String) -> void:
 	if state==null or gameplay==null or busy or travel.active():return
 	var parts: PackedStringArray=target.split(":",true,1)
@@ -1215,19 +1236,25 @@ func _export_flight_report(format: String) -> void:
 	if output==null:ui.notify("无法写入报告",true);return
 	var reports: Array[Dictionary]=gameplay.telemetry.export_rows()
 	var total: Dictionary=gameplay.telemetry.export_total()
-	if format=="json":output.store_string(JSON.stringify({"format_version":2,"totals":total,"reports":reports},"\t"))
+	var measurements: Dictionary=gameplay.journal.export_data()
+	if format=="json":output.store_string(JSON.stringify({"format_version":3,"totals":total,"reports":reports,"measurements":measurements},"\t"))
 	else:
 		output.store_buffer(PackedByteArray([239,187,191]))
-		var columns: PackedStringArray=["record_type","sequence","hull","status","partial_baseline","outings","lost_outings","income_credit","spent_credit","elapsed_s","combat_s","transit_s","flight_income","flight_spent","return_income","return_spent","mined_units","kills","damage_dealt","damage_taken","weapon_cycles","drone_losses","activity_count","materials_used","materials_returned","repair_hp"]
+		var columns: PackedStringArray=["record_type","sequence","hull","status","partial_baseline","outings","lost_outings","income_credit","spent_credit","elapsed_s","combat_s","transit_s","flight_income","flight_spent","return_income","return_spent","mined_units","kills","damage_dealt","damage_taken","weapon_cycles","drone_losses","activity_count","materials_used","materials_returned","repair_hp","kind","object_id","phase","outcome","reason","item_id","source","units","page","duration_s","visits","count","navigation_wait_s"]
 		output.store_csv_line(columns)
 		total["record_type"]="lifetime"
 		var rows: Array[Dictionary]=[total]
 		for report: Dictionary in reports:report["record_type"]="outing";rows.append(report)
+		for section: String in ["sources","activities","activity_totals","menus"]:
+			for measured: Dictionary in measurements[section]:
+				measured["record_type"]=section;rows.append(measured)
+		rows.append({"record_type":"timing","navigation_wait_s":measurements.navigation_wait_s})
 		for report: Dictionary in rows:
 			var values: PackedStringArray=[]
 			for column: String in columns:
 				var value: Variant=report.get(column,"");values.append(JSON.stringify(value) if value is Dictionary or value is Array else str(value))
 			output.store_csv_line(values)
+
 	output.close();ui.notify("已导出游戏报告："+directory.path_join(filename))
 
 func _demand_navigation(id: String) -> void:
@@ -1342,6 +1369,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 	gameplay.situational.cue_started.connect(_situational_cue)
 	gameplay.projects.changed.connect(_tactical_warning)
 	gameplay.expeditions.changed.connect(_tactical_warning)
+	gameplay.scenarios.changed.connect(_tactical_warning)
 	combat_automation = CombatAutomation.new()
 	combat_automation.changed.connect(_sync_combat_automation)
 	combat_automation.acquired.connect(_combat_acquired)

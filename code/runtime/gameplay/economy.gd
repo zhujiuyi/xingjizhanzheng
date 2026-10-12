@@ -44,6 +44,7 @@ func buy_item(item_id: String, quantity: int, destination: String) -> bool:
 	if g.state.player().credit<price:return g.fail("信用点不足")
 	g.state.player().credit-=price;stock.quantity-=quantity
 	g.inventory.grant(dest,item_id,quantity)
+	g.journal.source(item_id,quantity,"purchase")
 	return true
 
 func sell_item(entity_id: String, quantity: int) -> bool:
@@ -86,6 +87,7 @@ func buy_ship(ship_id: String) -> bool:
 func sell_ship(ship_id: String) -> bool:
 	if not g.allowed_service("ship_purchase"):return false
 	var ship: D.ShipStateDto = g.state.find("ship_state","ship_instance_id",ship_id)
+	if g.scenarios.ship_locked(ship_id):return g.fail("先结束该舰绑定的挑战或封锁行动")
 	if ship==null or ship.status!=T.ShipStatus.DOCKED or ship.station_id!=g.station() or ship.owner_player_id!=g.state.player().player_id:return g.fail("只能出售同站点自己的舰船")
 	if not g.definition("asset_policy_defs","policy_id",ship.policy_id).may_sell:return g.fail("保障或借船不能出售")
 	if g.state.player().controlled_ship_id==ship_id:return g.fail("先切换到另一艘船")
@@ -149,6 +151,7 @@ func manufacture(recipe_id: String, batches: int) -> bool:
 	_consume_inputs(inputs);g.state.player().credit-=fee
 	var batch: D.ProductionStateDto = D.ProductionStateDto.new();batch.production_id=g.id("production");batch.player_id=g.state.player().player_id;batch.recipe_id=recipe_id;batch.station_id=g.station();batch.batches=batches;batch.output_claimed=true;g.state.add("production_state",batch)
 	var ids: Array[String] = g.inventory.grant(g.inventory.warehouse(g.station()),recipe.output_item_id,recipe.output_quantity*batches,"normal_owned","","",T.ItemOrigin.MANUFACTURE,recipe_id)
+	g.journal.source(recipe.output_item_id,int(recipe.output_quantity)*batches,"manufacture")
 	if not g.definition("module_defs","module_id",recipe.output_item_id).is_empty():
 		for item_id in ids:
 			var item: D.ItemInstanceStateDto = g.state.find("item_instance_state","item_instance_id",item_id);item.has_manufacture_batch_id=true;item.manufacture_batch_id=batch.production_id

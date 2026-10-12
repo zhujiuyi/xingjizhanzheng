@@ -89,6 +89,8 @@ func inspect(id: String) -> Dictionary:
 		result.warp_reason = "此目标只支持接近和环绕"
 	elif active():
 		result.warp_reason = "先停止当前自动航行"
+	elif not gameplay.scenarios.navigation_reason().is_empty():
+		result.warp_reason=gameplay.scenarios.navigation_reason()
 	elif not gameplay.hired.travel_reason().is_empty():
 		result.warp_reason=gameplay.hired.travel_reason()
 	elif not _stable():

@@ -5,6 +5,7 @@ ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'jiaoben'))
 import progress_fixture as p
 from campaign_catalog import EXTENSIONS
+from scenario_catalog import EXTENSIONS as SCENARIO_EXTENSIONS
 
 class CampaignSql(unittest.TestCase):
  def setUp(self):
@@ -28,15 +29,15 @@ class CampaignSql(unittest.TestCase):
     for row in self.source.execute('SELECT * FROM "'+table+'"'):
      key=tuple(row[columns.index(k)] for k in keys)
      if key in before:self.assertEqual(before.pop(key),row)
-     else:self.assertIn(table,EXTENSIONS);self.assertTrue(str(key[0]).startswith(('exp_theme_','tac_exp_theme_')))
+     else:self.assertIn(table,set(EXTENSIONS)|set(SCENARIO_EXTENSIONS));self.assertTrue(str(key[0]).startswith(('exp_theme_','tac_exp_theme_','trial_','blockade_')))
     self.assertFalse(before)
   self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.source.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
  def test_published_001_024_and_adapters_are_byte_exact(self):
   for path in (ROOT/'code/database/progress').glob('*.sql'):
-   if path.name.startswith(('025_','026_')) or path.name=='catalog_adapter_v0_21.sql':continue
+   if path.name.startswith(('025_','026_','027_')) or path.name in ('catalog_adapter_v0_21.sql','catalog_adapter_v0_22.sql'):continue
    self.assertEqual(path.read_bytes(),subprocess.check_output(['git','show','f357712:'+path.relative_to(ROOT).as_posix()],cwd=ROOT),path.name)
  def test_new_initial_world_has_no_free_outcomes(self):
-  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(23,));self.assertEqual(len(p.STATE_TABLES),87)
+  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(24,));self.assertEqual(len(p.STATE_TABLES),99)
   for table in ['expedition_run_state','expedition_receipt_state','construction_receipt_state','construction_evidence_state','flight_record_state']:
    self.assertEqual(self.db.execute('SELECT count(*) FROM '+table).fetchone(),(0,))
   self.seal()
