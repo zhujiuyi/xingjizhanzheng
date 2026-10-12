@@ -17,11 +17,12 @@ class ScenarioSql(unittest.TestCase):
   self.ctx=p.context('scenarios','world-a',self.content)
  def seal(self):self.db.execute("UPDATE save_snapshot SET status='sealed' WHERE snapshot_id='scenarios'")
  def test_new_world_complete_and_empty_of_free_results(self):
-  self.assertEqual(len(p.STATE_TABLES),99);self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(24,))
+  self.assertEqual(len(p.STATE_TABLES),108);self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(25,))
   for table,count in [('trial_state',3),('blockade_state',3),('blockade_node_state',12),('telemetry_timing_state',1),('trial_result_state',0),('blockade_result_state',0),('tactical_award_state',0),('activity_total_state',0)]:
    self.assertEqual(self.db.execute('SELECT count(*) FROM '+table+" WHERE snapshot_id='scenarios'").fetchone(),(count,))
   self.seal()
  def test_old_155_definitions_and_four_views_unchanged(self):
+  from fleet_catalog import EXTENSIONS as FLEET_EXTENSIONS
   archive=ROOT/'code/data/catalog_campaign_v21.db'
   self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(),'bd691ebb7c2c75e409d71b7c19f5e6e4c9a8b49c0993901d482d29f690bc9612')
   old=sqlite3.connect(archive.as_uri()+'?mode=ro',uri=True);self.addCleanup(old.close)
@@ -33,6 +34,7 @@ class ScenarioSql(unittest.TestCase):
     for row in self.source.execute('SELECT * FROM "'+table+'"'):
      key=tuple(row[i] for i in keys)
      if key in before:self.assertEqual(before.pop(key),row)
+     elif table in FLEET_EXTENSIONS and str(row[[r[1] for r in columns].index(FLEET_EXTENSIONS[table][0])]).startswith(FLEET_EXTENSIONS[table][1]):pass
      else:
       self.assertIn(table,EXTENSIONS)
       self.assertTrue(str(key[0]).startswith(('trial_','blockade_')),key)
@@ -40,7 +42,7 @@ class ScenarioSql(unittest.TestCase):
   self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.source.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
  def test_published_migrations_and_adapters_byte_exact(self):
   for path in (ROOT/'code/database/progress').glob('*.sql'):
-   if path.name.startswith('027_') or path.name=='catalog_adapter_v0_22.sql':continue
+   if path.name.startswith(('027_','028_')) or path.name in ('catalog_adapter_v0_22.sql','catalog_adapter_v0_23.sql'):continue
    self.assertEqual(path.read_bytes(),subprocess.check_output(['git','show','3b68352:'+path.relative_to(ROOT).as_posix()],cwd=ROOT),path.name)
  def test_unpaid_trial_generation_rejected(self):
   self.db.execute("UPDATE trial_state SET generation=1,phase='accepted' WHERE snapshot_id='scenarios' AND trial_id='trial_precision'")

@@ -2,6 +2,18 @@
 TABLES = ('fleet_balance_defs', 'crew_profession_defs', 'crew_rank_defs',
           'crew_profile_defs', 'fleet_hull_defs', 'auxiliary_drone_defs',
           'ship_auxiliary_permissions')
+EXTENSIONS = {
+    'item_defs': ('item_id', 'module_aux_'), 'module_defs': ('module_id', 'module_aux_'),
+    'module_tech_defs': ('module_id', 'module_aux_'), 'module_activation_priority': ('module_id', 'module_aux_'),
+    'recipe_defs': ('recipe_id', 'recipe_aux_'), 'recipe_inputs': ('recipe_id', 'recipe_aux_'),
+    'recipe_access_defs': ('recipe_id', 'recipe_aux_'), 'industry_recipe_defs': ('blueprint_id', 'recipe_aux_'),
+    'module_salvage_recipe_defs': ('module_id', 'module_aux_'), 'recycle_outputs': ('source_item_id', 'module_aux_'),
+    'station_stock_defs': ('item_id', 'module_aux_'), 'npc_archetype_defs': ('archetype_id', 'owned_'),
+    'npc_defs': ('npc_id', 'owned_'), 'npc_resistances': ('archetype_id', 'owned_'),
+    'npc_behavior_defs': ('behavior_id', 'owned_'), 'npc_spawn_defs': ('spawn_id', 'owned_'),
+    'npc_patrol_points': ('spawn_id', 'owned_'), 'anchor_defs': ('anchor_id', 'owned_'),
+    'anchor_site_defs': ('anchor_id', 'owned_'),
+}
 COLUMNS = {'auxiliary_drone_defs': 'module_id:TEXT:1|role_kind:TEXT:0|drone_count:INTEGER:0|speed_mps:REAL:0|acceleration_mps2:REAL:0|turn_rad_s:REAL:0|work_range_m:REAL:0|sortie_timeout_s:REAL:0|return_radius_m:REAL:0|hull_hp:REAL:0|restore_amount:REAL:0|sensor_range_m:REAL:0|observe_cycle_s:REAL:0|observation_ttl_s:REAL:0|consumable_item_id:TEXT:0|consumable_per_sortie:INTEGER:0|material_id:TEXT:0|material_per_unit:INTEGER:0|credit_per_unit:INTEGER:0',
  'crew_profession_defs': 'profession_id:TEXT:1|display_name:TEXT:0|duty_kind:TEXT:0|hire_fee_credit:INTEGER:0|salary_credit:INTEGER:0|effect_stat:TEXT:0|effect_mode:TEXT:0|contribution_kind:TEXT:0|contribution_per_xp:REAL:0|description:TEXT:0',
  'crew_profile_defs': 'profile_id:TEXT:1|display_name:TEXT:0|profession_id:TEXT:0',

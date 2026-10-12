@@ -22,10 +22,10 @@ class MetricSql(unittest.TestCase):
   p.insert(self.db,'flight_material_state',{**self.ctx,'record_id':'report','item_id':'material_structural_stock','used_units':used,'returned_units':returned})
  def test_001_025_published_bytes_unchanged(self):
   for path in (ROOT/'code/database/progress').glob('*.sql'):
-   if path.name.startswith(('026_','027_')) or path.name=='catalog_adapter_v0_22.sql':continue
+   if path.name.startswith(('026_','027_','028_')) or path.name in ('catalog_adapter_v0_22.sql','catalog_adapter_v0_23.sql'):continue
    self.assertEqual(path.read_bytes(),subprocess.check_output(['git','show','2097713:'+path.relative_to(ROOT).as_posix()],cwd=ROOT),path.name)
  def test_empty_new_measurements_and_latest_format(self):
-  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(24,));self.assertEqual(len(p.STATE_TABLES),99)
+  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(25,));self.assertEqual(len(p.STATE_TABLES),108)
   for table in ['flight_material_state','telemetry_material_state','flight_repair_state','telemetry_repair_state']:self.assertEqual(self.db.execute('SELECT count(*) FROM '+table).fetchone(),(0,))
   self.seal()
  def test_realistic_investment_refund_and_repair_summary_seals(self):

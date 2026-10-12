@@ -1,0 +1,58 @@
+{
+  "format_version": 1,
+  "asset_version": "fleet-v1",
+  "entries": [
+    {
+      "kind": "item",
+      "id": "module_aux_repair_i",
+      "resource_path": "res://assets/fleet_v1/repair.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_aux_repair_i",
+      "resource_path": "res://assets/fleet_v1/repair.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_aux_repair_ii",
+      "resource_path": "res://assets/fleet_v1/repair.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_aux_repair_ii",
+      "resource_path": "res://assets/fleet_v1/repair.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_aux_recon_i",
+      "resource_path": "res://assets/fleet_v1/recon.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_aux_recon_i",
+      "resource_path": "res://assets/fleet_v1/recon.svg"
+    },
+    {
+      "kind": "item",
+      "id": "module_aux_recon_ii",
+      "resource_path": "res://assets/fleet_v1/recon.svg"
+    },
+    {
+      "kind": "blueprint",
+      "id": "recipe_aux_recon_ii",
+      "resource_path": "res://assets/fleet_v1/recon.svg"
+    }
+  ],
+  "resources": [
+    {
+      "resource_path": "res://assets/fleet_v1/repair.svg",
+      "sha256": "d765bea692e875e2b345eddb27cd0864500e11bf6305f498644ea893cbf49348",
+      "source": "Project-authored static SVG"
+    },
+    {
+      "resource_path": "res://assets/fleet_v1/recon.svg",
+      "sha256": "e1684bec67320e8cd650e38a27fa68532c5494504dca507a94454607673e5caa",
+      "source": "Project-authored static SVG"
+    }
+  ]
+}

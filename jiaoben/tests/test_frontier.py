@@ -31,7 +31,7 @@ class FrontierDefinitions(unittest.TestCase):
   self.assertEqual(self.db.execute('SELECT count(*) FROM frontier_governance_defs').fetchone(),(8,))
   self.assertEqual(self.db.execute('SELECT battle_kind,count(*) FROM frontier_campaign_defs GROUP BY battle_kind ORDER BY battle_kind').fetchall(),[('demolition',12),('hold',12)])
   self.assertEqual(self.db.execute('SELECT count(*) FROM ship_defs').fetchone(),(18,))
-  self.assertEqual(self.db.execute('SELECT count(*) FROM module_defs').fetchone(),(42,))
+  self.assertEqual(self.db.execute('SELECT count(*) FROM module_defs').fetchone(),(46,))
  def test_preparation_actors_cannot_produce_bounty_or_loot(self):
   self.assertEqual(self.db.execute("SELECT sum(s.bounty_enabled),sum(s.loot_enabled) FROM frontier_actor_defs a JOIN npc_spawn_defs s USING(spawn_id)").fetchone(),(0,0))
  def test_022_failure_rolls_back_format18_and_its_schema(self):
@@ -44,7 +44,7 @@ class FrontierDefinitions(unittest.TestCase):
   p.apply_migrations(db);self.assertEqual(db.execute('PRAGMA user_version').fetchone(),(p.FORMAT_VERSION,))
  def test_all_published_migrations_and_adapters_preserve_v025_bytes(self):
   for path in sorted((ROOT/'code/database/progress').glob('*.sql')):
-   if path.name.startswith(('022_','023_','024_','025_','026_','027_')) or path.name in ('catalog_adapter_v0_18.sql','catalog_adapter_v0_19.sql','catalog_adapter_v0_20.sql','catalog_adapter_v0_21.sql','catalog_adapter_v0_22.sql'):continue
+   if path.name.startswith(('022_','023_','024_','025_','026_','027_','028_')) or path.name in ('catalog_adapter_v0_18.sql','catalog_adapter_v0_19.sql','catalog_adapter_v0_20.sql','catalog_adapter_v0_21.sql','catalog_adapter_v0_22.sql','catalog_adapter_v0_23.sql'):continue
    original=subprocess.check_output(['git','show','622e5c1b7fc99974dfd6636a27fe2a2f45eb1bac:'+path.relative_to(ROOT).as_posix()],cwd=ROOT)
    self.assertEqual(path.read_bytes(),original,path.name)
 
@@ -58,7 +58,7 @@ class FrontierSealing(unittest.TestCase):
   self.ctx=p.context('frontier-candidate','world-a',self.content)
  def seal(self):self.db.execute("UPDATE save_snapshot SET status='sealed' WHERE snapshot_id='frontier-candidate'")
  def test_initial_full_world_has_70_groups_without_free_governance_or_rewards(self):
-  self.assertEqual(len(p.STATE_TABLES),99)
+  self.assertEqual(len(p.STATE_TABLES),108)
   self.assertEqual(self.db.execute("SELECT count(*) FROM frontier_campaign_state WHERE snapshot_id='frontier-candidate' AND phase='idle'").fetchone(),(24,))
   self.assertEqual(self.db.execute("SELECT count(*),sum(reserve_units) FROM frontier_territory_state WHERE snapshot_id='frontier-candidate' AND phase='neutral'").fetchone(),(8,0))
   self.seal()

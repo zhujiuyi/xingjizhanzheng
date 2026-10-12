@@ -11,6 +11,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "legacy-chain": ("legacy_chain_v44.gd", "XJ_LEGACY_CHAIN_V44", "legacy-chain-v44", "LEGACY_CHAIN_V44", "--xj-verify-legacy-chain-v44"),
     "owned-combat-world": ("owned_combat_world_v43.gd", "XJ_OWNED_COMBAT_WORLD_V43", "owned-combat-world-v43", "OWNED_COMBAT_WORLD_V43", "--xj-verify-owned-combat-world-v43"),
     "auxiliary-boundaries": ("auxiliary_boundaries_v43.gd", "XJ_AUXILIARY_BOUNDARIES_V43", "auxiliary-boundaries-v43", "AUXILIARY_BOUNDARIES_V43", "--xj-verify-auxiliary-boundaries-v43"),
     "fleet-integration": ("fleet_integration_v42.gd", "XJ_FLEET_INTEGRATION_V42", "fleet-integration-v42", "FLEET_INTEGRATION_V42", "--xj-verify-fleet-integration-v42"),
@@ -83,7 +84,7 @@ def sha(path):
 
 def require_supported_diagnostics(binary, names):
     """Read PE metadata before launching flags absent from older clients."""
-    if not set(names).intersection({"owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries"}):
+    if not set(names).intersection({"owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain"}):
         return
     env = os.environ.copy()
     env["XJ_DIAGNOSTIC_VERSION_FILE"] = str(binary)
@@ -186,7 +187,7 @@ def run_suite():
             try:
                 # Allow the role world's existing 900s watchdog to finish its
                 # real multi-gate freight trip and emit a definitive result.
-                code = process.wait(timeout=960 if name in ("roles-world","blockades-world") else 660 if name == "hire-world" else 600)
+                code = process.wait(timeout=1200 if name == "legacy-chain" else 960 if name in ("roles-world","blockades-world") else 660 if name == "hire-world" else 600)
             except subprocess.TimeoutExpired:
                 process.kill(); process.wait()
                 raise
@@ -225,6 +226,8 @@ def run_suite():
             assert record["summary"]["checks"] >= 34 and not captures
         if name in ("fleet-integration", "fleet-upgrade"):
             assert record["summary"]["checks"] >= (45 if name == "fleet-integration" else 20) and record["summary"]["groups"] == 108 and not captures
+        if name == "legacy-chain":
+            assert record["summary"]["checks"] >= 100 and sorted(record["summary"]["formats"]) == [16,17,18,19,20,21,23] and record["summary"]["groups"] == 108 and not captures
         if name == "owned-fleet-travel":
             assert record["summary"]["checks"] >= 100 and record["summary"]["groups"] == 108 and not captures
         if name == "owned-fleet-world":

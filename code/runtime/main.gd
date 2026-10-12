@@ -53,6 +53,7 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-legacy-chain-v44","file":"legacy_chain_v44.gd","prefix":"legacy-chain-v44","env":"XJ_LEGACY_CHAIN_V44","meta":"xj_legacy_chain_v44_diagnostic"},
 		{"flag":"--xj-verify-owned-combat-world-v43","file":"owned_combat_world_v43.gd","prefix":"owned-combat-world-v43","env":"XJ_OWNED_COMBAT_WORLD_V43","meta":"xj_owned_combat_world_v43_diagnostic"},
 		{"flag":"--xj-verify-auxiliary-boundaries-v43","file":"auxiliary_boundaries_v43.gd","prefix":"auxiliary-boundaries-v43","env":"XJ_AUXILIARY_BOUNDARIES_V43","meta":"xj_auxiliary_boundaries_v43_diagnostic"},
 		{"flag":"--xj-verify-fleet-integration-v42","file":"fleet_integration_v42.gd","prefix":"fleet-integration-v42","env":"XJ_FLEET_INTEGRATION_V42","meta":"xj_fleet_integration_v42_diagnostic"},

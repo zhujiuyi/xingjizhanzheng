@@ -17,6 +17,7 @@ class CampaignSql(unittest.TestCase):
   self.ctx=p.context('campaign','world-a',self.content)
  def seal(self):self.db.execute("UPDATE save_snapshot SET status='sealed' WHERE snapshot_id='campaign'")
  def test_original_147_table_rows_and_views_preserved(self):
+  from fleet_catalog import EXTENSIONS as FLEET_EXTENSIONS
   path=ROOT/'code/data/catalog_situational_v20.db'
   self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),'42579bc81283505e92b11f117f6ffd62e7709c8a3a8f96df0005584281fd387a')
   old=sqlite3.connect(path.as_uri()+'?mode=ro',uri=True);self.addCleanup(old.close)
@@ -29,15 +30,16 @@ class CampaignSql(unittest.TestCase):
     for row in self.source.execute('SELECT * FROM "'+table+'"'):
      key=tuple(row[columns.index(k)] for k in keys)
      if key in before:self.assertEqual(before.pop(key),row)
+     elif table in FLEET_EXTENSIONS and str(row[columns.index(FLEET_EXTENSIONS[table][0])]).startswith(FLEET_EXTENSIONS[table][1]):pass
      else:self.assertIn(table,set(EXTENSIONS)|set(SCENARIO_EXTENSIONS));self.assertTrue(str(key[0]).startswith(('exp_theme_','tac_exp_theme_','trial_','blockade_')))
     self.assertFalse(before)
   self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.source.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
  def test_published_001_024_and_adapters_are_byte_exact(self):
   for path in (ROOT/'code/database/progress').glob('*.sql'):
-   if path.name.startswith(('025_','026_','027_')) or path.name in ('catalog_adapter_v0_21.sql','catalog_adapter_v0_22.sql'):continue
+   if path.name.startswith(('025_','026_','027_','028_')) or path.name in ('catalog_adapter_v0_21.sql','catalog_adapter_v0_22.sql','catalog_adapter_v0_23.sql'):continue
    self.assertEqual(path.read_bytes(),subprocess.check_output(['git','show','f357712:'+path.relative_to(ROOT).as_posix()],cwd=ROOT),path.name)
  def test_new_initial_world_has_no_free_outcomes(self):
-  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(24,));self.assertEqual(len(p.STATE_TABLES),99)
+  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(25,));self.assertEqual(len(p.STATE_TABLES),108)
   for table in ['expedition_run_state','expedition_receipt_state','construction_receipt_state','construction_evidence_state','flight_record_state']:
    self.assertEqual(self.db.execute('SELECT count(*) FROM '+table).fetchone(),(0,))
   self.seal()

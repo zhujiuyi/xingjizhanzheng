@@ -12,6 +12,8 @@ S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增S
 
 实际战斗/母舰边界：`verify_combat_v18.py --native --only owned-combat-world auxiliary-boundaries`，对应两个固定v43入口及fresh目录。自有母舰从原舰支付资源，原有高危NPC数值不变；交战、命中、回收和原舰损失真实模拟。无关遭遇须使用各自数据库再生计时隔离，不只将alive置false。母舰致命伤、在外期限、返航末0.1秒为明示边界。暂停计时通过实际pause页面核验并在恢复后继续，不能把未恢复误报为返航失败。最新四组289项/13图证据`logs/v43-combat-boundaries-checkpoint.json`，含同型舰旅行和管理/AU回归；混合报告仅逐组接受通过项，失败日志保留。
 
+完整回归与旧档链：`py -m unittest discover -s jiaoben/tests`当前363项通过；`build_fleet_assets.py`生成两种静态图标与八个正式模块/配方映射。`prepare_legacy_chain_index_v44.py`校验保留的实际旧PCK测试库和来源摘要，输出`XJ_LEGACY_CHAIN_V44_INDEX`所用索引；`verify_combat_v18.py --only legacy-chain`通过固定v44入口验证七个历史格式16/17/18/19/20/21/23，107项通过。汇总`logs/v44-regression-checkpoint.json`。更早旧档、新档自然成长和最终EXE/PCK仍待验证；禁止使用个人库补充测试样本。
+
 ## 临时产物保留与清理
 
 每个联合开发阶段验收后清理重复候选包、过期UUID运行库/迁移副本、旧截图、下载缓存、一次性修改脚本及Python缓存。`tests/`、`art/`、`probes/`和构建/迁移生成器是维护中的源码，不能因为用于开发就作为垃圾删除。删除前核对Git忽略状态、实际引用和运行锁；只能操作已确认的工作区临时路径。

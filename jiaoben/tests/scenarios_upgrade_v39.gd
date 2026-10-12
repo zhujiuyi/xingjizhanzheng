@@ -3,9 +3,11 @@ extends "scenarios_v39.gd"
 func prior_signature(value: XJRuntimeState) -> String:
 	var data: Dictionary={}
 	for table: String in XJRuntimeState.TABLES:
-		if table in preload("res://runtime/data/scenario_validation.gd").TABLES:continue
+		if table in preload("res://runtime/data/scenario_validation.gd").TABLES or table in FLEET_STATE_ADDITIONS:continue
 		var rows: Array=[]
-		for row: RefCounted in value.rows(table):rows.append(Codec.new().encode_row(table,row))
+		for row: RefCounted in value.rows(table):
+			if table=="shop_stock_state" and str(row.item_def_id).begins_with("module_aux_"):continue
+			rows.append(Codec.new().encode_row(table,row))
 		rows.sort_custom(func(a: Dictionary,b: Dictionary):return JSON.stringify(a)<JSON.stringify(b));data[table]=rows
 	return JSON.stringify(data)
 func _run() -> void:

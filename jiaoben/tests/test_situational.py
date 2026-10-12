@@ -34,12 +34,12 @@ class ObservationSql(unittest.TestCase):
   self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.source.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
  def test_all_historical_migrations_and_adapters_keep_published_bytes(self):
   for path in (ROOT/'code/database/progress').glob('*.sql'):
-   if path.name.startswith(('024_','025_','026_','027_')) or path.name in ('catalog_adapter_v0_20.sql','catalog_adapter_v0_21.sql','catalog_adapter_v0_22.sql'):continue
+   if path.name.startswith(('024_','025_','026_','027_','028_')) or path.name in ('catalog_adapter_v0_20.sql','catalog_adapter_v0_21.sql','catalog_adapter_v0_22.sql','catalog_adapter_v0_23.sql'):continue
    published=subprocess.check_output(['git','show','52f91f0:'+path.relative_to(ROOT).as_posix()],cwd=ROOT)
    self.assertEqual(path.read_bytes(),published,path.name)
  def test_new_format_empty_observations_and_all_72_groups(self):
-  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(24,))
-  self.assertEqual(len(p.STATE_TABLES),99)
+  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(25,))
+  self.assertEqual(len(p.STATE_TABLES),108)
   self.assertEqual(self.db.execute('SELECT count(*) FROM resource_intel_state').fetchone(),(0,))
   self.assertEqual(self.db.execute('SELECT count(*) FROM demand_intel_state').fetchone(),(0,));self.seal()
  def test_previous_observation_survives_changed_live_resource(self):

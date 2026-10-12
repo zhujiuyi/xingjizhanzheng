@@ -112,9 +112,10 @@ func campaign_prior_signature(value: XJRuntimeState) -> String:
 	var data: Dictionary={}
 	var new_tables: Array[String]=preload("res://runtime/data/campaign_validation.gd").TABLES
 	for table: String in XJRuntimeState.TABLES:
-		if table in new_tables or table in preload("res://runtime/data/scenario_validation.gd").TABLES:continue
+		if table in new_tables or table in preload("res://runtime/data/scenario_validation.gd").TABLES or table in FLEET_STATE_ADDITIONS:continue
 		var result: Array=[]
 		for row: RefCounted in value.rows(table):
+			if table=="shop_stock_state" and str(row.item_def_id).begins_with("module_aux_"):continue
 			if table in ["exploration_instance_state","exploration_belt_state"] and str(row.event_id).begins_with("exp_theme_"):continue
 			if table=="resource_state" and str(row.node_id).begins_with("exp_theme_"):continue
 			if table=="tactical_site_state" and str(row.site_id).begins_with("tac_exp_theme_"):continue

@@ -125,7 +125,7 @@ class FeatureIntegrityTests(unittest.TestCase):
 
     def test_every_module_has_operational_effect(self) -> None:
         operational: set[str] = set()
-        for table in ("weapon_defs", "repair_defs", "mining_defs", "module_stat_modifiers", "module_resistance_modifiers", "weapon_tuning_defs"):
+        for table in ("weapon_defs", "repair_defs", "mining_defs", "module_stat_modifiers", "module_resistance_modifiers", "weapon_tuning_defs", "auxiliary_drone_defs"):
             operational |= self.ids(table, "module_id")
         self.assertEqual(self.ids("module_defs", "module_id"), operational)
 
@@ -244,6 +244,8 @@ class FeatureIntegrityTests(unittest.TestCase):
         mappings.update((row['kind'], row['id']) for row in extension['entries'])
         fitting = json.loads((CODE / 'assets/fitting_v1/manifest.json').read_text(encoding='utf-8'))
         mappings.update((row['kind'], row['id']) for row in fitting['entries'])
+        fleet = json.loads((CODE / 'assets/fleet_v1/manifest.json').read_text(encoding='utf-8'))
+        mappings.update((row['kind'],row['id']) for row in fleet['entries'])
         for table, column, kind in (
             ("ship_defs", "ship_id", "ship"), ("item_defs", "item_id", "item"),
             ("mission_defs", "mission_id", "mission"), ("research_defs", "research_id", "research"),

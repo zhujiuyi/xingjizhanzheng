@@ -31,8 +31,10 @@ func _ready() -> void:
 	get_tree().set_meta("xj_fitting_v31_diagnostic",true)
 	get_tree().create_timer(420.0).timeout.connect(func():print("FITTING_V31_RESULT FAIL watchdog");get_tree().quit(2))
 	_run.call_deferred()
-const CAMPAIGN_STATE_ADDITIONS: Array[String]=["construction_state","construction_input_state","construction_receipt_state","construction_evidence_state","expedition_route_state","expedition_run_state","expedition_stage_state","expedition_receipt_state","campaign_director_state","flight_record_state","telemetry_total_state","flight_material_state","telemetry_material_state","flight_repair_state","telemetry_repair_state","trial_state","trial_result_state","scenario_actor_state","tactical_award_state","blockade_state","blockade_node_state","blockade_result_state","telemetry_source_state","activity_record_state","telemetry_menu_state","telemetry_timing_state","activity_total_state"]
+const FLEET_STATE_ADDITIONS: Array[String]=["crew_member_state","crew_assignment_state","crew_receipt_state","crew_support_quote_state","fleet_deployment_state","fleet_receipt_state","fleet_total_state","auxiliary_bay_state","auxiliary_intel_state"]
+const CAMPAIGN_STATE_ADDITIONS: Array[String]=["construction_state","construction_input_state","construction_receipt_state","construction_evidence_state","expedition_route_state","expedition_run_state","expedition_stage_state","expedition_receipt_state","campaign_director_state","flight_record_state","telemetry_total_state","flight_material_state","telemetry_material_state","flight_repair_state","telemetry_repair_state","trial_state","trial_result_state","scenario_actor_state","tactical_award_state","blockade_state","blockade_node_state","blockade_result_state","telemetry_source_state","activity_record_state","telemetry_menu_state","telemetry_timing_state","activity_total_state"]+FLEET_STATE_ADDITIONS
 func campaign_added_row(table: String,row: RefCounted) -> bool:
+	if table=="shop_stock_state":return str(row.item_def_id).begins_with("module_aux_")
 	if table in ["exploration_instance_state","exploration_belt_state"]:return str(row.event_id).begins_with("exp_theme_")
 	if table=="resource_state":return str(row.node_id).begins_with("exp_theme_")
 	if table=="tactical_site_state":return str(row.site_id).begins_with("tac_exp_theme_")

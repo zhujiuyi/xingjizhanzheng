@@ -13,7 +13,7 @@ class FullSingleplayerContentTests(unittest.TestCase):
  def tearDownClass(cls):cls.db.close();cls.balance.connection.close()
  def rows(self,t):return [dict(r) for r in self.db.execute('SELECT * FROM '+t)]
  def test_full_finite_scope(self):
-  self.assertEqual(len(self.rows('system_defs')),54);self.assertEqual(len(self.rows('ship_defs')),18);self.assertEqual(len(self.rows('module_defs')),42)
+  self.assertEqual(len(self.rows('system_defs')),54);self.assertEqual(len(self.rows('ship_defs')),18);self.assertEqual(len(self.rows('module_defs')),46)
   self.assertEqual(len(self.rows('hull_recipe_defs')),18);self.assertEqual(len(self.rows('research_defs')),13);self.assertEqual(len(self.rows('base_module_defs')),4)
   self.assertEqual(len(self.rows('mission_defs')),52)
  def test_class_roles_and_different_budgets(self):
@@ -27,6 +27,8 @@ class FullSingleplayerContentTests(unittest.TestCase):
   for r in self.rows('module_tech_defs'):
    if r['module_id'].startswith('module_spec_'):continue
    families.setdefault(r['module_id'].rsplit('_',1)[0],set()).add(r['tech_level'])
+  auxiliary={key:families.pop(key) for key in ('module_aux_repair','module_aux_recon')}
+  self.assertEqual(auxiliary,{'module_aux_repair':{1,2},'module_aux_recon':{1,2}})
   self.assertEqual(len(families),13);self.assertTrue(all(x=={1,2,3} for x in families.values()))
   self.assertEqual({r['module_id'] for r in self.rows('module_salvage_recipe_defs')},{r['module_id'] for r in self.rows('module_defs')})
  def test_fixed_network_connects_all_systems_without_optional_hole(self):

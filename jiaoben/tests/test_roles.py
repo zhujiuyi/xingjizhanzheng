@@ -21,7 +21,7 @@ class RoleDefinitions(unittest.TestCase):
  def test_existing_hulls_gain_reviewed_capabilities_without_new_hull_inflation(self):
   roles_catalog.validate(self.db)
   self.assertEqual(self.db.execute('SELECT count(*) FROM ship_defs').fetchone(),(18,))
-  self.assertEqual(self.db.execute('SELECT count(*) FROM module_defs').fetchone(),(42,))
+  self.assertEqual(self.db.execute('SELECT count(*) FROM module_defs').fetchone(),(46,))
   self.assertEqual(self.db.execute('SELECT sum(remote_repair_allowed) FROM ship_role_capability_defs').fetchone(),(2,))
  def test_020_failure_rolls_back_format16_and_all_schema_objects(self):
   db=p.connect();self.addCleanup(db.close)

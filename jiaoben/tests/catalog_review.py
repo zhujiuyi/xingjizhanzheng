@@ -19,10 +19,19 @@ FITTING_NAMES = {
     'industry_recipe_defs': ('blueprint_id', 'recipe_spec_'),
 }
 
+def without_fleet_extensions(connection,table,rows):
+    """Only the nineteen namespaces whose old rows test_fleet protects."""
+    from fleet_catalog import EXTENSIONS
+    if table not in EXTENSIONS:return rows
+    column,prefix=EXTENSIONS[table]
+    index=[r[1] for r in connection.execute(f'PRAGMA table_info("{table}")')].index(column)
+    return {row for row in rows if not str(row[index]).startswith(prefix)}
+
 def without_campaign_extensions(connection,table,rows):
     """Only explicit namespace additions; test_campaign protects every v0.28 row."""
     from scenario_catalog import EXTENSIONS as SCENARIO_EXTENSIONS
     from campaign_catalog import EXTENSIONS
+    rows=without_fleet_extensions(connection,table,rows)
     if table not in set(EXTENSIONS)|set(SCENARIO_EXTENSIONS):return rows
     columns=[r[1] for r in connection.execute('PRAGMA table_info("'+table+'")')]
     key=next(r[1] for r in connection.execute('PRAGMA table_info("'+table+'")') if r[5]==1)

@@ -23,10 +23,10 @@ import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
 MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql", "018_operations.sql", "019_fitting.sql", "020_roles.sql", "021_honors.sql", "022_frontier.sql", "023_hire.sql", "024_situational.sql", "025_campaign.sql", "026_metrics.sql")
-MIGRATIONS += ("027_scenarios.sql",)
-FORMAT_VERSION = 24
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_22.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_22"
+MIGRATIONS += ("027_scenarios.sql", "028_owned_fleet.sql")
+FORMAT_VERSION = 25
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_23.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_23"
 REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_3": PROGRESS_DIR / "catalog_adapter_v0_3.sql",
     "frozen_catalog_v0_4": PROGRESS_DIR / "catalog_adapter_v0_4.sql",
@@ -48,9 +48,10 @@ REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_19": PROGRESS_DIR / "catalog_adapter_v0_19.sql",
     "frozen_catalog_v0_20": PROGRESS_DIR / "catalog_adapter_v0_20.sql",
     "frozen_catalog_v0_21": PROGRESS_DIR / "catalog_adapter_v0_21.sql",
-    "frozen_catalog_v0_22": ADAPTER,
+    "frozen_catalog_v0_22": PROGRESS_DIR / "catalog_adapter_v0_22.sql",
+    "frozen_catalog_v0_23": ADAPTER,
 }
-RULE_CODE_VERSION = "singleplayer_scenarios_v1"
+RULE_CODE_VERSION = "singleplayer_fleet_v1"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
 STATE_TABLES = (
@@ -78,6 +79,8 @@ STATE_TABLES = (
 )
 from scenario_state_spec import STATES as SCENARIO_STATES
 STATE_TABLES += tuple(SCENARIO_STATES)
+from fleet_state_spec import STATES as FLEET_STATES
+STATE_TABLES += tuple(FLEET_STATES)
 
 
 def utc_now():
@@ -433,6 +436,14 @@ def initial_state(connection, snapshot, world, content):
     for item in rows(connection, "item_instance_state", "snapshot_id=?", (snapshot,)):
         if item["item_def_id"] in drones:
             insert(connection, "drone_bay_state", {**ctx, "item_instance_id": item["item_instance_id"], "stock_units": counts[item["item_def_id"]], "deployed_units": 0, "lost_units": 0, "replenished_units": 0, "paid_credit_total": 0, "material_units_total": 0, "revision": 0, "command_kind": "attack"})
+    balance = frozen("fleet_balance_defs")[0]
+    insert(connection, "fleet_total_state", {**ctx, "singleton": 1})
+    for profile in frozen("crew_profile_defs"):
+        insert(connection, "crew_member_state", {**ctx, "profile_id": profile["profile_id"], "phase": "available", "loyalty": balance["loyalty_initial"]})
+    auxiliary = {row["module_id"]: row for row in frozen("auxiliary_drone_defs")}
+    for item in rows(connection, "item_instance_state", "snapshot_id=?", (snapshot,)):
+        if item["item_def_id"] in auxiliary:
+            insert(connection, "auxiliary_bay_state", {**ctx, "item_instance_id": item["item_instance_id"], "stock_units": auxiliary[item["item_def_id"]]["drone_count"], "command_kind": "follow"})
     mask64 = (1 << 64) - 1
     increment = (54 << 1) | 1
     state = ((increment + (seed & mask64)) * 6364136223846793005 + increment) & mask64
