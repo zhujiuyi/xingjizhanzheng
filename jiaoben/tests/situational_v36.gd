@@ -34,6 +34,11 @@ func _run() -> void:
 	if not check(row!=null and g.situational.resource_reading(node_id).live,"local in-range measurement records the node"):await finish();return
 	var measured: int=row.remaining_units
 	check(row.site_id==g.spatial_site("ship",state.ship().ship_instance_id),"measurement binds actual astronomical locality")
+	g.situational.spatial_active=false
+	var observed_tick: int=row.observed_tick
+	g.situational.observe()
+	check(not g.situational.resource_reading(node_id).live and row.observed_tick==observed_tick and g.situational.cues().is_empty(),"inactive strategic transit cannot measure the origin or expose local warnings")
+	g.situational.spatial_active=true
 	place(home.station_anchor_id,home.station_id)
 	state.find("resource_state","node_id",node_id).remaining_units-=1 # Isolated remote-depletion fixture.
 	check(not g.situational.resource_reading(node_id).live and int(g.situational.resource_reading(node_id).remaining_units)==measured,"remote view preserves the previous quantity instead of reading changed live state")

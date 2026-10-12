@@ -372,6 +372,7 @@ func _physics_process(delta: float) -> void:
 	gameplay.call("begin_step", delta)
 	gameplay.ship_roles.spatial_active = not travel.active() and not local_navigation.warp_active()
 	gameplay.hired.spatial_active = not travel.active() and not local_navigation.warp_active()
+	gameplay.situational.spatial_active = not travel.active() and not local_navigation.warp_active()
 	world.flight.metrics = gameplay.call("metrics", ship)
 	if _manual_navigation_override(): source_goal.clear()
 	if _manual_navigation_override() and combat_automation != null:
@@ -409,6 +410,7 @@ func _physics_process(delta: float) -> void:
 		world.simulate_npcs(delta)
 	world.projectiles.simulate(delta)
 	_flush_damage()
+	gameplay.situational.spatial_active = not travel.active() and not local_navigation.warp_active()
 	gameplay.call("finish_step", delta)
 	_check_objectives(delta)
 	if not str(gameplay.call("take_autosave_request")).is_empty():

@@ -7,6 +7,7 @@ const Space = preload("res://runtime/space_coordinates.gd")
 const ResourceStatus = preload("res://runtime/resource_status.gd")
 var g: RefCounted
 var balance: Dictionary = {}
+var spatial_active: bool = true
 var _elapsed: float = 0.0
 var _previous: Dictionary = {}
 var _sound_remaining: float = 0.0
@@ -22,7 +23,7 @@ func _tick() -> int: return g.state.snapshot.meta.simulation_tick
 func age(tick: int) -> float: return maxf(0.0, float(_tick() - tick) / g.rule("simulation_hz"))
 
 func _can_observe(node_id: String) -> bool:
-	if g.state.ship().status != T.ShipStatus.FLYING or not g.exploration.resource_visible(node_id): return false
+	if not spatial_active or g.state.ship().status != T.ShipStatus.FLYING or not g.exploration.resource_visible(node_id): return false
 	var location: Dictionary = g.definition("resource_node_locations", "node_id", node_id)
 	if location.is_empty() or not g.unlocked(location.required_unlock_id): return false
 	var anchor: Dictionary = g.definition("anchor_defs", "anchor_id", location.anchor_id)
@@ -141,7 +142,7 @@ func _cue(id: String, subject: String, detail: String) -> Dictionary:
 
 func cues() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	if not supported() or g.state.ship().status != T.ShipStatus.FLYING: return result
+	if not supported() or not spatial_active or g.state.ship().status != T.ShipStatus.FLYING: return result
 	for row: RefCounted in g.state.rows("npc_tactic_state"):
 		var npc: RefCounted = g.state.find("npc_state","npc_instance_id",row.npc_instance_id)
 		if row.phase != "charging" or npc == null or not npc.alive or not g.same_entity_site("npc",npc,"ship",g.state.ship()): continue

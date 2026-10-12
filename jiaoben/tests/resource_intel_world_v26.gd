@@ -72,8 +72,11 @@ func run() -> void:
 	check(host.local_navigation.active() and host.local_navigation.target_id == info.waypoint_id and host.source_goal.key == key_name, "source request navigates to actual next-hop gate")
 	var amount: int = host.state.find("resource_state", "node_id", node.node_id).remaining_units
 	host.set_process(true); host.set_physics_process(true)
+	var observation_boundary_seen: bool=false
 	var deadline: int = Time.get_ticks_msec() + 35000
-	while host.local_navigation.active() and Time.get_ticks_msec() < deadline: await frames(2)
+	while host.local_navigation.active() and Time.get_ticks_msec() < deadline:
+		await frames(2)
+		if host.local_navigation.warp_active() and not host.gameplay.situational.spatial_active:observation_boundary_seen=true
 	check(not host.local_navigation.active() and host.ui.target_id == info.waypoint_id, "real navigation reaches the selected transit gate")
 	host.get_viewport().warp_mouse(root.get_visible_rect().get_center())
 	await key(KEY_F)
@@ -82,9 +85,11 @@ func run() -> void:
 	while Time.get_ticks_msec() < deadline:
 		if host.state.current_sector() == node.sector_id and host.gameplay.same_anchor_site(host.state.ship(), host.store.catalog.one("anchor_defs", "anchor_id", location.anchor_id)) and not host.local_navigation.active(): break
 		await frames(2)
+		if (host.local_navigation.warp_active() or host.travel.active()) and not host.gameplay.situational.spatial_active:observation_boundary_seen=true
 	host.set_process(false); host.set_physics_process(false)
 	check(host.state.current_sector() == node.sector_id, "actual F input crosses the planned star-system gate")
 	check(host.gameplay.same_anchor_site(host.state.ship(), host.store.catalog.one("anchor_defs", "anchor_id", location.anchor_id)), "actual warp arrives in source's declared AU site")
+	check(observation_boundary_seen,"actual strategic navigation suspends local resource observation")
 	check(host.state.find("resource_state", "node_id", node.node_id).remaining_units == amount and host.gameplay.work.mining_target.is_empty(), "source arrival neither fabricates nor auto-mines goods")
 	await capture("sources-arrived")
 	await show("sources")
