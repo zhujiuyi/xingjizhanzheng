@@ -79,7 +79,7 @@ func _run() -> void:
 	if not check(state!=null,"all commander coverage seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
 	check(XJRuntimeState.TABLES.size()==99 and state.rows("civilization_command_state").size()==3 and state.rows("civilization_honor_evidence_state").is_empty(),"retained commander groups and new authority initialize without free qualifications")
-	check(int(store._records("PRAGMA user_version")[0].values()[0])==23,"real newly created SQLite user version matches format23")
+	check(int(store._records("PRAGMA user_version")[0].values()[0])==24,"real newly created SQLite user version matches format24")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)
 	state.player().credit=1000000;g.missions.refresh();g._sync_spawns()
 	hull("transport_caravan");fit("module_scanner_beacon_i","utility:0")

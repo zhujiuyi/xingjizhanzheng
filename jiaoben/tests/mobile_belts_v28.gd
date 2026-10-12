@@ -10,10 +10,16 @@ func connect_warnings() -> void:
 		if message.begins_with("矿带"): warning_count += 1)
 func complete_fingerprint(value: XJRuntimeState, prior: bool = false) -> String:
 	var result: Dictionary = {}
-	for table: String in XJRuntimeState.TABLES:
+	var compared: Array[String]=XJRuntimeState.TABLES.slice(0,47) if prior else XJRuntimeState.TABLES
+	for table: String in compared:
 		if prior and table == "exploration_belt_state": continue
 		var rows: Array = []
-		for row: RefCounted in value.rows(table): rows.append(Codec.new().encode_row(table, row))
+		for row: RefCounted in value.rows(table):
+			if prior:
+				if table=="exploration_instance_state" and str(row.event_id).begins_with("exp_theme_"):continue
+				if table=="resource_state" and str(row.node_id).begins_with("exp_theme_"):continue
+				if table=="shop_stock_state" and row.item_def_id in ["module_spec_burst","module_spec_sustain","module_spec_range"]:continue
+			rows.append(Codec.new().encode_row(table, row))
 		rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return JSON.stringify(a) < JSON.stringify(b))
 		result[table] = rows
 	return JSON.stringify(result)

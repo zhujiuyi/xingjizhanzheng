@@ -29,11 +29,13 @@ func act(kind: String, target: String = "", quantity: int = 1, extra: String = "
 	return result.phase == T.ActionPhase.APPLIED
 func fingerprint(value: XJRuntimeState, prior_resource_rules: bool = false) -> String:
 	var data: Dictionary = {}
-	for table: String in XJRuntimeState.TABLES:
+	var compared: Array[String]=XJRuntimeState.TABLES.slice(0,42) if prior_resource_rules else XJRuntimeState.TABLES
+	for table: String in compared:
 		if prior_resource_rules and table.begins_with("exploration_"): continue
 		var rows: Array = []
 		for row: RefCounted in value.rows(table):
 			if prior_resource_rules and table == "resource_state" and row.node_id.begins_with("exp_"): continue
+			if prior_resource_rules and table=="shop_stock_state" and row.item_def_id in ["module_spec_burst","module_spec_sustain","module_spec_range"]:continue
 			rows.append(Codec.new().encode_row(table, row))
 		rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return JSON.stringify(a) < JSON.stringify(b))
 		data[table] = rows
@@ -145,7 +147,7 @@ func legacy() -> void:
 	faulty.failure = ""
 	var next: XJRuntimeState = store.upgrade_content(state)
 	check(next != null and fingerprint(next, true) == old and store.catalog.table_names.has("resource_grade_defs"), "resource branch preserves prior state including paid order durations")
-	check(next != null and next.rows("exploration_instance_state").size() == 6 and next.rows("exploration_progress_state")[0].insight_available == 0, "current branch adds six unpaid clues without rewards")
+	check(next != null and next.rows("exploration_instance_state").size() == store.catalog.rows("exploration_event_defs").size() and next.rows("exploration_instance_state").filter(func(r: RefCounted):return not r.event_id.begins_with("exp_theme_")).size()==6 and next.rows("exploration_progress_state")[0].insight_available == 0, "current branch adds six original and declared theme unpaid clues without rewards")
 	state = store.load(slot.slot_id)
 	check(state != null and fingerprint(state, true) == old and not store.catalog.table_names.has("resource_grade_defs"), "old manual remains independently restorable")
 	store.close(); store = null; state = null

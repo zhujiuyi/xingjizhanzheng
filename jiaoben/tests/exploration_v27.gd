@@ -33,12 +33,14 @@ func fingerprint() -> String:
 	return state_fingerprint(state)
 func state_fingerprint(value: XJRuntimeState, prior_rules: bool = false) -> String:
 	var values: Dictionary = {"credit": value.player().credit}
-	for table: String in XJRuntimeState.TABLES:
-		if table == "action_receipt_state": continue
+	var compared: Array[String]=XJRuntimeState.TABLES.slice(0,42) if prior_rules else XJRuntimeState.TABLES
+	for table: String in compared:
+		if table == "action_receipt_state" and not prior_rules: continue
 		if prior_rules and table.begins_with("exploration_"): continue
 		var rows: Array = []
 		for row: RefCounted in value.rows(table):
 			if prior_rules and table == "resource_state" and row.node_id.begins_with("exp_"): continue
+			if prior_rules and table=="shop_stock_state" and row.item_def_id in ["module_spec_burst","module_spec_sustain","module_spec_range"]:continue
 			rows.append(Codec.new().encode_row(table, row))
 		rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return JSON.stringify(a) < JSON.stringify(b))
 		values[table] = rows
@@ -253,7 +255,7 @@ func legacy() -> void:
 	var next: XJRuntimeState = store.upgrade_content(state)
 	if not check(next != null, "reviewed exploration upgrade succeeds after rollback " + store.last_error): return
 	check(state_fingerprint(next, true) == before, "all forty-two old state groups and existing resources preserve exact rows")
-	check(next.rows("exploration_instance_state").size() == 6 and next.rows("exploration_actor_state").is_empty() and next.rows("exploration_claim_state").is_empty() and next.rows("exploration_progress_state")[0].insight_available == 0, "upgrade adds six deterministic unpaid clues without ships rewards or knowledge")
+	check(next.rows("exploration_instance_state").size() == store.catalog.rows("exploration_event_defs").size() and next.rows("exploration_instance_state").filter(func(r: RefCounted):return not r.event_id.begins_with("exp_theme_")).size()==6 and next.rows("exploration_actor_state").is_empty() and next.rows("exploration_claim_state").is_empty() and next.rows("exploration_progress_state")[0].insight_available == 0, "upgrade adds six original and declared theme clues without ships rewards or knowledge")
 	var generation: int = int(store._records("SELECT count(*) AS n FROM save_snapshot")[0].n)
 	check(store.upgrade_content(state) == null, "superseded old session cannot issue another upgrade")
 	state = store.load(slot.slot_id)

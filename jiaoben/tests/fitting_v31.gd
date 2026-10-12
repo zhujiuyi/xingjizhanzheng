@@ -192,7 +192,9 @@ func _sources(home: Dictionary) -> void:
 	place(home.station_anchor_id,home.station_id)
 func previous_signature(value: XJRuntimeState) -> String:
 	var data: Dictionary={}
-	for table: String in XJRuntimeState.TABLES:
+	# Format15 contained these 53 groups. Later services legitimately initialize
+	# their own tables; every original asset/receipt/RNG group remains exact.
+	for table: String in XJRuntimeState.TABLES.slice(0,53):
 		if table in CAMPAIGN_STATE_ADDITIONS:continue
 		if table.begins_with("specialization_"):continue
 		var rows: Array=[]

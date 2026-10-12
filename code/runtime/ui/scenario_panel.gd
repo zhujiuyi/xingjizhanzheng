@@ -50,8 +50,11 @@ func build() -> void:
 	var choices: HFlowContainer=HFlowContainer.new();add_child(choices)
 	for def: Dictionary in defs:
 		var id: String=def.get(kind+"_id")
-		u._button(choices,def.display_name,func():
-			if current():selected=id;u.set(kind+"_selected_id",id);build()).name="ScenarioSelect_"+id
+		var choice: Button=u._button(choices,def.display_name,func():
+			if current():selected=id;u.set(kind+"_selected_id",id);build())
+		choice.name="ScenarioSelect_"+id;choice.toggle_mode=true;choice.button_pressed=id==selected
+		if id==selected:u._primary(choice)
+		else:u._secondary(choice)
 	var spec: Dictionary=service().definition(kind,selected);var row: RefCounted=service().instance(kind,selected)
 	u._text_to(self,spec.display_name,20)
 	if kind=="trial":

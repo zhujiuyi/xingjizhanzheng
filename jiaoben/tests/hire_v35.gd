@@ -24,8 +24,8 @@ func _run() -> void:
 	directory=OS.get_environment("XJ_HIRE_V35_DIRECTORY").replace("\\","/")
 	if not check(directory.is_absolute_path() and directory.contains("/jiaoben/tmp/hire-v35/") and not FileAccess.file_exists(directory.path_join("progress.db")),"fresh scoped companion contract world"):get_tree().quit(2);return
 	store=Store.new(directory.path_join("progress.db"))
-	if not check(store.open(),"format22 opens "+store.last_error):await finish();return
-	check(int(store._records("PRAGMA user_version")[0].values()[0])==23 and int(store._records("SELECT format_version FROM database_meta")[0].format_version)==23,"fresh real SQLite has consistent format23 metadata and user version")
+	if not check(store.open(),"format24 opens "+store.last_error):await finish();return
+	check(int(store._records("PRAGMA user_version")[0].values()[0])==24 and int(store._records("SELECT format_version FROM database_meta")[0].format_version)==24,"fresh real SQLite has consistent format24 metadata and user version")
 	state=store.new_world("有限雇佣合同",3501)
 	if not check(state!=null,"new hire world seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
@@ -129,10 +129,10 @@ func legacy_hire() -> void:
 	check(DirAccess.copy_absolute(source,path)==OK,"copy real paid v0.26 progress without modifying source")
 	var faulty: FaultStore=FaultStore.new(path);faulty.failure="migration:023_hire.sql";store=faulty
 	check(not store.open() and int(store._records("SELECT format_version FROM database_meta")[0].format_version)==19,"023 failure preserves actual old format19")
-	check(FileAccess.file_exists(directory.path_join("migration-format19-backup.db")),"format21 migration first creates the actual old database backup")
+	check(FileAccess.file_exists(directory.path_join("migration-format19-backup.db")),"format24 migration first creates the actual old database backup")
 	faulty.failure=""
-	if not check(store.open(),"migration retries to format21 "+store.last_error):return
-	check(int(store._records("PRAGMA user_version")[0].values()[0])==23 and int(store._records("SELECT format_version FROM database_meta")[0].format_version)==23,"actual migrated database has consistent format23 version markers")
+	if not check(store.open(),"migration retries to format24 "+store.last_error):return
+	check(int(store._records("PRAGMA user_version")[0].values()[0])==24 and int(store._records("SELECT format_version FROM database_meta")[0].format_version)==24,"actual migrated database has consistent format24 version markers")
 	var slot: Dictionary={}
 	for entry: Dictionary in store.list_slots():
 		if entry.slot_kind=="manual" and int(entry.slot_index)==2:slot=entry;break

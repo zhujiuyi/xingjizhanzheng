@@ -131,6 +131,8 @@ func run() -> void:
 	host.set_process(false)
 	print("SCENARIO_HUD_CONTEXT ",JSON.stringify({"objective":host.ui.objective.text,"button":host.ui.mission_guide_button.text,"phase":support.phase,"pending":host.gameplay.scenarios.pending().get("id","")}))
 	check(host.ui.objective.text.contains("返回签发站") and host.ui.mission_guide_button.text=="挑战详情","actual flight HUD shows current challenge result and its detail entry")
+	host.ui._select_target("");host.ui._update_navigation()
+	check(not host.ui.overview.status_label.text.contains("目标不在当前星系"),"an empty selection does not present a false remote-target warning")
 	await capture("scenarios-support-complete")
 	if not await settle_at(host.gameplay.definition("station_defs","station_id","station_mirror_hub").station_anchor_id,"station_mirror_hub"):await finish();return
 	await show("trials");await click(host.ui.body.find_child("ScenarioSelect_trial_support",true,false),"select completed support")
@@ -155,6 +157,9 @@ func run() -> void:
 		root.size=layout.size;root.content_scale_factor=1.0;root.content_scale_size=Vector2i(Vector2(layout.size)/layout.scale)
 		await show("blockades");var button: Button=host.ui.body.find_child("ScenarioSelect_blockade_echo",true,false);await reveal(button)
 		check(Rect2(Vector2.ZERO,host.ui.root.size).encloses(button.get_global_rect()),"corridor choices remain reachable at exact native layout "+str(layout.size))
+		for spec: Dictionary in host.gameplay.rows("blockade_defs"):
+			var choice: Button=host.ui.body.find_child("ScenarioSelect_"+str(spec.blockade_id),true,false)
+			check(choice.toggle_mode and choice.button_pressed==(str(spec.blockade_id)==host.ui.blockade_selected_id),"only the actual selected corridor is highlighted "+str(spec.blockade_id))
 		await capture("scenarios-layout-"+str(int(layout.scale*100)))
 	await finish()
 func finish() -> void:

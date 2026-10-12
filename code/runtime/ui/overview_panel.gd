@@ -226,7 +226,7 @@ func set_selection(details: Dictionary, navigation: Dictionary, busy: bool = fal
 			resource_bar.tooltip_text = resource_label.tooltip_text
 	action_grid.columns = 2 if kind in ["npc","drone"] else 3
 	var running: bool = bool(navigation.get("active", false))
-	status_label.text = UISkin.navigation_phase(str(navigation.get("phase", ""))) if running else str(navigation.get("reason", ""))
+	status_label.text = UISkin.navigation_phase(str(navigation.get("phase", ""))) if running else str(navigation.get("reason", "")) if not selected_id.is_empty() else ""
 	if running and str(navigation.get("title", "")) != selected_title.text and not str(navigation.get("title", "")).is_empty(): status_label.text += " · " + str(navigation.title)
 	if running and float(navigation.get("remaining_s", 0.0)) > 0.0: status_label.text += " · %.1f s" % float(navigation.remaining_s)
 	var combat_active: bool = bool(navigation.get("combat_active", false))

@@ -63,12 +63,15 @@ func prior_fingerprint(value: XJRuntimeState) -> String:
 	var tactical_npcs: Array[String] = []
 	for npc: RefCounted in value.rows("npc_state"):
 		if npc.spawn_id.begins_with("tac_"):tactical_npcs.append(npc.npc_instance_id)
-	for table: String in XJRuntimeState.TABLES:
+	for table: String in XJRuntimeState.TABLES.slice(0,48):
 		if table in ["tactical_site_state","npc_tactic_state","ship_tactical_effect_state","drone_bay_state"]:continue
 		var rows: Array = []
 		for row: RefCounted in value.rows(table):
 			if table=="npc_state" and row.npc_instance_id in tactical_npcs:continue
 			if table=="spatial_state" and row.entity_kind=="npc" and row.entity_id in tactical_npcs:continue
+			if table in ["exploration_instance_state","exploration_belt_state"] and str(row.event_id).begins_with("exp_theme_"):continue
+			if table=="resource_state" and str(row.node_id).begins_with("exp_theme_"):continue
+			if table=="shop_stock_state" and row.item_def_id in ["module_spec_burst","module_spec_sustain","module_spec_range"]:continue
 			rows.append(Codec.new().encode_row(table,row))
 		rows.sort_custom(func(a: Dictionary,b: Dictionary)->bool:return JSON.stringify(a)<JSON.stringify(b))
 		result[table]=rows
@@ -93,7 +96,7 @@ func legacy_tactics() -> void:
 	faulty.failure="";state=store.upgrade_content(state)
 	if not check(state!=null,"reviewed tactics branch succeeds "+store.last_error):return
 	check(prior_fingerprint(state)==before,"old assets orders progress knowledge factions and RNG remain exact")
-	check(state.rows("tactical_site_state").size()==3 and state.rows("drone_bay_state").size()==1,"new optional sites and existing usable bay initialize without replacing assets")
+	check(state.rows("tactical_site_state").size()==store.catalog.rows("tactical_site_defs").size() and state.rows("tactical_site_state").filter(func(r: RefCounted):return not r.site_id.begins_with("tac_exp_theme_")).size()==3 and state.rows("drone_bay_state").size()==1,"three original optional sites, declared theme sites and existing usable bay initialize without replacing assets")
 	g=Gameplay.new();g.setup(state,store.catalog)
 	var bay: RefCounted = state.rows("drone_bay_state")[0]
 	var item: RefCounted = state.find("item_instance_state","item_instance_id",bay.item_instance_id)
