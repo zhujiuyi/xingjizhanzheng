@@ -149,10 +149,13 @@ func legacy_mobile() -> void:
 	state = store.upgrade_content(state)
 	if not check(state != null, "reviewed active-world upgrade succeeds " + store.last_error): return
 	check(complete_fingerprint(state, true) == before, "upgrade preserves all old assets stock progress receipts and RNG")
+	# Idempotence compares the same persisted Store boundary. Gameplay.setup
+	# legitimately spawns newly unlocked tactical actors after this snapshot.
+	var upgraded: String = complete_fingerprint(state)
+	var upgraded_snapshot: String=state.snapshot.meta.snapshot_id
 	g = Gameplay.new(); g.setup(state, store.catalog); connect_warnings()
 	var belt: RefCounted = g.mobile_belts.instance("exp_echo_mineral")
 	check(belt.start_elapsed_s == elapsed and belt.initial_units == stock and belt.stage_index == 0 and g.definition("exploration_belt_route_defs", "route_id", belt.route_id).route_index == 0, "old active belt gets original location and a fresh remaining-time decay schedule")
-	var upgraded: String = complete_fingerprint(state)
 	old = g.exploration.instance("exp_echo_mineral")
 	var stage: Dictionary = g.definition("exploration_belt_stage_defs", "stage_index", 1)
 	old.elapsed_s = elapsed + (float(g.exploration.variant(old).duration_s) - elapsed) * float(stage.threshold_bp) / 10000.0 - 0.05
@@ -164,7 +167,7 @@ func legacy_mobile() -> void:
 	check(complete_fingerprint(state, true) == before and state.rows("exploration_belt_state").is_empty(), "original manual slot remains independent")
 	var snapshots: int = int(store._records("SELECT count(*) n FROM save_snapshot")[0].n)
 	state = store.upgrade_content(state)
-	check(complete_fingerprint(state) == upgraded and int(store._records("SELECT count(*) n FROM save_snapshot")[0].n) == snapshots, "repeated upgrade reuses the exact original route branch")
+	check(state.snapshot.meta.snapshot_id==upgraded_snapshot and complete_fingerprint(state) == upgraded and int(store._records("SELECT count(*) n FROM save_snapshot")[0].n) == snapshots, "repeated upgrade reuses the exact original sealed route branch")
 func finish() -> void:
 	if g != null: g.dispose(); g = null
 	if store != null: store.close(); store = null
