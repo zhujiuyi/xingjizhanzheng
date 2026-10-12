@@ -11,6 +11,9 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "owned-fleet": ("owned_fleet_v40.gd", "XJ_OWNED_FLEET_V40", "owned-fleet-v40", "OWNED_FLEET_V40", "--xj-verify-owned-fleet-v40"),
+    "owned-fleet-travel": ("owned_fleet_travel_v40.gd", "XJ_OWNED_FLEET_TRAVEL_V40", "owned-fleet-travel-v40", "OWNED_FLEET_TRAVEL_V40", "--xj-verify-owned-fleet-travel-v40"),
+    "owned-fleet-world": ("owned_fleet_world_v40.gd", "XJ_OWNED_FLEET_WORLD_V40", "owned-fleet-world-v40", "OWNED_FLEET_WORLD_V40", "--xj-verify-owned-fleet-world-v40"),
     "measurements": ("measurements_v39.gd", "XJ_MEASUREMENTS_V39", "measurements-v39", "MEASUREMENTS_V39", "--xj-verify-measurements-v39"),
     "blockades-world": ("blockades_world_v39.gd", "XJ_BLOCKADES_WORLD_V39", "blockades-world-v39", "BLOCKADES_WORLD_V39", "--xj-verify-blockades-world-v39"),
     "scenarios-upgrade": ("scenarios_upgrade_v39.gd", "XJ_SCENARIOS_UPGRADE_V39", "scenarios-upgrade-v39", "SCENARIOS_V39", "--xj-verify-scenarios-upgrade-v39"),
@@ -197,6 +200,13 @@ def run_suite():
         if "summary" in record:
             assert record["summary"]["result"] == "PASS" and record["summary"]["failures"] == 0
         assert all(path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n" for path in captures)
+        if name == "owned-fleet":
+            assert record["summary"]["checks"] >= 34 and not captures
+        if name == "owned-fleet-travel":
+            assert record["summary"]["checks"] >= 100 and record["summary"]["groups"] == 108 and not captures
+        if name == "owned-fleet-world":
+            assert args.native and record["summary"]["checks"] >= 60 and len(captures) == 5
+            assert record["summary"]["owned_moved_m"] > 50 and record["summary"]["owned_cancelled"] and record["summary"]["owned_arrived"]
         if name in ("measurements","scenarios","scenarios-upgrade"):
             assert record["summary"]["checks"] >= {"measurements":30,"scenarios":80,"scenarios-upgrade":20}[name] and record["summary"]["groups"] == 99 and not captures
         if name == "scenarios-world":

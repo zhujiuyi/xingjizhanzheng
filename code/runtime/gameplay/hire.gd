@@ -183,6 +183,7 @@ func repair_step(row: RefCounted) -> String:
 func travel_reason() -> String:return Binding.travel_reason(g.state,g.catalog)
 func party_mass_kg() -> float:
 	return Binding.party_mass(g.state,g.catalog)
+func largest_party_mass_kg() -> float:return Binding.largest_party_mass(g.state,g.catalog)
 func party_fee(base: int) -> int:return Binding.party_fee(g.state,g.catalog,base)
 func departure_pose() -> Dictionary:
 	var row: RefCounted=active();var npc: RefCounted=actor(row)

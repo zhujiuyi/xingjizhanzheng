@@ -2,6 +2,7 @@ class_name XJOwnedFleetPilot
 extends RefCounted
 ## Uses the actual hull, mounted weapons, ammunition, capacitor and heat.
 const T=preload("res://contracts/contract_types.gd")
+const Party=preload("res://runtime/data/party_rules.gd")
 static func step(world: Node3D,npc: RefCounted,body: CharacterBody3D,delta: float) -> bool:
 	var g: RefCounted=world.gameplay;var fleet: RefCounted=g.owned_fleet;var deployment: RefCounted=fleet.row(npc.npc_instance_id)
 	if deployment==null or deployment.phase not in ["deployed","retreating"]:return false
@@ -15,8 +16,8 @@ static func step(world: Node3D,npc: RefCounted,body: CharacterBody3D,delta: floa
 		var profile: Dictionary=g.specializations.weapon_spec(equipment,hull)
 		if equipment.enabled and item!=null and item.durability>0 and not profile.is_empty():weapons.append({"equipment":equipment,"profile":profile});range_m=maxf(range_m,float(profile.range_m))
 	if deployment.phase=="deployed" and fleet.connected(deployment):
-		var index: int=fleet.active().find(deployment)+1;var spacing: float=float(fleet.balance.formation_m)*float(index)
-		destination=world.flight.position+world.flight.basis*Vector3(spacing,spacing*0.1,spacing*0.25)
+		var index: int=Party.owned(g.state,g.catalog).find(deployment)
+		destination=world.flight.position+world.flight.basis*Party.offset(g.catalog,index)
 		deployment.goal_x=destination.x;deployment.goal_y=destination.y;deployment.goal_z=destination.z
 		if not weapons.is_empty() and deployment.order_kind in ["advance","focus"]:
 			for id: String in world.npcs:

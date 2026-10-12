@@ -5,11 +5,12 @@ var health: Label
 var supplies: Label
 var _token: String=""
 var _elapsed: float=0.0
+var _party_count: int=1
 func setup(ui: Node) -> void:
 	u=ui;name="HirePanel";add_theme_constant_override("separation",12)
 	var service: RefCounted=u.gameplay.hired
 	if not service.supported():u._text_to(self,"当前世界尚未升级雇佣规则。",14);return
-	_token=service.token();status=u._text_to(self,service.status_text(),18);status.name="HireStatus"
+	_token=service.token();_party_count=service.party_fee(1);status=u._text_to(self,service.status_text(),18);status.name="HireStatus"
 	var row: RefCounted=service.active()
 	if row==null:
 		for spec: Dictionary in u.gameplay.rows("hire_profile_defs"):
@@ -26,7 +27,7 @@ func setup(ui: Node) -> void:
 		return
 	health=u._text_to(self,"",14);health.name="HireHealth"
 	supplies=u._text_to(self,"",14);supplies.name="HireSupplies"
-	u._text_to(self,"已付雇佣费 %d · 押金 %d · 同行航门按两舰计费" % [row.fee_paid_credit,row.deposit_paid_credit],13)
+	u._text_to(self,"已付雇佣费 %d · 押金 %d · 同行航门按 %d 舰计费" % [row.fee_paid_credit,row.deposit_paid_credit,_party_count],13)
 	var commands: HFlowContainer=HFlowContainer.new();commands.add_theme_constant_override("h_separation",8);commands.add_theme_constant_override("v_separation",6);add_child(commands)
 	for pair: Array in [["推进","advance"],["集结","regroup"],["集火","focus"],["撤退","retreat"]]:
 		var focus_id: String=str(u.target_id) if pair[1]=="focus" else "";var reason: String=service.order_reason(pair[1],focus_id)
@@ -57,4 +58,4 @@ func _process(delta: float) -> void:
 	if _elapsed<0.25 or not is_instance_valid(u) or not is_instance_valid(status) or u.page!="hire":return
 	_elapsed=0.0;_update()
 	var current: String=u.gameplay.hired.token()
-	if current!=_token:_token=current;u.call_deferred("refresh_page")
+	if current!=_token or u.gameplay.hired.party_fee(1)!=_party_count:_token=current;_party_count=u.gameplay.hired.party_fee(1);u.call_deferred("refresh_page")

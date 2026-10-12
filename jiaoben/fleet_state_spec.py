@@ -13,7 +13,7 @@ treatment_paid_credit INTEGER NOT NULL DEFAULT 0 CHECK(treatment_paid_credit>=0)
      'FOREIGN KEY(content_snapshot_id,profile_id) REFERENCES frozen_crew_profile_defs(content_snapshot_id,profile_id),FOREIGN KEY(content_snapshot_id,station_id) REFERENCES frozen_station_defs(content_snapshot_id,station_id)'),
     'crew_assignment_state': ('profile_id', """profile_id TEXT NOT NULL,ship_instance_id TEXT NOT NULL,profession_id TEXT NOT NULL,assigned_tick INTEGER NOT NULL CHECK(assigned_tick>=0)""",
      'FOREIGN KEY(snapshot_id,world_id,content_snapshot_id,profile_id) REFERENCES crew_member_state(snapshot_id,world_id,content_snapshot_id,profile_id),FOREIGN KEY(snapshot_id,world_id,content_snapshot_id,ship_instance_id) REFERENCES ship_state(snapshot_id,world_id,content_snapshot_id,ship_instance_id),FOREIGN KEY(content_snapshot_id,profession_id) REFERENCES frozen_crew_profession_defs(content_snapshot_id,profession_id)'),
-    'fleet_deployment_state': ('ship_instance_id', """ship_instance_id TEXT NOT NULL,generation INTEGER NOT NULL CHECK(generation>=1),
+    'fleet_deployment_state': ('ship_instance_id', """ship_instance_id TEXT NOT NULL,generation INTEGER NOT NULL CHECK(generation>=1),actor_generation INTEGER NOT NULL CHECK(actor_generation>=generation),
 phase TEXT NOT NULL CHECK(phase IN('deployed','retreating','returning','docked','lost')),
 npc_instance_id TEXT,origin_station_id TEXT NOT NULL,return_station_id TEXT,sector_id TEXT NOT NULL,site_id TEXT NOT NULL,
 order_kind TEXT NOT NULL DEFAULT 'regroup' CHECK(order_kind IN('advance','regroup','focus','retreat')),focus_target_id TEXT,

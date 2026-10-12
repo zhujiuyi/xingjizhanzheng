@@ -26,6 +26,8 @@ var source_page: int = 0
 var sources_return_page: String = "map"
 var exploration_selected: String = ""
 var frontier_selected_id: String=""
+var fleet_section: String="hulls"
+var crew_target_ship: String=""
 var war_navigation_row: HFlowContainer
 var state: XJRuntimeState
 var catalog: XJCatalog
@@ -429,7 +431,7 @@ func show_page(next_page: String) -> void:
 		_responsive()
 		return
 	_build_panel("配装挑战" if next_page=="trials" else "航路封锁" if next_page=="blockades" else "边疆工程" if next_page=="projects" else "远征航线" if next_page=="expeditions" else "航行战报" if next_page=="reports" else "雇佣僚舰" if next_page=="hire" else "边疆战役与治理" if next_page=="frontier" else "承运合同" if next_page=="consignments" else "配装分析" if next_page=="fitting_analysis" else "舰船角色" if next_page=="ship_roles" else "战术行动" if next_page == "operations" else "无人机管理" if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
-	if next_page in ["ships", "warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
+	if next_page in ["warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
 		if next_page=="ships" and gameplay.fitting_analysis.supported():_button(body,"舰船定位",show_page.bind("ship_roles")).name="ShipRolesEntry"
 		if next_page=="ships" and gameplay.hired.supported():_button(body,"雇佣僚舰",show_page.bind("hire")).name="HireFleetEntry"
 		_text("此服务需要停靠空间站。使用星图找到站点，进入停靠范围并减速后按 F。")
@@ -783,10 +785,23 @@ func _station() -> void:
 	_update_station_info()
 	_focus_page.call_deferred()
 
+func _fleet_section(section: String) -> void:
+	if page!="ships" or section not in ["hulls","owned","crew"]:return
+	fleet_section=section;refresh_page()
+
 func _ships() -> void:
 	var fleet_tools: HFlowContainer=HFlowContainer.new();body.add_child(fleet_tools)
 	if gameplay.fitting_analysis.supported():_button(fleet_tools,"查看18舰角色与预算",show_page.bind("ship_roles")).name="ShipRolesEntry"
 	if gameplay.hired.supported():_button(fleet_tools,"雇佣僚舰",show_page.bind("hire")).name="HireFleetEntry"
+	if gameplay.owned_fleet.supported():
+		var sections: HFlowContainer=HFlowContainer.new();body.add_child(sections)
+		for pair: Array in [["舰体与借船","hulls"],["自有编队","owned"],["船员","crew"]]:
+			var button: Button=_button(sections,pair[0],_fleet_section.bind(pair[1]));button.name="FleetSection_"+str(pair[1]);button.disabled=fleet_section==pair[1]
+		if fleet_section in ["owned","crew"]:
+			var management: VBoxContainer=preload("res://runtime/ui/fleet_panel.gd").new();body.add_child(management);management.setup(self,fleet_section);return
+	if not state.player().has_docked_station_id:
+		_text("舰体交易与借船需要停靠空间站；在上方管理当前编队。")
+		return
 	var list: VBoxContainer = _business_list("舰体与借船", "单价 / 服务费", "数量")
 	list.call("add_section", "自有舰队")
 	for row: Dtos.ShipStateDto in state.rows("ship_state"):

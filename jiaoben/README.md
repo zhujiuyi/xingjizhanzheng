@@ -1,6 +1,8 @@
 # 测试与辅助文件
 
-S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增SQL；`build_catalog.py --output jiaoben/tmp/fleet-candidate.db`执行数据闭合和经济校验。`store_generate_fleet.py`仅生成028/固定v0.23适配器和九组新状态（共108组），保护旧历史文件。`tests/owned_fleet_v40.gd`通过显式fresh UUID的`XJ_OWNED_FLEET_V40_DIRECTORY`运行源码业务，当前34项涵盖船员、已有舰部署/成本/损失及SQLite；资格/资产/贡献/工资边界/直接伤害是夹具，不证明自然成长或物理AI。编队旅行、UI和辅助机尚待联通，不正常启动开发源码处理个人档；功能联通后统一原生/旧PCK/发行验收，详见[66](../doc/66-自有舰队船员与辅助无人机.md)。
+S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增SQL，`build_catalog.py --output jiaoben/tmp/fleet-candidate.db`执行闭合校验，`store_generate_fleet.py`只生成028/固定v0.23适配器和九组新状态（共108组），保护旧历史SQL。`verify_combat_v18.py --only owned-fleet owned-fleet-travel`使用fresh UUID库检查船员/部署业务和旅行事务；`--native --only owned-fleet-world`检查真实Main/GUI、故障连接活动世界绑定、物理跟随、AU取消/抵达及三种布局。实际包沿用固定`--xj-verify-owned-fleet[-travel|-world]-v40`入口，尚未执行包验收，禁止通用EXE `--script`。
+
+当前旅行103项、原生75项/5图通过，汇总`logs/v40-travel-ui-checkpoint.json`，规格和证据边界见[66](../doc/66-自有舰队船员与辅助无人机.md)。资金、舰体、许可、姿态和遭遇隔离为声明夹具；故障须实际命中一次，不能仅凭资金未改变声称SQL回滚。独立工作树执行时额外持有主工作区`E:\星际战舰\jiaoben\tmp\feature-audit.lock`，引擎导入/检查/原生运行保持串行。辅助机、真实旧PCK升级及最终发行仍待完成，不正常启动开发源码处理个人档。
 
 ## 临时产物保留与清理
 

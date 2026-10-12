@@ -4,6 +4,7 @@ const D=preload("res://contracts/contract_dtos.gd")
 const T=preload("res://contracts/contract_types.gd")
 const Binding=preload("res://runtime/data/fleet_validation.gd")
 const Space=preload("res://runtime/space_coordinates.gd")
+const Party=preload("res://runtime/data/party_rules.gd")
 const POSE: Array[String]=["pos_x","pos_y","pos_z","quat_x","quat_y","quat_z","quat_w","vel_x","vel_y","vel_z"]
 var g: RefCounted
 var balance: Dictionary={}
@@ -54,6 +55,9 @@ func busy(id: String) -> bool:
 		for equipment: RefCounted in g.equipped(hull):
 			if equipment.active_remaining_s>0:return true
 	return pending_attacks.is_valid() and pending_attacks.call(id)
+func departure_poses() -> Array[Dictionary]:return Party.departure_owned(g.state,g.catalog)
+func restore_departure(poses: Array[Dictionary]) -> void:Party.restore_owned(g.state,g.catalog,poses)
+func follow_arrival() -> void:Party.arrive_owned(g.state,g.catalog)
 func deploy_reason(id: String) -> String:
 	if not supported():return "当前世界尚未升级自有舰队规则"
 	if g.station().is_empty() or g.state.ship().status!=T.ShipStatus.DOCKED:return "停靠空间站后部署自有舰"
@@ -109,10 +113,16 @@ func _deploy(id: String) -> bool:
 	value.sector_id=g.state.current_sector();value.site_id=Space.current_site(g.state);value.order_kind="regroup";value.has_focus_target_id=false;value.focus_target_id="";value.order_revision+=1
 	value.created_tick=g.state.snapshot.meta.simulation_tick;value.finished_tick=0;value.end_reason="";value.deploy_paid_credit+=fee;value.retreat_remaining_s=0;value.return_remaining_s=0
 	var station: Dictionary=g.definition("station_defs","station_id",g.station());var anchor: Dictionary=g.definition("anchor_defs","anchor_id",station.undock_anchor_id)
-	var position: Vector3=g.anchor_position(anchor)+Vector3(float(balance.formation_m)*(active().size()),0,float(balance.formation_m)*0.25)
+	var position: Vector3=g.anchor_position(anchor)+Basis(Vector3.UP,float(anchor.yaw_rad))*Party.offset(g.catalog,Party.owned(g.state,g.catalog).find(value))
 	hull.status=T.ShipStatus.FLYING;hull.has_station_id=false;hull.station_id="";hull.pos_x=position.x;hull.pos_y=position.y;hull.pos_z=position.z;hull.vel_x=0;hull.vel_y=0;hull.vel_z=0
 	value.goal_x=position.x;value.goal_y=position.y;value.goal_z=position.z
-	var npc: RefCounted=D.NpcStateDto.new();npc.npc_instance_id=id;npc.spawn_id=g.definition("fleet_hull_defs","ship_id",hull.ship_def_id).spawn_id;npc.sector_id=hull.sector_id;npc.generation=value.generation;npc.alive=true;npc.bounty_claimed=true;npc.loot_claimed=true;npc.behavior_phase=T.NpcPhase.PATROL
+	var npc: RefCounted=D.NpcStateDto.new();npc.npc_instance_id=id;npc.spawn_id=g.definition("fleet_hull_defs","ship_id",hull.ship_def_id).spawn_id;npc.sector_id=hull.sector_id
+	# The legacy NPC key is (spawn, generation). Two owned hulls of the same
+	# type share a spawn definition but need separate, monotonic actor versions.
+	value.actor_generation=maxi(value.actor_generation+1,value.generation)
+	for other: RefCounted in g.state.rows("npc_state"):
+		if other.spawn_id==npc.spawn_id:value.actor_generation=maxi(value.actor_generation,other.generation+1)
+	npc.generation=value.actor_generation;npc.alive=true;npc.bounty_claimed=true;npc.loot_claimed=true;npc.behavior_phase=T.NpcPhase.PATROL
 	for field: String in POSE:npc.set(field,hull.get(field))
 	npc.shield=hull.shield;npc.armor=hull.armor;npc.hull=hull.hull
 	g.state.add("npc_state",npc);Space.assign(g.state,"ship",id,value.site_id);Space.assign(g.state,"npc",id,value.site_id)
@@ -209,7 +219,7 @@ func tick(delta: float) -> void:
 		var npc: RefCounted=actor(value);var hull: RefCounted=ship(value.ship_instance_id)
 		if npc==null or hull==null:continue
 		npc.shield=hull.shield;npc.armor=hull.armor;npc.hull=hull.hull
-		if value.phase=="deployed" and g.crew.pilot(value.ship_instance_id)==null:_retreat(value,"crew_unavailable")
+		if spatial_active and value.phase=="deployed" and g.crew.pilot(value.ship_instance_id)==null:_retreat(value,"crew_unavailable")
 		if value.phase=="deployed" and value.order_kind=="focus" and not order_reason(value.ship_instance_id,"focus",value.focus_target_id,g.state.find("npc_state","npc_instance_id",value.focus_target_id).generation if g.state.find("npc_state","npc_instance_id",value.focus_target_id)!=null else 0).is_empty():
 			value.order_kind="regroup";value.has_focus_target_id=false;value.focus_target_id="";value.order_revision+=1
 func _receipt(value: RefCounted,kind: String,paid: int) -> void:

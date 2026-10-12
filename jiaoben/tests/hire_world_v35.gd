@@ -68,8 +68,8 @@ func run() -> void:
 	check(state_signature()==before and JSON.stringify(host.store.list_slots())==slots,"failed rental model preparation publishes no money or state")
 	host.reject_stage=false
 	var original: RefCounted=host.store;var faulty: RefCounted=FaultStore.new(directory.path_join("progress.db"));check(faulty.open(),"isolated failure writer opens the existing test-owned database")
-	faulty.reject_point="state";host.store=faulty;await click(button,"native SQL failure rolls back a paid rental candidate")
-	check(state_signature()==before and JSON.stringify(host.store.list_slots())==slots,"failed rental snapshot restores the old slot and live money")
+	faulty.active_state=host.state;faulty.reject_point="state";host.store=faulty;await click(button,"native SQL failure rolls back a paid rental candidate")
+	check(faulty.last_error.begins_with("Injected failure") and state_signature()==before and JSON.stringify(host.store.list_slots())==slots,"failed rental snapshot restores the old slot and live money")
 	host.store=original;faulty.close();faulty=null
 	await capture("hire-offers")
 	var credit: int=host.state.player().credit;var ship_count: int=host.state.rows("ship_state").size();var spec: Dictionary=host.gameplay.hired.profile("hire_escort")

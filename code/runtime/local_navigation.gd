@@ -7,6 +7,7 @@ const T = preload("res://contracts/contract_types.gd")
 const D = preload("res://contracts/contract_dtos.gd")
 const Rules = preload("res://runtime/local_navigation_rules.gd")
 const Space = preload("res://runtime/space_coordinates.gd")
+const Party = preload("res://runtime/data/party_rules.gd")
 var rules: Rules = Rules.new()
 var world: XJSector
 var state: XJRuntimeState
@@ -35,6 +36,8 @@ var travel_elapsed_s: float = 0.0
 var warp_heading: Vector3 = Vector3.FORWARD
 var _origin_site: String = ""
 var _companion_origin: Dictionary = {}
+var _owned_origin: Array[Dictionary] = []
+var _owned_shapes: Dictionary = {}
 var _destination_site: String = ""
 var _macro_origin: Dictionary = {}
 var _macro_destination: Dictionary = {}
@@ -125,6 +128,9 @@ func _begin(requested_mode: String, id: String, combat_order: bool = false, weap
 	var context: Dictionary = inspect(id)
 	if not bool(context.get(requested_mode + "_ready", false)):
 		return _fail(str(context.get(requested_mode + "_reason", context.reason)))
+	if requested_mode=="warp" or bool(context.get("remote_site",false)):
+		for row: RefCounted in Party.owned(state,catalog):
+			if not world.npcs.has(row.npc_instance_id):return _fail("自有僚舰实体尚未就绪，等待编队稳定")
 	if combat_order:
 		if requested_mode not in ["approach", "orbit"] or str(context.kind) != "npc": return _fail("战斗导航仅支持接近或环绕当前敌舰")
 		if not is_finite(weapon_distance_m) or weapon_distance_m <= 0.0: return _fail("有效武器射程不可用")
@@ -150,6 +156,11 @@ func _begin(requested_mode: String, id: String, combat_order: bool = false, weap
 	var node: Node3D = world.targets[id].node
 	if mode == "warp":
 		_companion_origin=gameplay.hired.departure_pose()
+		_owned_origin=gameplay.owned_fleet.departure_poses()
+		_owned_shapes.clear()
+		for pose: Dictionary in _owned_origin:
+			var body: CharacterBody3D=world.npcs[pose.ship]
+			_owned_shapes[pose.ship]=_capture_shapes(body,body.global_transform.affine_inverse())
 		origin = world.flight.global_position
 		last_safe_position = origin
 		_safe_positions = [origin]
@@ -189,6 +200,7 @@ func tick(delta: float) -> void:
 	if state.ship().ship_instance_id != _ship_id or state.current_sector() != _sector_id:
 		_abort("舰船或星区已改变，自动航行停止"); return
 	if warp_active() and not _stable(): _abort("跃迁中断：交战、弹丸或设备周期尚未结束"); return
+	if warp_active() and not Party.departure_valid(state,catalog,_owned_origin):_abort("跃迁中断：自有僚舰或操舰员状态已变化");return
 	var node: Node3D = world.targets[target_id].node
 	if mode == "warp":
 		if phase == "warmup":
@@ -205,10 +217,10 @@ func tick(delta: float) -> void:
 				changed.emit(mode, phase, "正在跃迁 · " + str(world.targets[target_id].title))
 			return
 		if phase == "arrival_check":
-			if not _landing_clear(destination): _abort("目标落点被占用，已退回出发地点"); return
+			if not _landing_clear(destination) or not _owned_landing_clear(destination): _abort("编队落点被占用，已退回出发地点"); return
 			_arrive()
 			return
-		if not _landing_clear(destination): _abort("目标落点被占用，跃迁已停止"); return
+		if not _landing_clear(destination) or not _owned_landing_clear(destination): _abort("编队落点被占用，跃迁已停止"); return
 		if _cross_site():
 			travel_elapsed_s = minf(travel_duration_s, travel_elapsed_s + delta)
 			world.advance_strategic_departure(travel_elapsed_s)
@@ -446,6 +458,26 @@ func _landing_clear(point: Vector3) -> bool:
 	if not is_instance_valid(world) or not is_instance_valid(world.flight) or not world.is_inside_tree(): return false
 	return _shapes_clear(world.flight, point - world.flight.global_position)
 
+func _capture_shapes(node: Node,inverse: Transform3D) -> Array[Dictionary]:
+	var shapes: Array[Dictionary]=[]
+	if node is CollisionShape3D and not node.disabled and node.shape!=null:
+		shapes.append({"shape":node.shape,"transform":inverse*node.global_transform})
+	for child: Node in node.get_children():shapes.append_array(_capture_shapes(child,inverse))
+	return shapes
+
+func _owned_landing_clear(point: Vector3) -> bool:
+	var excludes: Array[RID]=[world.flight.get_rid()]
+	for id: String in _owned_shapes:
+		if world.npcs.has(id):excludes.append(world.npcs[id].get_rid())
+	var index: int=0
+	for pose: Dictionary in _owned_origin:
+		var transform: Transform3D=Transform3D(world.flight.global_basis,point+world.flight.global_basis*Party.offset(catalog,index));index+=1
+		for shape: Dictionary in _owned_shapes.get(pose.ship,[]):
+			var query:=PhysicsShapeQueryParameters3D.new()
+			query.shape=shape.shape;query.transform=transform*shape.transform;query.margin=rules.value("collision_margin_m");query.collision_mask=world.flight.collision_mask;query.exclude=excludes
+			if not world.get_world_3d().direct_space_state.intersect_shape(query,1).is_empty():return false
+	return true
+
 func _shapes_clear(node: Node, displacement: Vector3) -> bool:
 	if node is CollisionShape3D:
 		var collider: CollisionShape3D = node
@@ -463,11 +495,17 @@ func _shapes_clear(node: Node, displacement: Vector3) -> bool:
 	return true
 
 func _sync_companion_pose() -> void:
-	var npc: RefCounted=gameplay.hired.actor()
-	if npc==null or not world.npcs.has(npc.npc_instance_id):return
-	var body: CharacterBody3D=world.npcs[npc.npc_instance_id]
-	body.global_position=Vector3(npc.pos_x,npc.pos_y,npc.pos_z);body.velocity=Vector3(npc.vel_x,npc.vel_y,npc.vel_z)
-	body.quaternion=Quaternion(npc.quat_x,npc.quat_y,npc.quat_z,npc.quat_w).normalized();body.reset_physics_interpolation()
+	var actors: Array=[]
+	var hired_actor: RefCounted=gameplay.hired.actor()
+	if hired_actor!=null:actors.append(hired_actor)
+	for row: RefCounted in gameplay.owned_fleet.active():
+		var owned_actor: RefCounted=gameplay.owned_fleet.actor(row)
+		if owned_actor!=null:actors.append(owned_actor)
+	for npc: RefCounted in actors:
+		if not world.npcs.has(npc.npc_instance_id):continue
+		var body: CharacterBody3D=world.npcs[npc.npc_instance_id]
+		body.global_position=Vector3(npc.pos_x,npc.pos_y,npc.pos_z);body.velocity=Vector3(npc.vel_x,npc.vel_y,npc.vel_z)
+		body.quaternion=Quaternion(npc.quat_x,npc.quat_y,npc.quat_z,npc.quat_w).normalized();body.reset_physics_interpolation()
 
 func _zero_motion(restore_companion: bool=true) -> void:
 	var companion_restored: bool=false
@@ -482,11 +520,13 @@ func _zero_motion(restore_companion: bool=true) -> void:
 				Space.assign(state, "ship", state.ship().ship_instance_id, _origin_site)
 				world.flight.global_position = origin
 				world.flight.write_back()
-				if restore_companion:gameplay.hired.restore_departure(_companion_origin);companion_restored=true
+				if restore_companion:
+					gameplay.hired.restore_departure(_companion_origin);gameplay.owned_fleet.restore_departure(_owned_origin);companion_restored=true
 				world.refresh_site()
 				world.sync_entities()
 		if warp_active() and restore_companion:
-			if not companion_restored:gameplay.hired.restore_departure(_companion_origin)
+			if not companion_restored:
+				gameplay.hired.restore_departure(_companion_origin);gameplay.owned_fleet.restore_departure(_owned_origin)
 			_sync_companion_pose()
 		if warp_active() and not _landing_clear(world.flight.global_position): _recover_warp_position()
 		world.flight.clear_intent()
@@ -551,6 +591,7 @@ func _arrive() -> void:
 	var id: String = target_id
 	if mode=="warp":
 		gameplay.hired.follow_arrival()
+		gameplay.owned_fleet.follow_arrival()
 		if not world.sync_entities():_abort(world.last_error);return
 		_sync_companion_pose()
 	# A completed strategic arrival keeps the destination context. Cancellation

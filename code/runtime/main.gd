@@ -53,6 +53,9 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-owned-fleet-v40","file":"owned_fleet_v40.gd","prefix":"owned-fleet-v40","env":"XJ_OWNED_FLEET_V40","meta":"xj_owned_fleet_v40_diagnostic"},
+		{"flag":"--xj-verify-owned-fleet-travel-v40","file":"owned_fleet_travel_v40.gd","prefix":"owned-fleet-travel-v40","env":"XJ_OWNED_FLEET_TRAVEL_V40","meta":"xj_owned_fleet_travel_v40_diagnostic"},
+		{"flag":"--xj-verify-owned-fleet-world-v40","file":"owned_fleet_world_v40.gd","prefix":"owned-fleet-world-v40","env":"XJ_OWNED_FLEET_WORLD_V40","meta":"xj_owned_fleet_world_v40_diagnostic"},
 		{"flag":"--xj-verify-measurements-v39","file":"measurements_v39.gd","prefix":"measurements-v39","env":"XJ_MEASUREMENTS_V39","meta":"xj_measurements_v39_diagnostic"},
 		{"flag":"--xj-verify-blockades-world-v39","file":"blockades_world_v39.gd","prefix":"blockades-world-v39","env":"XJ_BLOCKADES_WORLD_V39","meta":"xj_blockades_world_v39_diagnostic"},
 		{"flag":"--xj-verify-scenarios-upgrade-v39","file":"scenarios_upgrade_v39.gd","prefix":"scenarios-upgrade-v39","env":"XJ_SCENARIOS_UPGRADE_V39","meta":"xj_scenarios_upgrade_v39_diagnostic"},
@@ -918,6 +921,9 @@ func _business_action(action: String, target: String, quantity: int, extra: Stri
 	if action=="hire_action" and (target=="dismiss" or not gameplay.hired.profile(target).is_empty()):
 		_hire_financial(target,quantity,extra)
 		return
+	if action=="crew_action" or (action=="owned_fleet_action" and extra.get_slice("|",0) in ["deploy","recover"]):
+		_commit_fleet_action(action,target,quantity,extra,"船员与自有编队")
+		return
 	if ui.page == "warehouse" and action in ["move_stack", "move_item", "move_salvage"]:
 		var kind: String = {"move_stack": "stack", "move_item": "item", "move_salvage": "salvage"}[action]
 		var quote: Dictionary = gameplay.get("inventory").call("quote_transfer", kind, target, quantity, extra)
@@ -972,18 +978,21 @@ func _business_action(action: String, target: String, quantity: int, extra: Stri
 		ui.notify(feedback, true)
 
 func _hire_financial(target: String,quantity: int,extra: String) -> void:
+	_commit_fleet_action("hire_action",target,quantity,extra,"雇佣合同")
+
+func _commit_fleet_action(action: String,target: String,quantity: int,extra: String,label: String) -> void:
 	var blocked: String=_save_block_reason()
-	if not blocked.is_empty():ui.notify("等待%s结束后提交雇佣合同。" % blocked,true);return
+	if not blocked.is_empty():ui.notify("等待%s结束后提交%s。" % [blocked,label],true);return
 	var candidate: XJRuntimeState=store.clone_state(state)
-	if candidate==null:ui.notify("无法准备雇佣合同，资金保留。",true);return
+	if candidate==null:ui.notify("无法准备%s，资金保留。" % label,true);return
 	var actor: RefCounted=preload("res://runtime/gameplay.gd").new();actor.setup(candidate,store.catalog)
-	var result: Dtos.ActionResultDto=actor.act("hire_action",target,quantity,extra)
+	var result: Dtos.ActionResultDto=actor.act(action,target,quantity,extra)
 	var feedback: String=str(actor.status_text) if result.phase==Types.ActionPhase.APPLIED else str(actor.last_error)
 	actor.dispose()
 	if result.phase!=Types.ActionPhase.APPLIED:ui.notify(feedback,true);return
-	var old_page: String=ui.page;busy=true;_sync_combat_automation();ui.set_operation_status("save","正在提交雇佣合同")
+	var old_page: String=ui.page;busy=true;_sync_combat_automation();ui.set_operation_status("save","正在提交"+label)
 	if not _stage_candidate(candidate,store.catalog) or not store.save(candidate,"auto",auto_slot):
-		_discard_staged();busy=false;_sync_combat_automation();ui.set_operation_status("idle","");ui.notify("合同未提交，原僚舰与资金保留。"+store.last_error,true);return
+		_discard_staged();busy=false;_sync_combat_automation();ui.set_operation_status("idle","");ui.notify("操作未提交，原舰船、船员与资金保留。"+store.last_error,true);return
 	auto_slot=(auto_slot+1)%3;_activate(candidate);busy=false;_sync_combat_automation();ui.set_operation_status("idle","");ui.show_page(old_page);ui.notify(feedback)
 
 func _identify_salvage(package_id: String, quantity: int) -> void:
@@ -1526,6 +1535,7 @@ func _local_navigation_changed(_mode: String, phase: String, message: String) ->
 	if gameplay != null:
 		gameplay.ship_roles.spatial_active = not local_navigation.warp_active()
 		gameplay.hired.spatial_active = not local_navigation.warp_active()
+		gameplay.owned_fleet.spatial_active = not local_navigation.warp_active()
 		if local_navigation.warp_active(): gameplay.ship_roles.stop_support()
 	_sync_combat_automation()
 	if local_navigation.warp_active():

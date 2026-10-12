@@ -1430,6 +1430,7 @@ class FleetDeploymentStateDto extends RefCounted:
 	var created_tick: int = 0
 	var finished_tick: int = 0
 	var end_reason: String = ""
+	var actor_generation: int = 0
 
 class FleetReceiptStateDto extends RefCounted:
 	var source_token: String = ""
@@ -1496,6 +1497,7 @@ class CrewSupportQuoteStateDto extends RefCounted:
 	var loyalty_at_payment: int = 0
 	var restore_multiplier: float = 0.0
 	var paid_tick: int = 0
+
 
 
 

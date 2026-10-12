@@ -152,7 +152,9 @@ static func _gate_reason(sector: XJSector, state: XJRuntimeState, catalog: XJCat
 	var companion_mass: float=gameplay.hired.party_mass_kg()
 	var party_reason: String=gameplay.hired.travel_reason()
 	if not party_reason.is_empty():return party_reason
-	if mass > float(connection.max_gross_mass_kg) or companion_mass > float(connection.max_gross_mass_kg) or (gate.has_remaining_mass_budget_kg and mass+companion_mass > gate.remaining_mass_budget_kg): return "编队质量超过航门额度，卸货或换用较小舰船"
+	if mass > float(connection.max_gross_mass_kg) or gameplay.hired.largest_party_mass_kg() > float(connection.max_gross_mass_kg) or (gate.has_remaining_mass_budget_kg and mass+companion_mass > gate.remaining_mass_budget_kg): return "编队质量超过航门额度，卸货或换用较小舰船"
+	var owned_gate_reason: String=preload("res://runtime/data/party_rules.gd").gate_reason(state,catalog,connection)
+	if not owned_gate_reason.is_empty():return owned_gate_reason
 	if state.ship().energy < float(connection.energy_cost_eu) or state.player().credit < gameplay.hired.party_fee(int(connection.fee_credit)): return "航门费用或电容不足"
 	var pending: String = pending_attack_reason(sector)
 	if not pending.is_empty(): return pending

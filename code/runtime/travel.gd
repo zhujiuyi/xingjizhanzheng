@@ -5,6 +5,8 @@ signal changed(phase: int, message: String)
 const Types = preload("res://contracts/contract_types.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
 const Space = preload("res://runtime/space_coordinates.gd")
+const Party = preload("res://runtime/data/party_rules.gd")
+const Hire = preload("res://runtime/data/hire_validation.gd")
 var phase: Types.TravelPhase = Types.TravelPhase.IDLE
 var last_error: String = ""
 var remaining_s: float = 0.0
@@ -67,7 +69,7 @@ func tick(delta: float) -> void:
 		_commit()
 
 func _eligible() -> bool:
-	var party_reason: String=preload("res://runtime/data/hire_validation.gd").travel_reason(state,catalog)
+	var party_reason: String=Hire.travel_reason(state,catalog)
 	if not party_reason.is_empty():return _fail(party_reason)
 	if stable.is_valid() and stable.call() != true:
 		return _fail("虫洞充能中断：请先脱离交战并等待设备周期结束")
@@ -94,10 +96,12 @@ func _eligible() -> bool:
 	if cooldown != null and cooldown.remaining_s > 0.0:
 		return _fail("舰船航门冷却尚未结束")
 	var mass := _mass(ship)
-	var companion_mass: float=preload("res://runtime/data/hire_validation.gd").party_mass(state,catalog)
-	if mass > float(connection.max_gross_mass_kg) or companion_mass > float(connection.max_gross_mass_kg) or (gate.has_remaining_mass_budget_kg and mass+companion_mass > gate.remaining_mass_budget_kg):
+	var companion_mass: float=Hire.party_mass(state,catalog)
+	if mass > float(connection.max_gross_mass_kg) or Hire.largest_party_mass(state,catalog) > float(connection.max_gross_mass_kg) or (gate.has_remaining_mass_budget_kg and mass+companion_mass > gate.remaining_mass_budget_kg):
 		return _fail("总质量超过航门额度，卸货或换用较小舰船")
-	if ship.energy < float(connection.energy_cost_eu) or state.player().credit < preload("res://runtime/data/hire_validation.gd").party_fee(state,catalog,int(connection.fee_credit)):
+	var owned_gate_reason: String=Party.gate_reason(state,catalog,connection)
+	if not owned_gate_reason.is_empty():return _fail(owned_gate_reason)
+	if ship.energy < float(connection.energy_cost_eu) or state.player().credit < Hire.party_fee(state,catalog,int(connection.fee_credit)):
 		return _fail("航门费用或电容不足")
 	for npc: Dtos.NpcStateDto in state.rows("npc_state"):
 		if Space.supported(catalog) and (npc.sector_id != ship.sector_id or Space.site_for_entity(state, "npc", npc.npc_instance_id) != Space.current_site(state)): continue
@@ -172,7 +176,8 @@ func _commit() -> void:
 	ship.quat_z = attitude.z
 	ship.quat_w = attitude.w
 	ship.energy -= float(connection.energy_cost_eu)
-	candidate.player().credit -= preload("res://runtime/data/hire_validation.gd").party_fee(state,catalog,int(connection.fee_credit))
+	candidate.player().credit -= Hire.party_fee(state,catalog,int(connection.fee_credit))
+	Party.charge_owned_gate(candidate,catalog,connection)
 	for container: Dtos.ContainerStateDto in candidate.rows("container_state"):
 		if container.ship_instance_id == ship.ship_instance_id:
 			container.sector_id = ship.sector_id
@@ -184,12 +189,13 @@ func _commit() -> void:
 	cooldown.remaining_s = float(connection.cooldown_s)
 	var gate := candidate.find("gate_state", "connection_id", connection.connection_id) as Dtos.GateStateDto
 	if gate.has_remaining_mass_budget_kg:
-		gate.remaining_mass_budget_kg -= _mass(state.ship())+preload("res://runtime/data/hire_validation.gd").party_mass(state,catalog)
+		gate.remaining_mass_budget_kg -= _mass(state.ship())+Hire.party_mass(state,catalog)
 	var visited := candidate.find("sector_state", "sector_id", ship.sector_id) as Dtos.SectorStateDto
 	if visited != null:
 		visited.visited = true
 	var destination := candidate.find("transfer_state", "transfer_id", transfer_id) as Dtos.TransferStateDto
 	destination.endpoint = Types.TransferEndpoint.DESTINATION
+	Party.arrive_owned(candidate,catalog)
 	if record_arrival.is_valid():
 		record_arrival.call(candidate, connection.connection_id)
 	phase = Types.TravelPhase.DESTINATION_LOADING

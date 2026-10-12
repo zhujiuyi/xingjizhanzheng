@@ -76,7 +76,7 @@ BEGIN
  LEFT JOIN spatial_state p ON p.snapshot_id=f.snapshot_id AND p.entity_kind='ship' AND p.entity_id=f.ship_instance_id
  LEFT JOIN spatial_state q ON q.snapshot_id=f.snapshot_id AND q.entity_kind='npc' AND q.entity_id=f.npc_instance_id
  WHERE f.snapshot_id=NEW.snapshot_id AND f.phase IN('deployed','retreating') AND
- (n.npc_instance_id IS NULL OR n.alive<>1 OR n.generation<>f.generation OR n.spawn_id IS NOT h.spawn_id OR
+ (n.npc_instance_id IS NULL OR n.alive<>1 OR n.generation<>f.actor_generation OR n.spawn_id IS NOT h.spawn_id OR
  s.owner_player_id<>(SELECT player_id FROM player_state WHERE snapshot_id=f.snapshot_id) OR
  n.sector_id<>f.sector_id OR s.sector_id<>f.sector_id OR p.site_id IS NOT f.site_id OR q.site_id IS NOT f.site_id OR
  abs(n.shield-s.shield)>0.00001 OR abs(n.armor-s.armor)>0.00001 OR abs(n.hull-s.hull)>0.00001 OR

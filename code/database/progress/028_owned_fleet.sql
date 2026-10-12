@@ -217,7 +217,7 @@ CREATE TRIGGER crew_assignment_state_update_immutable BEFORE UPDATE ON crew_assi
 
 CREATE TRIGGER crew_assignment_state_delete_immutable BEFORE DELETE ON crew_assignment_state WHEN EXISTS(SELECT 1 FROM save_snapshot WHERE snapshot_id=OLD.snapshot_id AND status='sealed') BEGIN SELECT RAISE(ABORT,'sealed snapshot is immutable'); END;
 
-CREATE TABLE fleet_deployment_state(snapshot_id TEXT NOT NULL,world_id TEXT NOT NULL,content_snapshot_id TEXT NOT NULL,ship_instance_id TEXT NOT NULL,generation INTEGER NOT NULL CHECK(generation>=1),
+CREATE TABLE fleet_deployment_state(snapshot_id TEXT NOT NULL,world_id TEXT NOT NULL,content_snapshot_id TEXT NOT NULL,ship_instance_id TEXT NOT NULL,generation INTEGER NOT NULL CHECK(generation>=1),actor_generation INTEGER NOT NULL CHECK(actor_generation>=generation),
 phase TEXT NOT NULL CHECK(phase IN('deployed','retreating','returning','docked','lost')),
 npc_instance_id TEXT,origin_station_id TEXT NOT NULL,return_station_id TEXT,sector_id TEXT NOT NULL,site_id TEXT NOT NULL,
 order_kind TEXT NOT NULL DEFAULT 'regroup' CHECK(order_kind IN('advance','regroup','focus','retreat')),focus_target_id TEXT,
@@ -391,7 +391,7 @@ BEGIN
  LEFT JOIN spatial_state p ON p.snapshot_id=f.snapshot_id AND p.entity_kind='ship' AND p.entity_id=f.ship_instance_id
  LEFT JOIN spatial_state q ON q.snapshot_id=f.snapshot_id AND q.entity_kind='npc' AND q.entity_id=f.npc_instance_id
  WHERE f.snapshot_id=NEW.snapshot_id AND f.phase IN('deployed','retreating') AND
- (n.npc_instance_id IS NULL OR n.alive<>1 OR n.generation<>f.generation OR n.spawn_id IS NOT h.spawn_id OR
+ (n.npc_instance_id IS NULL OR n.alive<>1 OR n.generation<>f.actor_generation OR n.spawn_id IS NOT h.spawn_id OR
  s.owner_player_id<>(SELECT player_id FROM player_state WHERE snapshot_id=f.snapshot_id) OR
  n.sector_id<>f.sector_id OR s.sector_id<>f.sector_id OR p.site_id IS NOT f.site_id OR q.site_id IS NOT f.site_id OR
  abs(n.shield-s.shield)>0.00001 OR abs(n.armor-s.armor)>0.00001 OR abs(n.hull-s.hull)>0.00001 OR

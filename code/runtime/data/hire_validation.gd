@@ -1,5 +1,6 @@
 extends RefCounted
 const T=preload("res://contracts/contract_types.gd")
+const Party=preload("res://runtime/data/party_rules.gd")
 var last_error: String=""
 func _fail(message: String) -> bool:last_error=message;return false
 
@@ -23,6 +24,8 @@ static func friendly(state: XJRuntimeState,catalog: XJCatalog,id: String) -> boo
 	return catalog.table_names.has("frontier_campaign_defs") and preload("res://runtime/data/frontier_validation.gd").new().friendly(state,id)
 
 static func travel_reason(state: XJRuntimeState,catalog: XJCatalog) -> String:
+	var owned_reason: String=Party.travel_reason(state,catalog)
+	if not owned_reason.is_empty():return owned_reason
 	if not catalog.table_names.has("hire_profile_defs"):return ""
 	for row: RefCounted in state.rows("hire_contract_state"):
 		if row.phase=="retreating":return "等待僚舰完成脱离后再跃迁"
@@ -34,15 +37,23 @@ static func travel_reason(state: XJRuntimeState,catalog: XJCatalog) -> String:
 		if npc.sector_id!=ship.sector_id or row.site_id!=XJSpaceCoordinates.current_site(state) or from.distance_to(to)>float(catalog.rows("hire_balance_defs")[0].warp_ready_m):return "僚舰尚未进入跃迁编队距离"
 	return ""
 static func party_mass(state: XJRuntimeState,catalog: XJCatalog) -> float:
-	if not catalog.table_names.has("hire_profile_defs"):return 0.0
-	var mass: float=0.0
+	var mass: float=Party.owned_mass(state,catalog)
+	if not catalog.table_names.has("hire_profile_defs"):return mass
 	for row: RefCounted in state.rows("hire_contract_state"):
 		if row.phase!="deployed":continue
 		var spec: Dictionary=catalog.one("hire_profile_defs","profile_id",row.profile_id)
 		if not spec.is_empty():mass+=float(catalog.one("ship_defs","ship_id",spec.hull_id).dry_mass_kg)
 	return mass
+static func largest_party_mass(state: XJRuntimeState,catalog: XJCatalog) -> float:
+	var mass: float=Party.largest_owned(state,catalog)
+	if catalog.table_names.has("hire_profile_defs"):
+		for row: RefCounted in state.rows("hire_contract_state"):
+			if row.phase!="deployed":continue
+			var spec: Dictionary=catalog.one("hire_profile_defs","profile_id",row.profile_id)
+			if not spec.is_empty():mass=maxf(mass,float(catalog.one("ship_defs","ship_id",spec.hull_id).dry_mass_kg))
+	return mass
 static func party_fee(state: XJRuntimeState,catalog: XJCatalog,base: int) -> int:
-	var count: int=1
+	var count: int=1+Party.owned(state,catalog).size()
 	if catalog.table_names.has("hire_profile_defs"):
 		for row: RefCounted in state.rows("hire_contract_state"):
 			if row.phase=="deployed":count+=1

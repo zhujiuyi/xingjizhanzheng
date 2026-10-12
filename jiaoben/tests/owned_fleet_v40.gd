@@ -112,4 +112,5 @@ func finish() -> void:
 	if store!=null:store.close();store=null
 	state=null
 	print("OWNED_FLEET_V40_FINAL_JSON ",JSON.stringify({"result":"PASS" if failures.is_empty() else "FAIL","checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"scope":"crew-store-checkpoint"}))
+	print("OWNED_FLEET_V40_RESULT ","PASS" if failures.is_empty() else "FAIL"," checks=",checks," failures=",failures.size())
 	await get_tree().process_frame;get_tree().quit(0 if failures.is_empty() else 1)

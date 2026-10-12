@@ -10,7 +10,7 @@ static func actor_binding(state: XJRuntimeState,catalog: XJCatalog,id: String) -
 	var npc: RefCounted=state.find("npc_state","npc_instance_id",id)
 	if row==null or ship==null or npc==null or row.phase not in ["deployed","retreating"] or not row.has_npc_instance_id or row.npc_instance_id!=id:return false
 	var spec: Dictionary=catalog.one("fleet_hull_defs","ship_id",ship.ship_def_id)
-	return not spec.is_empty() and ship.policy_id=="normal_owned" and ship.owner_player_id==state.player().player_id and ship.status==T.ShipStatus.FLYING and npc.alive and npc.generation==row.generation and npc.spawn_id==spec.spawn_id and npc.sector_id==row.sector_id and ship.sector_id==row.sector_id
+	return not spec.is_empty() and ship.policy_id=="normal_owned" and ship.owner_player_id==state.player().player_id and ship.status==T.ShipStatus.FLYING and npc.alive and npc.generation==row.actor_generation and npc.spawn_id==spec.spawn_id and npc.sector_id==row.sector_id and ship.sector_id==row.sector_id
 static func pilot_ready(state: XJRuntimeState,catalog: XJCatalog,ship_id: String) -> bool:
 	var balance: Dictionary=catalog.rows("fleet_balance_defs")[0]
 	for a: RefCounted in state.rows("crew_assignment_state"):
@@ -33,7 +33,7 @@ func validate(state: XJRuntimeState,catalog: XJCatalog) -> bool:
 	var seen: Dictionary={};var active: int=0;var generations: int=0;var paid: int=0
 	for row: RefCounted in state.rows("fleet_deployment_state"):
 		var ship: RefCounted=state.find("ship_state","ship_instance_id",row.ship_instance_id)
-		if ship==null or seen.has(row.ship_instance_id) or ship.policy_id!="normal_owned" or row.generation<1 or row.phase not in ["deployed","retreating","returning","docked","lost"]:return fail("Owned fleet identity/lifecycle invalid")
+		if ship==null or seen.has(row.ship_instance_id) or ship.policy_id!="normal_owned" or row.generation<1 or row.actor_generation<row.generation or row.phase not in ["deployed","retreating","returning","docked","lost"]:return fail("Owned fleet identity/lifecycle invalid")
 		seen[row.ship_instance_id]=row;generations+=row.generation;paid+=row.deploy_paid_credit
 		var def: Dictionary=catalog.one("ship_defs","ship_id",ship.ship_def_id)
 		var quote: int=int(balance.deploy_fee_credit)+int(ceil(float(def.base_ask_credit)*float(balance.deploy_hull_fee_bp)/10000.0))
