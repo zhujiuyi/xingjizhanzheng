@@ -10,7 +10,8 @@ static func owned(state: XJRuntimeState,catalog: XJCatalog) -> Array:
 static func offset(catalog: XJCatalog,index: int) -> Vector3:
 	var spacing: float=float(catalog.rows("fleet_balance_defs")[0].formation_m)
 	var side: float=-1.0 if index%2==0 else 1.0
-	return Vector3(side*spacing,0.0,-side*spacing)
+	# Both wings trail the flagship, leaving their support corridor behind it.
+	return Vector3(side*spacing,0.0,spacing)
 static func hull_mass(state: XJRuntimeState,catalog: XJCatalog,ship: RefCounted) -> float:
 	var mass: float=float(catalog.one("ship_defs","ship_id",ship.ship_def_id).dry_mass_kg)
 	var containers: Array[String]=[]

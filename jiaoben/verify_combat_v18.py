@@ -11,6 +11,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "owned-combat-world": ("owned_combat_world_v43.gd", "XJ_OWNED_COMBAT_WORLD_V43", "owned-combat-world-v43", "OWNED_COMBAT_WORLD_V43", "--xj-verify-owned-combat-world-v43"),
+    "auxiliary-boundaries": ("auxiliary_boundaries_v43.gd", "XJ_AUXILIARY_BOUNDARIES_V43", "auxiliary-boundaries-v43", "AUXILIARY_BOUNDARIES_V43", "--xj-verify-auxiliary-boundaries-v43"),
     "fleet-integration": ("fleet_integration_v42.gd", "XJ_FLEET_INTEGRATION_V42", "fleet-integration-v42", "FLEET_INTEGRATION_V42", "--xj-verify-fleet-integration-v42"),
     "fleet-upgrade": ("fleet_upgrade_v42.gd", "XJ_FLEET_UPGRADE_V42", "fleet-upgrade-v42", "FLEET_UPGRADE_V42", "--xj-verify-fleet-upgrade-v42"),
     "auxiliary-world": ("auxiliary_world_v41.gd", "XJ_AUXILIARY_WORLD_V41", "auxiliary-world-v41", "AUXILIARY_WORLD_V41", "--xj-verify-auxiliary-world-v41"),
@@ -81,7 +83,7 @@ def sha(path):
 
 def require_supported_diagnostics(binary, names):
     """Read PE metadata before launching flags absent from older clients."""
-    if not set(names).intersection({"owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade"}):
+    if not set(names).intersection({"owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries"}):
         return
     env = os.environ.copy()
     env["XJ_DIAGNOSTIC_VERSION_FILE"] = str(binary)
@@ -234,6 +236,15 @@ def run_suite():
             assert 0 < summary["repaired_hp"] <= 40 and summary["recon_distance_m"] > 1000
             assert summary["intercepted"] and summary["frozen_intel"] and summary["restored"]
             assert summary["comm_returned"] and summary["blocked_sensing"]
+        if name == "owned-combat-world":
+            summary = record["summary"]
+            assert args.native and summary["checks"] >= 50 and len(captures) == 4
+            assert summary["damage_dealt"] > 0 and summary["damage_taken"] > 0 and 0 < summary["owned_repaired_hp"] <= 40
+            assert summary["retreat_m"] >= 1800 and summary["returned"] and summary["lost"] and summary["empty_shots"] == 0
+        if name == "auxiliary-boundaries":
+            summary = record["summary"]
+            assert args.native and summary["checks"] >= 40 and len(captures) == 4
+            assert summary["timeout_recovered"] and summary["timeout_lost"] and summary["mother_loss"] and summary["rescued"]
         if name in ("measurements","scenarios","scenarios-upgrade"):
             expected_groups = 108 if name == "scenarios" and record["summary"].get("fleet_rules") else 99
             assert record["summary"]["checks"] >= {"measurements":30,"scenarios":80,"scenarios-upgrade":20}[name] and record["summary"]["groups"] == expected_groups and not captures

@@ -53,6 +53,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-owned-combat-world-v43","file":"owned_combat_world_v43.gd","prefix":"owned-combat-world-v43","env":"XJ_OWNED_COMBAT_WORLD_V43","meta":"xj_owned_combat_world_v43_diagnostic"},
+		{"flag":"--xj-verify-auxiliary-boundaries-v43","file":"auxiliary_boundaries_v43.gd","prefix":"auxiliary-boundaries-v43","env":"XJ_AUXILIARY_BOUNDARIES_V43","meta":"xj_auxiliary_boundaries_v43_diagnostic"},
 		{"flag":"--xj-verify-fleet-integration-v42","file":"fleet_integration_v42.gd","prefix":"fleet-integration-v42","env":"XJ_FLEET_INTEGRATION_V42","meta":"xj_fleet_integration_v42_diagnostic"},
 		{"flag":"--xj-verify-fleet-upgrade-v42","file":"fleet_upgrade_v42.gd","prefix":"fleet-upgrade-v42","env":"XJ_FLEET_UPGRADE_V42","meta":"xj_fleet_upgrade_v42_diagnostic"},
 		{"flag":"--xj-verify-auxiliary-world-v41","file":"auxiliary_world_v41.gd","prefix":"auxiliary-world-v41","env":"XJ_AUXILIARY_WORLD_V41","meta":"xj_auxiliary_world_v41_diagnostic"},
