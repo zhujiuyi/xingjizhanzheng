@@ -273,3 +273,9 @@ v0.13.0实际交付`0.13.0-afdc5e1d-20261005-002457`来自干净已推送源`afd
 远征建设合批：`build_campaign_theme.py`仅从v0.28归档追加受审主题命名空间；`store_generate_campaign.py`只生成025/v0.21，保留原015/016账本完整守卫并追加已验证协调来源。`--only campaign`验证联合业务，`--only campaign-upgrade`通过`XJ_CAMPAIGN_LEGACY_DATABASE`仅测实际旧包升级，`--native --only campaign-world`通过`XJ_CAMPAIGN_CORE_DATABASE`导入已关闭test-owned联合库。资金、资格、姿态和命名变体均需声明。`prepare_roles_upgrade_v32.py --campaign --legacy-executable <已核v0.28 EXE>`经旧包固定fitting入口创建旧21/72组数据；不得使用通用`--script`或用户档。当前源码证据及尚未验证范围见[64](../doc/64-远征建设与主题行动.md)，本批实际发行仍待后续统一验收。
 
 无画面正常流程可使用`--replay-fps 20`或`30`减少表现层调用；默认仍为60。只改变渲染/脚本观察频率，项目60Hz物理逐步执行，不改航速、工作耗时、经济或时钟状态。报告记录实际参数；新救援续段另核物理频率。原生画面检查不使用该加速选项。
+
+运输成长续段`--only natural-logistics`使用`XJ_NATURAL_RESCUE_ORIGIN`绑定正常救援关闭档，计划经普通合同收入、船坞制造、旧设备转装和六批实体承运完成物流考核；当前仅已编写，尚未运行。保留实际支出、工期、通行和货损规则。
+
+指挥成长续段`--only natural-command`使用`XJ_NATURAL_LOGISTICS_ORIGIN`绑定已通过物流档，计划经付费配装、真实雇佣后勤、物理拆除/撤离、四项资格认证及普通补给采购达成战争受领条件；脚本刚编写，尚未运行，不作为完成证据。
+
+运输首段曾在完成造船和六批交付后触及2400秒外层墙钟限制，原结果保留为INCOMPLETE。`XJ_NATURAL_LOGISTICS_PARTIAL_ORIGIN`仅接受`v54-logistics-partial-*.json`绑定的关闭测试自动档，校验原日志/数据库摘要及实际造船、交付证据，续验返程和结算；不注入状态，不把旧超时改为整组通过。运输与指挥长流程的外层限时为3600秒，游戏内任务时限不变。
