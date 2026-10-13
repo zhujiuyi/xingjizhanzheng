@@ -20,6 +20,7 @@ var path: String = "user://database/progress.db"
 var catalog_path: String = "res://data/catalog.db"
 var catalog: Catalog
 var last_error: String = ""
+var last_retention_error: String = ""
 var phase: String = "CLOSED"
 var busy: bool = false
 var active_state: State
@@ -114,7 +115,14 @@ func new_world(name: String, seed: int, prepare: Callable = Callable()) -> State
 	return state
 
 func save(state: State, slot_kind: String = "auto", slot_index: int = 0) -> bool:
-	return _save(state, slot_kind, slot_index, slot_kind, "")
+	if not _save(state, slot_kind, slot_index, slot_kind, ""):return false
+	# Cleanup is a separate transaction after durable success. Travel endpoints
+	# use save_endpoint and retain their barrier until a later ordinary save.
+	last_retention_error=""
+	if not prune():
+		last_retention_error=last_error;last_error="";_set_phase("READY")
+		status_changed.emit("RETENTION_DEFERRED",last_retention_error)
+	return true
 
 func save_endpoint(state: State, reason: String, transfer_id: String, slot_kind: String = "auto", slot_index: int = 0) -> bool:
 	if reason not in ["travel_origin", "travel_destination"] or transfer_id.is_empty(): return _fail("Invalid transfer endpoint")
@@ -1208,7 +1216,9 @@ func prune(keep_recent: int = 3) -> bool:
 		for row in _records("SELECT source_snapshot_id AS id FROM content_upgrade_record WHERE world_id=? UNION SELECT upgraded_snapshot_id FROM content_upgrade_record WHERE world_id=?", [world.world_id, world.world_id]): protected.append(row.id)
 		for row in _records("SELECT snapshot_id FROM save_snapshot WHERE world_id=?", [world.world_id]):
 			if not protected.has(row.snapshot_id) and not _q("DELETE FROM save_snapshot WHERE snapshot_id=?", [row.snapshot_id]): return _rollback()
-	return _q("COMMIT")
+	if not _checkpoint("retention"):return _rollback("Injected retention interruption")
+	if not _q("COMMIT"):return _rollback()
+	return true
 
 func _migrate() -> bool:
 	var existing: Array[Dictionary] = _records("SELECT name FROM sqlite_schema WHERE type='table'")

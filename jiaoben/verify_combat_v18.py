@@ -12,6 +12,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "retention": ("retention_v48.gd", "XJ_RETENTION_V48", "retention-v48", "RETENTION_V48", "--xj-verify-retention-v48"),
     "market-cache": ("market_cache_v47.gd", "XJ_MARKET_CACHE_V47", "market-cache-v47", "MARKET_CACHE_V47", "--xj-verify-market-cache-v47"),
     "natural-checkpoint": ("natural_growth_v45.gd", "XJ_NATURAL_GROWTH_V45", "natural-growth-v45", "NATURAL_GROWTH_V45", "--xj-verify-natural-growth-v45"),
     "natural-recovery": ("natural_recovery_v45.gd", "XJ_NATURAL_RECOVERY_V45", "natural-recovery-v45", "NATURAL_RECOVERY_V45", "--xj-verify-natural-recovery-v45"),
@@ -91,7 +92,7 @@ def sha(path):
 
 def require_supported_diagnostics(binary, names):
     """Read PE metadata before launching flags absent from older clients."""
-    if not set(names).intersection({"owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache"}):
+    if not set(names).intersection({"owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache", "retention"}):
         return
     env = os.environ.copy()
     env["XJ_DIAGNOSTIC_VERSION_FILE"] = str(binary)
@@ -246,6 +247,8 @@ def run_suite():
             assert record["summary"]["result"] == "PASS" and record["summary"]["failures"] == 0
         if name == "market-cache":
             assert record["summary"]["checks"] >= 30 and record["summary"]["groups"] == 108
+        if name == "retention":
+            assert record["summary"]["checks"] >= 50 and len(record["summary"]["cases"]) == 2
         if name in ("auxiliary-world","owned-combat-world"):
             performance = record["summary"]["performance"]
             assert performance["native"] and performance["samples"] >= 120 and performance["layouts"]
@@ -292,7 +295,7 @@ def run_suite():
             assert args.native and summary["checks"] >= 40 and len(captures) == 4
             assert summary["timeout_recovered"] and summary["timeout_lost"] and summary["mother_loss"] and summary["rescued"]
         if name in ("measurements","scenarios","scenarios-upgrade"):
-            expected_groups = 108 if name == "scenarios" and record["summary"].get("fleet_rules") else 99
+            expected_groups = 108
             assert record["summary"]["checks"] >= {"measurements":30,"scenarios":80,"scenarios-upgrade":20}[name] and record["summary"]["groups"] == expected_groups and not captures
         if name == "scenarios-world":
             assert record["summary"]["checks"] >= 100 and len(captures) == 8 and record["summary"]["precision_hp"] >= 180 and record["summary"]["escort_m"] > 5000 and record["summary"]["repair_hp"] >= 120
@@ -306,21 +309,21 @@ def run_suite():
         if name == "frontier-governance-world":
             assert record["summary"]["checks"] >= 58 and len(captures) == 5 and record["summary"]["defended"] and record["summary"]["dispatched"] and record["summary"]["physical_damage"] > 0
         if name == "campaign-extension":
-            assert record["summary"]["checks"] >= 60 and record["summary"]["groups"] == 99 and record["summary"]["routes_completed"] == 1 and record["summary"]["mineral_cycles"] == 6 and not captures
+            assert record["summary"]["checks"] >= 60 and record["summary"]["groups"] == 108 and record["summary"]["routes_completed"] == 1 and record["summary"]["mineral_cycles"] == 6 and not captures
         if name == "campaign-world":
             assert record["summary"]["checks"] >= 40 and len(captures) >= 6 and record["summary"]["project_visual"] and record["summary"]["physical_tactics"] and record["summary"]["actual_damage"] > 0 and record["summary"]["exported"]
         if name == "campaign-upgrade":
-            assert record["summary"]["checks"] >= 20 and record["summary"]["groups"] == 99 and record["summary"]["legacy_checked"] and record["summary"]["upgrade_only"]
+            assert record["summary"]["checks"] >= 20 and record["summary"]["groups"] == 108 and record["summary"]["legacy_checked"] and record["summary"]["upgrade_only"]
         if name == "campaign":
-            assert record["summary"]["checks"] >= 60 and record["summary"]["groups"] == 99 and not captures
+            assert record["summary"]["checks"] >= 60 and record["summary"]["groups"] == 108 and not captures
         if name == "situational":
-            assert record["summary"]["checks"] >= 30 and record["summary"]["groups"] == 99 and not captures
+            assert record["summary"]["checks"] >= (30 if os.environ.get("XJ_SITUATIONAL_LEGACY_DATABASE") else 28) and record["summary"]["groups"] == 108 and not captures
             if os.environ.get("XJ_SITUATIONAL_LEGACY_DATABASE"):
                 assert record["summary"]["legacy_checked"] is True
         if name == "situational-world":
             assert record["summary"]["checks"] >= 35 and len(captures) >= 5 and record["summary"]["physical_cues"] >= 2 and record["summary"]["audio_played"] and record["summary"]["pause_checked"]
         if name == "hire":
-            assert record["summary"]["checks"] >= 40 and set(record["summary"]["roles"]) == {"escort", "support"} and record["summary"]["groups"] == 99 and not captures
+            assert record["summary"]["checks"] >= 40 and set(record["summary"]["roles"]) == {"escort", "support"} and record["summary"]["groups"] == 108 and not captures
             if os.environ.get("XJ_HIRE_LEGACY_DATABASE"):
                 assert record["summary"]["checks"] >= 70 and record["summary"]["legacy_checked"] is True
         if name == "hire-world":

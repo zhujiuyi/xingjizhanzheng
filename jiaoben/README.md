@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+保留策略：`--only retention`使用固定v48入口和`XJ_RETENTION_V48_INPUTS`指定的测试输入清单，在副本中验证成功保存后的独立清理、清理事务中断、已提交端点不回滚、旧手动/升级/跨世界引用保护及空间复用。原始输入只读核对SHA256；不得传入个人库。68项初次源码证据见`logs/v18-source-headless-174b99f8-7ec2-4017-a2f3-edbb09a860a7.json`，追加跨世界断言随实际候选验收。
+
 自然成长：`verify_combat_v18.py --only natural-growth`通过固定v45入口，从正常新世界完成五段教学和三类普通合同，再用实际收入购船、配装及招募。headless按固定渲染步长重放，模拟频率和玩法数值不变；没有资金、资产、资格、任务事件、姿态或时钟夹具，结果不代表人工乐趣。`natural-checkpoint`只加载SHA256匹配的已关闭回放库，比较全部108组/RNG在Main表现回调之前的读取边界；原始失败报告和通过的补验必须分开引用。`natural-recovery`从有组合来源凭据的正常世界副本验证真实NPC损失、救援、治疗和付费替代舰；源码24项通过，实际包待验。详见[67](../doc/67-自然成长经济与失败恢复验证.md)。
 
 缓存对照：`prepare_cache_reference_v47.py`从固定已提交源码生成两份带SHA256的测试参考，分别通过`XJ_MARKET_CACHE_V47_REFERENCE`及`XJ_MARKET_CACHE_V47_SPAWN_REFERENCE`传入`--only market-cache`。40项完整108组对照覆盖数学顺序、临界补货、目录替换和NPC生命周期；ID时钟是明示夹具。性能定位的临时源码插桩须核对摘要并在finally恢复，不将它混入发行源码。结果汇总`logs/v47-source-checkpoint.json`。

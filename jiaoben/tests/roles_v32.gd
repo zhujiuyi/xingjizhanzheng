@@ -58,7 +58,7 @@ func _run() -> void:
 	state=store.new_world("真实舰种能力与承运",3201)
 	if not check(state!=null,"all role coverage seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==99 and state.rows("consignment_state").size()==2 and state.rows("remote_support_state").is_empty(),"retained role groups and new empty authority initialize without free freight or repair")
+	check(XJRuntimeState.TABLES.size()==108 and state.rows("consignment_state").size()==2 and state.rows("remote_support_state").is_empty(),"retained role groups and new empty authority initialize without free freight or repair")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)
 	g.missions.refresh();g._sync_spawns();state.player().credit=1000000
 	_scouting()

@@ -53,6 +53,7 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-retention-v48","file":"retention_v48.gd","prefix":"retention-v48","env":"XJ_RETENTION_V48","meta":"xj_retention_v48_diagnostic"},
 		{"flag":"--xj-verify-market-cache-v47","file":"market_cache_v47.gd","prefix":"market-cache-v47","env":"XJ_MARKET_CACHE_V47","meta":"xj_market_cache_v47_diagnostic"},
 		{"flag":"--xj-verify-natural-recovery-v45","file":"natural_recovery_v45.gd","prefix":"natural-recovery-v45","env":"XJ_NATURAL_RECOVERY_V45","meta":"xj_natural_recovery_v45_diagnostic"},
 		{"flag":"--xj-verify-natural-growth-v45","file":"natural_growth_v45.gd","prefix":"natural-growth-v45","env":"XJ_NATURAL_GROWTH_V45","meta":"xj_natural_growth_v45_diagnostic"},
