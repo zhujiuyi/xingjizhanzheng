@@ -14,8 +14,20 @@ func _ready() -> void:
 
 func goto_target(id: String, docking: bool=false) -> bool:
 	var start_tick: int=tick()
+	var next_report: int=Time.get_ticks_msec()+15000
 	while tick()-start_tick<int(host.store.catalog.rule("simulation_hz")*600.0):
 		await frames(12);record_distance()
+		if Time.get_ticks_msec()>=next_report:
+			next_report=Time.get_ticks_msec()+15000
+			var evidence: Dictionary={"target":id,"tick":tick(),"busy":host.busy,"page":host.ui.page,"sector":host.state.current_sector(),"status":host.state.ship().status,"position":str(host.gameplay.position(host.state.ship())),"hull":host.state.ship().hull,"shield":host.state.ship().shield}
+			if not host.busy and not host.travel.active():
+				evidence.navigation=host.navigation_context(id);evidence.combat=host.gameplay.in_combat();evidence.party=host.gameplay.hired.travel_reason()
+				if evidence.combat:
+					evidence.engaged=[]
+					for npc: RefCounted in host.state.rows("npc_state"):
+						if npc.alive and host.gameplay.same_entity_site("ship",host.state.ship(),"npc",npc) and npc.behavior_phase in [T.NpcPhase.ACQUIRE,T.NpcPhase.PURSUE,T.NpcPhase.ATTACK,T.NpcPhase.DISENGAGE]:
+							evidence.engaged.append({"spawn":npc.spawn_id,"phase":npc.behavior_phase,"distance":host.gameplay.position(npc).distance_to(host.gameplay.position(host.state.ship()))})
+			print("NATURAL_NAVIGATION ",JSON.stringify(evidence))
 		if host.state.ship().status==T.ShipStatus.DESTROYED:return true
 		if docking and host.state.ship().status==T.ShipStatus.DOCKED:return host.gameplay.station()==id
 		if host.busy or host.travel.active() or host.local_navigation.active():continue

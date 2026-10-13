@@ -12,6 +12,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "natural-war": ("natural_war_v56.gd", "XJ_NATURAL_WAR_V56", "natural-war-v56", "NATURAL_WAR_V56", "--xj-verify-natural-war-v56"),
     "natural-command": ("natural_command_v55.gd", "XJ_NATURAL_COMMAND_V55", "natural-command-v55", "NATURAL_COMMAND_V55", "--xj-verify-natural-command-v55"),
     "natural-logistics": ("natural_logistics_v54.gd", "XJ_NATURAL_LOGISTICS_V54", "natural-logistics-v54", "NATURAL_LOGISTICS_V54", "--xj-verify-natural-logistics-v54"),
     "natural-rescue": ("natural_rescue_v53.gd", "XJ_NATURAL_RESCUE_V53", "natural-rescue-v53", "NATURAL_RESCUE_V53", "--xj-verify-natural-rescue-v53"),
@@ -104,7 +105,7 @@ def sha(path):
 
 def require_supported_diagnostics(binary, names):
     """Read PE metadata before launching flags absent from older clients."""
-    if not set(names).intersection({"march", "march-world", "march-upgrade", "march-routes", "natural-mid", "natural-rank", "natural-scout", "natural-research", "natural-rescue", "natural-logistics", "natural-command", "growth-world", "owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache", "retention"}):
+    if not set(names).intersection({"march", "march-world", "march-upgrade", "march-routes", "natural-mid", "natural-rank", "natural-scout", "natural-research", "natural-rescue", "natural-logistics", "natural-command", "natural-war", "growth-world", "owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache", "retention"}):
         return
     env = os.environ.copy()
     env["XJ_DIAGNOSTIC_VERSION_FILE"] = str(binary)
@@ -113,7 +114,7 @@ def require_supported_diagnostics(binary, names):
          "(Get-Item -LiteralPath $env:XJ_DIAGNOSTIC_VERSION_FILE).VersionInfo.FileVersion"],
         env=env, text=True, encoding="utf-8").strip()
     numbers = [int(value) for value in re.findall(r"\d+", version)[:4]]
-    minimum = (0, 32, 0, 0) if set(names).intersection({'march','march-world','march-upgrade','march-routes','natural-mid','natural-rank','natural-scout','natural-research','natural-rescue','natural-logistics','natural-command','growth-world'}) else (0, 31, 0, 0)
+    minimum = (0, 32, 0, 0) if set(names).intersection({'march','march-world','march-upgrade','march-routes','natural-mid','natural-rank','natural-scout','natural-research','natural-rescue','natural-logistics','natural-command','natural-war','growth-world'}) else (0, 31, 0, 0)
     if len(numbers) < 3 or tuple((numbers + [0] * 4)[:4]) < minimum:
         raise RuntimeError(f"这些诊断需要 {'.'.join(map(str,minimum))} 及以上客户端，当前为 {version or '未知'}；未启动游戏。旧包升级须使用其原有固定入口。")
     # Development candidates can share a version while adding fixed endpoints.
@@ -169,13 +170,16 @@ def run_suite():
         identity = {"executable": str(binary), "exe_sha256": sha(binary), "pck_sha256": sha(binary.with_suffix(".pck"))}
     else:
         binary = args.engine.resolve()
-        identity = {"engine": str(binary), "catalog_sha256": sha(ROOT / "code/data/catalog.db")}
+        identity = {"engine": str(binary), "catalog_sha256": sha(ROOT / "code/data/catalog.db"),
+                    "source_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+                    "code_dirty": bool(subprocess.check_output(["git", "status", "--porcelain", "--", "code"], cwd=ROOT))}
     for name in args.only:
         script, prefix, folder, marker, flag = CASES[name]
         directory = ROOT / "jiaoben/tmp" / folder / str(uuid.uuid4())
         directory.mkdir(parents=True)
         builtin = name in ("base-store", "base-presentation")
         test = ROOT / ("code" if builtin else "jiaoben/tests") / script
+        script_at_start = sha(test)
         env = os.environ.copy()
         if name in ("frontier-world", "frontier-demolition-world"):
             env["XJ_FRONTIER_BATTLE_KIND"] = "demolition" if name == "frontier-demolition-world" else "hold"
@@ -199,7 +203,7 @@ def run_suite():
         output = ROOT / f"jiaoben/logs/{stem}.log"
         engine_log = ROOT / f"jiaoben/logs/{stem}-engine.log"
         command = [str(binary), "--audio-driver", "WASAPI", "--log-file", engine_log.as_posix()]
-        if name in ("natural-growth","natural-recovery","natural-mid","natural-rank","natural-scout","natural-research","natural-rescue","natural-logistics","natural-command") and not args.native:
+        if name in ("natural-growth","natural-recovery","natural-mid","natural-rank","natural-scout","natural-research","natural-rescue","natural-logistics","natural-command","natural-war") and not args.native:
             # Replay all production physics ticks at fixed frame cadence. Only
             # simulated time describes pacing; wall time is execution cost.
             command += ["--fixed-fps", str(args.replay_fps), "--disable-vsync"]
@@ -226,7 +230,7 @@ def run_suite():
             try:
                 # Allow the role world's existing 900s watchdog to finish its
                 # real multi-gate freight trip and emit a definitive result.
-                code = process.wait(timeout=3600 if name in ("natural-logistics","natural-command") else 2400 if name in ("natural-growth","natural-mid","natural-rank","natural-scout","natural-research","natural-rescue","natural-logistics","natural-command") else 1200 if name in ("legacy-chain","legacy-early","legacy-boundary","natural-recovery") else 960 if name in ("roles-world","blockades-world") else 660 if name == "hire-world" else 600)
+                code = process.wait(timeout=3600 if name in ("natural-logistics","natural-command","natural-war") else 2400 if name in ("natural-growth","natural-mid","natural-rank","natural-scout","natural-research","natural-rescue","natural-logistics","natural-command","natural-war") else 1200 if name in ("legacy-chain","legacy-early","legacy-boundary","natural-recovery") else 960 if name in ("roles-world","blockades-world") else 660 if name == "hire-world" else 600)
             except subprocess.TimeoutExpired:
                 process.kill(); process.wait()
                 raise
@@ -235,7 +239,7 @@ def run_suite():
         finals = re.findall(rf"^{marker}_FINAL_JSON (.+)$", text, re.M)
         captures = sorted(directory.glob("*.png"))
         record = {"case": name, "exit_code": code, "seconds": round(time.monotonic() - started, 2),
-                  "directory": str(directory), "script_sha256": sha(test), "stdout": str(output), "engine_log": str(engine_log),
+                  "directory": str(directory), "script_sha256": script_at_start, "script_changed_during_run": sha(test) != script_at_start, "stdout": str(output), "engine_log": str(engine_log),
                   "stdout_sha256": sha(output), "engine_sha256": sha(engine_log) if engine_log.exists() else None,
                   "captures": [{"path": str(path), "sha256": sha(path)} for path in captures],
                   "diagnostics": [line for line in (text + engine).splitlines() if DIAGNOSTIC.search(line)]}
@@ -258,6 +262,7 @@ def run_suite():
         records.append(record)
         report_path.write_text(json.dumps({"mode": mode, "identity": identity, "cases": records}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
         assert code == 0 and engine_log.exists(), f"{name} process failed: {output}"
+        assert not record["script_changed_during_run"], f"{name} script changed during execution; result requires review"
         assert re.search(rf"^{marker}(?:_RESULT)? PASS.*failures=0", text, re.M), f"{name} incomplete/failed result: {output}"
         assert not re.search(r"^FAIL(?:\s|$)", text, re.M), f"{name} contains a failed nested assertion: {output}"
         assert not record["diagnostics"], f"{name} diagnostics: {record['diagnostics'][:5]}"
@@ -309,6 +314,10 @@ def run_suite():
             summary = record['summary']
             assert summary['checks'] >= 20 and summary['combat_earned'] and summary['certified'] and summary['war_ready']
             assert summary['physical_distance_m'] > 1000 and summary['final_credit'] >= 0
+        if name == 'natural-war':
+            summary = record['summary']
+            assert summary['checks'] >= 20 and summary['won'] and summary['gate_passages'] >= 6
+            assert len(summary['original_fleet']) == 3 and summary['physical_distance_m'] > 1000
         if name == 'growth-world':
             summary = record['summary']
             assert args.native and summary['checks'] >= 25 and len(captures) == 3

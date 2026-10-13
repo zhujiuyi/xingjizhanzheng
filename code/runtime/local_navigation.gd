@@ -97,7 +97,7 @@ func inspect(id: String) -> Dictionary:
 	elif not gameplay.hired.travel_reason().is_empty():
 		result.warp_reason=gameplay.hired.travel_reason()
 	elif not _stable():
-		result.warp_reason = pending + "后才能跃迁" if not pending.is_empty() else "脱离交战并等待设备周期结束后才能跃迁"
+		result.warp_reason = pending + "后才能跃迁" if not pending.is_empty() else "交战中 · 继续飞离追击范围；僚舰可先撤退" if bool(gameplay.call("in_combat")) else "等待设备周期结束后才能跃迁"
 	elif not _landing_clear(world.flight.global_position):
 		result.warp_reason = "先离开障碍物，再启动跃迁"
 	elif not is_finite(path) or path < rules.value("min_warp_distance_m"):

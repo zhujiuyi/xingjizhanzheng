@@ -4,6 +4,7 @@ extends "natural_logistics_v54.gd"
 var combat_earned: bool=false
 var certified: bool=false
 var war_ready: bool=false
+var command_resume: bool=false
 
 func _ready() -> void:
 	for diagnostic: String in ["natural_command_v55","natural_logistics_v54","natural_rescue_v53","natural_scout_v51","natural_recovery_v45","natural_growth_v45"]:
@@ -23,9 +24,27 @@ func operation(action: String) -> bool:
 	await command("operation_action",row.operation_id,1,action+":"+str(row.generation))
 	return check(host.gameplay.last_error.is_empty(),"ordinary demolition action "+action+" "+host.gameplay.last_error)
 
+func clear_for_warp(target: String, thrust_action: String="forward") -> bool:
+	if bool(host.navigation_context(target).get("warp_ready",false)):return true
+	await command("nav_stop");host.ui.show_page("")
+	if not check(host._keyboard_control_allowed(),"normal flight input remains available during extraction"):return false
+	var started: int=tick();var origin_position: Vector3=host.gameplay.position(host.state.ship())
+	Input.action_press(thrust_action);Input.action_press("boost")
+	while tick()-started<int(host.gameplay.rule("simulation_hz")*240):
+		await frames(12);record_distance()
+		if host.state.ship().status==T.ShipStatus.DESTROYED:break
+		if bool(host.navigation_context(target).get("warp_ready",false)):break
+	Input.action_release(thrust_action);Input.action_release("boost");await frames(2)
+	var escaped: bool=bool(host.navigation_context(target).get("warp_ready",false))
+	mark("normal-powered-disengagement")
+	print("NATURAL_DISENGAGEMENT ",JSON.stringify({"distance_m":origin_position.distance_to(host.gameplay.position(host.state.ship())),"navigation":host.navigation_context(target)}))
+	return check(escaped,"ordinary thrust and engine cycles leave pursuit range before warp")
+
 func drive_demolition() -> bool:
-	if not await operation("accept"):return false
-	await command("undock");host.ui.show_page("")
+	if host.gameplay.operations.instance("op_demolition").phase!="accepted":
+		if not await operation("accept"):return false
+	if host.state.ship().status==T.ShipStatus.DOCKED:await command("undock")
+	host.ui.show_page("")
 	var started: int=tick();var last: String=""
 	while failures.is_empty() and tick()-started<int(host.gameplay.rule("simulation_hz")*900):
 		await frames(12);record_distance()
@@ -36,6 +55,15 @@ func drive_demolition() -> bool:
 		if row.phase in ["failed","withdrawn"]:check(false,"normal demolition failed "+row.phase);return false
 		if row.phase=="ready":
 			if not check(row.completed_units==2,"real weapons destroy both required installations"):return false
+			# Extraction does not automatically recall a fighting companion.
+			# Give the same explicit retreat order available to the player.
+			if host.gameplay.hired.active()!=null and host.gameplay.hired.active().phase=="deployed":
+				var reason: String=host.gameplay.hired.order_reason("retreat")
+				if not check(reason.is_empty(),"support can receive ordinary retreat "+reason):return false
+				await command("hire_action","retreat",1,host.gameplay.hired.token())
+				if not check(host.gameplay.hired.active()==null or host.gameplay.hired.active().phase!="deployed","support starts actual withdrawal before player warp"):return false
+			if not await clear_for_warp(host.gameplay.operations.definition(row.operation_id).station_id):return false
+			check(host.gameplay.tactics.remaining("tac_sector_echo_group")>0,"physical extraction remains possible without killing every hostile")
 			if not await reach_station(host.gameplay.operations.definition(row.operation_id).station_id):return false
 			return await operation("claim")
 		if host.busy or host.travel.active() or host.local_navigation.warp_active():continue
@@ -55,30 +83,39 @@ func drive_demolition() -> bool:
 
 func run() -> void:
 	directory=OS.get_environment("XJ_NATURAL_COMMAND_V55_DIRECTORY").replace("\\","/")
-	var proof_path: String=OS.get_environment("XJ_NATURAL_LOGISTICS_ORIGIN").replace("\\","/")
-	if not check(directory.is_absolute_path() and directory.contains("/jiaoben/tmp/natural-command-v55/") and not directory.contains("..") and not FileAccess.file_exists(directory.path_join("progress.db")) and proof_path.is_absolute_path() and proof_path.contains("/jiaoben/logs/v54-logistics-origin-") and not proof_path.contains(".."),"fresh normally earned commander scope"):await finish();return
+	command_resume=not OS.get_environment("XJ_NATURAL_COMMAND_PARTIAL_ORIGIN").is_empty()
+	var proof_path: String=OS.get_environment("XJ_NATURAL_COMMAND_PARTIAL_ORIGIN" if command_resume else "XJ_NATURAL_LOGISTICS_ORIGIN").replace("\\","/")
+	if not check(directory.is_absolute_path() and directory.contains("/jiaoben/tmp/natural-command-v55/") and not directory.contains("..") and not FileAccess.file_exists(directory.path_join("progress.db")) and proof_path.is_absolute_path() and proof_path.contains("/jiaoben/logs/v55-command-partial-" if command_resume else "/jiaoben/logs/v54-logistics-origin-") and not proof_path.contains(".."),"fresh normally earned commander scope"):await finish();return
 	origin=JSON.parse_string(FileAccess.get_file_as_string(proof_path));source_path=str(origin.database)
-	if not check(origin.result=="PASS" and source_path.contains("/jiaoben/tmp/natural-logistics-v54/") and not source_path.contains("..") and FileAccess.get_sha256(source_path)==origin.database_sha256 and FileAccess.get_sha256(origin.source_report)==origin.source_report_sha256,"normal logistics source matches accepted closed report"):await finish();return
+	if not check(origin.result==("EARNED_CHECKPOINT" if command_resume else "PASS") and source_path.contains("/jiaoben/tmp/natural-command-v55/" if command_resume else "/jiaoben/tmp/natural-logistics-v54/") and not source_path.contains("..") and FileAccess.get_sha256(source_path)==origin.database_sha256 and FileAccess.get_sha256(origin.source_report)==origin.source_report_sha256,"earned source matches bound report and declared completion status"):await finish();return
 	if not check(DirAccess.copy_absolute(source_path,directory.path_join("progress.db"))==OK,"copy earned industrial career"):await finish();return
 	host=ObservedMain.new();host.progress_database_path=directory.path_join("progress.db");get_tree().root.add_child(host);await frames(4)
 	if not check(host.services_ready,"normal Main opens commander continuation"):await finish();return
 	var slot: Dictionary={}
 	for entry: Dictionary in host.store.list_slots():
-		if entry.slot_kind=="manual" and int(entry.slot_index)==int(origin.manual_slot):slot=entry;break
+		if ((entry.slot_id==origin.slot_id and entry.current_snapshot_id==origin.snapshot_id) if command_resume else (entry.slot_kind=="manual" and int(entry.slot_index)==int(origin.manual_slot))):slot=entry;break
 	if not check(not slot.is_empty(),"earned logistics checkpoint exists"):await finish();return
 	await host._command("load",slot.slot_id,slot.generation,slot.current_snapshot_id);await settle();initial_credit=host.state.player().credit
 	if not check(initial_credit==int(origin.credit) and host.gameplay.honors.progress("honor_faction_deepforge_logistics")==6,"earned freight and money retained"):await finish();return
 	check(Engine.physics_ticks_per_second==60 and int(host.gameplay.rule("simulation_hz"))==60,"commander replay retains production60Hz physics")
 	previous_position=host.gameplay.position(host.state.ship());previous_site=XJSpaceCoordinates.current_site(host.state);previous_ship=host.state.ship().ship_instance_id
-	for pair: Array in [["module_scanner_beacon_i","utility:1"],["module_shield_lattice_i","utility:2"],["module_thermal_sunline_i","weapon:0"]]:
-		var item: RefCounted=local_module(pair[0])
-		if item==null:await command("buy_item",pair[0]);item=local_module(pair[0])
-		if not check(item!=null,"ordinary market buys locally accessible equipment "+str(pair[0])):await finish();return
-		await command("fit_module",item.item_instance_id,1,pair[1]);await command("set_module_enabled",item.item_instance_id,1,"on")
-		if not check(host.state.find("equipment_state","item_instance_id",item.item_instance_id)!=null,"normal legal transport refit "+str(pair[0])):await finish();return
-	if not await reach_station("station_echo_depot"):await finish();return
-	await command("hire_action","hire_support",1,host.gameplay.hired.token())
-	if not check(host.gameplay.hired.active()!=null and host.gameplay.hired.active().profile_id=="hire_support","actual income pays support lease and deposit"):await finish();return
+	if command_resume:
+		check(FileAccess.get_sha256(origin.source_log)==origin.source_log_sha256,"original stopped-run log is unchanged")
+		check(host.gameplay.operations.instance("op_demolition").phase=="accepted" and host.gameplay.operations.instance("op_demolition").completed_units==0,"earlier earned checkpoint does not invent unsaved demolition progress")
+		check(host.gameplay.hired.active()!=null and host.gameplay.hired.active().profile_id=="hire_support","paid support lease survives the real auto-save")
+		for module: String in ["module_scanner_beacon_i","module_shield_lattice_i","module_thermal_sunline_i"]:
+			check(local_module(module)!=null,"original locally paid refit retained "+module)
+		if not failures.is_empty():await finish();return
+	else:
+		for pair: Array in [["module_scanner_beacon_i","utility:1"],["module_shield_lattice_i","utility:2"],["module_thermal_sunline_i","weapon:0"]]:
+			var item: RefCounted=local_module(pair[0])
+			if item==null:await command("buy_item",pair[0]);item=local_module(pair[0])
+			if not check(item!=null,"ordinary market buys locally accessible equipment "+str(pair[0])):await finish();return
+			await command("fit_module",item.item_instance_id,1,pair[1]);await command("set_module_enabled",item.item_instance_id,1,"on")
+			if not check(host.state.find("equipment_state","item_instance_id",item.item_instance_id)!=null,"normal legal transport refit "+str(pair[0])):await finish();return
+		if not await reach_station("station_echo_depot"):await finish();return
+		await command("hire_action","hire_support",1,host.gameplay.hired.token())
+		if not check(host.gameplay.hired.active()!=null and host.gameplay.hired.active().profile_id=="hire_support","actual income pays support lease and deposit"):await finish();return
 	if not await drive_demolition():await finish();return
 	var task: String="honor_faction_deepforge_combat"
 	combat_earned=check(host.gameplay.honors.progress(task)==2,"actual complete demolition earns combat examination")
@@ -119,8 +156,9 @@ func run() -> void:
 func finish() -> void:
 	if finishing:return
 	finishing=true
+	Input.action_release("forward");Input.action_release("back");Input.action_release("boost")
 	var credit: int=host.state.player().credit if is_instance_valid(host) and host.state!=null else 0
 	if is_instance_valid(host):host.queue_free()
 	host=null;await frames(5);await get_tree().create_timer(0.25).timeout
-	var summary: Dictionary={"result":"PASS" if failures.is_empty() else "FAIL","checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"combat_earned":combat_earned,"certified":certified,"war_ready":war_ready,"initial_credit":initial_credit,"final_credit":credit,"physical_distance_m":moved_m,"actions":actions,"milestones":milestones,"scope":"normal refit, hired support, actual demolition and commander certification; no progression fixtures"}
+	var summary: Dictionary={"result":"PASS" if failures.is_empty() else "FAIL","checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"combat_earned":combat_earned,"certified":certified,"war_ready":war_ready,"resumed":command_resume,"origin":origin,"initial_credit":initial_credit,"final_credit":credit,"physical_distance_m":moved_m,"actions":actions,"milestones":milestones,"scope":"normal refit, hired support, actual demolition and commander certification; no progression fixtures"}
 	print("NATURAL_COMMAND_V55_FINAL_JSON ",JSON.stringify(summary));print("NATURAL_COMMAND_V55_RESULT ",summary.result," checks=",checks," failures=",failures.size());get_tree().quit(0 if failures.is_empty() else 1)

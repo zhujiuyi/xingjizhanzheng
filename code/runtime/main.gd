@@ -53,6 +53,7 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-natural-war-v56","file":"natural_war_v56.gd","prefix":"natural-war-v56","env":"XJ_NATURAL_WAR_V56","meta":"xj_natural_war_v56_diagnostic"},
 		{"flag":"--xj-verify-natural-command-v55","file":"natural_command_v55.gd","prefix":"natural-command-v55","env":"XJ_NATURAL_COMMAND_V55","meta":"xj_natural_command_v55_diagnostic"},
 		{"flag":"--xj-verify-natural-logistics-v54","file":"natural_logistics_v54.gd","prefix":"natural-logistics-v54","env":"XJ_NATURAL_LOGISTICS_V54","meta":"xj_natural_logistics_v54_diagnostic"},
 		{"flag":"--xj-verify-natural-rescue-v53","file":"natural_rescue_v53.gd","prefix":"natural-rescue-v53","env":"XJ_NATURAL_RESCUE_V53","meta":"xj_natural_rescue_v53_diagnostic"},
