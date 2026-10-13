@@ -10,6 +10,10 @@ var gate_restore_checked: bool=false
 var grant_ui_checked: bool=false
 var march_pause_checked: bool=false
 var war_id: String="war_council_01"
+var frame_metrics: RefCounted=preload("frame_metrics.gd").new()
+
+func _process(delta: float) -> void:
+	frame_metrics.observe(host,delta)
 
 func _ready() -> void:
 	get_tree().set_meta("xj_march_world_v49_diagnostic",true)
@@ -117,7 +121,9 @@ func run() -> void:
 func finish() -> void:
 	if finishing:return
 	finishing=true
+	var performance: Dictionary=frame_metrics.report()
+	check(performance.native and int(performance.samples)>60,"passive native performance samples cover real active march frames")
 	if is_instance_valid(host):host.queue_free()
 	host=null;await frames(5);await get_tree().create_timer(0.25).timeout
-	var summary: Dictionary={"result":"PASS" if failures.is_empty() else "FAIL","checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"captures":captures,"native_moved_m":native_moved_m,"departed":departed,"gate_ready_checked":gate_ready_checked,"gate_hidden_checked":gate_hidden_checked,"gate_restore_checked":gate_restore_checked,"grant_ui_checked":grant_ui_checked,"pause_checked":march_pause_checked,"scope":"qualification/wealth/loadout fixture; actual GUI, Main physics, one visible gate and full save/load; complete itinerary separately covered by macro suite"}
+	var summary: Dictionary={"result":"PASS" if failures.is_empty() else "FAIL","checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"captures":captures,"native_moved_m":native_moved_m,"departed":departed,"gate_ready_checked":gate_ready_checked,"gate_hidden_checked":gate_hidden_checked,"gate_restore_checked":gate_restore_checked,"grant_ui_checked":grant_ui_checked,"pause_checked":march_pause_checked,"performance":performance,"scope":"qualification/wealth/loadout fixture; actual GUI, Main physics, one visible gate and full save/load; complete itinerary separately covered by macro suite"}
 	print("MARCH_WORLD_V49_FINAL_JSON ",JSON.stringify(summary));print("MARCH_WORLD_V49_RESULT ",summary.result," checks=",checks," failures=",failures.size());get_tree().quit(0 if failures.is_empty() else 1)

@@ -15,6 +15,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILES = {
+    "natural-expedition": ("natural-campaign-v58", 0, "v58-expedition-origin", "expedition_completed"),
+    "natural-project": ("natural-campaign-v58", 1, "v58-project-origin", "project_completed"),
     "natural-hull": ("natural-hull-v57", 4, "v57-hull-origin", "fitted"),
     "natural-war": ("natural-war-v56", 3, "v56-war-origin", "won"),
     "natural-command": ("natural-command-v55", 2, "v55-command-origin", "war_ready"),
