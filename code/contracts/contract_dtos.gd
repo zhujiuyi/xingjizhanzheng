@@ -1508,7 +1508,84 @@ class CrewSupportQuoteStateDto extends RefCounted:
 
 
 
+class MarchStateDto extends RefCounted:
+	var war_id: String = ""
+	var attempt: int = 0
+	var phase: String = ""
+	var resume_phase: String = ""
+	var direction: int = 0
+	var retreat_requested: bool = false
+	var completed_legs: int = 0
+	var sector_id: String = ""
+	var site_id: String = ""
+	var goal_anchor_id: String = ""
+	var phase_remaining_s: float = 0.0
+	var blocked_elapsed_s: float = 0.0
+	var blocked_reason: String = ""
+	var initial_supply_units: int = 0
+	var returned_supply_units: int = 0
+	var lost_supply_units: int = 0
+	var transferred_supply_units: int = 0
+	var revision: int = 0
+	var started_tick: int = 0
+	var finished_tick: int = 0
+	var gate_cooldown_remaining_s: float = 0.0
+
+class MarchMemberStateDto extends RefCounted:
+	var npc_instance_id: String = ""
+	var war_id: String = ""
+	var attempt: int = 0
+	var spawn_id: String = ""
+	var ship_def_id: String = ""
+	var phase: String = ""
+	var sector_id: String = ""
+	var site_id: String = ""
+	var cargo_units: int = 0
+	var goal_x: float = 0.0
+	var goal_y: float = 0.0
+	var goal_z: float = 0.0
+	var moved_distance_m: float = 0.0
+	var lost_tick: int = 0
+
+class MarchJournalStateDto extends RefCounted:
+	var source_token: String = ""
+	var war_id: String = ""
+	var attempt: int = 0
+	var event_kind: String = ""
+	var sector_id: String = ""
+	var has_endpoint_id: bool = false
+	var endpoint_id: String = ""
+	var completed_legs: int = 0
+	var direction: int = 0
+	var has_npc_instance_id: bool = false
+	var npc_instance_id: String = ""
+	var material_units: int = 0
+	var mass_kg: float = 0.0
+	var event_tick: int = 0
+
+class GrowthGoalStateDto extends RefCounted:
+	var player_id: String = ""
+	var has_faction_id: bool = false
+	var faction_id: String = ""
+	var has_stage_id: bool = false
+	var stage_id: String = ""
+	var revision: int = 0
+	var selected_tick: int = 0
+
+class GrowthMilestoneStateDto extends RefCounted:
+	var stage_id: String = ""
+	var observed_tick: int = 0
+	var credit_at_observation: int = 0
+	var reputation_at_observation: int = 0
+	var owned_hulls_at_observation: int = 0
+
+
 class WorldSnapshotDto extends RefCounted:
+	var growth_milestone_state_rows: Array[GrowthMilestoneStateDto] = []
+	var growth_goal_state_rows: Array[GrowthGoalStateDto] = []
+	var march_journal_state_rows: Array[MarchJournalStateDto] = []
+	var march_member_state_rows: Array[MarchMemberStateDto] = []
+	var march_state_rows: Array[MarchStateDto] = []
 	var crew_support_quote_state_rows: Array[CrewSupportQuoteStateDto] = []
 	var auxiliary_intel_state_rows: Array[AuxiliaryIntelStateDto] = []
 	var auxiliary_bay_state_rows: Array[AuxiliaryBayStateDto] = []
