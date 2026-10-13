@@ -19,7 +19,7 @@ func _run() -> void:
 	state=store.new_world("战术与行为记录",3901)
 	if not check(state!=null,"new active-rules world seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==(108 if v42_fleet_rules else 99) and state.rows("trial_state").size()==3 and state.rows("blockade_state").size()==3 and state.rows("blockade_node_state").size()==12 and (not v42_fleet_rules or (state.rows("crew_member_state").size()==8 and state.rows("fleet_total_state").size()==1)),"all tactical definitions and current ABI have unique initial state")
+	check(XJRuntimeState.TABLES.size()==(114 if store.catalog.table_names.has("march_balance_defs") else 108 if v42_fleet_rules else 99) and state.rows("trial_state").size()==3 and state.rows("blockade_state").size()==3 and state.rows("blockade_node_state").size()==12 and (not v42_fleet_rules or (state.rows("crew_member_state").size()==8 and state.rows("fleet_total_state").size()==1)),"all tactical definitions and current ABI have unique initial state")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)
 	state.player().credit=1000000;g.telemetry.wallet()
 	hull("frigate_kestrel");fit("module_kinetic_needle_ii","weapon:0");at_station("station_anchor_port")

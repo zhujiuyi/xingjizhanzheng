@@ -1,6 +1,6 @@
 extends "owned_fleet_v40.gd"
 ## Asset/fund/arrival, contribution and payroll boundaries are declared fixtures.
-## Tests real business guards, budget accounting, durable quotes and all108 groups.
+## Tests real business guards, budget accounting, durable quotes and all current groups.
 const Space=preload("res://runtime/space_coordinates.gd")
 const Party=preload("res://runtime/data/party_rules.gd")
 var buddy_id: String=""
@@ -89,7 +89,7 @@ func run() -> void:
 	for slot: Dictionary in store.list_slots():
 		if slot.slot_kind=="manual" and int(slot.slot_index)==3:slot_id=slot.slot_id;break
 	g.dispose();g=null;state=store.load(slot_id)
-	if not check(state!=null and signature()==saved,"all108 groups and RNG reopen with original paid quote"):await finish();return
+	if not check(state!=null and signature()==saved,"all current groups and RNG reopen with original paid quote"):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog);g.set_spatial_validator(func(_from: Vector3,_to: Vector3,_id: String):return true)
 	var channel: RefCounted=g.ship_roles.channel(patch_id);var before_hp: float=g.owned_fleet.ship(buddy_id).armor
 	for step: int in range(int(ceil(channel.remaining_s/dt))+2):
@@ -107,5 +107,5 @@ func finish() -> void:
 	if store!=null:store.close();store=null
 	state=null
 	var result: String="PASS" if failures.is_empty() else "FAIL"
-	print("FLEET_INTEGRATION_V42_FINAL_JSON ",JSON.stringify({"result":result,"checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"groups":108}))
+	print("FLEET_INTEGRATION_V42_FINAL_JSON ",JSON.stringify({"result":result,"checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"groups":XJRuntimeState.TABLES.size()}))
 	print("FLEET_INTEGRATION_V42_RESULT ",result," checks=",checks," failures=",failures.size());await get_tree().process_frame;get_tree().quit(0 if failures.is_empty() else 1)

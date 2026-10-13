@@ -40,7 +40,7 @@ func run() -> void:
 	state=store.new_world("自有编队与船员检查",4001)
 	if not check(state!=null,"new fleet world seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==108 and state.rows("crew_member_state").size()==8 and state.rows("crew_member_state").all(func(c: RefCounted):return c.phase=="available" and c.generation==0 and c.experience==0),"new roster gives no free employed crew or experience")
+	check(XJRuntimeState.TABLES.size()==114 and state.rows("crew_member_state").size()==8 and state.rows("crew_member_state").all(func(c: RefCounted):return c.phase=="available" and c.generation==0 and c.experience==0),"new roster gives no free employed crew or experience")
 	check(state.rows("fleet_deployment_state").is_empty() and not state.rows("npc_state").any(func(n: RefCounted):return n.spawn_id.begins_with("owned_")),"new world never creates duplicate owned actors")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)
 	g.missions.refresh();g._sync_spawns();state.player().credit=100000

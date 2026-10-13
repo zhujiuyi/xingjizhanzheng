@@ -254,7 +254,7 @@ func campaign_frontier() -> void:
 	capital(faction);check(not action("start_war",definitions[0].war_id),"current controlled frontier cannot be conquered repeatedly")
 	check(helper.prepare(definitions[1].war_id),"second current frontier gets a separate real paid preparation")
 	var credit: int=state.player().credit
-	check(action("fleet_command","retreat") and g.civilizations.active_war()==null and state.rows("war_fleet_state").is_empty() and state.player().credit==credit,"current retreat cleans real fleet without sovereignty or reward")
+	check(action("fleet_command","retreat") and helper.finish_march(definitions[1].war_id,"returned") and g.civilizations.active_war()==null and state.rows("war_fleet_state").is_empty() and state.player().credit==credit,"current retreat returns and cleans real fleet without sovereignty or reward")
 	check(helper.prepare(definitions[1].war_id),"withdrawn frontier supports a fresh paid attempt")
 	war=g.civilizations.active_war()
 	for ally: RefCounted in g.civilizations.living_fleet(war,"ally"):g.damage_npc(ally.npc_instance_id,Vector3(1000000,1000000,1000000))

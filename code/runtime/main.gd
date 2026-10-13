@@ -53,6 +53,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-natural-rescue-v53","file":"natural_rescue_v53.gd","prefix":"natural-rescue-v53","env":"XJ_NATURAL_RESCUE_V53","meta":"xj_natural_rescue_v53_diagnostic"},
+		{"flag":"--xj-verify-natural-research-v52","file":"natural_research_v52.gd","prefix":"natural-research-v52","env":"XJ_NATURAL_RESEARCH_V52","meta":"xj_natural_research_v52_diagnostic"},
 		{"flag":"--xj-verify-natural-scout-v51","file":"natural_scout_v51.gd","prefix":"natural-scout-v51","env":"XJ_NATURAL_SCOUT_V51","meta":"xj_natural_scout_v51_diagnostic"},
 		{"flag":"--xj-verify-natural-rank-v50","file":"natural_rank_v50.gd","prefix":"natural-rank-v50","env":"XJ_NATURAL_RANK_V50","meta":"xj_natural_rank_v50_diagnostic"},
 		{"flag":"--xj-verify-growth-world-v50","file":"growth_world_v50.gd","prefix":"growth-world-v50","env":"XJ_GROWTH_WORLD_V50","meta":"xj_growth_world_v50_diagnostic"},

@@ -31,6 +31,13 @@ func run() -> void:
 	await host._command("new_world","成长入口联合验证",1,"");await settle();host.set_process(false);host.set_physics_process(false)
 	if not await qualified_frontier():await finish();return
 	host.ui.civilization_selected_faction=faction
+	var before_browsing: String=preload("snapshot_signature.gd").runtime(host.state)
+	var all_statuses: bool=true
+	for stage: Dictionary in host.gameplay.growth.stages(faction):
+		for path: Dictionary in host.gameplay.growth.activities(stage.stage_id):
+			all_statuses=all_statuses and not host.gameplay.growth.activity_status(path).is_empty()
+	check(all_statuses,"every actual growth path explains its current availability")
+	check(preload("snapshot_signature.gd").runtime(host.state)==before_browsing,"browsing growth availability preserves every state group and RNG")
 	var credit: int=host.state.player().credit
 	for suffix: String in ["register","command","research2","hull2","rank5"]:
 		var id: String=faction+"_"+suffix

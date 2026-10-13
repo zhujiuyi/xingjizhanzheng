@@ -19,6 +19,17 @@ func qualified_faction(faction: String) -> void:
 	if rep==null:g.civilizations._add_reputation(faction,2600)
 	else:rep.reputation=2600
 	at_capital(faction)
+func finish_march(war_id: String,wanted: String="arrived") -> bool:
+	var service: RefCounted=g.get("march")
+	if service==null or not service.supported() or service.state_for(war_id)==null:return true
+	# Declared coarse strategy clock; native travelling bodies have their own suite.
+	for index: int in range(4800):
+		var row: RefCounted=service.state_for(war_id)
+		if row.phase==wanted:return true
+		if row.phase in ["failed","cancelled"]:return false
+		state.snapshot.meta.simulation_tick+=15
+		service.tick(0.25);g.civilizations.tick(0.25);g._tick_gate_lifetimes(0.25)
+	return false
 func task(faction: String,kind: String) -> Dictionary:
 	for spec: Dictionary in g.honors.tasks(faction):
 		if spec.task_kind==kind:return spec
@@ -78,8 +89,8 @@ func _run() -> void:
 	state=store.new_world("文明真实能力考核",3301)
 	if not check(state!=null,"all commander coverage seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==108 and state.rows("civilization_command_state").size()==3 and state.rows("civilization_honor_evidence_state").is_empty(),"retained commander groups and new authority initialize without free qualifications")
-	check(int(store._records("PRAGMA user_version")[0].values()[0])==25,"real newly created SQLite user version matches format25")
+	check(XJRuntimeState.TABLES.size()==114 and state.rows("civilization_command_state").size()==3 and state.rows("civilization_honor_evidence_state").is_empty(),"retained commander groups and new authority initialize without free qualifications")
+	check(int(store._records("PRAGMA user_version")[0].values()[0])==26,"real newly created SQLite user version matches format26")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)
 	state.player().credit=1000000;g.missions.refresh();g._sync_spawns()
 	hull("transport_caravan");fit("module_scanner_beacon_i","utility:0")
@@ -129,6 +140,7 @@ func _run() -> void:
 		if front!=null and front.supported():g.inventory.grant(g.inventory.warehouse(g.station()),front.balance.material_id,int(front.balance.supply_units))
 		check(g.civilizations.war_reason(war_id).is_empty() and apply("start_war",war_id),"qualification has a real new-war permission consumer")
 		check(apply("fleet_command","retreat"),"qualified campaign can use real existing retreat")
+		check(finish_march(war_id,"returned"),"new-rule fleet completes its actual return before changing allegiance")
 		step(g.combat_remaining_s+0.2)
 		factions_checked+=1
 	var validation: RefCounted=Validation.new()

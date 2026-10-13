@@ -12,6 +12,8 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "natural-rescue": ("natural_rescue_v53.gd", "XJ_NATURAL_RESCUE_V53", "natural-rescue-v53", "NATURAL_RESCUE_V53", "--xj-verify-natural-rescue-v53"),
+    "natural-research": ("natural_research_v52.gd", "XJ_NATURAL_RESEARCH_V52", "natural-research-v52", "NATURAL_RESEARCH_V52", "--xj-verify-natural-research-v52"),
     "natural-scout": ("natural_scout_v51.gd", "XJ_NATURAL_SCOUT_V51", "natural-scout-v51", "NATURAL_SCOUT_V51", "--xj-verify-natural-scout-v51"),
     "natural-rank": ("natural_rank_v50.gd", "XJ_NATURAL_RANK_V50", "natural-rank-v50", "NATURAL_RANK_V50", "--xj-verify-natural-rank-v50"),
     "growth-world": ("growth_world_v50.gd", "XJ_GROWTH_WORLD_V50", "growth-world-v50", "GROWTH_WORLD_V50", "--xj-verify-growth-world-v50"),
@@ -100,7 +102,7 @@ def sha(path):
 
 def require_supported_diagnostics(binary, names):
     """Read PE metadata before launching flags absent from older clients."""
-    if not set(names).intersection({"march", "march-world", "march-upgrade", "march-routes", "natural-mid", "natural-rank", "natural-scout", "growth-world", "owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache", "retention"}):
+    if not set(names).intersection({"march", "march-world", "march-upgrade", "march-routes", "natural-mid", "natural-rank", "natural-scout", "natural-research", "natural-rescue", "growth-world", "owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache", "retention"}):
         return
     env = os.environ.copy()
     env["XJ_DIAGNOSTIC_VERSION_FILE"] = str(binary)
@@ -109,7 +111,7 @@ def require_supported_diagnostics(binary, names):
          "(Get-Item -LiteralPath $env:XJ_DIAGNOSTIC_VERSION_FILE).VersionInfo.FileVersion"],
         env=env, text=True, encoding="utf-8").strip()
     numbers = [int(value) for value in re.findall(r"\d+", version)[:4]]
-    minimum = (0, 32, 0, 0) if set(names).intersection({'march','march-world','march-upgrade','march-routes','natural-mid','natural-rank','natural-scout','growth-world'}) else (0, 31, 0, 0)
+    minimum = (0, 32, 0, 0) if set(names).intersection({'march','march-world','march-upgrade','march-routes','natural-mid','natural-rank','natural-scout','natural-research','natural-rescue','growth-world'}) else (0, 31, 0, 0)
     if len(numbers) < 3 or tuple((numbers + [0] * 4)[:4]) < minimum:
         raise RuntimeError(f"这些诊断需要 {'.'.join(map(str,minimum))} 及以上客户端，当前为 {version or '未知'}；未启动游戏。旧包升级须使用其原有固定入口。")
     # Development candidates can share a version while adding fixed endpoints.
@@ -148,6 +150,8 @@ def activate(process, ready_output=None):
 def run_suite():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--native", action="store_true")
+    parser.add_argument("--replay-fps", type=int, choices=[20, 30, 60], default=60,
+                        help="Headless normal-play render cadence; production 60 Hz physics is unchanged")
     parser.add_argument("--only", nargs="+", choices=CASES, default=["combat", "lighting", "weapon-ui", "upgrade"])
     parser.add_argument("--executable", type=Path, help="Actual Windows release EXE, without a source project path")
     parser.add_argument("--engine", type=Path, default=Path("D:/DevTools/Godot/4.7.2/Godot_v4.7.2-stable_win64.exe"))
@@ -193,10 +197,10 @@ def run_suite():
         output = ROOT / f"jiaoben/logs/{stem}.log"
         engine_log = ROOT / f"jiaoben/logs/{stem}-engine.log"
         command = [str(binary), "--audio-driver", "WASAPI", "--log-file", engine_log.as_posix()]
-        if name in ("natural-growth","natural-recovery","natural-mid","natural-rank","natural-scout") and not args.native:
+        if name in ("natural-growth","natural-recovery","natural-mid","natural-rank","natural-scout","natural-research","natural-rescue") and not args.native:
             # Replay all production physics ticks at fixed frame cadence. Only
             # simulated time describes pacing; wall time is execution cost.
-            command += ["--fixed-fps", "60", "--disable-vsync"]
+            command += ["--fixed-fps", str(args.replay_fps), "--disable-vsync"]
         if not args.native or name == "base-store":
             command += ["--headless"]
         if args.executable:
@@ -220,7 +224,7 @@ def run_suite():
             try:
                 # Allow the role world's existing 900s watchdog to finish its
                 # real multi-gate freight trip and emit a definitive result.
-                code = process.wait(timeout=2400 if name in ("natural-growth","natural-mid","natural-rank","natural-scout") else 1200 if name in ("legacy-chain","legacy-early","legacy-boundary","natural-recovery") else 960 if name in ("roles-world","blockades-world") else 660 if name == "hire-world" else 600)
+                code = process.wait(timeout=2400 if name in ("natural-growth","natural-mid","natural-rank","natural-scout","natural-research","natural-rescue") else 1200 if name in ("legacy-chain","legacy-early","legacy-boundary","natural-recovery") else 960 if name in ("roles-world","blockades-world") else 660 if name == "hire-world" else 600)
             except subprocess.TimeoutExpired:
                 process.kill(); process.wait()
                 raise
@@ -233,6 +237,9 @@ def run_suite():
                   "stdout_sha256": sha(output), "engine_sha256": sha(engine_log) if engine_log.exists() else None,
                   "captures": [{"path": str(path), "sha256": sha(path)} for path in captures],
                   "diagnostics": [line for line in (text + engine).splitlines() if DIAGNOSTIC.search(line)]}
+        if "--fixed-fps" in command:
+            record["replay_render_fps"] = args.replay_fps
+            record["production_physics_hz"] = 60
         if finals:
             assert len(finals) == 1
             record["summary"] = json.loads(finals[0])
@@ -255,7 +262,7 @@ def run_suite():
         if "summary" in record:
             assert record["summary"]["result"] == "PASS" and record["summary"]["failures"] == 0
         if name == "market-cache":
-            assert record["summary"]["checks"] >= 30 and record["summary"]["groups"] == 108
+            assert record["summary"]["checks"] >= 30 and record["summary"]["groups"] == 114
         if name == "march":
             summary = record['summary']
             assert summary['checks'] >= 50 and summary['groups'] == 114 and not captures
@@ -284,6 +291,14 @@ def run_suite():
             summary = record['summary']
             assert summary['checks'] >= 15 and summary['ship_bought'] and summary['scout_earned'] and summary['grant_earned']
             assert summary['physical_distance_m'] > 1000 and summary['final_credit'] >= 0
+        if name == 'natural-research':
+            summary = record['summary']
+            assert summary['checks'] >= 15 and summary['research_earned'] and len(summary['completed']) == 2
+            assert summary['physical_distance_m'] > 1000 and summary['final_credit'] >= 0
+        if name == 'natural-rescue':
+            summary = record['summary']
+            assert summary['checks'] >= 15 and summary['rescue_earned'] and summary['grant_earned']
+            assert summary['physical_distance_m'] > 1000 and summary['final_credit'] >= 0
         if name == 'growth-world':
             summary = record['summary']
             assert args.native and summary['checks'] >= 25 and len(captures) == 3
@@ -308,15 +323,15 @@ def run_suite():
         if name == "owned-fleet":
             assert record["summary"]["checks"] >= 34 and not captures
         if name in ("fleet-integration", "fleet-upgrade"):
-            assert record["summary"]["checks"] >= (45 if name == "fleet-integration" else 20) and record["summary"]["groups"] == 108 and not captures
+            assert record["summary"]["checks"] >= (45 if name == "fleet-integration" else 20) and record["summary"]["groups"] == 114 and not captures
         if name == "legacy-chain":
-            assert record["summary"]["checks"] >= 100 and sorted(record["summary"]["formats"]) == [16,17,18,19,20,21,23] and record["summary"]["groups"] == 108 and not captures
+            assert record["summary"]["checks"] >= 100 and sorted(record["summary"]["formats"]) == [16,17,18,19,20,21,23] and record["summary"]["groups"] == 114 and not captures
         if name == "legacy-early":
-            assert record["summary"]["checks"] >= 100 and sorted(record["summary"]["formats"]) == list(range(9,16)) and record["summary"]["groups"] == 108 and not captures
+            assert record["summary"]["checks"] >= 100 and sorted(record["summary"]["formats"]) == list(range(9,16)) and record["summary"]["groups"] == 114 and not captures
         if name == "legacy-boundary":
-            assert record["summary"]["checks"] >= 30 and sorted(record["summary"]["formats"]) == [6,8] and record["summary"]["groups"] == 108 and not captures
+            assert record["summary"]["checks"] >= 30 and sorted(record["summary"]["formats"]) == [6,8] and record["summary"]["groups"] == 114 and not captures
         if name == "owned-fleet-travel":
-            assert record["summary"]["checks"] >= 100 and record["summary"]["groups"] == 108 and not captures
+            assert record["summary"]["checks"] >= 100 and record["summary"]["groups"] == 114 and not captures
         if name == "owned-fleet-world":
             assert args.native and record["summary"]["checks"] >= 60 and len(captures) == 5
             assert record["summary"]["owned_moved_m"] > 50 and record["summary"]["owned_cancelled"] and record["summary"]["owned_arrived"]
@@ -336,7 +351,7 @@ def run_suite():
             assert args.native and summary["checks"] >= 40 and len(captures) == 4
             assert summary["timeout_recovered"] and summary["timeout_lost"] and summary["mother_loss"] and summary["rescued"]
         if name in ("measurements","scenarios","scenarios-upgrade"):
-            expected_groups = 108
+            expected_groups = 114
             assert record["summary"]["checks"] >= {"measurements":30,"scenarios":80,"scenarios-upgrade":20}[name] and record["summary"]["groups"] == expected_groups and not captures
         if name == "scenarios-world":
             assert record["summary"]["checks"] >= 100 and len(captures) == 8 and record["summary"]["precision_hp"] >= 180 and record["summary"]["escort_m"] > 5000 and record["summary"]["repair_hp"] >= 120
@@ -350,21 +365,21 @@ def run_suite():
         if name == "frontier-governance-world":
             assert record["summary"]["checks"] >= 58 and len(captures) == 5 and record["summary"]["defended"] and record["summary"]["dispatched"] and record["summary"]["physical_damage"] > 0
         if name == "campaign-extension":
-            assert record["summary"]["checks"] >= 60 and record["summary"]["groups"] == 108 and record["summary"]["routes_completed"] == 1 and record["summary"]["mineral_cycles"] == 6 and not captures
+            assert record["summary"]["checks"] >= 60 and record["summary"]["groups"] == 114 and record["summary"]["routes_completed"] == 1 and record["summary"]["mineral_cycles"] == 6 and not captures
         if name == "campaign-world":
             assert record["summary"]["checks"] >= 40 and len(captures) >= 6 and record["summary"]["project_visual"] and record["summary"]["physical_tactics"] and record["summary"]["actual_damage"] > 0 and record["summary"]["exported"]
         if name == "campaign-upgrade":
-            assert record["summary"]["checks"] >= 20 and record["summary"]["groups"] == 108 and record["summary"]["legacy_checked"] and record["summary"]["upgrade_only"]
+            assert record["summary"]["checks"] >= 20 and record["summary"]["groups"] == 114 and record["summary"]["legacy_checked"] and record["summary"]["upgrade_only"]
         if name == "campaign":
-            assert record["summary"]["checks"] >= 60 and record["summary"]["groups"] == 108 and not captures
+            assert record["summary"]["checks"] >= 60 and record["summary"]["groups"] == 114 and not captures
         if name == "situational":
-            assert record["summary"]["checks"] >= (30 if os.environ.get("XJ_SITUATIONAL_LEGACY_DATABASE") else 28) and record["summary"]["groups"] == 108 and not captures
+            assert record["summary"]["checks"] >= (30 if os.environ.get("XJ_SITUATIONAL_LEGACY_DATABASE") else 28) and record["summary"]["groups"] == 114 and not captures
             if os.environ.get("XJ_SITUATIONAL_LEGACY_DATABASE"):
                 assert record["summary"]["legacy_checked"] is True
         if name == "situational-world":
             assert record["summary"]["checks"] >= 35 and len(captures) >= 5 and record["summary"]["physical_cues"] >= 2 and record["summary"]["audio_played"] and record["summary"]["pause_checked"]
         if name == "hire":
-            assert record["summary"]["checks"] >= 40 and set(record["summary"]["roles"]) == {"escort", "support"} and record["summary"]["groups"] == 108 and not captures
+            assert record["summary"]["checks"] >= 40 and set(record["summary"]["roles"]) == {"escort", "support"} and record["summary"]["groups"] == 114 and not captures
             if os.environ.get("XJ_HIRE_LEGACY_DATABASE"):
                 assert record["summary"]["checks"] >= 70 and record["summary"]["legacy_checked"] is True
         if name == "hire-world":

@@ -30,7 +30,7 @@ func _run() -> void:
 	state=store.new_world("远征工程批次",3701)
 	if not check(state!=null,"new87-group world seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==108 and state.rows("construction_state").size()==3 and state.rows("construction_input_state").size()==18,"finite projects and collection points initialize completely")
+	check(XJRuntimeState.TABLES.size()==114 and state.rows("construction_state").size()==3 and state.rows("construction_input_state").size()==18,"finite projects and collection points initialize completely")
 	check(state.rows("expedition_route_state").size()==3 and state.rows("expedition_run_state").is_empty() and state.rows("flight_record_state").is_empty(),"no free expedition or invented sortie history")
 	check(state.rows("exploration_instance_state").size()==12 and state.rows("tactical_site_state").size()==9 and state.rows("exploration_belt_state").size()==4,"six new exploration places retain tactical and migrating belt systems")
 	if OS.get_environment("XJ_CAMPAIGN_UPGRADE_ONLY")=="1":await legacy_campaign();await finish();return

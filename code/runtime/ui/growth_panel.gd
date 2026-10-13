@@ -57,4 +57,8 @@ func tick() -> void:
 	if not is_instance_valid(values):return
 	var result: Dictionary=u.gameplay.growth.progress(selected_stage)
 	values.text=("已达成 · " if result.complete else "当前 · ")+"%d / %d" % [int(result.current),int(result.target)]
-	note.text=str(result.note);note.visible=not note.text.is_empty()
+	var parts: PackedStringArray=[]
+	if not str(result.note).is_empty():parts.append(str(result.note))
+	if is_instance_valid(choices) and choices.selected>=0 and choices.selected<paths.size():
+		parts.append(u.gameplay.growth.activity_status(paths[choices.selected]))
+	note.text="\n".join(parts);note.visible=not note.text.is_empty()

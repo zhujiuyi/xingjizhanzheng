@@ -31,7 +31,11 @@ func prepare(war_id: String,save_work: bool=false) -> bool:
 	check(apply("start_war",war_id),"real core station accepts paid staged war "+war_id)
 	var row: RefCounted=g.frontier.campaign(war_id);var war: RefCounted=g.civilizations.active_war();var spec: Dictionary=g.frontier.definition(war_id)
 	if not check(war!=null and row.phase=="scouting" and g.inventory.count(warehouse,g.frontier.balance.material_id,true)==amount-int(g.frontier.balance.supply_units),"acceptance escrows exactly the authored ordinary supplies"):return false
-	check(g.civilizations.living_fleet(war,"ally").is_empty() and g.civilizations.living_fleet(war,"defender").is_empty(),"battle actors wait for completed preparation")
+	var march: RefCounted=g.get("march")
+	if march!=null and march.supported():
+		check(g.civilizations.living_fleet(war,"ally").size()==3 and g.civilizations.living_fleet(war,"defender").is_empty(),"funded allies assemble while defenders wait for preparation")
+		if not check(finish_march(war_id),"original allies traverse the real itinerary before battle preparation"):return false
+	else:check(g.civilizations.living_fleet(war,"ally").is_empty() and g.civilizations.living_fleet(war,"defender").is_empty(),"legacy battle actors wait for completed preparation")
 	check(not frontier("survey",war_id),"distant survey cannot be started from the capital")
 	place(spec.scout_anchor_id);cold();var energy: float=state.ship().energy
 	check(frontier("survey",war_id),"actual close survey pays once")
@@ -101,7 +105,7 @@ func _run() -> void:
 	state=store.new_world("边疆完整阶段",3401)
 	if not check(state!=null,"full staged frontier world seals "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==108 and state.rows("frontier_campaign_state").size()==24 and state.rows("frontier_territory_state").size()==8,"all existing wars and only eight conquerable sectors receive new authority")
+	check(XJRuntimeState.TABLES.size()==114 and state.rows("frontier_campaign_state").size()==24 and state.rows("frontier_territory_state").size()==8,"all existing wars and only eight conquerable sectors receive new authority")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)
 	state.player().credit=1000000;g.missions.refresh();g._sync_spawns();hull("transport_caravan");fit("module_scanner_beacon_i","utility:0")
 	var faction: String="faction_route_council";qualified_faction(faction)

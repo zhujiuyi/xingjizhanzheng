@@ -18,7 +18,7 @@ func _run() -> void:
 	state=store.new_world("状态与情报",3601)
 	if not check(state!=null,"all72 typed groups seal "+store.last_error):await finish();return
 	g=Gameplay.new();g.setup(state,store.catalog)
-	check(XJRuntimeState.TABLES.size()==108 and state.rows("resource_intel_state").is_empty() and state.rows("demand_intel_state").is_empty(),"new players receive no remote measurements")
+	check(XJRuntimeState.TABLES.size()==114 and state.rows("resource_intel_state").is_empty() and state.rows("demand_intel_state").is_empty(),"new players receive no remote measurements")
 	for unlock: Dictionary in g.rows("unlock_defs"):g.grant_unlock(unlock.unlock_id)
 	g.missions.refresh();g._sync_spawns();state.player().credit=1000000
 	hull("frigate_kestrel")

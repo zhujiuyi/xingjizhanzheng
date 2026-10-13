@@ -93,6 +93,32 @@ func activity(stage_id: String,index: int) -> Dictionary:
 		if int(row.activity_index)==index:return row
 	return {}
 
+func activity_status(row: Dictionary) -> String:
+	# Read existing availability; missions.eligible/window may mutate windows.
+	if row.activity_kind=="mission":
+		var mission: Dictionary=g.definition("mission_defs","mission_id",row.reference_id)
+		var active: RefCounted=g.missions.active()
+		if active!=null:return "进行中" if active.mission_def_id==row.reference_id else "先完成当前任务"
+		var remaining: float=0.0
+		for previous: RefCounted in g.state.rows("mission_state"):
+			if previous.mission_def_id==row.reference_id:remaining=maxf(remaining,previous.cooldown_remaining_s)
+		if remaining>0.0:return "整备 %d秒 · 可换其他途径" % ceili(remaining)
+		var availability: RefCounted=g.state.find("mission_availability_state","mission_def_id",row.reference_id)
+		if availability!=null and availability.status=="available":
+			return "本站可接取" if g.station()==mission.accept_station_id else "可接取 · "+str(g.definition("station_defs","station_id",mission.accept_station_id).display_name)
+		if availability!=null and availability.status=="finished":return "已完成"
+		var prerequisite: String=g.missions.missing_prerequisite(row.reference_id)
+		if not prerequisite.is_empty():return "前置 · "+str(g.definition("mission_defs","mission_id",prerequisite).display_name)
+		return "暂不可接取 · 可换其他途径"
+	if row.activity_kind=="donation":
+		var reason: String=g.civilizations.donation_reason(row.reference_id,1)
+		return "可捐献" if reason.is_empty() else reason
+	if row.activity_kind=="honor":
+		var task: Dictionary=g.definition("civilization_honor_task_defs","task_id",row.reference_id)
+		var count: int=g.honors.progress(row.reference_id)
+		return "%d / %d · 整备款%s" % [count,int(task.required_units),"已领取" if g.state.find("growth_grant_receipt_state","task_id",row.reference_id)!=null else "可领取" if count>=int(task.required_units) else "待考核"]
+	return str(g.definition("station_defs","station_id",row.station_id).display_name)
+
 func activity_label(row: Dictionary) -> String:
 	match str(row.activity_kind):
 		"mission":

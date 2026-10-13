@@ -1,5 +1,9 @@
 # 测试与辅助文件
 
+正常成长续段来源统一使用`prepare_natural_checkpoint.py --report <logs中的已通过报告> --case natural-research|natural-rescue`。输出只读核对后的来源凭据和路径文件。`--only natural-rescue`读取`XJ_NATURAL_RESEARCH_ORIGIN`，运行实际战斗、修复护送、交付与整备款；源库不写入。此组尚待运行，不能因脚本存在就视为通过。
+
+主线/研究正常续段：`--only natural-research`读取`XJ_NATURAL_SCOUT_ORIGIN`指定的`logs/v52-scout-origin-*.json`，只使用已通过正常探索回放的关闭副本，执行原有主线、市场和研究入口。当前运行状态与来源边界见67。
+
 正常探索续段使用`--only natural-scout`与`XJ_NATURAL_EXAM_ORIGIN`指向`logs/v51-exam-origin-*.json`，只允许经摘要和已通过回放记录绑定的`natural-rank-v50`副本。购船、装配、导航、调查、战斗和领取均走Main真实入口，不注入进度或时钟。当前运行状态见67；未完成前不得将部分日志计为通过。
 
 v50补验：`--only march-routes`为三文明24条路线的战略矩阵（明示粗粒度时钟），`--native --only growth-world`验证实际成长入口；正常成长用`--only natural-mid`及`natural-rank`，分别通过`XJ_NATURAL_MID_ORIGIN`和`XJ_NATURAL_RANK_ORIGIN`指定经摘要核对的正常来源。后者的`v50-mid-origin-*.json`明确保留前段登记前提失败，不能作为整组通过凭据。运行仍须持有主工作区共享锁并串行；所有旧输入只读，勿使用个人库。
@@ -267,3 +271,5 @@ v0.13.0实际交付`0.13.0-afdc5e1d-20261005-002457`来自干净已推送源`afd
 导出客户端不能使用通用`--script`来代替受审诊断入口；本机已观察到参数被忽略并进入默认初始化。包清单必须通过上述固定入口，临时目录/脚本路径检查保持；不启动默认进度库。v0.28最终覆盖及误初始化后的恢复记录见[63](../doc/63-状态反馈与航行情报.md)，最终汇总`logs/v36-delivery-verification.json`。
 
 远征建设合批：`build_campaign_theme.py`仅从v0.28归档追加受审主题命名空间；`store_generate_campaign.py`只生成025/v0.21，保留原015/016账本完整守卫并追加已验证协调来源。`--only campaign`验证联合业务，`--only campaign-upgrade`通过`XJ_CAMPAIGN_LEGACY_DATABASE`仅测实际旧包升级，`--native --only campaign-world`通过`XJ_CAMPAIGN_CORE_DATABASE`导入已关闭test-owned联合库。资金、资格、姿态和命名变体均需声明。`prepare_roles_upgrade_v32.py --campaign --legacy-executable <已核v0.28 EXE>`经旧包固定fitting入口创建旧21/72组数据；不得使用通用`--script`或用户档。当前源码证据及尚未验证范围见[64](../doc/64-远征建设与主题行动.md)，本批实际发行仍待后续统一验收。
+
+无画面正常流程可使用`--replay-fps 20`或`30`减少表现层调用；默认仍为60。只改变渲染/脚本观察频率，项目60Hz物理逐步执行，不改航速、工作耗时、经济或时钟状态。报告记录实际参数；新救援续段另核物理频率。原生画面检查不使用该加速选项。
