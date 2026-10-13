@@ -1,6 +1,8 @@
 # 测试与辅助文件
 
-保留策略：`--only retention`使用固定v48入口和`XJ_RETENTION_V48_INPUTS`指定的测试输入清单，在副本中验证成功保存后的独立清理、清理事务中断、已提交端点不回滚、旧手动/升级/跨世界引用保护及空间复用。原始输入只读核对SHA256；不得传入个人库。68项初次源码证据见`logs/v18-source-headless-174b99f8-7ec2-4017-a2f3-edbb09a860a7.json`，追加跨世界断言随实际候选验收。
+v0.31正式Windows包已交付：最终包15组925项/36图、正式目录另6项与文件/ZIP一致性通过，汇总`logs/v48-final-candidate-checkpoint.json`和`logs/v48-delivery-verification.json`。下文开发检查点的“待验”只描述当时范围，当前状态见[26](../doc/26-开发阶段与交付记录.md)。完整目标继续S34和S29中后期，相关功能合并开发后统一验收。
+
+保留策略：`--only retention`使用固定v48入口和`XJ_RETENTION_V48_INPUTS`指定的测试输入清单，在副本中验证成功保存后的独立清理、清理事务中断、已提交端点不回滚、旧手动/升级/跨世界引用保护及空间复用。原始输入只读核对SHA256；不得传入个人库。68项初次源码证据见`logs/v18-source-headless-174b99f8-7ec2-4017-a2f3-edbb09a860a7.json`，追加跨世界断言已在最终实际包74项通过。
 
 自然成长：`verify_combat_v18.py --only natural-growth`通过固定v45入口，从正常新世界完成五段教学和三类普通合同，再用实际收入购船、配装及招募。headless按固定渲染步长重放，模拟频率和玩法数值不变；没有资金、资产、资格、任务事件、姿态或时钟夹具，结果不代表人工乐趣。`natural-checkpoint`只加载SHA256匹配的已关闭回放库，比较全部108组/RNG在Main表现回调之前的读取边界；原始失败报告和通过的补验必须分开引用。`natural-recovery`从有组合来源凭据的正常世界副本验证真实NPC损失、救援、治疗和付费替代舰；源码24项通过，实际包待验。详见[67](../doc/67-自然成长经济与失败恢复验证.md)。
 
@@ -20,7 +22,7 @@ S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增S
 
 实际战斗/母舰边界：`verify_combat_v18.py --native --only owned-combat-world auxiliary-boundaries`，对应两个固定v43入口及fresh目录。自有母舰从原舰支付资源，原有高危NPC数值不变；交战、命中、回收和原舰损失真实模拟。无关遭遇须使用各自数据库再生计时隔离，不只将alive置false。母舰致命伤、在外期限、返航末0.1秒为明示边界。暂停计时通过实际pause页面核验并在恢复后继续，不能把未恢复误报为返航失败。最新四组289项/13图证据`logs/v43-combat-boundaries-checkpoint.json`，含同型舰旅行和管理/AU回归；混合报告仅逐组接受通过项，失败日志保留。
 
-完整回归与旧档链：`py -m unittest discover -s jiaoben/tests`当前363项通过；`build_fleet_assets.py`生成两种静态图标与八个正式模块/配方映射。`prepare_legacy_chain_index_v44.py`校验保留的实际旧PCK测试库和来源摘要，输出`XJ_LEGACY_CHAIN_V44_INDEX`所用索引；`verify_combat_v18.py --only legacy-chain`通过固定v44入口验证七个历史格式16/17/18/19/20/21/23，107项通过。汇总`logs/v44-regression-checkpoint.json`。更早旧档、新档自然成长和最终EXE/PCK仍待验证；禁止使用个人库补充测试样本。
+完整回归与旧档链：`py -m unittest discover -s jiaoben/tests`当前363项通过；`build_fleet_assets.py`生成两种静态图标与八个正式模块/配方映射。`prepare_legacy_chain_index_v44.py`校验保留的实际旧PCK测试库和来源摘要，输出`XJ_LEGACY_CHAIN_INDEX`所用索引；`verify_combat_v18.py --only legacy-chain`通过固定v44入口验证七个历史格式16/17/18/19/20/21/23，107项通过。汇总`logs/v44-regression-checkpoint.json`。更早旧档、新档自然成长和最终EXE/PCK仍待验证；禁止使用个人库补充测试样本。
 
 ## 临时产物保留与清理
 
