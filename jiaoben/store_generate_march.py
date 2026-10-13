@@ -33,6 +33,7 @@ def main():
                 parts.append(f"CREATE TRIGGER {table}_finite BEFORE UPDATE OF status ON save_snapshot WHEN NEW.status='sealed' AND OLD.status='building' AND EXISTS(SELECT 1 FROM {table} WHERE snapshot_id=NEW.snapshot_id AND ({invalid})) BEGIN SELECT RAISE(ABORT,'nonfinite march scalar'); END;")
         legacy = ' OR '.join(f'EXISTS(SELECT 1 FROM {t} WHERE snapshot_id=NEW.snapshot_id)' for t in STATES)
         parts.append(f"CREATE TRIGGER march_legacy_guard BEFORE UPDATE OF status ON save_snapshot WHEN NEW.status='sealed' AND OLD.status='building' AND NOT EXISTS(SELECT 1 FROM frozen_march_balance_defs WHERE content_snapshot_id=NEW.content_snapshot_id) AND ({legacy}) BEGIN SELECT RAISE(ABORT,'march state under legacy rules'); END;")
+        parts.append((ROOT / 'code/database/march_state_validation.sql').read_text(encoding='utf-8'))
         with sqlite3.connect(':memory:') as prior:
             for file in sorted(progress.glob('[0-9][0-9][0-9]_*.sql')):
                 if int(file.name[:3]) <= 28:
@@ -63,15 +64,15 @@ def main():
         pattern = re.compile(r'(class ' + class_name(table) + r' extends RefCounted:\n)(.*?)(?=\nclass |\Z)', re.S)
         match = pattern.search(text)
         assert match, table
-        body = match.group(2)
+        body = ''
         for column in split_columns(columns):
             info = re.match(r'(\w+)\s+(TEXT|INTEGER|REAL)\b(.*)', column, re.S)
             if not info:
                 continue
             field, kind, rest = info.groups()
-            if re.search(r'\bvar ' + field + r':', body):
-                continue
             typ, default = {'TEXT': ('String', '""'), 'INTEGER': ('int', '0'), 'REAL': ('float', '0.0')}[kind]
+            if kind == 'INTEGER' and re.search(r'CHECK\(' + field + r' IN\(0,1\)\)', rest):
+                typ, default = 'bool', 'false'
             if 'NOT NULL' not in rest:
                 body += f'\tvar has_{field}: bool = false\n'
             body += f'\tvar {field}: {typ} = {default}\n'

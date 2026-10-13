@@ -1519,6 +1519,8 @@ class MarchStateDto extends RefCounted:
 	var sector_id: String = ""
 	var site_id: String = ""
 	var goal_anchor_id: String = ""
+	var has_gate_actor_id: bool = false
+	var gate_actor_id: String = ""
 	var phase_remaining_s: float = 0.0
 	var blocked_elapsed_s: float = 0.0
 	var blocked_reason: String = ""
@@ -1529,7 +1531,6 @@ class MarchStateDto extends RefCounted:
 	var revision: int = 0
 	var started_tick: int = 0
 	var finished_tick: int = 0
-	var gate_cooldown_remaining_s: float = 0.0
 
 class MarchMemberStateDto extends RefCounted:
 	var npc_instance_id: String = ""
@@ -1541,6 +1542,8 @@ class MarchMemberStateDto extends RefCounted:
 	var sector_id: String = ""
 	var site_id: String = ""
 	var cargo_units: int = 0
+	var completed_legs: int = 0
+	var gate_cooldown_remaining_s: float = 0.0
 	var goal_x: float = 0.0
 	var goal_y: float = 0.0
 	var goal_z: float = 0.0
@@ -1579,8 +1582,15 @@ class GrowthMilestoneStateDto extends RefCounted:
 	var reputation_at_observation: int = 0
 	var owned_hulls_at_observation: int = 0
 
+class GrowthGrantReceiptStateDto extends RefCounted:
+	var task_id: String = ""
+	var faction_id: String = ""
+	var paid_credit: int = 0
+	var awarded_reputation: int = 0
+	var claimed_tick: int = 0
 
 class WorldSnapshotDto extends RefCounted:
+	var growth_grant_receipt_state_rows: Array[GrowthGrantReceiptStateDto] = []
 	var growth_milestone_state_rows: Array[GrowthMilestoneStateDto] = []
 	var growth_goal_state_rows: Array[GrowthGoalStateDto] = []
 	var march_journal_state_rows: Array[MarchJournalStateDto] = []

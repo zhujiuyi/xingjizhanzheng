@@ -24,6 +24,9 @@ func setup(ui: Node,id: String) -> void:
 	else:_governance(service)
 	_token=service.expected_token(selected)
 func _campaign(service: RefCounted,row: RefCounted) -> void:
+	var march_info: Dictionary=u.gameplay.march.view(selected)
+	if not march_info.is_empty() and u.gameplay.march.active(u.gameplay.march.state_for(selected)):
+		u._text_to(self,"当前位置 · %s · 下一地点可用上方按钮定位" % march_info.sector_name,13)
 	var actions: HFlowContainer=HFlowContainer.new();add_child(actions)
 	for pair: Array in [["survey","开始侦察"],["repair","投入修复"]]:
 		var reason: String=service.action_reason(selected,pair[0]);var button: Button=_button(actions,pair[1],"frontier_action",selected,null,pair[0]+":"+service.expected_token(selected))

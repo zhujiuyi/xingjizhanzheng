@@ -5,6 +5,7 @@ var title: Label
 var register_button: Button
 var certify_button: Button
 var values: Dictionary={}
+var grant_buttons: Dictionary={}
 
 func build(ui: Node,id: String,owner: RefCounted) -> void:
 	u=ui;faction=id
@@ -46,7 +47,16 @@ func build(ui: Node,id: String,owner: RefCounted) -> void:
 			var button: Button=u._button(controls,"前往" if navigate else "定位",callback)
 			button.name=("CommanderNavigate_" if navigate else "CommanderLocate_")+str(task.task_kind)
 			button.tooltip_text="完整调查/救援/拆除结算计入考核；承运按实际送达批数累计。登记前已结算、失败和退回不计。"
+		if u.gameplay.growth.supported():_add_grant(controls,task)
 	tick()
+
+func _add_grant(parent: Node,task: Dictionary) -> void:
+	var id: String=str(task.task_id)
+	var state: RefCounted=u.state;var catalog: RefCounted=u.catalog;var epoch: int=state.epoch;var generation: int=u.business_generation;var selected_faction: String=faction
+	var callback: Callable=func():
+		if u.state!=state or u.catalog!=catalog or state.epoch!=epoch or u.business_generation!=generation or u.page!="civilizations" or u.civilization_selected_faction!=selected_faction:return
+		u.requested.emit("growth_claim",id,1,u.gameplay.growth.grant_token(id))
+	var button: Button=u._button(parent,"",callback);button.name="GrowthGrant_"+str(task.task_kind);grant_buttons[id]=button
 func tick() -> void:
 	if not is_instance_valid(title):return
 	var honors: RefCounted=u.gameplay.honors;var row: RefCounted=honors.instance(faction)
@@ -61,3 +71,9 @@ func tick() -> void:
 		var label: Label=values[str(task.task_id)]
 		var count: int=honors.progress(task.task_id)
 		label.text="%s%s · %d / %d%s" % ["✓ " if count==int(task.required_units) else "",task.display_name,count,task.required_units,"批" if task.task_kind=="logistics" else ""]
+		if grant_buttons.has(str(task.task_id)):
+			var grant: Dictionary=u.catalog.one("growth_grant_defs","task_id",task.task_id)
+			var button: Button=grant_buttons[str(task.task_id)]
+			var claimed: bool=u.state.find("growth_grant_receipt_state","task_id",task.task_id)!=null
+			button.text=("已领" if claimed else "领取整备款")+" · %d信用点 / %d声望" % [int(grant.reward_credit),int(grant.reward_reputation)]
+			var why: String=u.gameplay.growth.grant_reason(task.task_id);button.disabled=not why.is_empty();button.tooltip_text=why if not why.is_empty() else "每个真实考核项目仅领取一次，资格认证奖励另计。"

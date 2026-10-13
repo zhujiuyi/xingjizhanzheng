@@ -19,6 +19,35 @@ func member(id: String) -> RefCounted:return g.state.find("march_member_state","
 func definition(war_id: String) -> Dictionary:return g.definition("march_campaign_defs","war_id",war_id)
 func active(row: RefCounted) -> bool:return row!=null and row.phase not in ["arrived","returned","failed","cancelled","completed"]
 
+func quote_reason(war_id: String) -> String:
+	if not supported():return ""
+	var spec: Dictionary=definition(war_id)
+	if spec.is_empty():return "战役行军路线缺失"
+	var hull: Dictionary=g.definition("ship_defs","ship_id",spec.travel_hull_id)
+	var material: Dictionary=g.definition("item_defs","item_id",g.frontier.balance.material_id)
+	var count: int=0
+	for original: Dictionary in g.rows("civilization_war_members"):
+		if original.war_id==war_id and original.side=="ally":count+=1
+	var payload: float=float(g.frontier.balance.supply_units)*float(material.unit_mass_kg)
+	for leg: Dictionary in g.rows("march_route_defs"):
+		if leg.war_id!=war_id:continue
+		var endpoint: Dictionary=g.definition("gate_endpoint_defs","endpoint_id",leg.endpoint_id)
+		if not str(endpoint.required_unlock_id).is_empty() and not g.unlocked(str(endpoint.required_unlock_id)):return "行军航门许可未解锁"
+		var connection: Dictionary=g.definition("effective_connection_defs","connection_id",endpoint.connection_id)
+		var gate: RefCounted=g.state.find("gate_state","connection_id",endpoint.connection_id)
+		if gate==null or not gate.enabled or (gate.has_lifetime_remaining_s and gate.lifetime_remaining_s<=0):return "行军路线存在关闭的航门"
+		if float(hull.dry_mass_kg)+payload>float(connection.max_gross_mass_kg):return "行军舰体超出航门吨位"
+		if gate.has_remaining_mass_budget_kg and float(hull.dry_mass_kg)*count+payload>gate.remaining_mass_budget_kg:return "行军航门剩余质量不足"
+	return ""
+
+func protects_identity(id: String) -> bool:return member(id)!=null
+
+func has_local_member(sector_id: String,site_id: String) -> bool:
+	for m: RefCounted in g.state.rows("march_member_state"):
+		var npc: RefCounted=g.state.find("npc_state","npc_instance_id",m.npc_instance_id)
+		if npc!=null and npc.alive and m.sector_id==sector_id and m.site_id==site_id and not hidden(m.npc_instance_id):return true
+	return false
+
 func members(row: RefCounted,alive_only: bool=false) -> Array[RefCounted]:
 	var result: Array[RefCounted]=[]
 	for m: RefCounted in g.state.rows("march_member_state"):
@@ -37,7 +66,7 @@ func route(row: RefCounted) -> Array[Dictionary]:
 func hidden(id: String) -> bool:
 	var m: RefCounted=member(id)
 	var row: RefCounted=state_for(m.war_id) if m!=null else null
-	return row!=null and row.attempt==m.attempt and row.phase in ["site_warp","gate_transit"] and m.phase!="lost"
+	return row!=null and row.attempt==m.attempt and (row.phase=="site_warp" or m.phase=="gate_transit") and m.phase!="lost"
 
 func holds_campaign(war: RefCounted) -> bool:
 	var row: RefCounted=state_for(war.war_id)
@@ -77,6 +106,7 @@ func cleanup_members(war_id: String) -> void:
 func finished(war_id: String,status: String) -> void:
 	var row: RefCounted=state_for(war_id)
 	if row==null:return
+	row.has_gate_actor_id=false;row.gate_actor_id=""
 	if row.phase!="returned":
 		for m: RefCounted in members(row):row.lost_supply_units+=m.cargo_units;m.cargo_units=0
 		row.phase="completed" if status=="won" else status
@@ -87,9 +117,9 @@ func finished(war_id: String,status: String) -> void:
 func request_retreat(war: RefCounted) -> bool:
 	var row: RefCounted=state_for(war.war_id)
 	if row==null or row.attempt!=war.attempt or row.phase in ["returned","failed","cancelled","completed"]:return false
-	row.retreat_requested=true;war.fleet_order="retreat";war.focus_target_id=""
+	row.retreat_requested=true;war.fleet_order="advance";war.focus_target_id=""
 	_journal(row,"retreat")
-	if row.phase not in ["site_warp","gate_transit"]:_reverse(row)
+	if row.phase not in ["site_warp","gate_transit"] and not _partial_gate(row):_reverse(row)
 	g.request_autosave();return true
 
 func local_plan(id: String) -> Dictionary:
@@ -97,7 +127,11 @@ func local_plan(id: String) -> Dictionary:
 	if m==null:return {}
 	var row: RefCounted=state_for(m.war_id)
 	if not active(row) or m.phase=="lost":return {}
-	return {"destination":Vector3(m.goal_x,m.goal_y,m.goal_z),"hold":row.phase in ["assembling","gate_prepare","blocked"] or hidden(id)}
+	var selected: bool=row.has_gate_actor_id and row.gate_actor_id==id
+	var hold: bool=m.phase=="gate_wait" or row.phase in ["assembling","blocked","gate_transit"] or (row.phase=="gate_prepare" and not selected) or hidden(id)
+	var result: Dictionary={"destination":Vector3(m.goal_x,m.goal_y,m.goal_z),"hold":hold}
+	if row.phase=="gate_prepare" and selected:result.stop_radius=float(balance.gate_stop_m)
+	return result
 
 func _formation(index: int,count: int) -> Vector3:
 	var distance: float=float(balance.formation_m)
@@ -106,8 +140,9 @@ func _formation(index: int,count: int) -> Vector3:
 func _goal(m: RefCounted,position: Vector3) -> void:m.goal_x=position.x;m.goal_y=position.y;m.goal_z=position.z
 
 func _place(npc: RefCounted,m: RefCounted,anchor: Dictionary,offset: Vector3) -> void:
-	npc.sector_id=anchor.sector_id;var position: Vector3=g.anchor_position(anchor)+offset
+	npc.sector_id=anchor.sector_id;var attitude: Basis=Basis(Vector3.UP,float(anchor.yaw_rad));var position: Vector3=g.anchor_position(anchor)+attitude*offset
 	npc.pos_x=position.x;npc.pos_y=position.y;npc.pos_z=position.z;npc.vel_x=0;npc.vel_y=0;npc.vel_z=0
+	var rotation: Quaternion=attitude.get_rotation_quaternion();npc.quat_x=rotation.x;npc.quat_y=rotation.y;npc.quat_z=rotation.z;npc.quat_w=rotation.w
 	g.assign_anchor_site("npc",npc.npc_instance_id,anchor.anchor_id)
 	m.sector_id=npc.sector_id;m.site_id=g.spatial_site("npc",npc.npc_instance_id)
 
@@ -127,7 +162,10 @@ func _next(row: RefCounted) -> void:
 	var anchor: Dictionary=g.definition("anchor_defs","anchor_id",row.goal_anchor_id)
 	var group: Array[RefCounted]=members(row,true)
 	if Space.site_for_anchor(g.catalog,row.goal_anchor_id)==row.site_id:
-		for index: int in range(group.size()):_goal(group[index],g.anchor_position(anchor)+_formation(index,group.size()))
+		for index: int in range(group.size()):
+			var offset: Vector3=_formation(index,group.size())
+			if not endpoint.is_empty():offset+=Vector3(0,0,float(balance.gate_exit_m))
+			_goal(group[index],g.anchor_position(anchor)+Basis(Vector3.UP,float(anchor.yaw_rad))*offset)
 		_phase(row,"arrival_approach" if endpoint.is_empty() else "gate_approach");return
 	for m: RefCounted in group:
 		var npc: RefCounted=g.state.find("npc_state","npc_instance_id",m.npc_instance_id)
@@ -136,7 +174,9 @@ func _next(row: RefCounted) -> void:
 	_phase(row,"site_align",float(balance.align_s))
 
 func _reverse(row: RefCounted) -> void:
-	row.direction=-1;row.retreat_requested=false;row.blocked_reason="";row.blocked_elapsed_s=0;_next(row)
+	row.direction=-1;row.retreat_requested=false;row.blocked_reason="";row.blocked_elapsed_s=0;row.has_gate_actor_id=false;row.gate_actor_id=""
+	for m: RefCounted in members(row,true):m.phase="active"
+	_next(row)
 
 func _at_goals(row: RefCounted) -> bool:
 	for m: RefCounted in members(row,true):
@@ -144,8 +184,9 @@ func _at_goals(row: RefCounted) -> bool:
 		if g.position(npc).distance_to(Vector3(m.goal_x,m.goal_y,m.goal_z))>float(balance.arrival_radius_m):return false
 	return true
 
-func _coarse(row: RefCounted,delta: float) -> void:
+func _coarse(row: RefCounted,delta: float,only_selected: bool=false) -> void:
 	for m: RefCounted in members(row,true):
+		if m.phase in ["gate_wait","gate_transit"] or (only_selected and m.npc_instance_id!=row.gate_actor_id):continue
 		var npc: RefCounted=g.state.find("npc_state","npc_instance_id",m.npc_instance_id)
 		if spatial_active and g.state.ship().status==T.ShipStatus.FLYING and g.same_entity_site("npc",npc,"ship",g.state.ship()):continue
 		var before: Vector3=g.position(npc);var goal: Vector3=Vector3(m.goal_x,m.goal_y,m.goal_z)
@@ -156,11 +197,59 @@ func _coarse(row: RefCounted,delta: float) -> void:
 		var velocity: Vector3=(position-before)/maxf(delta,0.000001)
 		npc.vel_x=velocity.x;npc.vel_y=velocity.y;npc.vel_z=velocity.z;m.moved_distance_m+=before.distance_to(position)
 
+func record_motion(id: String,before: Vector3,after: Vector3) -> void:
+	var m: RefCounted=member(id)
+	if m!=null and active(state_for(m.war_id)):m.moved_distance_m+=before.distance_to(after)
+
+func _hold_coarse(row: RefCounted,moving_id: String="") -> void:
+	for m: RefCounted in members(row,true):
+		if m.npc_instance_id==moving_id:continue
+		var npc: RefCounted=g.state.find("npc_state","npc_instance_id",m.npc_instance_id)
+		if spatial_active and g.state.ship().status==T.ShipStatus.FLYING and g.same_entity_site("npc",npc,"ship",g.state.ship()):continue
+		npc.vel_x=0;npc.vel_y=0;npc.vel_z=0
+
+func _gate_stationary(row: RefCounted) -> bool:
+	var endpoint: Dictionary=_endpoint(row)
+	var anchor: Dictionary=g.definition("anchor_defs","anchor_id",endpoint.entry_anchor_id)
+	var npc: RefCounted=g.state.find("npc_state","npc_instance_id",row.gate_actor_id) if row.has_gate_actor_id else null
+	return npc!=null and npc.alive and g.position(npc).distance_to(g.anchor_position(anchor))<=g.rule("gate_entry_radius_m") and g.velocity(npc).length()<=g.rule("gate_max_entry_speed_mps")
+
+func _partial_gate(row: RefCounted) -> bool:
+	for m: RefCounted in members(row,true):
+		if m.completed_legs!=row.completed_legs:return true
+	return false
+
+func _pending_gate(row: RefCounted) -> Array[RefCounted]:
+	var pending: Array[RefCounted]=[]
+	for m: RefCounted in members(row,true):
+		if m.completed_legs==row.completed_legs:pending.append(m)
+	pending.sort_custom(func(a: RefCounted,b: RefCounted) -> bool:return int(g.definition("civilization_war_members","spawn_id",a.spawn_id).formation_index)<int(g.definition("civilization_war_members","spawn_id",b.spawn_id).formation_index))
+	return pending
+
+func _advance_gate(row: RefCounted) -> void:
+	row.has_gate_actor_id=false;row.gate_actor_id=""
+	var endpoint: Dictionary=_endpoint(row);var pending: Array[RefCounted]=_pending_gate(row)
+	if pending.is_empty():
+		var exit_anchor: Dictionary=g.definition("anchor_defs","anchor_id",endpoint.exit_anchor_id)
+		row.completed_legs+=row.direction;row.sector_id=exit_anchor.sector_id;row.site_id=Space.site_for_anchor(g.catalog,exit_anchor.anchor_id)
+		for m: RefCounted in members(row,true):m.phase="active"
+		if row.retreat_requested:_reverse(row)
+		else:_next(row)
+		return
+	var selected: RefCounted=pending[0];var entry_anchor: Dictionary=g.definition("anchor_defs","anchor_id",endpoint.entry_anchor_id)
+	row.has_gate_actor_id=true;row.gate_actor_id=selected.npc_instance_id
+	_goal(selected,g.anchor_position(entry_anchor)+Basis(Vector3.UP,float(entry_anchor.yaw_rad))*Vector3(0,0,float(balance.gate_approach_m)))
+	var connection: Dictionary=g.definition("effective_connection_defs","connection_id",endpoint.connection_id)
+	_phase(row,"gate_prepare",float(connection.prepare_s))
+
+func member_mass(m: RefCounted) -> float:
+	var material: Dictionary=g.definition("item_defs","item_id",g.frontier.balance.material_id)
+	return float(g.definition("ship_defs","ship_id",m.ship_def_id).dry_mass_kg)+float(material.unit_mass_kg)*m.cargo_units
+
 func mass(row: RefCounted,largest: bool=false) -> float:
 	var result: float=0.0
-	var material: Dictionary=g.definition("item_defs","item_id",g.frontier.balance.material_id)
 	for m: RefCounted in members(row,true):
-		var value: float=float(g.definition("ship_defs","ship_id",m.ship_def_id).dry_mass_kg)+float(material.unit_mass_kg)*m.cargo_units
+		var value: float=member_mass(m)
 		result=maxf(result,value) if largest else result+value
 	return result
 
@@ -173,8 +262,11 @@ func _gate_reason(row: RefCounted) -> String:
 	if gate==null or not gate.enabled:return "航门关闭"
 	if gate.has_lifetime_remaining_s and gate.lifetime_remaining_s<=0:return "航门已消失"
 	if largest_mass_exceeds(row,connection):return "编队舰体超出航门吨位"
-	if gate.has_remaining_mass_budget_kg and mass(row)>gate.remaining_mass_budget_kg:return "航门剩余通行质量不足"
-	if row.gate_cooldown_remaining_s>0:return "舰队跃迁冷却"
+	var pending_mass: float=0.0
+	for m: RefCounted in _pending_gate(row):pending_mass+=member_mass(m)
+	if gate.has_remaining_mass_budget_kg and pending_mass>gate.remaining_mass_budget_kg:return "航门剩余通行质量不足"
+	var selected: RefCounted=member(row.gate_actor_id) if row.has_gate_actor_id else null
+	if selected!=null and selected.gate_cooldown_remaining_s>0:return "舰船跃迁冷却"
 	return ""
 
 func largest_mass_exceeds(row: RefCounted,connection: Dictionary) -> bool:return mass(row,true)>float(connection.max_gross_mass_kg)
@@ -198,6 +290,15 @@ func _losses(row: RefCounted) -> bool:
 		carrier_lost=carrier_lost or m.cargo_units>0;_journal(row,"member_loss",m.cargo_units,"",0,m.npc_instance_id);m.cargo_units=0
 	return carrier_lost or members(row,true).is_empty()
 
+func destroyed(npc: RefCounted) -> void:
+	var m: RefCounted=member(npc.npc_instance_id)
+	if m==null:return
+	var row: RefCounted=state_for(m.war_id)
+	if _losses(row):g.frontier._fail(g.civilizations.active_war(),"failed")
+	else:
+		if row.has_gate_actor_id and row.gate_actor_id==npc.npc_instance_id:_advance_gate(row)
+		g.request_autosave()
+
 func _arrive(row: RefCounted) -> void:
 	if row.direction==-1:
 		var cargo: int=0
@@ -217,19 +318,28 @@ func tick(delta: float) -> void:
 	if war==null:return
 	var row: RefCounted=state_for(war.war_id)
 	if row==null or row.attempt!=war.attempt:return
-	if _losses(row):g.civilizations._finish(war,"failed");return
+	if _losses(row):g.frontier._fail(war,"failed");return
 	if not active(row):return
-	row.gate_cooldown_remaining_s=maxf(0,row.gate_cooldown_remaining_s-delta)
-	if g.state.ship().status==T.ShipStatus.DESTROYED:g.civilizations._finish(war,"failed");return
+	for m: RefCounted in members(row,true):m.gate_cooldown_remaining_s=maxf(0,m.gate_cooldown_remaining_s-delta)
+	if g.state.ship().status==T.ShipStatus.DESTROYED:g.frontier._fail(war,"failed");return
+	if war.fleet_order=="focus":
+		var target: RefCounted=g.state.find("npc_state","npc_instance_id",war.focus_target_id)
+		if target==null or not target.alive or not has_local_member(target.sector_id,g.spatial_site("npc",target.npc_instance_id)):
+			war.fleet_order="advance";war.focus_target_id=""
 	if war.fleet_order in ["regroup","focus"] and row.phase not in ["site_warp","gate_transit"]:return
+	if row.phase in ["assembling","gate_prepare","gate_transit","blocked"]:_hold_coarse(row,row.gate_actor_id if row.phase=="gate_prepare" and row.has_gate_actor_id else "")
 	if row.phase=="blocked":
 		var reason: String=_gate_reason(row)
-		if reason.is_empty():row.blocked_reason="";row.blocked_elapsed_s=0;_phase(row,row.resume_phase)
+		if reason.is_empty():
+			row.blocked_reason="";row.blocked_elapsed_s=0
+			var duration: float=float(g.definition("effective_connection_defs","connection_id",_endpoint(row).connection_id).prepare_s) if row.resume_phase=="gate_prepare" else 0.0
+			_phase(row,row.resume_phase,duration)
 		else:
 			row.blocked_reason=reason;row.blocked_elapsed_s+=delta
-			if row.blocked_elapsed_s>=float(balance.max_blocked_s):g.civilizations._finish(war,"failed")
+			if row.blocked_elapsed_s>=float(balance.max_blocked_s):g.frontier._fail(war,"failed")
 		return
 	if row.phase in ["site_align","gate_approach","arrival_approach"]:_coarse(row,delta)
+	if row.phase=="gate_prepare":_coarse(row,delta,true)
 	if row.phase=="assembling":
 		row.phase_remaining_s=maxf(0,row.phase_remaining_s-delta)
 		if row.phase_remaining_s<=0:_next(row)
@@ -251,31 +361,36 @@ func tick(delta: float) -> void:
 	elif row.phase=="gate_approach" and _at_goals(row):
 		var reason: String=_gate_reason(row)
 		if not reason.is_empty():_block(row,reason);return
-		var endpoint: Dictionary=_endpoint(row);var connection: Dictionary=g.definition("effective_connection_defs","connection_id",endpoint.connection_id)
-		_phase(row,"gate_prepare",float(connection.prepare_s))
+		_advance_gate(row)
 	elif row.phase=="gate_prepare":
-		if not _at_goals(row):_phase(row,"gate_approach");return
+		var selected: RefCounted=member(row.gate_actor_id) if row.has_gate_actor_id else null
+		if selected==null or selected.phase=="lost":_advance_gate(row);return
+		var connection: Dictionary=g.definition("effective_connection_defs","connection_id",_endpoint(row).connection_id)
+		if not _gate_stationary(row):row.phase_remaining_s=float(connection.prepare_s);return
 		var reason: String=_gate_reason(row)
 		if not reason.is_empty():_block(row,reason);return
 		row.phase_remaining_s=maxf(0,row.phase_remaining_s-delta)
 		if row.phase_remaining_s<=0:
-			var endpoint: Dictionary=_endpoint(row);var connection: Dictionary=g.definition("effective_connection_defs","connection_id",endpoint.connection_id)
-			var gate: RefCounted=g.state.find("gate_state","connection_id",endpoint.connection_id);var weight: float=mass(row)
+			var endpoint: Dictionary=_endpoint(row)
+			var gate: RefCounted=g.state.find("gate_state","connection_id",endpoint.connection_id);var weight: float=member_mass(selected)
 			if gate.has_remaining_mass_budget_kg:gate.remaining_mass_budget_kg-=weight
-			row.gate_cooldown_remaining_s=float(connection.cooldown_s);_phase(row,"gate_transit",float(balance.gate_transit_s));_journal(row,"gate",0,endpoint.endpoint_id,weight)
+			selected.gate_cooldown_remaining_s=float(connection.cooldown_s);selected.phase="gate_transit"
+			_phase(row,"gate_transit",float(balance.gate_transit_s));_journal(row,"gate",0,endpoint.endpoint_id,weight,selected.npc_instance_id)
 	elif row.phase=="gate_transit":
 		row.phase_remaining_s=maxf(0,row.phase_remaining_s-delta)
 		if row.phase_remaining_s<=0:
-			var endpoint: Dictionary=_endpoint(row);var anchor: Dictionary=g.definition("anchor_defs","anchor_id",endpoint.exit_anchor_id);var group: Array[RefCounted]=members(row,true)
-			for index: int in range(group.size()):_place(g.state.find("npc_state","npc_instance_id",group[index].npc_instance_id),group[index],anchor,Vector3(0,0,float(balance.gate_exit_m))+_formation(index,group.size()))
-			row.completed_legs+=row.direction;row.sector_id=anchor.sector_id;row.site_id=Space.site_for_anchor(g.catalog,anchor.anchor_id)
-			if row.retreat_requested:_reverse(row)
-			else:_next(row)
+			var selected: RefCounted=member(row.gate_actor_id) if row.has_gate_actor_id else null
+			if selected!=null and selected.phase!="lost":
+				var endpoint: Dictionary=_endpoint(row);var anchor: Dictionary=g.definition("anchor_defs","anchor_id",endpoint.exit_anchor_id)
+				var original: Dictionary=g.definition("civilization_war_members","spawn_id",selected.spawn_id)
+				_place(g.state.find("npc_state","npc_instance_id",selected.npc_instance_id),selected,anchor,Vector3(0,0,float(balance.gate_exit_m))+_formation(int(original.formation_index),members(row).size()))
+				selected.completed_legs+=row.direction;selected.phase="gate_wait";_goal(selected,g.position(g.state.find("npc_state","npc_instance_id",selected.npc_instance_id)))
+			_advance_gate(row)
 	elif row.phase=="arrival_approach" and _at_goals(row):_arrive(row)
 
 func _block(row: RefCounted,reason: String) -> void:
 	# Invalidating a charge restarts the full preparation after the gate clears.
-	row.resume_phase="gate_approach";row.blocked_reason=reason;row.blocked_elapsed_s=0;_phase(row,"blocked");_journal(row,"blocked")
+	row.resume_phase=row.phase;row.blocked_reason=reason;row.blocked_elapsed_s=0;_phase(row,"blocked");_journal(row,"blocked")
 
 func view(war_id: String) -> Dictionary:
 	var row: RefCounted=state_for(war_id)

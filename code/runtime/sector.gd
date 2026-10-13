@@ -196,7 +196,7 @@ func sync_entities() -> bool:
 		if row.sector_id != state.current_sector():
 			continue
 		if Space.supported(catalog) and Space.site_for_entity(state, "npc", row.npc_instance_id) != Space.current_site(state): continue
-		if not row.alive or (gameplay.operations.handles(row.spawn_id) and not gameplay.operations.structure_active(row)):
+		if not row.alive or gameplay.march.hidden(row.npc_instance_id) or (gameplay.operations.handles(row.spawn_id) and not gameplay.operations.structure_active(row)):
 			if npcs.has(row.npc_instance_id):
 				var retired: CharacterBody3D = npcs[row.npc_instance_id]
 				retired.hide()
@@ -491,6 +491,7 @@ func expire_auxiliary_markers() -> void:
 		if not state.rows("auxiliary_intel_state").has(targets[id].record) or targets[id].site_id!=Space.current_site(state) or age_s>=ttl:_remove_target(id)
 
 func target_is_local(id: String) -> bool:
+	if gameplay.march.hidden(id):return false
 	return not Space.supported(catalog) or (not target_site(id).is_empty() and target_site(id) == Space.current_site(state))
 
 func target_is_render_local(id: String) -> bool:

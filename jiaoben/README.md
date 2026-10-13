@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+v0.32联合源码检查：`verify_combat_v18.py --only march`验证114组行军/成长业务，`--native --only march-world`验证真实窗口、舰体和入门速度；`--only march-upgrade`须通过`XJ_MARCH_LEGACY_PROVENANCE`传入`logs/v49-march-legacy-source-*.json`中的已核实际v0.31旧输入。固定入口均为v49，实际EXE须至少0.32且PCK内存在对应参数，不能向旧EXE试探新参数。源码200项/6图通过，边界见61与`logs/v49-source-integration-checkpoint.json`，不等同自然成长或发行验收。
+
 v0.31正式Windows包已交付：最终包15组925项/36图、正式目录另6项与文件/ZIP一致性通过，汇总`logs/v48-final-candidate-checkpoint.json`和`logs/v48-delivery-verification.json`。下文开发检查点的“待验”只描述当时范围，当前状态见[26](../doc/26-开发阶段与交付记录.md)。完整目标继续S34和S29中后期，相关功能合并开发后统一验收。
 
 保留策略：`--only retention`使用固定v48入口和`XJ_RETENTION_V48_INPUTS`指定的测试输入清单，在副本中验证成功保存后的独立清理、清理事务中断、已提交端点不回滚、旧手动/升级/跨世界引用保护及空间复用。原始输入只读核对SHA256；不得传入个人库。68项初次源码证据见`logs/v18-source-headless-174b99f8-7ec2-4017-a2f3-edbb09a860a7.json`，追加跨世界断言已在最终实际包74项通过。

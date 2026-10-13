@@ -43,7 +43,7 @@ def main():
             lines.append('INSERT INTO ' + table + ' VALUES(' + ','.join(map(literal, values)) + ');')
 
         # Timing hypotheses, to be checked with the combined normal-flow batch.
-        insert('march_balance_defs', [1, 8.0, 4.0, 0.18, 6.0, 36.0, 120.0, 700.0, 180.0, 800.0, 180.0, 0.5, 2.0, 256])
+        insert('march_balance_defs', [1, 8.0, 4.0, 0.18, 6.0, 36.0, 120.0, 700.0, 180.0, 800.0, 180.0, 0.5, 2.0, 256, 60.0, 20.0])
         endpoints = [dict(x) for x in db.execute('SELECT * FROM gate_endpoint_defs ORDER BY endpoint_id')]
         for war in db.execute('SELECT * FROM civilization_war_defs ORDER BY war_id'):
             faction = db.execute('SELECT * FROM civilization_defs WHERE faction_id=?', (war['faction_id'],)).fetchone()
@@ -63,11 +63,12 @@ def main():
             stages = [
                 ('join', '完成核心站入籍', 'membership', fid, 1, '加入文明，开放专属发展'),
                 ('rank2', '取得中级舰采购资格', 'rank', fid, 2, '开放第一型文明舰'),
+                ('register', '登记文明指挥考核', 'registration', fid, 1, '后续真实行动开始计入考核'),
+                ('command', '完成文明指挥考核', 'honors', fid, 4, '取得战争指挥资格；逐项可领整备款'),
                 ('research2', '研究中级文明舰', 'research', research[0], 1, '取得中级舰设计许可'),
                 ('hull2', '整备中级文明舰', 'owned_hull', hulls[0]['ship_id'], 1, '形成文明战术核心'),
                 ('rank4', '取得高级舰采购资格', 'rank', fid, 4, '开放第二型文明舰'),
                 ('research4', '研究高级文明舰', 'research', research[1], 1, '取得高级舰设计许可'),
-                ('command', '完成文明指挥考核', 'honors', fid, 4, '取得战争指挥资格'),
                 ('rank5', '取得舰队伯爵爵位', 'rank', fid, 5, '达到边疆战争受领爵位'),
                 ('war', '完成首次边疆战役', 'war', war, 1, '获得据点并开启持续治理'),
                 ('rank6', '取得主力舰采购资格', 'rank', fid, 6, '开放文明主力舰'),
@@ -80,6 +81,8 @@ def main():
                 sources = []
                 if criterion == 'membership':
                     sources = [('mission', row[0]) for row in db.execute('SELECT mission_id FROM civilization_join_missions WHERE faction_id=? ORDER BY step_index', (fid,))]
+                elif criterion == 'registration':
+                    sources = [('honor_register', fid)]
                 elif criterion == 'rank':
                     sources = [('mission', row[0]) for row in db.execute('SELECT m.mission_id FROM mission_defs m JOIN mission_reputation_rewards r USING(mission_id) WHERE r.faction_id=? AND m.repeatable=1 ORDER BY r.reputation_delta DESC,m.mission_id', (fid,))]
                     sources += [('donation', row[0]) for row in db.execute('SELECT donation_id FROM civilization_donation_defs WHERE faction_id=? ORDER BY donation_id', (fid,))]
@@ -87,6 +90,8 @@ def main():
                     sources = [('honor', row[0]) for row in db.execute('SELECT task_id FROM civilization_honor_task_defs WHERE faction_id=? ORDER BY task_id', (fid,))]
                 elif criterion == 'research':
                     sources = [('research', ref)]
+                elif criterion == 'owned_hull':
+                    sources = [('hull_recipe', row[0]) for row in db.execute('SELECT hull_recipe_id FROM hull_recipe_defs WHERE ship_id=? ORDER BY hull_recipe_id', (ref,))]
                 elif criterion == 'war':
                     sources = [('war', war)]
                 for index, (kind, reference) in enumerate(sources):
@@ -98,8 +103,11 @@ def main():
         ]:
             row = db.execute(f'SELECT * FROM {table} ORDER BY {id_field} LIMIT 1').fetchone()
             stage = 'growth_' + kind
-            insert('growth_stage_defs', [stage, None, 12, title, kind, row[id_field], 1, row[station_field], outcome])
+            insert('growth_stage_defs', [stage, None, 13, title, kind, row[id_field], 1, row[station_field], outcome])
             insert('growth_activity_defs', [stage, 0, kind, row[id_field], row[station_field]])
+        for task in db.execute('SELECT * FROM civilization_honor_task_defs ORDER BY task_id'):
+            title = {'scout': '侦察', 'logistics': '物流', 'rescue': '救援', 'combat': '作战'}[task['task_kind']]
+            insert('growth_grant_defs', [task['task_id'], 8000, 350, title + '整备款'])
         lines.append("UPDATE catalog_meta SET content_version='v0.24-march',ruleset_version='singleplayer_march_v1',schema_version=23,source_document='doc/61-边疆战争与重建争夺.md';")
         (ROOT / 'code/database/march_seed.sql').write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
         print('Authored continuous war itineraries and growth references; old definitions unchanged')

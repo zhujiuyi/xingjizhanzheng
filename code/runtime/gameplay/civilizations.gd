@@ -144,6 +144,9 @@ func war_reason(war_id: String) -> String:
 	var policy: Dictionary = g.definition("sector_sovereignty_defs", "sector_id", definition.target_sector_id)
 	if policy.is_empty() or not bool(policy.conquerable) or not owner(definition.target_sector_id).is_empty(): return "目标已非可争夺的中立星系"
 	if g.missions.has_pending_loans(): return "先归还待清理的任务借船"
+	if g.march!=null:
+		reason=g.march.quote_reason(war_id)
+		if not reason.is_empty():return reason
 	return g.frontier.quote_reason(war_id)
 
 func start_war(war_id: String) -> bool:
@@ -187,6 +190,7 @@ func start_war(war_id: String) -> bool:
 		fleet.npc_instance_id = npc.npc_instance_id; fleet.war_id = war_id; fleet.side = entry.side
 		g.state.add("war_fleet_state", fleet)
 	g.frontier.begin(campaign)
+	g.march.start(campaign)
 	return true
 
 func handles_spawn(spawn_id: String) -> bool:
@@ -237,6 +241,7 @@ func command(order: String, target_id: String = "") -> bool:
 	var campaign: D.WarCampaignStateDto = active_war()
 	if campaign == null: return g.fail("没有进行中的舰队战争")
 	if order == "retreat":
+		if g.march.request_retreat(campaign):return true
 		_finish(campaign, "cancelled")
 		return true
 	if order not in ["advance", "focus", "regroup"]: return g.fail("未知舰队指令")
@@ -245,7 +250,9 @@ func command(order: String, target_id: String = "") -> bool:
 		if npc == null or not npc.alive or friendly(target_id) or not g.same_entity_site("ship", g.state.ship(), "npc", npc): return g.fail("选择战区内存活的敌舰后集火")
 		var war_def: Dictionary = g.definition("civilization_war_defs", "war_id", campaign.war_id)
 		var battle_anchor: Dictionary = g.definition("anchor_defs", "anchor_id", war_def.capture_anchor_id)
-		if not g.same_anchor_site(npc, battle_anchor): return g.fail("集火目标必须位于本次战役空域")
+		if g.march.holds_campaign(campaign):
+			if not g.march.has_local_member(npc.sector_id,g.spatial_site("npc",npc.npc_instance_id)):return g.fail("集火目标必须位于当前行军空域")
+		elif not g.same_anchor_site(npc, battle_anchor): return g.fail("集火目标必须位于本次战役空域")
 	campaign.fleet_order = order
 	campaign.focus_target_id = target_id if order == "focus" else ""
 	return true
@@ -264,6 +271,10 @@ func tick(delta: float) -> void:
 	if member != null: member.switch_cooldown_remaining_s = maxf(0, member.switch_cooldown_remaining_s - delta)
 	var campaign: D.WarCampaignStateDto = active_war()
 	if campaign == null: return
+	if g.march.holds_campaign(campaign):
+		var marching: RefCounted=g.march.state_for(campaign.war_id)
+		if marching.direction==1 and not marching.retreat_requested:g.frontier.tick_preparation(delta,campaign)
+		return
 	if g.frontier.owns_campaign(campaign):g.frontier.tick_campaign(delta,campaign);return
 	var definition: Dictionary = g.definition("civilization_war_defs", "war_id", campaign.war_id)
 	if g.state.ship().status == T.ShipStatus.DESTROYED or living_fleet(campaign, "ally").is_empty():
@@ -299,6 +310,7 @@ func tick(delta: float) -> void:
 		_finish(campaign, "won")
 
 func _finish(campaign: D.WarCampaignStateDto, status: String) -> void:
+	g.march.finished(campaign.war_id,status)
 	if status=="cancelled":g.frontier.cancelled(campaign)
 	g.frontier.legacy_finished(campaign,status)
 	campaign.status = status
@@ -309,6 +321,7 @@ func _finish(campaign: D.WarCampaignStateDto, status: String) -> void:
 	g.request_autosave()
 
 func _clear_fleet(war_id: String) -> void:
+	g.march.cleanup_members(war_id)
 	for member: D.WarFleetStateDto in g.state.rows("war_fleet_state").duplicate():
 		if member.war_id != war_id: continue
 		var npc: D.NpcStateDto = g.state.find("npc_state", "npc_instance_id", member.npc_instance_id)

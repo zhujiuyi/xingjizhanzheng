@@ -1,12 +1,13 @@
 """Closure checks for real gate itineraries and references to existing growth."""
 TABLES = ('march_balance_defs', 'march_campaign_defs', 'march_route_defs',
-          'growth_stage_defs', 'growth_activity_defs')
+          'growth_stage_defs', 'growth_activity_defs', 'growth_grant_defs')
 COLUMNS = {
-    'march_balance_defs': 'singleton:INTEGER:1|assembly_s:REAL:0|align_s:REAL:0|warp_speed_au_s:REAL:0|warp_min_s:REAL:0|warp_max_s:REAL:0|arrival_radius_m:REAL:0|clear_distance_m:REAL:0|formation_m:REAL:0|gate_exit_m:REAL:0|max_blocked_s:REAL:0|return_supply_ratio:REAL:0|gate_transit_s:REAL:0|history_limit:INTEGER:0',
+    'march_balance_defs': 'singleton:INTEGER:1|assembly_s:REAL:0|align_s:REAL:0|warp_speed_au_s:REAL:0|warp_min_s:REAL:0|warp_max_s:REAL:0|arrival_radius_m:REAL:0|clear_distance_m:REAL:0|formation_m:REAL:0|gate_exit_m:REAL:0|max_blocked_s:REAL:0|return_supply_ratio:REAL:0|gate_transit_s:REAL:0|history_limit:INTEGER:0|gate_approach_m:REAL:0|gate_stop_m:REAL:0',
     'march_campaign_defs': 'war_id:TEXT:1|origin_station_id:TEXT:0|destination_anchor_id:TEXT:0|supply_carrier_spawn_id:TEXT:0|travel_hull_id:TEXT:0',
     'march_route_defs': 'war_id:TEXT:1|leg_index:INTEGER:2|endpoint_id:TEXT:0|reverse_endpoint_id:TEXT:0',
     'growth_stage_defs': 'stage_id:TEXT:1|faction_id:TEXT:0|sort_order:INTEGER:0|display_name:TEXT:0|criterion_kind:TEXT:0|reference_id:TEXT:0|target_count:INTEGER:0|station_id:TEXT:0|outcome_label:TEXT:0',
     'growth_activity_defs': 'stage_id:TEXT:1|activity_index:INTEGER:2|activity_kind:TEXT:0|reference_id:TEXT:0|station_id:TEXT:0',
+    'growth_grant_defs': 'task_id:TEXT:1|reward_credit:INTEGER:0|reward_reputation:INTEGER:0|display_name:TEXT:0',
 }
 
 
@@ -17,6 +18,9 @@ def validate(db):
 
     require(db.execute('SELECT count(*) FROM march_balance_defs').fetchone()[0] == 1,
             'A single authoritative march balance is required')
+    approach, stop = db.execute('SELECT gate_approach_m,gate_stop_m FROM march_balance_defs').fetchone()
+    radius = db.execute("SELECT value_real FROM rule_parameters WHERE parameter_id='gate_entry_radius_m'").fetchone()[0]
+    require(approach + stop < radius, 'Sequential gate goal must fit the real entry radius')
     wars = {r[0] for r in db.execute('SELECT war_id FROM civilization_war_defs')}
     require({r[0] for r in db.execute('SELECT war_id FROM march_campaign_defs')} == wars,
             'Every civilization campaign needs a real route')
@@ -52,9 +56,11 @@ def validate(db):
         'honor': ('civilization_honor_task_defs', 'task_id'), 'war': ('civilization_war_defs', 'war_id'),
         'expedition': ('expedition_route_defs', 'route_id'), 'project': ('construction_project_defs', 'project_id'),
         'research': ('research_defs', 'research_id'),
+        'honor_register': ('civilization_command_defs', 'faction_id'), 'hull_recipe': ('hull_recipe_defs', 'hull_recipe_id'),
     }
     criteria = dict(references, membership=('civilization_defs', 'faction_id'),
                     rank=('civilization_defs', 'faction_id'), honors=('civilization_defs', 'faction_id'),
+                    registration=('civilization_command_defs', 'faction_id'),
                     owned_hull=('ship_defs', 'ship_id'))
     for kind, reference in db.execute('SELECT criterion_kind,reference_id FROM growth_stage_defs'):
         table, key = criteria[kind]
@@ -65,5 +71,8 @@ def validate(db):
         require(db.execute(f'SELECT count(*) FROM {table} WHERE {key}=?', (reference,)).fetchone()[0] == 1,
                 'Growth guidance must reference a playable activity')
     for faction, in db.execute('SELECT faction_id FROM civilization_defs'):
-        require(db.execute('SELECT count(*) FROM growth_stage_defs WHERE faction_id=?', (faction,)).fetchone()[0] >= 12,
+        require(db.execute('SELECT count(*) FROM growth_stage_defs WHERE faction_id=?', (faction,)).fetchone()[0] >= 13,
                 'All civilizations need a path through middle and late progression')
+    require({r[0] for r in db.execute('SELECT task_id FROM growth_grant_defs')} ==
+            {r[0] for r in db.execute('SELECT task_id FROM civilization_honor_task_defs')},
+            'Every actual capability proof needs an explicit finite outfitting grant')

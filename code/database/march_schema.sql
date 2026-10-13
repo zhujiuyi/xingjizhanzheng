@@ -13,7 +13,9 @@ CREATE TABLE march_balance_defs(
  max_blocked_s REAL NOT NULL CHECK(max_blocked_s>0),
  return_supply_ratio REAL NOT NULL CHECK(return_supply_ratio BETWEEN 0 AND 1),
  gate_transit_s REAL NOT NULL CHECK(gate_transit_s>0),
- history_limit INTEGER NOT NULL CHECK(history_limit>=32)
+ history_limit INTEGER NOT NULL CHECK(history_limit>=32),
+ gate_approach_m REAL NOT NULL CHECK(gate_approach_m>0),
+ gate_stop_m REAL NOT NULL CHECK(gate_stop_m>0)
 ) STRICT;
 
 CREATE TABLE march_campaign_defs(
@@ -37,7 +39,7 @@ CREATE TABLE growth_stage_defs(
  faction_id TEXT REFERENCES civilization_defs(faction_id),
  sort_order INTEGER NOT NULL CHECK(sort_order>=0),
  display_name TEXT NOT NULL,
- criterion_kind TEXT NOT NULL CHECK(criterion_kind IN('membership','rank','research','owned_hull','honors','war','expedition','project')),
+ criterion_kind TEXT NOT NULL CHECK(criterion_kind IN('membership','rank','registration','research','owned_hull','honors','war','expedition','project')),
  reference_id TEXT NOT NULL,
  target_count INTEGER NOT NULL CHECK(target_count>0),
  station_id TEXT NOT NULL REFERENCES station_defs(station_id),
@@ -47,8 +49,15 @@ CREATE TABLE growth_stage_defs(
 CREATE TABLE growth_activity_defs(
  stage_id TEXT NOT NULL REFERENCES growth_stage_defs(stage_id),
  activity_index INTEGER NOT NULL CHECK(activity_index>=0),
- activity_kind TEXT NOT NULL CHECK(activity_kind IN('mission','donation','research','honor','war','expedition','project')),
+ activity_kind TEXT NOT NULL CHECK(activity_kind IN('mission','donation','research','honor_register','honor','hull_recipe','war','expedition','project')),
  reference_id TEXT NOT NULL,
  station_id TEXT NOT NULL REFERENCES station_defs(station_id),
  PRIMARY KEY(stage_id,activity_index)
+) STRICT;
+
+CREATE TABLE growth_grant_defs(
+ task_id TEXT PRIMARY KEY REFERENCES civilization_honor_task_defs(task_id),
+ reward_credit INTEGER NOT NULL CHECK(reward_credit>0),
+ reward_reputation INTEGER NOT NULL CHECK(reward_reputation>0),
+ display_name TEXT NOT NULL
 ) STRICT;

@@ -86,7 +86,7 @@ func begin(war: RefCounted) -> void:
 	if not supported():return
 	for npc: RefCounted in g.civilizations.living_fleet(war,"ally")+g.civilizations.living_fleet(war,"defender"):_dormant(npc)
 	_trigger_demand(g.definition("civilization_defs","faction_id",g.civilizations.allegiance()).capital_station_id)
-	warning_changed.emit("战役准备 · 前往边疆侦察；补给已在战区集结")
+	warning_changed.emit("战役准备 · 核心站集结舰队与补给" if g.march.supported() else "战役准备 · 前往边疆侦察；补给已在战区集结")
 func _dormant(npc: RefCounted) -> void:
 	npc.alive=false;npc.shield=0.0;npc.armor=0.0;npc.hull=0.0;npc.behavior_phase=T.NpcPhase.DEAD;npc.bounty_claimed=true
 func _revive(npc: RefCounted) -> void:
@@ -122,6 +122,9 @@ func action_reason(id: String,action: String) -> String:
 	if row==null:return _governance_reason(id,action)
 	var war: RefCounted=g.civilizations.active_war();var spec: Dictionary=definition(id);var w: Dictionary=g.definition("civilization_war_defs","war_id",id)
 	if war==null or war.war_id!=id or not owns_campaign(war):return "此战役不在新版活动阶段"
+	if g.march.holds_campaign(war):
+		var marching: RefCounted=g.march.state_for(id)
+		if action!="survey" or marching.direction==-1 or marching.retreat_requested:return "舰队行军中 · 抵达战区后继续"
 	if action=="survey":
 		if row.phase!="scouting" or row.survey_paid:return "侦察已开始或当前阶段不符"
 		if not _at(spec.scout_anchor_id,float(balance.survey_radius_m)):return "实际接近侦察点后调查"
@@ -135,7 +138,7 @@ func action_reason(id: String,action: String) -> String:
 	return "未知战役操作"
 func execute(id: String,action: String,quantity: int,expected: String) -> bool:
 	var row: RefCounted=campaign(id)
-	var current: String=str(row.attempt)+":"+str(row.phase) if row!=null else _governance_token(id)
+	var current: String=expected_token(id)
 	if expected!=current:return g.fail("边疆状态已变化，请重新查看")
 	var reason: String=action_reason(id,action)
 	if not reason.is_empty():return g.fail(reason)
@@ -147,17 +150,30 @@ func execute(id: String,action: String,quantity: int,expected: String) -> bool:
 		if not g.inventory.consume(g.inventory.hold(g.state.ship(),T.ContainerKind.CARGO),balance.material_id,int(balance.rebuild_units),true):return g.fail("修复材料已变化")
 		row.repair_paid_units=int(balance.rebuild_units);row.repair_remaining_s=float(balance.rebuild_s);_receipt(row,"repair",0,int(balance.rebuild_units))
 	g.request_autosave();return true
+func _launch_escort(war: RefCounted,row: RefCounted) -> void:
+	_receipt(row,"survey",1);row.phase="escorting"
+	for a: Dictionary in g.rows("frontier_actor_defs"):
+		if a.war_id==war.war_id and a.actor_role in ["convoy","ambusher"]:_spawn(a.spawn_id,war.war_id,row.attempt)
+	warning_changed.emit("补给舰已集结 · 护送并保护它抵达登陆点");g.request_autosave()
+func tick_preparation(delta: float,war: RefCounted) -> void:
+	var row: RefCounted=campaign(war.war_id)
+	if row==null or row.phase!="scouting" or not row.survey_paid:return
+	var spec: Dictionary=definition(war.war_id)
+	if row.survey_remaining_s>0.0 and _at(spec.scout_anchor_id,float(balance.survey_radius_m)):
+		row.survey_remaining_s=maxf(0.0,row.survey_remaining_s-delta)
+		if row.survey_remaining_s<=0.0:
+			g.crew.contribute(g.state.ship().ship_instance_id,"survey",1.0)
+			warning_changed.emit("侦察已就绪 · 可继续其他准备或接应舰队");g.request_autosave()
+	if row.survey_remaining_s<=0.0 and not g.march.holds_campaign(war):_launch_escort(war,row)
 func tick_campaign(delta: float,war: RefCounted) -> void:
 	var row: RefCounted=campaign(war.war_id);var spec: Dictionary=definition(war.war_id);var w: Dictionary=g.definition("civilization_war_defs","war_id",war.war_id)
 	if g.state.ship().status==T.ShipStatus.DESTROYED:_fail(war,"failed");return
 	if row.phase=="scouting":
+		if g.march.state_for(war.war_id)!=null:tick_preparation(delta,war);return
 		if row.survey_paid and _at(spec.scout_anchor_id,float(balance.survey_radius_m)):
 			row.survey_remaining_s=maxf(0.0,row.survey_remaining_s-delta)
 			if row.survey_remaining_s<=0.0:
-				_receipt(row,"survey",1);row.phase="escorting"
-				for a: Dictionary in g.rows("frontier_actor_defs"):
-					if a.war_id==war.war_id and a.actor_role in ["convoy","ambusher"]:_spawn(a.spawn_id,war.war_id,row.attempt)
-				warning_changed.emit("补给舰已集结 · 护送并保护它抵达登陆点");g.request_autosave()
+				_launch_escort(war,row)
 	elif row.phase=="escorting":
 		var convoy: RefCounted=_actor_for(war.war_id,"convoy")
 		if convoy==null or not convoy.alive:_fail(war,"failed");return
@@ -166,7 +182,10 @@ func tick_campaign(delta: float,war: RefCounted) -> void:
 			row.supply_delivered=true;_receipt(row,"supply",int(balance.supply_units));_clear_actors(war.war_id)
 			for member: RefCounted in g.state.rows("war_fleet_state"):
 				if member.war_id!=war.war_id:continue
-				var npc: RefCounted=g.state.find("npc_state","npc_instance_id",member.npc_instance_id);_revive(npc)
+				var npc: RefCounted=g.state.find("npc_state","npc_instance_id",member.npc_instance_id)
+				# Arriving original actors keep all damage and their real pose.
+				if g.march.protects_identity(npc.npc_instance_id):continue
+				_revive(npc)
 				if member.side=="ally":
 					# Reinforcements assemble with the physical escort. Reuse the
 					# existing fleet spacing rather than an unrelated old spawn pose.
@@ -199,7 +218,9 @@ func destroyed(npc: RefCounted) -> void:
 func _rebuilding(war: RefCounted,row: RefCounted) -> void:
 	row.phase="rebuilding";war.status="occupying";_clear_actors(war.war_id)
 	for member: RefCounted in g.state.rows("war_fleet_state"):
-		if member.war_id==war.war_id:_dormant(g.state.find("npc_state","npc_instance_id",member.npc_instance_id))
+		if member.war_id==war.war_id:
+			if member.side=="ally" and g.march.protects_identity(member.npc_instance_id):continue
+			_dormant(g.state.find("npc_state","npc_instance_id",member.npc_instance_id))
 	warning_changed.emit("战斗目标完成 · 携带结构料修复登陆设施后登记主权");g.request_autosave()
 func _capture(war: RefCounted,row: RefCounted) -> void:
 	var w: Dictionary=g.definition("civilization_war_defs","war_id",war.war_id);var control: RefCounted=g.state.find("territory_state","sector_id",w.target_sector_id);var governed: RefCounted=territory(w.target_sector_id)
@@ -402,10 +423,16 @@ func focused_id() -> String:
 	return d.active_sector_id if d.has_active_sector_id else ""
 func expected_token(id: String) -> String:
 	var row: RefCounted=campaign(id)
-	return "%d:%s" % [row.attempt,row.phase] if row!=null else _governance_token(id)
+	var march_row: RefCounted=g.march.state_for(id)
+	var token: String="%d:%s" % [row.attempt,row.phase] if row!=null else _governance_token(id)
+	return token+":march:"+str(march_row.revision) if march_row!=null and row!=null and march_row.attempt==row.attempt else token
 func status_text(id: String) -> String:
 	var row: RefCounted=campaign(id)
 	if row!=null:
+		var march_row: RefCounted=g.march.state_for(id)
+		if march_row!=null and march_row.attempt==row.attempt and g.march.active(march_row):
+			var info: Dictionary=g.march.view(id)
+			return "%s · %s · 航段 %d/%d · 友舰 %d%s%s" % ["返航" if info.returning else "行军",info.label,info.completed_legs,info.total_legs,info.members," · "+str(info.blocked_reason) if not str(info.blocked_reason).is_empty() else " · %.0f秒" % float(info.remaining_s)," · 侦察已就绪" if row.survey_paid and row.survey_remaining_s<=0 else " · 可先行侦察"]
 		match row.phase:
 			"scouting":return "侦察 · 剩余 %.1f秒" % row.survey_remaining_s if row.survey_paid else "侦察 · 抵达目标后调查"
 			"escorting":
@@ -424,6 +451,11 @@ func guidance(id: String) -> Dictionary:
 	if row!=null:
 		var spec: Dictionary=definition(id);var war: Dictionary=g.definition("civilization_war_defs","war_id",id)
 		anchor_id=spec.scout_anchor_id if row.phase=="scouting" else spec.convoy_start_anchor_id if row.phase=="escorting" else war.capture_anchor_id
+		var march_row: RefCounted=g.march.state_for(id)
+		if march_row!=null and march_row.attempt==row.attempt and g.march.active(march_row):
+			var prepare: bool=march_row.direction==1 and not march_row.retreat_requested and row.phase=="scouting" and (not row.survey_paid or row.survey_remaining_s>0.0)
+			anchor_id=spec.scout_anchor_id if prepare else march_row.goal_anchor_id
+			return g.missions._route_location(g.missions._anchor_location(anchor_id,"frontier:"+id,"encounter",("先行侦察 · " if prepare else "舰队下一行军地点 · ")+title),"")
 		if row.phase=="escorting":
 			var convoy: RefCounted=_actor_for(id,"convoy")
 			if convoy!=null and g.same_entity_site("ship",g.state.ship(),"npc",convoy):
@@ -445,6 +477,10 @@ func waypoints(sector_id: String) -> Array[Dictionary]:
 	var row: RefCounted=campaign(id);var anchor_id: String=""
 	if row!=null:
 		var spec: Dictionary=definition(id);anchor_id=spec.scout_anchor_id if row.phase=="scouting" else spec.convoy_start_anchor_id if row.phase=="escorting" else g.definition("civilization_war_defs","war_id",id).capture_anchor_id
+		var march_row: RefCounted=g.march.state_for(id)
+		if march_row!=null and march_row.attempt==row.attempt and g.march.active(march_row):
+			var prepare: bool=march_row.direction==1 and not march_row.retreat_requested and row.phase=="scouting" and (not row.survey_paid or row.survey_remaining_s>0.0)
+			anchor_id=spec.scout_anchor_id if prepare else march_row.goal_anchor_id
 	else:anchor_id=g.definition("frontier_governance_defs","sector_id",id).defense_anchor_id
 	var at: Dictionary=g.definition("anchor_defs","anchor_id",anchor_id)
 	if at.sector_id!=sector_id:return result

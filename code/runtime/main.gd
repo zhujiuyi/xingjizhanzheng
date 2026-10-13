@@ -53,6 +53,9 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-march-upgrade-v49","file":"march_upgrade_v49.gd","prefix":"march-upgrade-v49","env":"XJ_MARCH_UPGRADE_V49","meta":"xj_march_upgrade_v49_diagnostic"},
+		{"flag":"--xj-verify-march-world-v49","file":"march_world_v49.gd","prefix":"march-world-v49","env":"XJ_MARCH_WORLD_V49","meta":"xj_march_world_v49_diagnostic"},
+		{"flag":"--xj-verify-march-v49","file":"march_v49.gd","prefix":"march-v49","env":"XJ_MARCH_V49","meta":"xj_march_v49_diagnostic"},
 		{"flag":"--xj-verify-retention-v48","file":"retention_v48.gd","prefix":"retention-v48","env":"XJ_RETENTION_V48","meta":"xj_retention_v48_diagnostic"},
 		{"flag":"--xj-verify-market-cache-v47","file":"market_cache_v47.gd","prefix":"market-cache-v47","env":"XJ_MARKET_CACHE_V47","meta":"xj_market_cache_v47_diagnostic"},
 		{"flag":"--xj-verify-natural-recovery-v45","file":"natural_recovery_v45.gd","prefix":"natural-recovery-v45","env":"XJ_NATURAL_RECOVERY_V45","meta":"xj_natural_recovery_v45_diagnostic"},
@@ -778,6 +781,10 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			ui.open_sources(str(gameplay.frontier.balance.material_id))
 		"frontier_map", "frontier_navigate":
 			_frontier_navigation(action,target,extra)
+		"growth_map", "growth_navigate":
+			_growth_navigation(action,target,extra)
+		"growth_open":
+			_growth_open(target,extra)
 		"operation_open":
 			ui.show_page("operations")
 		"operation_map", "operation_nav":
@@ -934,6 +941,9 @@ func _business_action(action: String, target: String, quantity: int, extra: Stri
 		return
 	if action=="crew_action" or (action=="owned_fleet_action" and extra.get_slice("|",0) in ["deploy","recover"]):
 		_commit_fleet_action(action,target,quantity,extra,"船员与自有编队")
+		return
+	if action=="growth_claim" or (action=="start_war" and gameplay.march.supported()):
+		_commit_fleet_action(action,target,quantity,extra,"整备款" if action=="growth_claim" else "舰队整备")
 		return
 	if ui.page == "warehouse" and action in ["move_stack", "move_item", "move_salvage"]:
 		var kind: String = {"move_stack": "stack", "move_item": "item", "move_salvage": "salvage"}[action]
@@ -1114,7 +1124,8 @@ func _source_navigation(action: String, key: String, item_id: String) -> void:
 func _source_after_arrival() -> void:
 	await get_tree().process_frame
 	if not source_goal.is_empty() and state != null and source_goal.world == state.world_id and not busy:
-		if source_goal.has("frontier"):_frontier_navigation("frontier_navigate",source_goal.frontier,gameplay.frontier.expected_token(source_goal.frontier))
+		if source_goal.has("growth"):_growth_navigation("growth_navigate",source_goal.growth,str(source_goal.activity))
+		elif source_goal.has("frontier"):_frontier_navigation("frontier_navigate",source_goal.frontier,gameplay.frontier.expected_token(source_goal.frontier))
 		elif source_goal.has("consignment"): _consignment_navigation("consignment_navigate",source_goal.consignment,str(source_goal.generation))
 		elif source_goal.has("operation"): _operation_navigation("operation_nav",source_goal.operation,str(source_goal.generation))
 		elif source_goal.has("event"): _exploration_navigation("exploration_nav", source_goal.event, str(source_goal.generation))
@@ -1148,6 +1159,37 @@ func _drone_order(kind: String, target: String) -> void:
 	ui.notify({"attack":"无人机攻击指令已下达。","follow":"无人机跟随指令已下达；本次仍只有一次已支付攻击。","recall":"无人机正在回收，尚未发出的攻击已停止。"}.get(kind, "无人机指令已更新。"))
 	if kind != "recall" and not launched and gameplay.drone_control.live.is_empty(): ui.notify("指令已更新；机库冷却或电容不足，满足条件后可再次出击。",true)
 	ui.refresh_page()
+
+func _growth_navigation(action: String,stage_id: String,selection: String) -> void:
+	if state==null or gameplay==null or busy or travel.active() or not selection.is_valid_int():return
+	var index: int=int(selection)
+	var info: Dictionary=gameplay.growth.guidance(stage_id,index)
+	if info.is_empty():ui.notify("此成长途径暂不可用。",true);return
+	if action=="growth_map" or state.ship().status!=Types.ShipStatus.FLYING:
+		ui.show_page("map")
+		if ui.resource_chart!=null:ui.resource_chart.select_sector(str(info.sector_id),false);ui.resource_chart.call("focus_selected")
+		return
+	if not str(info.get("route_reason","")).is_empty():ui.notify(str(info.route_reason),true);return
+	source_goal={"world":state.world_id,"growth":stage_id,"activity":index}
+	_navigate_guidance(info,true,true,true)
+
+func _growth_open(stage_id: String,selection: String) -> void:
+	if state==null or gameplay==null or busy or not selection.is_valid_int():return
+	var stage: Dictionary=gameplay.definition("growth_stage_defs","stage_id",stage_id)
+	var selected: Dictionary=gameplay.growth.activity(stage_id,int(selection))
+	if stage.is_empty() or selected.is_empty():return
+	if stage.faction_id!=null:ui.civilization_selected_faction=str(stage.faction_id)
+	var page: String=gameplay.growth.service_page(stage_id,int(selection))
+	ui.show_page(page)
+	if page=="civilizations":
+		var focus_name: String="CommanderRegister" if selected.activity_kind=="honor_register" else "CommanderCertify" if selected.activity_kind=="honor" else "CivilizationJoin" if stage.criterion_kind=="membership" else "CivilizationWar_"+str(stage.reference_id) if selected.activity_kind=="war" else ""
+		if not focus_name.is_empty():
+			var control: Control=ui.find_child(focus_name,true,false) as Control
+			if is_instance_valid(control):
+				control.grab_focus();var parent: Node=control.get_parent()
+				while parent!=null:
+					if parent is ScrollContainer:parent.ensure_control_visible(control);break
+					parent=parent.get_parent()
 
 func _frontier_navigation(action: String,id: String,expected: String) -> void:
 	if state==null or gameplay==null or busy or travel.active():return

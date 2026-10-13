@@ -31,6 +31,8 @@ const DroneControl = preload("res://runtime/gameplay/drone_control.gd")
 const Space = preload("res://runtime/space_coordinates.gd")
 var state: XJRuntimeState
 var catalog: XJCatalog
+var march: RefCounted
+var growth: RefCounted
 var inventory: RefCounted
 var economy: RefCounted
 var missions: RefCounted
@@ -111,6 +113,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog, preview: bool = 
 	consignments = Consignments.new(self)
 	honors = Honors.new(self)
 	frontier = Frontier.new(self)
+	march=preload("res://runtime/gameplay/march.gd").new(self)
 	hired = Hired.new(self)
 	situational = Situational.new(self)
 	projects = Projects.new(self)
@@ -118,6 +121,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog, preview: bool = 
 	telemetry = Telemetry.new(self)
 	journal = preload("res://runtime/gameplay/journal.gd").new(self)
 	scenarios = preload("res://runtime/gameplay/scenarios.gd").new(self)
+	growth=preload("res://runtime/gameplay/growth.gd").new(self)
 	if preview: return
 	# Older snapshots could retain capacity from a disabled passive module.
 	# Normalize only the live candidate; sealed historical snapshots stay intact.
@@ -188,6 +192,7 @@ func same_anchor_site(row: RefCounted, anchor: Dictionary) -> bool:
 
 func same_entity_site(kind_a: String, row_a: RefCounted, kind_b: String, row_b: RefCounted) -> bool:
 	if row_a == null or row_b == null or str(row_a.get("sector_id")) != str(row_b.get("sector_id")): return false
+	if march!=null and ((kind_a=="npc" and march.hidden(Space.row_id(row_a))) or (kind_b=="npc" and march.hidden(Space.row_id(row_b)))):return false
 	if not Space.supported(catalog): return true
 	var a: String = spatial_site(kind_a, Space.row_id(row_a))
 	return not a.is_empty() and a == spatial_site(kind_b, Space.row_id(row_b))
@@ -199,6 +204,12 @@ func entity_distance(kind_a: String, row_a: RefCounted, kind_b: String, row_b: R
 	return Space.entity_distance(state, catalog, kind_a, row_a, kind_b, row_b)
 
 func remove_npc(row: D.NpcStateDto) -> void:
+	if row==null:return
+	if march!=null and march.member(row.npc_instance_id)!=null:
+		# A travelling original member becomes a recorded loss; its dead identity
+		# remains until campaign cleanup removes the roster and references.
+		row.alive=false;row.shield=0;row.armor=0;row.hull=0;row.behavior_phase=T.NpcPhase.DEAD
+		march.destroyed(row);return
 	for support: RefCounted in state.rows("remote_support_state").duplicate():
 		if support.target_npc_id==row.npc_instance_id:ship_roles.stop_support(support.item_instance_id)
 	if row == null: return
@@ -255,6 +266,8 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 	if action == "auxiliary_launch":command.action_kind=T.ActionKind.AUXILIARY_LAUNCH
 	if action == "crew_action":command.action_kind=T.ActionKind.CREW_ACTION
 	if action == "owned_fleet_action":command.action_kind=T.ActionKind.OWNED_FLEET_ACTION
+	if action == "growth_select":command.action_kind=T.ActionKind.GROWTH_SELECT
+	if action == "growth_claim":command.action_kind=T.ActionKind.GROWTH_CLAIM
 	_active_action = command
 	_active_payload = _request_for(action, target, quantity, extra)
 	var ok: bool = false
@@ -315,6 +328,8 @@ func act(action: String, target: String = "", quantity: int = 1, extra: String =
 			"donate_civilization": ok = civilizations.donate(target, quantity)
 			"start_war": ok = civilizations.start_war(target)
 			"fleet_command": ok = civilizations.command(target, extra)
+			"growth_select":ok=growth.select(target) if quantity==1 else fail("每次只选择一个成长目标")
+			"growth_claim":ok=growth.claim(target,extra) if quantity==1 else fail("每次只领取一个整备项目")
 			"claim_industry": ok = industry.claim(target)
 			"cancel_industry": ok = industry.cancel(target)
 			"deliver_demand": ok = industry.deliver(target, quantity, extra)
@@ -662,6 +677,7 @@ func finish_step(delta: float) -> void:
 		_pending_repairs.erase(repair)
 	missions.tick(delta)
 	work.tick(delta)
+	march.spatial_active=situational.spatial_active;march.tick(delta)
 	civilizations.tick(delta)
 	frontier.tick(delta)
 	economy.tick(delta)
@@ -774,6 +790,7 @@ func damage_npc(instance_id: String, raw_vector: Vector3,credited_raw: Vector3=V
 		tactics.destroyed(npc)
 		operations.destroyed(npc)
 		frontier.destroyed(npc)
+		march.destroyed(npc)
 		npc.respawn_remaining_s = float(spawn.respawn_s) if spawn.respawn_s != null else 0.0
 		if spawn.bounty_enabled and not npc.bounty_claimed: state.player().credit += def.reward_credit; npc.bounty_claimed = true
 		var packaged: bool = encounters.on_destroy(npc)
@@ -928,9 +945,9 @@ func mission_view() -> Array[Dictionary]:
 
 func dispose() -> void:
 	# Explicitly break parent/service references when a world is replaced.
-	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,auxiliary_drones,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired,situational,projects,expeditions,telemetry,journal,scenarios,crew,owned_fleet]:
+	for service in [inventory,economy,missions,work,encounters,civilizations,industry,resource_intel,exploration,mobile_belts,tactics,drone_control,auxiliary_drones,operations,specializations,fitting_analysis,ship_roles,consignments,honors,frontier,hired,situational,projects,expeditions,telemetry,journal,scenarios,crew,owned_fleet,march,growth]:
 		if service != null: service.g = null
-	specializations = null; fitting_analysis = null
+	march=null; growth=null; specializations = null; fitting_analysis = null
 	ship_roles = null; auxiliary_drones=null; consignments = null; honors = null; frontier = null; hired = null; situational = null; projects = null; expeditions = null; telemetry = null
 	operations = null; journal = null; scenarios = null
 	crew=null;owned_fleet=null
@@ -1012,6 +1029,7 @@ func _request_for(action: String, target: String, quantity: int, extra: String) 
 
 
 func request_autosave() -> void:
+	if growth!=null:growth.observe()
 	if pending_autosave_request_id.is_empty(): pending_autosave_request_id = id("autosave")
 
 func take_autosave_request() -> String:

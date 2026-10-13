@@ -12,6 +12,9 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "march-upgrade": ("march_upgrade_v49.gd", "XJ_MARCH_UPGRADE_V49", "march-upgrade-v49", "MARCH_UPGRADE_V49", "--xj-verify-march-upgrade-v49"),
+    "march-world": ("march_world_v49.gd", "XJ_MARCH_WORLD_V49", "march-world-v49", "MARCH_WORLD_V49", "--xj-verify-march-world-v49"),
+    "march": ("march_v49.gd", "XJ_MARCH_V49", "march-v49", "MARCH_V49", "--xj-verify-march-v49"),
     "retention": ("retention_v48.gd", "XJ_RETENTION_V48", "retention-v48", "RETENTION_V48", "--xj-verify-retention-v48"),
     "market-cache": ("market_cache_v47.gd", "XJ_MARKET_CACHE_V47", "market-cache-v47", "MARKET_CACHE_V47", "--xj-verify-market-cache-v47"),
     "natural-checkpoint": ("natural_growth_v45.gd", "XJ_NATURAL_GROWTH_V45", "natural-growth-v45", "NATURAL_GROWTH_V45", "--xj-verify-natural-growth-v45"),
@@ -92,7 +95,7 @@ def sha(path):
 
 def require_supported_diagnostics(binary, names):
     """Read PE metadata before launching flags absent from older clients."""
-    if not set(names).intersection({"owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache", "retention"}):
+    if not set(names).intersection({"march", "march-world", "march-upgrade", "owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache", "retention"}):
         return
     env = os.environ.copy()
     env["XJ_DIAGNOSTIC_VERSION_FILE"] = str(binary)
@@ -101,8 +104,9 @@ def require_supported_diagnostics(binary, names):
          "(Get-Item -LiteralPath $env:XJ_DIAGNOSTIC_VERSION_FILE).VersionInfo.FileVersion"],
         env=env, text=True, encoding="utf-8").strip()
     numbers = [int(value) for value in re.findall(r"\d+", version)[:4]]
-    if len(numbers) < 3 or tuple((numbers + [0] * 4)[:4]) < (0, 31, 0, 0):
-        raise RuntimeError(f"这些诊断需要 v0.31.0 及以上客户端，当前为 {version or '未知'}；未启动游戏。旧包升级须使用其原有固定入口。")
+    minimum = (0, 32, 0, 0) if set(names).intersection({'march','march-world','march-upgrade'}) else (0, 31, 0, 0)
+    if len(numbers) < 3 or tuple((numbers + [0] * 4)[:4]) < minimum:
+        raise RuntimeError(f"这些诊断需要 {'.'.join(map(str,minimum))} 及以上客户端，当前为 {version or '未知'}；未启动游戏。旧包升级须使用其原有固定入口。")
     # Development candidates can share a version while adding fixed endpoints.
     # Refuse an absent flag before an older candidate can fall through to the
     # ordinary user-data startup path.
@@ -247,6 +251,18 @@ def run_suite():
             assert record["summary"]["result"] == "PASS" and record["summary"]["failures"] == 0
         if name == "market-cache":
             assert record["summary"]["checks"] >= 30 and record["summary"]["groups"] == 108
+        if name == "march":
+            summary = record['summary']
+            assert summary['checks'] >= 50 and summary['groups'] == 114 and not captures
+            assert summary['mixed_saved'] and summary['gate_passages'] >= 6
+            assert summary['return_checked'] and summary['loss_checked'] and summary['growth_checked']
+        if name == 'march-world':
+            summary = record['summary']
+            assert args.native and summary['checks'] >= 25 and len(captures) == 6
+            assert summary['native_moved_m'] >= 200 and summary['departed'] and summary['pause_checked']
+            assert summary['gate_ready_checked'] and summary['gate_hidden_checked'] and summary['gate_restore_checked'] and summary['grant_ui_checked']
+        if name == 'march-upgrade':
+            assert record['summary']['checks'] >= 20 and record['summary']['groups'] == 114 and not captures
         if name == "retention":
             assert record["summary"]["checks"] >= 50 and len(record["summary"]["cases"]) == 2
         if name in ("auxiliary-world","owned-combat-world"):

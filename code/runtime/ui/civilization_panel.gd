@@ -7,10 +7,12 @@ var war_status: Label
 var join_button: Button
 var join_note: Label
 var honor_panel: RefCounted
+var growth_panel: RefCounted
 
 func build(ui: Node) -> void:
 	u = ui
 	honor_panel=null
+	growth_panel=null
 	var civ: RefCounted = u.gameplay.civilizations
 	if not civ.supported():
 		u._text("当前世界仍使用旧规则。重新载入后可按备份分支流程升级文明内容。", 16)
@@ -42,6 +44,8 @@ func build(ui: Node) -> void:
 	u._text("声望 %d · %s · 管辖 %d 个星系\n核心站：%s" % [u.gameplay.economy.reputation(faction), title_status, owned, u._station_name(str(selected.capital_station_id))], 14)
 	var map_button: Button = _command(u.body, "定位文明核心星系", "civilization_map", faction)
 	map_button.name = "CivilizationCapital"
+	if u.gameplay.growth.supported():
+		growth_panel=preload("res://runtime/ui/growth_panel.gd").new();growth_panel.build(u,faction)
 	if joined==faction:_build_commander(faction)
 	u._text("入籍任务", 18)
 	for step: Dictionary in u.catalog.rows("civilization_join_missions"):
@@ -129,7 +133,7 @@ func build(ui: Node) -> void:
 		_command(controls, "推进", "fleet_command", "advance")
 		_command(controls, "集结", "fleet_command", "regroup")
 		_command(controls, "集火当前目标", "fleet_command", "focus", null, str(u.target_id))
-		_command(controls, "撤退并放弃战役", "fleet_command", "retreat")
+		_command(controls, "撤退返航" if u.gameplay.march.state_for(campaign.war_id)!=null else "撤退并放弃战役", "fleet_command", "retreat")
 	else:
 		u._text("舰队伯爵"+("取得指挥资格后" if u.gameplay.honors.supported() else "")+"可在所属核心站受领委托。"+("先侦察/护送，再完成战斗目标和修复。" if u.gameplay.frontier.supported() else "3艘友舰在战区集结，清敌后驻留占领。")+"出生航路受保护。", 13)
 		for war: Dictionary in u.catalog.rows("civilization_war_defs"):
@@ -153,6 +157,7 @@ func _build_commander(faction: String) -> void:
 	honor_panel.build(u,faction,self)
 
 func tick() -> void:
+	if growth_panel!=null:growth_panel.tick()
 	if honor_panel!=null:honor_panel.tick()
 	if not is_instance_valid(war_status): return
 	var civ: RefCounted = u.gameplay.civilizations
