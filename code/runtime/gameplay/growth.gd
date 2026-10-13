@@ -39,6 +39,15 @@ func progress(stage: Dictionary) -> Dictionary:
 			var research: Dictionary=g.definition("research_defs","research_id",stage.reference_id)
 			current=1 if g.unlocked(research.reward_unlock_id) else 0;complete=current==1
 			note="研究费 %d · 当前 %d" % [int(research.required_credit),g.state.player().credit]
+			if not complete:
+				var prerequisite: String=""
+				if research.verification_mission_id!=null and not g.missions.completed(research.verification_mission_id):
+					prerequisite="验证任务 · "+str(g.definition("mission_defs","mission_id",research.verification_mission_id).display_name)
+				else:
+					for requirement: Dictionary in g.rows("research_prerequisites"):
+						if requirement.research_id==research.research_id and not g.unlocked(requirement.unlock_id):
+							prerequisite="前置科技 · "+str(g.definition("unlock_defs","unlock_id",requirement.unlock_id).display_name);break
+				if not prerequisite.is_empty():note=prerequisite+"\n"+note
 		"owned_hull":
 			for ship: RefCounted in g.state.rows("ship_state"):
 				if ship.ship_def_id==stage.reference_id and ship.policy_id=="normal_owned" and ship.status not in [T.ShipStatus.DESTROYED,T.ShipStatus.RETURNED]:current+=1

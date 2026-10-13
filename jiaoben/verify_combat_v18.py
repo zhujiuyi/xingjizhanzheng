@@ -12,6 +12,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "natural-hull": ("natural_hull_v57.gd", "XJ_NATURAL_HULL_V57", "natural-hull-v57", "NATURAL_HULL_V57", "--xj-verify-natural-hull-v57"),
     "natural-war": ("natural_war_v56.gd", "XJ_NATURAL_WAR_V56", "natural-war-v56", "NATURAL_WAR_V56", "--xj-verify-natural-war-v56"),
     "natural-command": ("natural_command_v55.gd", "XJ_NATURAL_COMMAND_V55", "natural-command-v55", "NATURAL_COMMAND_V55", "--xj-verify-natural-command-v55"),
     "natural-logistics": ("natural_logistics_v54.gd", "XJ_NATURAL_LOGISTICS_V54", "natural-logistics-v54", "NATURAL_LOGISTICS_V54", "--xj-verify-natural-logistics-v54"),
@@ -105,7 +106,7 @@ def sha(path):
 
 def require_supported_diagnostics(binary, names):
     """Read PE metadata before launching flags absent from older clients."""
-    if not set(names).intersection({"march", "march-world", "march-upgrade", "march-routes", "natural-mid", "natural-rank", "natural-scout", "natural-research", "natural-rescue", "natural-logistics", "natural-command", "natural-war", "growth-world", "owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache", "retention"}):
+    if not set(names).intersection({"march", "march-world", "march-upgrade", "march-routes", "natural-mid", "natural-rank", "natural-scout", "natural-research", "natural-rescue", "natural-logistics", "natural-command", "natural-war", "natural-hull", "growth-world", "owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache", "retention"}):
         return
     env = os.environ.copy()
     env["XJ_DIAGNOSTIC_VERSION_FILE"] = str(binary)
@@ -114,7 +115,7 @@ def require_supported_diagnostics(binary, names):
          "(Get-Item -LiteralPath $env:XJ_DIAGNOSTIC_VERSION_FILE).VersionInfo.FileVersion"],
         env=env, text=True, encoding="utf-8").strip()
     numbers = [int(value) for value in re.findall(r"\d+", version)[:4]]
-    minimum = (0, 32, 0, 0) if set(names).intersection({'march','march-world','march-upgrade','march-routes','natural-mid','natural-rank','natural-scout','natural-research','natural-rescue','natural-logistics','natural-command','natural-war','growth-world'}) else (0, 31, 0, 0)
+    minimum = (0, 32, 0, 0) if set(names).intersection({'march','march-world','march-upgrade','march-routes','natural-mid','natural-rank','natural-scout','natural-research','natural-rescue','natural-logistics','natural-command','natural-war','natural-hull','growth-world'}) else (0, 31, 0, 0)
     if len(numbers) < 3 or tuple((numbers + [0] * 4)[:4]) < minimum:
         raise RuntimeError(f"这些诊断需要 {'.'.join(map(str,minimum))} 及以上客户端，当前为 {version or '未知'}；未启动游戏。旧包升级须使用其原有固定入口。")
     # Development candidates can share a version while adding fixed endpoints.
@@ -203,7 +204,7 @@ def run_suite():
         output = ROOT / f"jiaoben/logs/{stem}.log"
         engine_log = ROOT / f"jiaoben/logs/{stem}-engine.log"
         command = [str(binary), "--audio-driver", "WASAPI", "--log-file", engine_log.as_posix()]
-        if name in ("natural-growth","natural-recovery","natural-mid","natural-rank","natural-scout","natural-research","natural-rescue","natural-logistics","natural-command","natural-war") and not args.native:
+        if name in ("natural-growth","natural-recovery","natural-mid","natural-rank","natural-scout","natural-research","natural-rescue","natural-logistics","natural-command","natural-war","natural-hull") and not args.native:
             # Replay all production physics ticks at fixed frame cadence. Only
             # simulated time describes pacing; wall time is execution cost.
             command += ["--fixed-fps", str(args.replay_fps), "--disable-vsync"]
@@ -230,7 +231,7 @@ def run_suite():
             try:
                 # Allow the role world's existing 900s watchdog to finish its
                 # real multi-gate freight trip and emit a definitive result.
-                code = process.wait(timeout=3600 if name in ("natural-logistics","natural-command","natural-war") else 2400 if name in ("natural-growth","natural-mid","natural-rank","natural-scout","natural-research","natural-rescue","natural-logistics","natural-command","natural-war") else 1200 if name in ("legacy-chain","legacy-early","legacy-boundary","natural-recovery") else 960 if name in ("roles-world","blockades-world") else 660 if name == "hire-world" else 600)
+                code = process.wait(timeout=3600 if name in ("natural-logistics","natural-command","natural-war","natural-hull") else 2400 if name in ("natural-growth","natural-mid","natural-rank","natural-scout","natural-research","natural-rescue","natural-logistics","natural-command","natural-war","natural-hull") else 1200 if name in ("legacy-chain","legacy-early","legacy-boundary","natural-recovery") else 960 if name in ("roles-world","blockades-world") else 660 if name == "hire-world" else 600)
             except subprocess.TimeoutExpired:
                 process.kill(); process.wait()
                 raise
@@ -318,6 +319,10 @@ def run_suite():
             summary = record['summary']
             assert summary['checks'] >= 20 and summary['won'] and summary['gate_passages'] >= 6
             assert len(summary['original_fleet']) == 3 and summary['physical_distance_m'] > 1000
+        if name == 'natural-hull':
+            summary = record['summary']
+            assert summary['checks'] >= 20 and summary['researched'] and summary['hull_built'] and summary['fitted']
+            assert summary['physical_distance_m'] > 1000 and summary['final_credit'] >= 0
         if name == 'growth-world':
             summary = record['summary']
             assert args.native and summary['checks'] >= 25 and len(captures) == 3
