@@ -1,5 +1,7 @@
 extends "honors_world_v33.gd"
 ## Standing/funds, paid qualification and initial arrival poses are fixtures.
+## The isolated battle also uses the declared coarse march fixture; complete
+## natural and visible itineraries are verified by the separate march suites.
 ## Survey, convoy movement, hostile hits, support and battle timers run in Main.
 var convoy_id: String=""
 var shield_id: String=""
@@ -29,6 +31,10 @@ func qualified_frontier() -> bool:
 	helper.g=null;helper.state=null;helper.store=null;helper.free();business.dispose();return await activate(candidate)
 func scout_arrival(war_id: String) -> bool:
 	var candidate: XJRuntimeState=host.store.clone_state(host.state);var business: Gameplay=Gameplay.new();business.setup(candidate,host.store.catalog)
+	var helper: Node=(load(get_script().resource_path.get_base_dir().path_join("frontier_v34.gd")) as Script).new();helper.g=business;helper.state=candidate;helper.store=host.store
+	var arrived: bool=helper.finish_march(war_id)
+	helper.g=null;helper.state=null;helper.store=null;helper.free()
+	if not check(arrived,"declared coarse march fixture prepares the isolated native battle arrival"):business.dispose();return false
 	var spec: Dictionary=business.frontier.definition(war_id);place(candidate,business,spec.scout_anchor_id)
 	var from: Vector3=business.anchor_position(business.definition("anchor_defs","anchor_id",spec.scout_anchor_id));var destination: Vector3=business.anchor_position(business.definition("anchor_defs","anchor_id",spec.convoy_exit_anchor_id))
 	var rotation: Quaternion=Basis.looking_at(from.direction_to(destination),Vector3.UP).get_rotation_quaternion()

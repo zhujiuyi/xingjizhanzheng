@@ -67,7 +67,7 @@ func run() -> void:
 			if slot.slot_kind!="manual":continue
 			var expected: String=Sig.saved(store,slot.current_snapshot_id)
 			state=store.load(slot.slot_id)
-			check(state!=null and Sig.runtime(state)==expected,"each old and current manual slot independently restores all108 groups")
+			check(state!=null and Sig.runtime(state)==expected,"each old and current manual slot independently restores all authoritative groups")
 		if i==1:
 			var previous_world: String=state.world_id;var old_roots: Dictionary=pinned_payloads()
 			var second: XJRuntimeState=store.new_world("保留策略第二世界",4802)

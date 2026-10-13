@@ -10,7 +10,8 @@ func _ready() -> void:
 	start_msec=Time.get_ticks_msec();event_id="exp_echo_rescue";run.call_deferred()
 
 func drive_rescue() -> bool:
-	await command("undock");host.ui.show_page("")
+	if host.state.ship().status==T.ShipStatus.DOCKED:await command("undock")
+	host.ui.show_page("")
 	var started: int=tick();var last: String=""
 	while failures.is_empty() and tick()-started<int(host.gameplay.rule("simulation_hz")*1200.0):
 		await frames(12);record_distance()
@@ -34,9 +35,13 @@ func drive_rescue() -> bool:
 				var npc: RefCounted=host.state.find("npc_state","npc_instance_id",member.npc_instance_id)
 				if npc!=null and npc.alive and host._combat_target_valid(npc.npc_instance_id):hostile=npc.npc_instance_id;break
 		if not hostile.is_empty():
-			if host.auto_fire_target!=hostile:await command("combat_engage",hostile)
+			if host.auto_fire_target!=hostile:
+				await command("combat_engage",hostile)
+				await command("set_combat_option","orbit",1,"on")
 			continue
-		if not row.operation_kind.is_empty():continue
+		if not row.operation_kind.is_empty():
+			if not host.gameplay.exploration._at(row) and not host.local_navigation.active():await command("exploration_nav",event_id,1,str(row.generation))
+			continue
 		if row.phase=="rescue" and row.stabilized:
 			for member: RefCounted in host.state.rows("exploration_actor_state"):
 				if member.event_id==event_id and member.actor_role=="escort" and host.world.targets.has(member.npc_instance_id):

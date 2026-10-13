@@ -140,7 +140,7 @@ func run() -> void:
 		if entry.slot_kind=="manual" and int(entry.slot_index)==1:slot=entry;break
 	var before: String=SnapshotSignature.saved(host.store,slot.current_snapshot_id)
 	await host._command("load",slot.slot_id,slot.generation,slot.current_snapshot_id);host.ui.show_page("pause");await settle()
-	check(str(host.get("loaded_rows"))==before,"natural failure and paid recovery reopen all108 groups and RNG before presentation updates")
+	check(str(host.get("loaded_rows"))==before,"natural failure and paid recovery reopen all authoritative groups and RNG before presentation updates")
 	check(FileAccess.get_sha256(source)==origin.database_sha256,"original normally earned checkpoint remains byte-identical")
 	await finish()
 

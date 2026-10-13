@@ -26,8 +26,10 @@ func explore_command(action: String) -> bool:
 
 func drive_relic() -> bool:
 	var event: Dictionary=host.gameplay.exploration.definition(event_id)
-	if not await reach_station(event.station_id):return false
-	await command("undock");host.ui.show_page("")
+	if host.state.ship().status==T.ShipStatus.DOCKED:
+		if not await reach_station(event.station_id):return false
+		await command("undock")
+	host.ui.show_page("")
 	var started: int=tick();var last: String=""
 	while failures.is_empty() and tick()-started<int(host.gameplay.rule("simulation_hz")*1200.0):
 		await frames(12);record_distance()
@@ -47,7 +49,9 @@ func drive_relic() -> bool:
 				var npc: RefCounted=host.state.find("npc_state","npc_instance_id",member.npc_instance_id)
 				if npc!=null and npc.alive and host._combat_target_valid(npc.npc_instance_id):hostile=npc.npc_instance_id;break
 		if not hostile.is_empty():
-			if host.auto_fire_target!=hostile:await command("combat_engage",hostile)
+			if host.auto_fire_target!=hostile:
+				await command("combat_engage",hostile)
+				await command("set_combat_option","orbit",1,"on")
 			continue
 		if not row.operation_kind.is_empty():
 			if not host.gameplay.exploration._at(row) and not host.local_navigation.active():await command("exploration_nav",event_id,1,str(row.generation))

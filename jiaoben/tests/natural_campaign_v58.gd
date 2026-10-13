@@ -7,6 +7,9 @@ var project_completed: bool=false
 var maintained: int=0
 var maintaining: bool=false
 var resuming_campaign: bool=false
+var observed_tick: int=-1
+var observed_tick_ms: int=0
+var next_observation_ms: int=0
 const HOME: String="sector_frontier_01"
 const PROJECT: String="project_frontier_01"
 
@@ -14,6 +17,28 @@ func _ready() -> void:
 	for diagnostic: String in ["natural_campaign_v58","natural_hull_v57","natural_war_v56","natural_command_v55","natural_logistics_v54","natural_rescue_v53","natural_scout_v51","natural_recovery_v45","natural_growth_v45"]:
 		get_tree().set_meta("xj_"+diagnostic+"_diagnostic",true)
 	start_msec=Time.get_ticks_msec();run.call_deferred()
+
+func _process(_delta: float) -> void:
+	if finishing or not is_instance_valid(host) or host.state==null or host.world==null:return
+	var now: int=Time.get_ticks_msec()
+	if tick()!=observed_tick:observed_tick=tick();observed_tick_ms=now
+	if now<next_observation_ms:return
+	next_observation_ms=now+15000
+	var observed: Dictionary={"tick":tick(),"busy":host.busy,"paused":host._paused(),"page":host.ui.page,"menu_open":host.ui.menu_open,"world_error":host.world.last_error,"gameplay_error":host.gameplay.last_error,"status":host.state.ship().status,"shield":host.state.ship().shield,"hull":host.state.ship().hull}
+	observed.position=str(host.gameplay.position(host.state.ship()))
+	observed.auto_target=host.auto_fire_target
+	if host.local_navigation!=null:observed.navigation={"active":host.local_navigation.active(),"mode":host.local_navigation.mode,"phase":host.local_navigation.phase,"target":host.local_navigation.target_id}
+	var current: RefCounted=host.gameplay.exploration.instance(event_id)
+	if current!=null:observed.event={"id":event_id,"phase":current.phase,"operation":current.operation_kind,"remaining_s":current.operation_remaining_s,"at_site":host.gameplay.exploration._at(current)}
+	var actors: Array[Dictionary]=[]
+	for member: RefCounted in host.state.rows("exploration_actor_state"):
+		if member.event_id!=event_id:continue
+		var npc: RefCounted=host.state.find("npc_state","npc_instance_id",member.npc_instance_id)
+		if npc!=null:actors.append({"id":npc.npc_instance_id,"role":member.actor_role,"alive":npc.alive,"hp":npc.shield+npc.armor+npc.hull,"distance_m":host.gameplay.position(npc).distance_to(host.gameplay.position(host.state.ship()))})
+	observed.actors=actors
+	print("NATURAL_CAMPAIGN_OBSERVATION ",JSON.stringify(observed))
+	if now-observed_tick_ms>60000:
+		check(false,"normal long-term simulation stopped for60wallseconds: "+JSON.stringify(observed));finish()
 
 func command(action: String,target: String="",quantity: int=1,extra: String="") -> void:
 	# Respond through the existing remote reserve command, never edit ownership
@@ -77,25 +102,30 @@ func funding_candidate() -> Dictionary:
 func expedition() -> bool:
 	# Earn a construction/repair reserve by playing existing, distinct contracts.
 	# The threshold is this pilot's budget choice, not a production reward.
+	var active: RefCounted=host.gameplay.expeditions.active()
 	var contracts: int=0
-	while host.state.player().credit<25000 and contracts<8:
+	while active==null and host.state.player().credit<25000 and contracts<8:
 		var mission: Dictionary=funding_candidate()
 		if not check(not mission.is_empty(),"current availability offers an unlocked funding contract"):return false
 		if not await reach_station(mission.accept_station_id):return false
 		if not await drive_mission(mission.mission_id):return false
 		contracts+=1
-	if not check(host.state.player().credit>=25000,"ordinary income prepares expedition and subsequent construction budget"):return false
-	if not await reach_station("station_mirror_hub"):return false
-	var run_id: String=""
+	if active==null:
+		if not check(host.state.player().credit>=25000,"ordinary income prepares expedition and subsequent construction budget"):return false
+		if not await reach_station("station_mirror_hub"):return false
+	var run_id: String=active.run_id if active!=null else ""
+	var first: int=(int(active.stage_index)-1 if active.phase=="active" else int(active.stage_index)) if active!=null else 0
 	var choices: Array[String]=["archive","relief","archive"]
-	for index: int in range(3):
-		var id: String="route_archive" if index==0 else run_id
-		await command("expedition_action",id,1,("start" if index==0 else "continue")+"|"+choices[index]+"|"+host.gameplay.expeditions.token(id))
-		var active: RefCounted=host.gameplay.expeditions.active()
+	for index: int in range(first,3):
+		var restoring_stage: bool=active!=null and active.phase=="active" and int(active.stage_index)==index+1
+		if not restoring_stage:
+			var id: String="route_archive" if index==0 else run_id
+			await command("expedition_action",id,1,("start" if index==0 else "continue")+"|"+choices[index]+"|"+host.gameplay.expeditions.token(id))
+		active=host.gameplay.expeditions.active()
 		if not check(active!=null and active.stage_index==index+1,"normal route choice begins actual expedition stage "+str(index+1)):return false
 		run_id=active.run_id
 		event_id=host.gameplay.expeditions.option("route_archive",index+1,choices[index]).event_id
-		if not await prepare_event(event_id):return false
+		if not restoring_stage and not await prepare_event(event_id):return false
 		var success: bool
 		if choices[index]=="relief":success=await drive_rescue()
 		else:success=await drive_relic()
