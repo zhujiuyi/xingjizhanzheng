@@ -53,6 +53,10 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-natural-rank-v50","file":"natural_rank_v50.gd","prefix":"natural-rank-v50","env":"XJ_NATURAL_RANK_V50","meta":"xj_natural_rank_v50_diagnostic"},
+		{"flag":"--xj-verify-growth-world-v50","file":"growth_world_v50.gd","prefix":"growth-world-v50","env":"XJ_GROWTH_WORLD_V50","meta":"xj_growth_world_v50_diagnostic"},
+		{"flag":"--xj-verify-natural-mid-v50","file":"natural_mid_v50.gd","prefix":"natural-mid-v50","env":"XJ_NATURAL_MID_V50","meta":"xj_natural_mid_v50_diagnostic"},
+		{"flag":"--xj-verify-march-routes-v50","file":"march_routes_v50.gd","prefix":"march-routes-v50","env":"XJ_MARCH_ROUTES_V50","meta":"xj_march_routes_v50_diagnostic"},
 		{"flag":"--xj-verify-march-upgrade-v49","file":"march_upgrade_v49.gd","prefix":"march-upgrade-v49","env":"XJ_MARCH_UPGRADE_V49","meta":"xj_march_upgrade_v49_diagnostic"},
 		{"flag":"--xj-verify-march-world-v49","file":"march_world_v49.gd","prefix":"march-world-v49","env":"XJ_MARCH_WORLD_V49","meta":"xj_march_world_v49_diagnostic"},
 		{"flag":"--xj-verify-march-v49","file":"march_v49.gd","prefix":"march-v49","env":"XJ_MARCH_V49","meta":"xj_march_v49_diagnostic"},
@@ -1167,7 +1171,7 @@ func _growth_navigation(action: String,stage_id: String,selection: String) -> vo
 	if info.is_empty():ui.notify("此成长途径暂不可用。",true);return
 	if action=="growth_map" or state.ship().status!=Types.ShipStatus.FLYING:
 		ui.show_page("map")
-		if ui.resource_chart!=null:ui.resource_chart.select_sector(str(info.sector_id),false);ui.resource_chart.call("focus_selected")
+		if ui.resource_chart!=null:ui.resource_chart.select_sector(str(info.sector_id));ui.resource_chart.call("focus_selected")
 		return
 	if not str(info.get("route_reason","")).is_empty():ui.notify(str(info.route_reason),true);return
 	source_goal={"world":state.world_id,"growth":stage_id,"activity":index}
@@ -1198,7 +1202,7 @@ func _frontier_navigation(action: String,id: String,expected: String) -> void:
 	if info.is_empty():return
 	if action=="frontier_map" or state.ship().status!=Types.ShipStatus.FLYING:
 		ui.show_page("map")
-		if ui.resource_chart!=null:ui.resource_chart.select_sector(str(info.sector_id),false);ui.resource_chart.call("focus_selected")
+		if ui.resource_chart!=null:ui.resource_chart.select_sector(str(info.sector_id));ui.resource_chart.call("focus_selected")
 		return
 	if not str(info.get("route_reason","")).is_empty():ui.notify(str(info.route_reason),true);return
 	source_goal={"world":state.world_id,"frontier":id}

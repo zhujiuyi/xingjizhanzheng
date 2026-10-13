@@ -23,10 +23,10 @@ import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
 MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql", "018_operations.sql", "019_fitting.sql", "020_roles.sql", "021_honors.sql", "022_frontier.sql", "023_hire.sql", "024_situational.sql", "025_campaign.sql", "026_metrics.sql")
-MIGRATIONS += ("027_scenarios.sql", "028_owned_fleet.sql")
-FORMAT_VERSION = 25
-ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_23.sql"
-ADAPTER_VERSION = "frozen_catalog_v0_23"
+MIGRATIONS += ("027_scenarios.sql", "028_owned_fleet.sql", "029_march.sql")
+FORMAT_VERSION = 26
+ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_24.sql"
+ADAPTER_VERSION = "frozen_catalog_v0_24"
 REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_3": PROGRESS_DIR / "catalog_adapter_v0_3.sql",
     "frozen_catalog_v0_4": PROGRESS_DIR / "catalog_adapter_v0_4.sql",
@@ -49,9 +49,10 @@ REVIEWED_ADAPTERS = {
     "frozen_catalog_v0_20": PROGRESS_DIR / "catalog_adapter_v0_20.sql",
     "frozen_catalog_v0_21": PROGRESS_DIR / "catalog_adapter_v0_21.sql",
     "frozen_catalog_v0_22": PROGRESS_DIR / "catalog_adapter_v0_22.sql",
-    "frozen_catalog_v0_23": ADAPTER,
+    "frozen_catalog_v0_23": PROGRESS_DIR / "catalog_adapter_v0_23.sql",
+    "frozen_catalog_v0_24": ADAPTER,
 }
-RULE_CODE_VERSION = "singleplayer_fleet_v1"
+RULE_CODE_VERSION = "singleplayer_march_v1"
 ASSET_VERSION = "placeholder-b-v1"
 ASSET_MANIFEST = ROOT / "code/assets/placeholders/manifest.json"
 STATE_TABLES = (
@@ -81,6 +82,8 @@ from scenario_state_spec import STATES as SCENARIO_STATES
 STATE_TABLES += tuple(SCENARIO_STATES)
 from fleet_state_spec import STATES as FLEET_STATES
 STATE_TABLES += tuple(FLEET_STATES)
+from march_state_spec import STATES as MARCH_STATES
+STATE_TABLES += tuple(MARCH_STATES)
 
 
 def utc_now():

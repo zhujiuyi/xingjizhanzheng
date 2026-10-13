@@ -12,6 +12,10 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "natural-rank": ("natural_rank_v50.gd", "XJ_NATURAL_RANK_V50", "natural-rank-v50", "NATURAL_RANK_V50", "--xj-verify-natural-rank-v50"),
+    "growth-world": ("growth_world_v50.gd", "XJ_GROWTH_WORLD_V50", "growth-world-v50", "GROWTH_WORLD_V50", "--xj-verify-growth-world-v50"),
+    "natural-mid": ("natural_mid_v50.gd", "XJ_NATURAL_MID_V50", "natural-mid-v50", "NATURAL_MID_V50", "--xj-verify-natural-mid-v50"),
+    "march-routes": ("march_routes_v50.gd", "XJ_MARCH_ROUTES_V50", "march-routes-v50", "MARCH_ROUTES_V50", "--xj-verify-march-routes-v50"),
     "march-upgrade": ("march_upgrade_v49.gd", "XJ_MARCH_UPGRADE_V49", "march-upgrade-v49", "MARCH_UPGRADE_V49", "--xj-verify-march-upgrade-v49"),
     "march-world": ("march_world_v49.gd", "XJ_MARCH_WORLD_V49", "march-world-v49", "MARCH_WORLD_V49", "--xj-verify-march-world-v49"),
     "march": ("march_v49.gd", "XJ_MARCH_V49", "march-v49", "MARCH_V49", "--xj-verify-march-v49"),
@@ -95,7 +99,7 @@ def sha(path):
 
 def require_supported_diagnostics(binary, names):
     """Read PE metadata before launching flags absent from older clients."""
-    if not set(names).intersection({"march", "march-world", "march-upgrade", "owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache", "retention"}):
+    if not set(names).intersection({"march", "march-world", "march-upgrade", "march-routes", "natural-mid", "natural-rank", "growth-world", "owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache", "retention"}):
         return
     env = os.environ.copy()
     env["XJ_DIAGNOSTIC_VERSION_FILE"] = str(binary)
@@ -104,7 +108,7 @@ def require_supported_diagnostics(binary, names):
          "(Get-Item -LiteralPath $env:XJ_DIAGNOSTIC_VERSION_FILE).VersionInfo.FileVersion"],
         env=env, text=True, encoding="utf-8").strip()
     numbers = [int(value) for value in re.findall(r"\d+", version)[:4]]
-    minimum = (0, 32, 0, 0) if set(names).intersection({'march','march-world','march-upgrade'}) else (0, 31, 0, 0)
+    minimum = (0, 32, 0, 0) if set(names).intersection({'march','march-world','march-upgrade','march-routes','natural-mid','natural-rank','growth-world'}) else (0, 31, 0, 0)
     if len(numbers) < 3 or tuple((numbers + [0] * 4)[:4]) < minimum:
         raise RuntimeError(f"这些诊断需要 {'.'.join(map(str,minimum))} 及以上客户端，当前为 {version or '未知'}；未启动游戏。旧包升级须使用其原有固定入口。")
     # Development candidates can share a version while adding fixed endpoints.
@@ -188,7 +192,7 @@ def run_suite():
         output = ROOT / f"jiaoben/logs/{stem}.log"
         engine_log = ROOT / f"jiaoben/logs/{stem}-engine.log"
         command = [str(binary), "--audio-driver", "WASAPI", "--log-file", engine_log.as_posix()]
-        if name in ("natural-growth","natural-recovery") and not args.native:
+        if name in ("natural-growth","natural-recovery","natural-mid","natural-rank") and not args.native:
             # Replay all production physics ticks at fixed frame cadence. Only
             # simulated time describes pacing; wall time is execution cost.
             command += ["--fixed-fps", "60", "--disable-vsync"]
@@ -215,7 +219,7 @@ def run_suite():
             try:
                 # Allow the role world's existing 900s watchdog to finish its
                 # real multi-gate freight trip and emit a definitive result.
-                code = process.wait(timeout=2400 if name == "natural-growth" else 1200 if name in ("legacy-chain","legacy-early","legacy-boundary","natural-recovery") else 960 if name in ("roles-world","blockades-world") else 660 if name == "hire-world" else 600)
+                code = process.wait(timeout=2400 if name in ("natural-growth","natural-mid","natural-rank") else 1200 if name in ("legacy-chain","legacy-early","legacy-boundary","natural-recovery") else 960 if name in ("roles-world","blockades-world") else 660 if name == "hire-world" else 600)
             except subprocess.TimeoutExpired:
                 process.kill(); process.wait()
                 raise
@@ -263,6 +267,22 @@ def run_suite():
             assert summary['gate_ready_checked'] and summary['gate_hidden_checked'] and summary['gate_restore_checked'] and summary['grant_ui_checked']
         if name == 'march-upgrade':
             assert record['summary']['checks'] >= 20 and record['summary']['groups'] == 114 and not captures
+        if name == 'march-routes':
+            assert record['summary']['checks'] >= 150 and record['summary']['groups'] == 114 and not captures
+            assert len(set(record['summary']['routes'])) == 24 and record['summary']['passages'] >= 144
+        if name == 'natural-mid':
+            summary = record['summary']
+            assert summary['checks'] >= 15 and len(summary['completed']) == 3
+            assert summary['membership_earned'] and summary['examination_registered'] and summary['normal_loadout']
+            assert summary['physical_distance_m'] > 1000 and summary['final_credit'] >= 0
+        if name == 'natural-rank':
+            summary = record['summary']
+            assert summary['checks'] >= 15 and summary['registered'] and summary['contracts_completed'] > 0
+            assert summary['reputation_end'] > summary['reputation_start'] and summary['physical_distance_m'] > 1000
+        if name == 'growth-world':
+            summary = record['summary']
+            assert args.native and summary['checks'] >= 25 and len(captures) == 3
+            assert summary['selections'] >= 5 and summary['maps'] == summary['services'] == 5 and summary['navigation_started']
         if name == "retention":
             assert record["summary"]["checks"] >= 50 and len(record["summary"]["cases"]) == 2
         if name in ("auxiliary-world","owned-combat-world"):

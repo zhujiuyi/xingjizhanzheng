@@ -35,11 +35,12 @@ class CampaignSql(unittest.TestCase):
     self.assertFalse(before)
   self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.source.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
  def test_published_001_024_and_adapters_are_byte_exact(self):
-  for path in (ROOT/'code/database/progress').glob('*.sql'):
-   if path.name.startswith(('025_','026_','027_','028_')) or path.name in ('catalog_adapter_v0_21.sql','catalog_adapter_v0_22.sql','catalog_adapter_v0_23.sql'):continue
+  for name in subprocess.check_output(['git','ls-tree','-r','--name-only','f357712','code/database/progress'],cwd=ROOT,text=True).splitlines():
+   if not name.endswith('.sql'):continue
+   path=ROOT/name
    self.assertEqual(path.read_bytes(),subprocess.check_output(['git','show','f357712:'+path.relative_to(ROOT).as_posix()],cwd=ROOT),path.name)
  def test_new_initial_world_has_no_free_outcomes(self):
-  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(25,));self.assertEqual(len(p.STATE_TABLES),108)
+  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(26,));self.assertEqual(len(p.STATE_TABLES),114)
   for table in ['expedition_run_state','expedition_receipt_state','construction_receipt_state','construction_evidence_state','flight_record_state']:
    self.assertEqual(self.db.execute('SELECT count(*) FROM '+table).fetchone(),(0,))
   self.seal()

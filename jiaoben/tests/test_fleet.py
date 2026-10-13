@@ -5,14 +5,15 @@ ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'jiaoben'))
 import progress_fixture as p
 import fleet_catalog
+import march_catalog
 
 class FleetDefinitions(unittest.TestCase):
     def setUp(self):
         self.db=sqlite3.connect((ROOT/'code/data/catalog.db').as_uri()+'?mode=ro',uri=True);self.addCleanup(self.db.close)
     def test_reviewed_scope_and_definition_closure(self):
         fleet_catalog.validate(self.db)
-        self.assertEqual(self.db.execute('SELECT schema_version,content_version,ruleset_version FROM catalog_meta').fetchone(),(22,'v0.23-fleet','singleplayer_fleet_v1'))
-        self.assertEqual(len(p.STATE_TABLES),108)
+        self.assertEqual(self.db.execute('SELECT schema_version,content_version,ruleset_version FROM catalog_meta').fetchone(),(23,'v0.24-march','singleplayer_march_v1'))
+        self.assertEqual(len(p.STATE_TABLES),114)
         self.assertEqual(self.db.execute('SELECT count(*) FROM auxiliary_drone_defs').fetchone(),(4,))
     def test_every_old_definition_schema_row_and_view_preserved(self):
         archive=ROOT/'code/data/catalog_scenarios_v22.db'
@@ -20,7 +21,7 @@ class FleetDefinitions(unittest.TestCase):
         old=sqlite3.connect(archive.as_uri()+'?mode=ro',uri=True);self.addCleanup(old.close)
         tables={r[0] for r in old.execute("SELECT name FROM sqlite_schema WHERE type='table'")}
         current={r[0] for r in self.db.execute("SELECT name FROM sqlite_schema WHERE type='table'")}
-        self.assertEqual(current,tables|set(fleet_catalog.TABLES))
+        self.assertEqual(current,tables|set(fleet_catalog.TABLES)|set(march_catalog.TABLES))
         for table in tables-{'catalog_meta'}:
             columns=old.execute(f'PRAGMA table_info("{table}")').fetchall()
             self.assertEqual(columns,self.db.execute(f'PRAGMA table_info("{table}")').fetchall(),table)
@@ -71,7 +72,7 @@ class FleetSealing(unittest.TestCase):
         p.insert(self.db,'auxiliary_bay_state',{**self.ctx,'item_instance_id':'aux-item','stock_units':rule['drone_count'],'command_kind':'follow',**fields})
         return rule
     def test_initial_crew_are_available_without_free_progress(self):
-        self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(25,))
+        self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(26,))
         self.assertEqual(self.db.execute("SELECT count(*) FROM crew_member_state WHERE snapshot_id=? AND phase='available' AND experience=0 AND hire_paid_credit=0",(self.initial,)).fetchone(),(8,))
         self.assertEqual(self.db.execute('SELECT deployments,losses,paid_credit FROM fleet_total_state WHERE snapshot_id=?',(self.initial,)).fetchone(),(0,0,0))
         self.assertEqual(self.db.execute('SELECT count(*) FROM fleet_deployment_state').fetchone(),(0,))

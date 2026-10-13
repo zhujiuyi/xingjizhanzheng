@@ -97,6 +97,12 @@ func activity_label(row: Dictionary) -> String:
 	match str(row.activity_kind):
 		"mission":
 			var mission: Dictionary=g.definition("mission_summary_defs","mission_id",row.reference_id)
+			var stage: Dictionary=g.definition("growth_stage_defs","stage_id",row.stage_id)
+			if stage.criterion_kind=="rank":
+				var gain: int=0
+				for reward: Dictionary in g.rows("mission_reputation_rewards"):
+					if reward.mission_id==row.reference_id and reward.faction_id==stage.faction_id:gain+=int(reward.reputation_delta)
+				return "%s · +%d声望" % [mission.display_name,gain]
 			return "%s · %d信用点" % [mission.display_name,int(mission.reward_credit)]
 		"donation":
 			var donation: Dictionary=g.definition("civilization_donation_defs","donation_id",row.reference_id)

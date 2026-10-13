@@ -21,11 +21,12 @@ class MetricSql(unittest.TestCase):
   p.insert(self.db,'telemetry_material_state',{**self.ctx,'item_id':'material_structural_stock','used_units':total,'returned_units':returned})
   p.insert(self.db,'flight_material_state',{**self.ctx,'record_id':'report','item_id':'material_structural_stock','used_units':used,'returned_units':returned})
  def test_001_025_published_bytes_unchanged(self):
-  for path in (ROOT/'code/database/progress').glob('*.sql'):
-   if path.name.startswith(('026_','027_','028_')) or path.name in ('catalog_adapter_v0_22.sql','catalog_adapter_v0_23.sql'):continue
+  for name in subprocess.check_output(['git','ls-tree','-r','--name-only','2097713','code/database/progress'],cwd=ROOT,text=True).splitlines():
+   if not name.endswith('.sql'):continue
+   path=ROOT/name
    self.assertEqual(path.read_bytes(),subprocess.check_output(['git','show','2097713:'+path.relative_to(ROOT).as_posix()],cwd=ROOT),path.name)
  def test_empty_new_measurements_and_latest_format(self):
-  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(25,));self.assertEqual(len(p.STATE_TABLES),108)
+  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(26,));self.assertEqual(len(p.STATE_TABLES),114)
   for table in ['flight_material_state','telemetry_material_state','flight_repair_state','telemetry_repair_state']:self.assertEqual(self.db.execute('SELECT count(*) FROM '+table).fetchone(),(0,))
   self.seal()
  def test_realistic_investment_refund_and_repair_summary_seals(self):

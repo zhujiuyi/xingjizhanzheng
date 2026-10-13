@@ -17,7 +17,7 @@ class ScenarioSql(unittest.TestCase):
   self.ctx=p.context('scenarios','world-a',self.content)
  def seal(self):self.db.execute("UPDATE save_snapshot SET status='sealed' WHERE snapshot_id='scenarios'")
  def test_new_world_complete_and_empty_of_free_results(self):
-  self.assertEqual(len(p.STATE_TABLES),108);self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(25,))
+  self.assertEqual(len(p.STATE_TABLES),114);self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(26,))
   for table,count in [('trial_state',3),('blockade_state',3),('blockade_node_state',12),('telemetry_timing_state',1),('trial_result_state',0),('blockade_result_state',0),('tactical_award_state',0),('activity_total_state',0)]:
    self.assertEqual(self.db.execute('SELECT count(*) FROM '+table+" WHERE snapshot_id='scenarios'").fetchone(),(count,))
   self.seal()
@@ -41,8 +41,9 @@ class ScenarioSql(unittest.TestCase):
     self.assertFalse(before)
   self.assertEqual(old.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall(),self.source.execute("SELECT name,sql FROM sqlite_schema WHERE type='view' ORDER BY name").fetchall())
  def test_published_migrations_and_adapters_byte_exact(self):
-  for path in (ROOT/'code/database/progress').glob('*.sql'):
-   if path.name.startswith(('027_','028_')) or path.name in ('catalog_adapter_v0_22.sql','catalog_adapter_v0_23.sql'):continue
+  for name in subprocess.check_output(['git','ls-tree','-r','--name-only','3b68352','code/database/progress'],cwd=ROOT,text=True).splitlines():
+   if not name.endswith('.sql'):continue
+   path=ROOT/name
    self.assertEqual(path.read_bytes(),subprocess.check_output(['git','show','3b68352:'+path.relative_to(ROOT).as_posix()],cwd=ROOT),path.name)
  def test_unpaid_trial_generation_rejected(self):
   self.db.execute("UPDATE trial_state SET generation=1,phase='accepted' WHERE snapshot_id='scenarios' AND trial_id='trial_precision'")
