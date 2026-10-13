@@ -1,5 +1,7 @@
 # 测试与辅助文件
 
+正常探索续段使用`--only natural-scout`与`XJ_NATURAL_EXAM_ORIGIN`指向`logs/v51-exam-origin-*.json`，只允许经摘要和已通过回放记录绑定的`natural-rank-v50`副本。购船、装配、导航、调查、战斗和领取均走Main真实入口，不注入进度或时钟。当前运行状态见67；未完成前不得将部分日志计为通过。
+
 v50补验：`--only march-routes`为三文明24条路线的战略矩阵（明示粗粒度时钟），`--native --only growth-world`验证实际成长入口；正常成长用`--only natural-mid`及`natural-rank`，分别通过`XJ_NATURAL_MID_ORIGIN`和`XJ_NATURAL_RANK_ORIGIN`指定经摘要核对的正常来源。后者的`v50-mid-origin-*.json`明确保留前段登记前提失败，不能作为整组通过凭据。运行仍须持有主工作区共享锁并串行；所有旧输入只读，勿使用个人库。
 
 v0.32联合源码检查：`verify_combat_v18.py --only march`验证114组行军/成长业务，`--native --only march-world`验证真实窗口、舰体和入门速度；`--only march-upgrade`须通过`XJ_MARCH_LEGACY_PROVENANCE`传入`logs/v49-march-legacy-source-*.json`中的已核实际v0.31旧输入。固定入口均为v49，实际EXE须至少0.32且PCK内存在对应参数，不能向旧EXE试探新参数。源码200项/6图通过，边界见61与`logs/v49-source-integration-checkpoint.json`，不等同自然成长或发行验收。
