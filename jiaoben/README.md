@@ -289,3 +289,5 @@ v0.13.0实际交付`0.13.0-afdc5e1d-20261005-002457`来自干净已推送源`afd
 首战正常续段现已32项通过，见`logs/v56-normal-war-checkpoint.json`。文明舰`--only natural-hull`已注册，读取`XJ_NATURAL_WAR_ORIGIN`绑定首战关闭档；当前正在运行，不计为通过。上文“尚未注册”仅记录早期准备状态。
 
 正常长期玩法使用`tests/natural_campaign_v58.gd`，由`natural-expedition`/`natural-project`固定入口模式区分。前者绑定已通过文明舰档，后者绑定已通过三段远征档；二者独立关闭数据库和来源。当前远征正在运行、建设尚未运行；有实际结果后再更新状态。正常驻防预警通过既有远程储备指令响应，并记录真实消耗，不改变危机时钟或所有权。
+
+最终原生建设验收：`--native --only natural-project --executable <v0.32实际EXE>`，`XJ_NATURAL_EXPEDITION_ORIGIN`引用经核对的远征关闭档，须清除中断续段变量。窗口1440×900，通过正常采购、六次材料交付和三个工期取得实际阶段效果；记录三张原生工程图及真实出航帧采样。原生方法不使用固定渲染步长，仍要求60Hz生产物理、完整114组/RNG重开及来源档不变。

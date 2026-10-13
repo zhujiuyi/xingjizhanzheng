@@ -10,16 +10,22 @@ var resuming_campaign: bool=false
 var observed_tick: int=-1
 var observed_tick_ms: int=0
 var next_observation_ms: int=0
+var frame_metrics: RefCounted=preload("frame_metrics.gd").new()
+var campaign_captures: Array[String]=[]
 const HOME: String="sector_frontier_01"
 const PROJECT: String="project_frontier_01"
 
 func _ready() -> void:
+	if DisplayServer.get_name()!="headless":
+		var window: Window=get_tree().root
+		window.mode=Window.MODE_WINDOWED;window.size=Vector2i(1440,900);window.content_scale_mode=Window.CONTENT_SCALE_MODE_CANVAS_ITEMS;window.content_scale_factor=1.0;window.content_scale_size=window.size
 	for diagnostic: String in ["natural_campaign_v58","natural_hull_v57","natural_war_v56","natural_command_v55","natural_logistics_v54","natural_rescue_v53","natural_scout_v51","natural_recovery_v45","natural_growth_v45"]:
 		get_tree().set_meta("xj_"+diagnostic+"_diagnostic",true)
 	start_msec=Time.get_ticks_msec();run.call_deferred()
 
 func _process(_delta: float) -> void:
 	if finishing or not is_instance_valid(host) or host.state==null or host.world==null:return
+	if DisplayServer.get_name()!="headless":frame_metrics.observe(host,_delta)
 	var now: int=Time.get_ticks_msec()
 	if tick()!=observed_tick:observed_tick=tick();observed_tick_ms=now
 	if now<next_observation_ms:return
@@ -169,6 +175,13 @@ func construction() -> bool:
 		if not check(project.phase=="completed" if stage_index==3 else project.stage_index==stage_index+1,"ordinary world time completes construction stage "+str(stage_index)):return false
 		if stage_index==1:check(host.gameplay.economy.quote_manufacture(recipe)<previous_quote,"earned construction lowers the real station manufacturing quote")
 		mark("normal-project-stage:"+str(stage_index))
+		if DisplayServer.get_name()!="headless":
+			host.ui.project_selected_id=PROJECT;host.ui.show_page("projects");await frames(6)
+			var capture_path: String=directory.path_join("natural-project-stage-"+str(stage_index)+".png")
+			var image: Image=get_viewport().get_texture().get_image()
+			check(not image.is_empty() and image.get_size()==get_tree().root.size,"actual native project viewport stage "+str(stage_index))
+			if check(image.save_png(capture_path)==OK,"actual native project capture stage "+str(stage_index)):campaign_captures.append(capture_path)
+			host.ui.show_page("")
 	project_completed=check(project.phase=="completed" and host.gameplay.projects.owned(PROJECT),"three paid cross-station phases finish the still-owned colony project")
 	return project_completed
 
@@ -211,8 +224,10 @@ func finish() -> void:
 	if finishing:return
 	finishing=true
 	Input.action_release("forward");Input.action_release("back");Input.action_release("boost")
+	var performance: Dictionary=frame_metrics.report()
+	if DisplayServer.get_name()!="headless" and project_completed:check(performance.native and int(performance.samples)>60 and campaign_captures.size()==3,"earned native construction includes active flight performance and three stage views")
 	var credit: int=host.state.player().credit if is_instance_valid(host) and host.state!=null else 0
 	if is_instance_valid(host):host.queue_free()
 	host=null;await frames(5);await get_tree().create_timer(0.25).timeout
-	var summary: Dictionary={"result":"PASS" if failures.is_empty() else "FAIL","checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"mode":mode,"resumed":resuming_campaign,"expedition_completed":expedition_completed,"project_completed":project_completed,"maintained":maintained,"origin":origin,"initial_credit":initial_credit,"final_credit":credit,"physical_distance_m":moved_m,"actions":actions,"milestones":milestones,"scope":"normal earned expedition/construction and paid reserve responses; no progression fixtures"}
+	var summary: Dictionary={"result":"PASS" if failures.is_empty() else "FAIL","checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"mode":mode,"resumed":resuming_campaign,"expedition_completed":expedition_completed,"project_completed":project_completed,"maintained":maintained,"origin":origin,"initial_credit":initial_credit,"final_credit":credit,"physical_distance_m":moved_m,"actions":actions,"milestones":milestones,"performance":performance,"captures":campaign_captures,"scope":"normal earned expedition/construction and paid reserve responses; no progression fixtures"}
 	print("NATURAL_CAMPAIGN_V58_FINAL_JSON ",JSON.stringify(summary));print("NATURAL_CAMPAIGN_V58_RESULT ",summary.result," checks=",checks," failures=",failures.size());get_tree().quit(0 if failures.is_empty() else 1)

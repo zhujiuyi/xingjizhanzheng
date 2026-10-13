@@ -332,6 +332,8 @@ def run_suite():
             assert summary['checks'] >= 20
             assert summary['expedition_completed'] if name == 'natural-expedition' else summary['project_completed']
             assert summary['physical_distance_m'] > 1000 and summary['final_credit'] >= 0
+            if args.native and name == 'natural-project':
+                assert len(captures) == 3 and summary['performance']['native'] and summary['performance']['samples'] > 60
         if name == 'growth-world':
             summary = record['summary']
             assert args.native and summary['checks'] >= 25 and len(captures) == 3
