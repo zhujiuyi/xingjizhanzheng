@@ -53,6 +53,9 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-market-cache-v47","file":"market_cache_v47.gd","prefix":"market-cache-v47","env":"XJ_MARKET_CACHE_V47","meta":"xj_market_cache_v47_diagnostic"},
+		{"flag":"--xj-verify-natural-recovery-v45","file":"natural_recovery_v45.gd","prefix":"natural-recovery-v45","env":"XJ_NATURAL_RECOVERY_V45","meta":"xj_natural_recovery_v45_diagnostic"},
+		{"flag":"--xj-verify-natural-growth-v45","file":"natural_growth_v45.gd","prefix":"natural-growth-v45","env":"XJ_NATURAL_GROWTH_V45","meta":"xj_natural_growth_v45_diagnostic"},
 		{"flag":"--xj-verify-legacy-chain-v44","file":"legacy_chain_v44.gd","prefix":"legacy-chain-v44","env":"XJ_LEGACY_CHAIN_V44","meta":"xj_legacy_chain_v44_diagnostic"},
 		{"flag":"--xj-verify-owned-combat-world-v43","file":"owned_combat_world_v43.gd","prefix":"owned-combat-world-v43","env":"XJ_OWNED_COMBAT_WORLD_V43","meta":"xj_owned_combat_world_v43_diagnostic"},
 		{"flag":"--xj-verify-auxiliary-boundaries-v43","file":"auxiliary_boundaries_v43.gd","prefix":"auxiliary-boundaries-v43","env":"XJ_AUXILIARY_BOUNDARIES_V43","meta":"xj_auxiliary_boundaries_v43_diagnostic"},

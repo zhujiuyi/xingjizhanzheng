@@ -1,5 +1,11 @@
 # 测试与辅助文件
 
+自然成长：`verify_combat_v18.py --only natural-growth`通过固定v45入口，从正常新世界完成五段教学和三类普通合同，再用实际收入购船、配装及招募。headless按固定渲染步长重放，模拟频率和玩法数值不变；没有资金、资产、资格、任务事件、姿态或时钟夹具，结果不代表人工乐趣。`natural-checkpoint`只加载SHA256匹配的已关闭回放库，比较全部108组/RNG在Main表现回调之前的读取边界；原始失败报告和通过的补验必须分开引用。`natural-recovery`从有组合来源凭据的正常世界副本验证真实NPC损失、救援、治疗和付费替代舰；源码24项通过，实际包待验。详见[67](../doc/67-自然成长经济与失败恢复验证.md)。
+
+缓存对照：`prepare_cache_reference_v47.py`从固定已提交源码生成两份带SHA256的测试参考，分别通过`XJ_MARKET_CACHE_V47_REFERENCE`及`XJ_MARKET_CACHE_V47_SPAWN_REFERENCE`传入`--only market-cache`。40项完整108组对照覆盖数学顺序、临界补货、目录替换和NPC生命周期；ID时钟是明示夹具。性能定位的临时源码插桩须核对摘要并在finally恢复，不将它混入发行源码。结果汇总`logs/v47-source-checkpoint.json`。
+
+早期旧档链：`prepare_legacy_chain_index_v44.py --early`校验format9–15的保留摘要与原SQL字段/主键；11–15另有实际旧PCK创建凭据，9/10仅有保留清单和历史输入登记，不扩大其来源结论。`legacy-early`复用固定v44入口；`legacy-boundary`用于从固定历史提交重建实际旧包得到的format6/8，准备和验收结果另行记录。引擎操作一律持有主工作区共享锁并串行。
+
 S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增SQL，`build_catalog.py --output jiaoben/tmp/fleet-candidate.db`执行闭合校验，`store_generate_fleet.py`只生成028/固定v0.23适配器和九组新状态（共108组），保护旧历史SQL。`verify_combat_v18.py --only owned-fleet owned-fleet-travel`使用fresh UUID库检查船员/部署业务和旅行事务；`--native --only owned-fleet-world`检查真实Main/GUI、故障连接活动世界绑定、物理跟随、AU取消/抵达及三种布局。实际包沿用固定`--xj-verify-owned-fleet[-travel|-world]-v40`入口，尚未执行包验收，禁止通用EXE `--script`。
 
 旅行103项、原生75项/5图的接线检查点见`logs/v40-travel-ui-checkpoint.json`，规格和证据边界见[66](../doc/66-自有舰队船员与辅助无人机.md)。资金、舰体、许可、姿态和遭遇隔离为声明夹具；故障须实际命中一次，不能仅凭资金未改变声称SQL回滚。独立工作树执行时额外持有主工作区`E:\星际战舰\jiaoben\tmp\feature-audit.lock`，引擎导入/检查/原生运行保持串行。剩余联合边界、真实旧PCK升级及最终发行仍待完成，不正常启动开发源码处理个人档。

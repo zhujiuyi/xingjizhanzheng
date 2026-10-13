@@ -151,5 +151,5 @@ func finish() -> void:
 	if is_instance_valid(host):host.queue_free()
 	host=null;await frames(5);await get_tree().create_timer(0.25).timeout
 	var result: String="PASS" if failures.is_empty() else "FAIL"
-	print("OWNED_COMBAT_WORLD_V43_FINAL_JSON ",JSON.stringify({"result":result,"checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"captures":captures,"damage_dealt":real_damage,"damage_taken":real_taken,"owned_repaired_hp":fleet_repaired,"retreat_m":retreat_m,"returned":return_checked,"lost":loss_checked,"empty_shots":source_empty_shots}))
+	print("OWNED_COMBAT_WORLD_V43_FINAL_JSON ",JSON.stringify({"result":result,"checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"captures":captures,"damage_dealt":real_damage,"damage_taken":real_taken,"owned_repaired_hp":fleet_repaired,"retreat_m":retreat_m,"returned":return_checked,"lost":loss_checked,"empty_shots":source_empty_shots,"performance":frame_metrics.report()}))
 	print("OWNED_COMBAT_WORLD_V43_RESULT ",result," checks=",checks," failures=",failures.size());get_tree().quit(0 if failures.is_empty() else 1)

@@ -2,7 +2,21 @@ extends RefCounted
 const D = preload("res://contracts/contract_dtos.gd")
 const T = preload("res://contracts/contract_types.gd")
 var g: RefCounted
+var _definition_catalog: RefCounted
+var _definition_hash: String=""
+var _goods: Dictionary={}
+var _hulls: Dictionary={}
 func _init(gameplay: RefCounted) -> void: g = gameplay
+
+func _index_stock_definitions() -> void:
+	if _definition_catalog==g.catalog and _definition_hash==g.catalog.content_hash:return
+	_goods.clear();_hulls.clear();_definition_catalog=g.catalog;_definition_hash=g.catalog.content_hash
+	for row: Dictionary in g.catalog.rows("station_stock_defs"):
+		if not _goods.has(row.station_id):_goods[row.station_id]={}
+		_goods[row.station_id][row.item_id]=row
+	for row: Dictionary in g.catalog.rows("station_ship_stock_defs"):
+		if not _hulls.has(row.station_id):_hulls[row.station_id]={}
+		_hulls[row.station_id][row.ship_id]=row
 
 func reputation(faction_id: String) -> int:
 	var row: RefCounted = g.state.find("reputation_state","faction_id",faction_id)
@@ -17,9 +31,9 @@ func _ship_stock(ship_id: String) -> D.ShopShipStockStateDto:
 		if row.station_id == g.station() and row.ship_def_id == ship_id: return row
 	return null
 func _stock_def(item_id: String) -> Dictionary:
-	for row in g.rows("station_stock_defs"):
-		if row.station_id==g.station() and row.item_id==item_id: return row
-	return {}
+	_index_stock_definitions()
+	var definition: Dictionary=_goods.get(g.station(),{}).get(item_id,{})
+	return definition.duplicate(true)
 func _budget() -> D.StationEconomyStateDto:
 	return g.state.find("station_economy_state","station_id",g.station())
 
@@ -242,23 +256,30 @@ func base_factor(service_kind: String) -> float:
 	return result
 
 func tick(delta: float) -> void:
+	# Modifiers are pure station queries. Cache only within this tick, keeping
+	# delta * frontier * project in its original floating-point order.
+	var decrements: Dictionary={}
 	for budget in g.state.rows("station_economy_state"):
 		budget.refresh_remaining_s=maxf(0,budget.refresh_remaining_s-delta)
 		if budget.refresh_remaining_s==0:
 			var station: Dictionary = g.definition("station_defs","station_id",budget.station_id);budget.refresh_remaining_s=station.stock_refresh_s;budget.buyback_remaining_credit=station.buyback_budget_credit
 	for stock in g.state.rows("shop_stock_state"):
-		stock.refresh_remaining_s=maxf(0,stock.refresh_remaining_s-delta*g.frontier.restock_rate(stock.station_id)*g.projects.factor(stock.station_id,"stock_refresh"))
+		if not decrements.has(stock.station_id):decrements[stock.station_id]=delta*g.frontier.restock_rate(stock.station_id)*g.projects.factor(stock.station_id,"stock_refresh")
+		stock.refresh_remaining_s=maxf(0,stock.refresh_remaining_s-float(decrements[stock.station_id]))
 		if stock.refresh_remaining_s>0:continue
-		for def in g.rows("station_stock_defs"):
-			if def.station_id==stock.station_id and def.item_id==stock.item_def_id:
-				stock.quantity=mini(def.hard_cap_units,mini(def.target_units,maxi(stock.quantity,stock.quantity+def.restock_units_per_refresh))) if stock.quantity<def.target_units else stock.quantity
-				stock.buyback_remaining_units=def.buyback_units_per_refresh
+		_index_stock_definitions()
+		var def: Dictionary=_goods.get(stock.station_id,{}).get(stock.item_def_id,{})
+		if not def.is_empty():
+			stock.quantity=mini(def.hard_cap_units,mini(def.target_units,maxi(stock.quantity,stock.quantity+def.restock_units_per_refresh))) if stock.quantity<def.target_units else stock.quantity
+			stock.buyback_remaining_units=def.buyback_units_per_refresh
 		stock.refresh_remaining_s=g.definition("station_defs","station_id",stock.station_id).stock_refresh_s
 	for stock in g.state.rows("shop_ship_stock_state"):
-		stock.refresh_remaining_s=maxf(0,stock.refresh_remaining_s-delta*g.frontier.restock_rate(stock.station_id)*g.projects.factor(stock.station_id,"stock_refresh"))
+		if not decrements.has(stock.station_id):decrements[stock.station_id]=delta*g.frontier.restock_rate(stock.station_id)*g.projects.factor(stock.station_id,"stock_refresh")
+		stock.refresh_remaining_s=maxf(0,stock.refresh_remaining_s-float(decrements[stock.station_id]))
 		if stock.refresh_remaining_s>0:continue
-		for def in g.rows("station_ship_stock_defs"):
-			if def.station_id==stock.station_id and def.ship_id==stock.ship_def_id:stock.quantity=mini(def.target_units,stock.quantity+def.restock_units_per_refresh) if stock.quantity<def.target_units else stock.quantity
+		_index_stock_definitions()
+		var def: Dictionary=_hulls.get(stock.station_id,{}).get(stock.ship_def_id,{})
+		if not def.is_empty():stock.quantity=mini(def.target_units,stock.quantity+def.restock_units_per_refresh) if stock.quantity<def.target_units else stock.quantity
 		stock.refresh_remaining_s=g.definition("station_defs","station_id",stock.station_id).stock_refresh_s
 
 

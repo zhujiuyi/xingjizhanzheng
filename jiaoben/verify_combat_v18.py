@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 import hashlib
 import json
+import mmap
 import os
 import re
 import subprocess
@@ -11,6 +12,12 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
+    "market-cache": ("market_cache_v47.gd", "XJ_MARKET_CACHE_V47", "market-cache-v47", "MARKET_CACHE_V47", "--xj-verify-market-cache-v47"),
+    "natural-checkpoint": ("natural_growth_v45.gd", "XJ_NATURAL_GROWTH_V45", "natural-growth-v45", "NATURAL_GROWTH_V45", "--xj-verify-natural-growth-v45"),
+    "natural-recovery": ("natural_recovery_v45.gd", "XJ_NATURAL_RECOVERY_V45", "natural-recovery-v45", "NATURAL_RECOVERY_V45", "--xj-verify-natural-recovery-v45"),
+    "legacy-boundary": ("legacy_chain_v44.gd", "XJ_LEGACY_CHAIN_V44", "legacy-chain-v44", "LEGACY_CHAIN_V44", "--xj-verify-legacy-chain-v44"),
+    "legacy-early": ("legacy_chain_v44.gd", "XJ_LEGACY_CHAIN_V44", "legacy-chain-v44", "LEGACY_CHAIN_V44", "--xj-verify-legacy-chain-v44"),
+    "natural-growth": ("natural_growth_v45.gd", "XJ_NATURAL_GROWTH_V45", "natural-growth-v45", "NATURAL_GROWTH_V45", "--xj-verify-natural-growth-v45"),
     "legacy-chain": ("legacy_chain_v44.gd", "XJ_LEGACY_CHAIN_V44", "legacy-chain-v44", "LEGACY_CHAIN_V44", "--xj-verify-legacy-chain-v44"),
     "owned-combat-world": ("owned_combat_world_v43.gd", "XJ_OWNED_COMBAT_WORLD_V43", "owned-combat-world-v43", "OWNED_COMBAT_WORLD_V43", "--xj-verify-owned-combat-world-v43"),
     "auxiliary-boundaries": ("auxiliary_boundaries_v43.gd", "XJ_AUXILIARY_BOUNDARIES_V43", "auxiliary-boundaries-v43", "AUXILIARY_BOUNDARIES_V43", "--xj-verify-auxiliary-boundaries-v43"),
@@ -84,7 +91,7 @@ def sha(path):
 
 def require_supported_diagnostics(binary, names):
     """Read PE metadata before launching flags absent from older clients."""
-    if not set(names).intersection({"owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain"}):
+    if not set(names).intersection({"owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache"}):
         return
     env = os.environ.copy()
     env["XJ_DIAGNOSTIC_VERSION_FILE"] = str(binary)
@@ -95,6 +102,15 @@ def require_supported_diagnostics(binary, names):
     numbers = [int(value) for value in re.findall(r"\d+", version)[:4]]
     if len(numbers) < 3 or tuple((numbers + [0] * 4)[:4]) < (0, 31, 0, 0):
         raise RuntimeError(f"这些诊断需要 v0.31.0 及以上客户端，当前为 {version or '未知'}；未启动游戏。旧包升级须使用其原有固定入口。")
+    # Development candidates can share a version while adding fixed endpoints.
+    # Refuse an absent flag before an older candidate can fall through to the
+    # ordinary user-data startup path.
+    with binary.with_suffix('.pck').open('rb') as stream:
+        with mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as packed:
+            for name in names:
+                flag = CASES[name][4]
+                if flag.startswith('--') and packed.find(flag.encode('utf-8')) < 0:
+                    raise RuntimeError(f'客户端包没有固定诊断入口 {flag}；未启动游戏。')
 
 
 def activate(process, ready_output=None):
@@ -153,6 +169,9 @@ def run_suite():
         else:
             env[prefix + "_SCRIPT"] = test.as_posix()
             env[prefix + "_DIRECTORY"] = directory.as_posix()
+        if name != "natural-checkpoint":
+            env.pop("XJ_NATURAL_GROWTH_V45_CHECKPOINT_SOURCE", None)
+            env.pop("XJ_NATURAL_GROWTH_V45_CHECKPOINT_SHA256", None)
         if name == "campaign-upgrade":
             env["XJ_CAMPAIGN_UPGRADE_ONLY"] = "1"
         if name in ("upgrade", "civilization-upgrade"):
@@ -164,6 +183,10 @@ def run_suite():
         output = ROOT / f"jiaoben/logs/{stem}.log"
         engine_log = ROOT / f"jiaoben/logs/{stem}-engine.log"
         command = [str(binary), "--audio-driver", "WASAPI", "--log-file", engine_log.as_posix()]
+        if name in ("natural-growth","natural-recovery") and not args.native:
+            # Replay all production physics ticks at fixed frame cadence. Only
+            # simulated time describes pacing; wall time is execution cost.
+            command += ["--fixed-fps", "60", "--disable-vsync"]
         if not args.native or name == "base-store":
             command += ["--headless"]
         if args.executable:
@@ -187,7 +210,7 @@ def run_suite():
             try:
                 # Allow the role world's existing 900s watchdog to finish its
                 # real multi-gate freight trip and emit a definitive result.
-                code = process.wait(timeout=1200 if name == "legacy-chain" else 960 if name in ("roles-world","blockades-world") else 660 if name == "hire-world" else 600)
+                code = process.wait(timeout=2400 if name == "natural-growth" else 1200 if name in ("legacy-chain","legacy-early","legacy-boundary","natural-recovery") else 960 if name in ("roles-world","blockades-world") else 660 if name == "hire-world" else 600)
             except subprocess.TimeoutExpired:
                 process.kill(); process.wait()
                 raise
@@ -221,6 +244,22 @@ def run_suite():
         assert not record["diagnostics"], f"{name} diagnostics: {record['diagnostics'][:5]}"
         if "summary" in record:
             assert record["summary"]["result"] == "PASS" and record["summary"]["failures"] == 0
+        if name == "market-cache":
+            assert record["summary"]["checks"] >= 30 and record["summary"]["groups"] == 108
+        if name in ("auxiliary-world","owned-combat-world"):
+            performance = record["summary"]["performance"]
+            assert performance["native"] and performance["samples"] >= 120 and performance["layouts"]
+        if name == "natural-checkpoint":
+            summary = record["summary"]
+            assert summary["checks"] >= 10 and summary["verification_only"] and len(summary["completed"]) == 8
+        if name == "natural-growth":
+            summary = record["summary"]
+            assert not summary["verification_only"]
+            assert summary["checks"] >= 20 and len(summary["completed"]) == 8
+            assert summary["physical_distance_m"] > 1000 and summary["earned_credit"] > 0
+        if name == "natural-recovery":
+            summary = record["summary"]
+            assert summary["checks"] >= 15 and summary["naturally_lost"] and summary["rescued"] and summary["paid_replacement"] and summary["physical_distance_m"] > 1000
         assert all(path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n" for path in captures)
         if name == "owned-fleet":
             assert record["summary"]["checks"] >= 34 and not captures
@@ -228,6 +267,10 @@ def run_suite():
             assert record["summary"]["checks"] >= (45 if name == "fleet-integration" else 20) and record["summary"]["groups"] == 108 and not captures
         if name == "legacy-chain":
             assert record["summary"]["checks"] >= 100 and sorted(record["summary"]["formats"]) == [16,17,18,19,20,21,23] and record["summary"]["groups"] == 108 and not captures
+        if name == "legacy-early":
+            assert record["summary"]["checks"] >= 100 and sorted(record["summary"]["formats"]) == list(range(9,16)) and record["summary"]["groups"] == 108 and not captures
+        if name == "legacy-boundary":
+            assert record["summary"]["checks"] >= 30 and sorted(record["summary"]["formats"]) == [6,8] and record["summary"]["groups"] == 108 and not captures
         if name == "owned-fleet-travel":
             assert record["summary"]["checks"] >= 100 and record["summary"]["groups"] == 108 and not captures
         if name == "owned-fleet-world":

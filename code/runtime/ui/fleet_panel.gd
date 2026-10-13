@@ -40,8 +40,11 @@ func _crew() -> void:
 		if ship.policy_id!="normal_owned" or ship.status in [T.ShipStatus.DESTROYED,T.ShipStatus.RETURNED]:continue
 		hulls.append(ship.ship_instance_id);selector.add_item(str(u.gameplay.definition("ship_defs","ship_id",ship.ship_def_id).display_name)+(" · 主舰" if ship==u.state.ship() else " · "+ship.ship_instance_id.right(6)))
 		selector.set_item_metadata(selector.item_count-1,ship.ship_instance_id)
-	if not hulls.has(u.crew_target_ship):u.crew_target_ship=u.state.ship().ship_instance_id
-	selector.select(maxi(0,hulls.find(u.crew_target_ship)))
+	if hulls.is_empty():
+		u.crew_target_ship="";selector.add_item("暂无可指派的自有舰");selector.disabled=true
+	else:
+		if not hulls.has(u.crew_target_ship):u.crew_target_ship=u.state.ship().ship_instance_id if hulls.has(u.state.ship().ship_instance_id) else hulls[0]
+		selector.select(hulls.find(u.crew_target_ship))
 	var ui_ref: WeakRef=weakref(u);var original: RefCounted=u.state;var generation: int=u.business_generation
 	selector.item_selected.connect(func(index: int):
 		var ui: Node=ui_ref.get_ref() as Node
@@ -109,6 +112,7 @@ func _update() -> void:
 			var service: RefCounted=u.gameplay.crew;var member: RefCounted=service.member(value.id);var assignment: RefCounted=service.assignment(value.id)
 			var assigned: RefCounted=u.state.find("ship_state","ship_instance_id",assignment.ship_instance_id) if assignment!=null else null
 			var where: String=str(u.gameplay.definition("ship_defs","ship_id",assigned.ship_def_id).display_name) if assigned!=null else "未指派"
+			if assigned==null and member.has_station_id:where=str(u.gameplay.definition("station_defs","station_id",member.station_id).get("display_name","未指派"))
 			value.label.text="Lv.%d · 经验 %d · 忠诚 %d%% · 工资 %d\n%s · %s%s" % [int(service.rank_for(member).rank),member.experience,member.loyalty,service.salary(member),{"available":"待招募","hired":"可出勤" if service.ready(member) else "暂不可出勤","injured":"受伤 %.0f秒" % member.recovery_remaining_s,"resting":"休整 %.0f秒" % member.recovery_remaining_s}[member.phase],where," · 欠薪 %d" % member.arrears_credit if member.arrears_credit>0 else ""]
 			var job: Dictionary=service.profession(value.id);var effect: float=float(service.rank_for(member).effect_value)*member.loyalty/100.0 if service.ready(member) and assigned!=null else 0.0
 			value.label.text+=" · "+{"pilot":"转向 +%.1f%%" % (effect*100.0),"gunner":"散热 +%.1f%%" % (effect*100.0),"engineer":"远修 +%.1f%%" % (effect*100.0),"scout":"扫描 +%.1f" % effect}.get(job.duty_kind,"")

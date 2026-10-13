@@ -64,6 +64,8 @@ var events: Array[D.EventDto] = []
 var pending_autosave_request_id: String = ""
 var status_text: String = ""
 var last_error: String = ""
+var _ordinary_spawns: Array[Dictionary]=[]
+var _spawn_plan_ready: bool=false
 var spatial_validator: Callable
 var combat_remaining_s: float = 0.0
 var _pending_repairs: Array[Dictionary] = []
@@ -81,6 +83,7 @@ func setup(world_state: XJRuntimeState, definitions: XJCatalog, preview: bool = 
 	state = world_state
 	catalog = definitions
 	_definition_cache.clear(); _index_cache.clear(); _rules.clear()
+	_ordinary_spawns.clear();_spawn_plan_ready=false
 	for row in rows("rule_parameters"):
 		_rules[row.parameter_id] = row.value_integer if row.value_integer != null else row.value_real
 	_regeneration_modifiers_present=false
@@ -820,14 +823,17 @@ func damage_ship(raw_vector: Vector3,cause: String="combat") -> float:
 func _sync_spawns(delta: float = 0.0) -> void:
 	encounters.tick(delta)
 	tactics.sync(delta)
-	for spawn in rows("npc_spawn_defs"):
-		if catalog.table_names.has("fleet_hull_defs") and not definition("fleet_hull_defs","spawn_id",spawn.spawn_id).is_empty():continue
-		if tactics.handles(spawn.spawn_id) or operations.handles(spawn.spawn_id) or scenarios.handles(spawn.spawn_id): continue
+	# These bindings are catalogue definitions initialized by setup. Dynamic
+	# exploration ownership, unlocks, missions and respawn clocks stay live.
+	if not _spawn_plan_ready:
+		for spawn: Dictionary in rows("npc_spawn_defs"):
+			if catalog.table_names.has("fleet_hull_defs") and not definition("fleet_hull_defs","spawn_id",spawn.spawn_id).is_empty():continue
+			if tactics.handles(spawn.spawn_id) or operations.handles(spawn.spawn_id) or scenarios.handles(spawn.spawn_id):continue
+			if civilizations.handles_spawn(spawn.spawn_id) or frontier.handles_spawn(spawn.spawn_id) or hired.handles_spawn(spawn.spawn_id) or encounters.handles(spawn.spawn_id):continue
+			_ordinary_spawns.append(spawn)
+		_spawn_plan_ready=true
+	for spawn: Dictionary in _ordinary_spawns:
 		if exploration.managed_spawns.has(spawn.spawn_id): continue
-		if civilizations.handles_spawn(spawn.spawn_id): continue
-		if frontier.handles_spawn(spawn.spawn_id):continue
-		if hired.handles_spawn(spawn.spawn_id):continue
-		if encounters.handles(spawn.spawn_id): continue
 		if not unlocked(spawn.required_unlock_id): continue
 		var mission: D.MissionStateDto = missions.active_for_target("destroy_spawn", spawn.spawn_id)
 		if spawn.occurrence_mode == "mission_scoped" and mission == null:
@@ -932,6 +938,7 @@ func dispose() -> void:
 	tactics = null; drone_control = null
 	pending_autosave_request_id=""; events.clear(); _pending_repairs.clear(); _definition_cache.clear(); _index_cache.clear(); _rules.clear()
 	_active_action = null; _active_payload = null; state = null; catalog = null; spatial_validator = Callable()
+	_ordinary_spawns.clear();_spawn_plan_ready=false
 
 
 func _tick_gate_lifetimes(delta: float) -> void:

@@ -11,6 +11,10 @@ var frozen_intel: bool=false
 var restored: bool=false
 var comm_returned: bool=false
 var blocked_sensing: bool=false
+var frame_metrics: RefCounted=preload("frame_metrics.gd").new()
+
+func _process(delta: float) -> void:
+	frame_metrics.observe(host,delta)
 
 func state_signature() -> String:
 	# SQLite row order is not state. Include every field, key and RNG stream
@@ -204,5 +208,5 @@ func finish() -> void:
 	if is_instance_valid(host):host.queue_free()
 	host=null;await frames(5);await get_tree().create_timer(0.25).timeout
 	var result: String="PASS" if failures.is_empty() else "FAIL"
-	print("AUXILIARY_WORLD_V41_FINAL_JSON ",JSON.stringify({"result":result,"checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"captures":captures,"repaired_hp":repaired_hp,"recon_distance_m":recon_distance_m,"intercepted":intercepted,"frozen_intel":frozen_intel,"restored":restored,"comm_returned":comm_returned,"blocked_sensing":blocked_sensing}))
+	print("AUXILIARY_WORLD_V41_FINAL_JSON ",JSON.stringify({"result":result,"checks":checks,"failures":failures.size(),"failure_labels":failures,"directory":directory,"captures":captures,"repaired_hp":repaired_hp,"recon_distance_m":recon_distance_m,"intercepted":intercepted,"frozen_intel":frozen_intel,"restored":restored,"comm_returned":comm_returned,"blocked_sensing":blocked_sensing,"performance":frame_metrics.report()}))
 	print("AUXILIARY_WORLD_V41_RESULT ",result," checks=",checks," failures=",failures.size());get_tree().quit(0 if failures.is_empty() else 1)
