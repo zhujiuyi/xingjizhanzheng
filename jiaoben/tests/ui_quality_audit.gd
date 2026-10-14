@@ -136,13 +136,18 @@ func structural_assertions(ui: Node, name: String) -> void:
 					check(fact.get_line_count() == 1, "short information fact stays on one actual rendered line " + name + " " + fact.text)
 		if node.has_meta("info_list"):
 			var current_rows: Array = node.get("rows")
+			# A stage list sends the selected item's detail to its own column, so
+			# nothing opens inline there; a workbench list still opens exactly one.
+			var external: bool = bool(node.get("details_external"))
 			var open_count: int = 0
 			var selected_matches: bool = true
 			for row: Dictionary in current_rows:
 				var current: bool = str(row.id) == str(node.get("selected_id"))
 				if row.details.visible: open_count += 1
-				selected_matches = selected_matches and row.details.visible == current and row.selector.button_pressed == current and bool(row.row.get_meta("details_open", false)) == current and row.actions is HFlowContainer
-			check(open_count == (0 if current_rows.is_empty() else 1) and selected_matches, "non-trading list exposes exactly the real selected detail and horizontal actions " + name)
+				selected_matches = selected_matches and row.details.visible == (current and not external) and row.selector.button_pressed == current and bool(row.row.get_meta("details_open", false)) == current and row.actions is HFlowContainer
+			check(open_count == (0 if current_rows.is_empty() or external else 1) and selected_matches, "non-trading list exposes exactly the real selected detail and horizontal actions " + name)
+			if external:
+				check(is_instance_valid(ui.stage_detail) and ui.stage_detail.is_visible_in_tree() and ui.stage_detail.get_child_count() > 0, "stage list shows the selected item in its detail column " + name)
 		if not node.has_meta("business_list"): continue
 		var header: HBoxContainer = node.get("header")
 		var aligned: bool = header != null
@@ -679,10 +684,13 @@ func information_variants(suffix: String) -> void:
 			var current_rows: Array = node.get("rows")
 			if current_rows.size() < 2: continue
 			var chosen: String = str(current_rows[-1].id)
+			var external: bool = bool(node.get("details_external"))
 			await actual_click(current_rows[-1].selector, "non-trading row " + page + " " + chosen)
-			check(str(node.get("selected_id")) == chosen and current_rows[-1].details.visible and not current_rows[0].details.visible, "new selection closes old detail " + page)
+			check(str(node.get("selected_id")) == chosen and (current_rows[-1].details.visible or external) and not current_rows[0].details.visible, "new selection closes old detail " + page)
+			if external:
+				check(host.ui.stage_detail.get_child_count() > 0, "stage selection fills the detail column " + page)
 			await actual_click(current_rows[-1].selector, "reactivate current detail " + page)
-			check(current_rows[-1].details.visible and current_rows[-1].selector.button_pressed, "current item stays explicitly selected on repeated activation " + page)
+			check((current_rows[-1].details.visible or external) and current_rows[-1].selector.button_pressed, "current item stays explicitly selected on repeated activation " + page)
 		await inspect(page + "-selected-detail-" + suffix, page)
 
 func after_variants(suffix: String) -> void:

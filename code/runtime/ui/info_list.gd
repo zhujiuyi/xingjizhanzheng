@@ -6,6 +6,12 @@ var rows: Array[Dictionary] = []
 var selected_id: String = ""
 var preferred_id: String = ""
 var context_valid: Callable
+## A stage page shows the selected item in its own column, so selection must not
+## also open an inline detail block: the same thing would appear twice.
+var details_external: bool = false
+## Status column width. A trade-oriented list can afford 120 px; the stage card
+## column cannot, and the fixed width used to squeeze the name out of the card.
+var status_min_width: int = 120
 
 func configure(title: String = "", _price_heading: String = "", _quantity_heading: String = "", _quantities: bool = false) -> void:
 	name = "InfoList"
@@ -50,14 +56,14 @@ func append_row(id: String, thumbnail: Texture2D, title: String, description: St
 	image.custom_minimum_size = Vector2(40, 40)
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	summary.add_child(image)
-	var name_label: Label = _label(summary, title, 14)
+	var name_label: Label = _label(summary, title, UISkin.SIZE_BODY)
 	name_label.name = "InfoName"
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.max_lines_visible = 2
 	name_label.tooltip_text = title
 	var status_label: Label = _label(summary, status, 12)
 	status_label.name = "InfoStatus"
-	status_label.custom_minimum_size.x = 120
+	status_label.custom_minimum_size.x = status_min_width
 	status_label.size_flags_horizontal = Control.SIZE_FILL
 	status_label.max_lines_visible = 2
 	status_label.tooltip_text = status
@@ -122,7 +128,7 @@ func select_row(id: String) -> void:
 	selected_id = id
 	for row: Dictionary in rows:
 		var selected: bool = str(row.id) == id
-		row.details.visible = selected
+		row.details.visible = selected and not details_external
 		row.row.set_meta("details_open", selected)
 		row.selector.set_pressed_no_signal(selected)
 		row.selector.icon = UISkin.glyph("radio_on" if selected else "radio", UISkin.AMBER if selected else UISkin.MUTED)

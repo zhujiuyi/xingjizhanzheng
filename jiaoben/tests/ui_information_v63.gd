@@ -42,14 +42,19 @@ func selected_list_case() -> void:
 					if not command is Button: continue
 					var connections: Array = command.get_signal_connection_list("pressed")
 					if not connections.is_empty(): old_callback = connections[0].callable; break
+			# A stage list sends the selected item's detail to its own column, so no
+			# row opens an inline block there; a workbench list still opens exactly one.
+			var external: bool = bool(node.get("details_external"))
 			for row: Dictionary in current_rows:
 				if not await actual_click(row.selector, "select actual " + page + " row " + str(row.id)): continue
 				await frames(3)
 				var visible_count: int = 0
 				for candidate: Dictionary in current_rows:
 					if candidate.details.is_visible_in_tree(): visible_count += 1
-					check(candidate.details.visible == (str(candidate.id) == str(row.id)), "old detail closes when real row changes " + page + " " + str(candidate.id))
-				check(visible_count == 1 and str(node.get("selected_id")) == str(row.id) and row.selector.button_pressed, "one visible detail matches current selector " + page + " " + str(row.id))
+					check(candidate.details.visible == ((str(candidate.id) == str(row.id)) and not external), "old detail closes when real row changes " + page + " " + str(candidate.id))
+				check(visible_count == (0 if external else 1) and str(node.get("selected_id")) == str(row.id) and row.selector.button_pressed, "one visible detail matches current selector " + page + " " + str(row.id))
+				if external:
+					check(host.ui.stage_detail.get_child_count() > 0, "stage selection fills the detail column " + page + " " + str(row.id))
 				check(row.actions is HFlowContainer, "selected item actions share a horizontal flow " + page)
 			if old_callback.is_valid():
 				var count: int = request_events.size(); var before: String = resources()

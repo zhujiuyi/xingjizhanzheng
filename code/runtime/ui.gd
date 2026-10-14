@@ -162,6 +162,23 @@ var info_selected: Dictionary = {}
 var industry_tab: String = "manufacture"
 var fitting_show_all: bool = false
 
+## Pages built over the hangar instead of on top of it. The 3D scene stays visible
+## and the page docks to three edges, leaving the centre for the ship: a card list
+## on the left, the selected subject and its actions on the right, a strip of large
+## readouts along the bottom. Dense tables stay in workbench mode, where the width
+## is what makes them readable.
+const STAGE_PAGES: Array[String] = ["ships"]
+var stage_mode: bool = false
+var stage_header: PanelContainer
+var stage_left: PanelContainer
+var stage_right: PanelContainer
+var stage_bottom: PanelContainer
+var stage_scroll: ScrollContainer
+var stage_detail: VBoxContainer
+var stage_strip: HFlowContainer
+## Card data for the current stage page, keyed by row id.
+var stage_rows: Dictionary = {}
+
 ## The trail of pages the player actually walked. Back pops it, so the same page
 ## returns somewhere different depending on how it was reached. Deep links and the
 ## first entry have no trail and fall back to the declared hierarchy.
@@ -665,7 +682,13 @@ func _build_panel(title: String, description: String) -> void:
 	card_grid = null
 	panel.visible = true
 	panel.modulate = Color.WHITE
-	panel.add_theme_stylebox_override("panel", UISkin.plate() if page != "title" else StyleBoxEmpty.new())
+	stage_mode = STAGE_PAGES.has(page)
+	panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new() if page == "title" or stage_mode else UISkin.plate())
+	if stage_mode:
+		_build_stage_frame()
+		_update_hud_visibility()
+		_responsive()
+		return
 	var shell: HBoxContainer = HBoxContainer.new()
 	shell.add_theme_constant_override("separation", UISkin.SECTION_GAP)
 	panel.add_child(shell)
@@ -726,6 +749,94 @@ func _build_panel(title: String, description: String) -> void:
 	page_scroll.add_child(body)
 	_update_hud_visibility()
 	_responsive()
+
+## The stage frame: three docked panels over a visible hangar. Each region is a
+## plain Control child of the screen panel rather than a container child, because a
+## PanelContainer lays every child out to fill and the regions are positioned by
+## anchors instead.
+func _build_stage_frame() -> void:
+	var layers := Control.new()
+	layers.name = "StageLayers"
+	layers.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layers.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(layers)
+
+	stage_header = _stage_region(layers, "StageHeader")
+	var header: HBoxContainer = HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
+	stage_header.add_child(header)
+	var heading_icon: TextureRect = TextureRect.new()
+	heading_icon.name = "PageHeadingIcon"
+	heading_icon.texture = _service_icon(_service_context_page())
+	heading_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	heading_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	heading_icon.custom_minimum_size = Vector2(26, 26)
+	heading_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	heading_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header.add_child(heading_icon)
+	var heading: Label = _text_to(header, _page_title(page), UISkin.SIZE_PAGE)
+	UISkin.apply_text_style(heading, "page")
+	heading.name = "PageHeading"
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var close: Button = _button(header, _close_label(), _back)
+	close.name = "PanelClose"
+	close.custom_minimum_size.x = 132
+	close.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_secondary(close)
+	close.tooltip_text = _close_label(false, true)
+
+	stage_left = _stage_region(layers, "StageLeft")
+	var left_column: VBoxContainer = VBoxContainer.new()
+	left_column.add_theme_constant_override("separation", UISkin.GAP)
+	stage_left.add_child(left_column)
+	stage_scroll = ScrollContainer.new()
+	stage_scroll.name = "PageScroll"
+	stage_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stage_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# Page controls already reveal through their focus_entered handler. Native
+	# follow_focus would apply the same scroll delta before queued layout settles.
+	stage_scroll.follow_focus = false
+	left_column.add_child(stage_scroll)
+	body = VBoxContainer.new()
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("separation", UISkin.SECTION_GAP)
+	stage_scroll.add_child(body)
+	page_scroll = stage_scroll
+
+	stage_right = _stage_region(layers, "StageRight")
+	stage_detail = VBoxContainer.new()
+	stage_detail.add_theme_constant_override("separation", UISkin.GAP)
+	stage_right.add_child(stage_detail)
+
+	stage_bottom = _stage_region(layers, "StageBottom")
+	stage_strip = HFlowContainer.new()
+	stage_strip.name = "StageStrip"
+	stage_strip.add_theme_constant_override("h_separation", UISkin.SECTION_GAP)
+	stage_strip.add_theme_constant_override("v_separation", UISkin.GAP)
+	stage_bottom.add_child(stage_strip)
+
+func _stage_region(parent: Node, name_hint: String) -> PanelContainer:
+	var region := PanelContainer.new()
+	region.name = name_hint
+	region.add_theme_stylebox_override("panel", UISkin.hud_panel(10))
+	parent.add_child(region)
+	return region
+
+## One entry in the bottom readout strip. Large value, small caption: the strip is
+## read at a glance, so the number carries and the label only names it.
+func _stage_stat(label: String, value: String, tone: Color = UISkin.TEXT) -> void:
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 0)
+	column.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	stage_strip.add_child(column)
+	# _label, not _text_to: the flowing variant expands and autowraps, which inside a
+	# flow container collapses the column to one character per line.
+	var caption: Label = _label(column, label, UISkin.SIZE_NOTE)
+	UISkin.apply_text_style(caption, "note")
+	caption.add_theme_color_override("font_color", UISkin.MUTED)
+	var readout: Label = _label(column, value, UISkin.SIZE_PAGE)
+	UISkin.apply_text_style(readout, "page")
+	readout.add_theme_color_override("font_color", tone)
 
 func _station() -> void:
 	for child: Node in station_layer.get_children():
@@ -818,22 +929,47 @@ func _fleet_section(section: String) -> void:
 	fleet_section=section;refresh_page()
 
 func _ships() -> void:
-	var fleet_tools: HFlowContainer=HFlowContainer.new();body.add_child(fleet_tools)
-	if gameplay.fitting_analysis.supported():_button(fleet_tools,"查看18舰角色与预算",show_page.bind("ship_roles")).name="ShipRolesEntry"
-	if gameplay.hired.supported():_button(fleet_tools,"雇佣僚舰",show_page.bind("hire")).name="HireFleetEntry"
-	if gameplay.owned_fleet.supported():
-		var sections: HFlowContainer=HFlowContainer.new();body.add_child(sections)
-		for pair: Array in [["舰体与借船","hulls"],["自有编队","owned"],["船员","crew"]]:
-			var button: Button=_button(sections,pair[0],_fleet_section.bind(pair[1]));button.name="FleetSection_"+str(pair[1])
-			button.toggle_mode = true
-			button.set_pressed_no_signal(fleet_section == pair[1])
-			UISkin.apply_button(button, "filter", false, fleet_section == pair[1])
-		if fleet_section in ["owned","crew"]:
-			var management: VBoxContainer=preload("res://runtime/ui/fleet_panel.gd").new();body.add_child(management);management.setup(self,fleet_section);return
-	if not state.player().has_docked_station_id:
-		_text("舰体交易与借船需要停靠空间站；在上方管理当前编队。")
+	# Stage layout: the card column on the left, the selected hull and its actions on
+	# the right, and the hangar left visible in the middle showing that hull.
+	stage_rows.clear()
+	var sections: HFlowContainer = HFlowContainer.new()
+	body.add_child(sections)
+	for pair: Array in [["舰体与借船", "hulls"], ["自有编队", "owned"], ["船员", "crew"]]:
+		var button: Button = _button(sections, pair[0], _fleet_section.bind(pair[1]))
+		button.name = "FleetSection_" + str(pair[1])
+		button.toggle_mode = true
+		button.set_pressed_no_signal(fleet_section == pair[1])
+		UISkin.apply_button(button, "filter", false, fleet_section == pair[1])
+	if fleet_section in ["owned", "crew"]:
+		var management: VBoxContainer = preload("res://runtime/ui/fleet_panel.gd").new()
+		body.add_child(management)
+		management.setup(self, fleet_section)
+		_ships_strip()
 		return
-	var list: VBoxContainer = _business_list("舰体与借船", "单价 / 服务费", "数量")
+	var tools: HFlowContainer = HFlowContainer.new()
+	body.add_child(tools)
+	if gameplay.fitting_analysis.supported():
+		_button(tools, "舰船角色与预算", show_page.bind("ship_roles")).name = "ShipRolesEntry"
+	if gameplay.hired.supported():
+		_button(tools, "雇佣僚舰", show_page.bind("hire")).name = "HireFleetEntry"
+	_ships_cards()
+	_ships_strip()
+
+func _ships_strip() -> void:
+	var ship: Dtos.ShipStateDto = state.ship()
+	var metrics: Dictionary = gameplay.call("metrics", ship)
+	_stage_stat("信用点", str(state.player().credit))
+	_stage_stat("护盾", "%.0f / %.0f" % [ship.shield, metrics.shield_max])
+	_stage_stat("装甲", "%.0f / %.0f" % [ship.armor, metrics.armor_max])
+	_stage_stat("结构", "%.0f / %.0f" % [ship.hull, metrics.hull_max])
+
+func _ships_cards() -> void:
+	var list: VBoxContainer = _information_list(body, "舰体", "ships")
+	list.set("details_external", true)
+	# A real minimum, not zero: the status used to collapse to one character per
+	# line in the narrow card column.
+	list.set("status_min_width", 64)
+	list.connect("selection_changed", _ships_select)
 	list.call("add_section", "自有舰队")
 	for row: Dtos.ShipStateDto in state.rows("ship_state"):
 		if row.status in [Types.ShipStatus.RETURNED, Types.ShipStatus.DESTROYED]: continue
@@ -843,13 +979,11 @@ func _ships() -> void:
 		var sale_reason: String = _ship_sale_reason(row) if may_sell else "保障 / 借用舰体不可出售"
 		var has_quote: bool = may_sell and state.rows("shop_ship_stock_state").any(func(stock: Dtos.ShopShipStockStateDto): return stock.station_id == state.player().docked_station_id and stock.ship_def_id == row.ship_def_id)
 		var price: int = int(gameplay.get("economy").call("quote_ship", row.ship_instance_id, true)) if has_quote else 0
-		var entry: Dictionary = _asset_row(list, row.ship_instance_id, "ship", row.ship_def_id, _ship_name(row.ship_def_id), _ship_description(row.ship_def_id) + "\n结构 %.0f · 装甲 %.0f · %s" % [row.hull, row.armor, _policy_name(row.policy_id)], "艘", "1", str(price) if has_quote else "—", str(price) if has_quote else "—", ("当前驾驶" if current else "停靠 " + _station_name(row.station_id) if row.status == Types.ShipStatus.DOCKED else "位于 " + _sector_name(row.sector_id)) + ("\n" + sale_reason if not sale_reason.is_empty() else "\n可出售裸舰；设备与货物移入仓库"))
-		var switch: Button = _command(entry.actions, "切换驾驶", "switch_ship", row.ship_instance_id)
-		switch.disabled = not local or current or row.owner_player_id != state.player().player_id
+		var where: String = "当前驾驶" if current else "停靠本站" if local else "其他空间站" if row.status == Types.ShipStatus.DOCKED else "航行中"
+		var actions: Array[Dictionary] = [{"title": "切换驾驶", "action": "switch_ship", "target": row.ship_instance_id, "disabled": not local or current or row.owner_player_id != state.player().player_id, "reason": "" if local else "需要停靠在这艘船所在的空间站"}]
 		if may_sell:
-			var sell: Button = _command(entry.actions, "出售舰体", "sell_ship", row.ship_instance_id)
-			sell.disabled = not sale_reason.is_empty()
-			sell.tooltip_text = sale_reason if not sale_reason.is_empty() else "实收 %d 信用点；普通设备与货物移入本站仓库。" % price
+			actions.append({"title": "出售舰体", "action": "sell_ship", "target": row.ship_instance_id, "disabled": not sale_reason.is_empty(), "reason": sale_reason if not sale_reason.is_empty() else "实收 %d 信用点；普通设备与货物移入本站仓库。" % price})
+		_ships_card(list, row.ship_instance_id, row.ship_def_id, _ship_name(row.ship_def_id), where, _ship_description(row.ship_def_id), "", str(price) if has_quote else "", actions)
 	list.call("add_section", "任务舰领取与换发")
 	for definition: Dictionary in _defs("loan_service_defs"):
 		if definition.station_id != state.player().docked_station_id: continue
@@ -868,9 +1002,10 @@ func _ships() -> void:
 		for other: Dtos.LoanStateDto in state.rows("loan_state"):
 			if other.status in [Types.LoanStatus.ACTIVE, Types.LoanStatus.LOST] and (mission == null or other.mission_instance_id != mission.mission_instance_id or other.loan_service_id != definition.loan_service_id): reason = "已有另一份有效借船"
 		var ship_id: String = str(loadout.get("ship_id", ""))
-		var entry: Dictionary = _asset_row(list, str(definition.loan_service_id), "ship", ship_id, "任务借船 · " + _ship_name(ship_id), _ship_description(ship_id) + "\n归还 " + _station_name(str(definition.return_station_id)) + "；绑定设备不可交易，换发保留任务与采额。", "艘", "1", str(int(definition.fee_credit)), str(int(definition.fee_credit)), reason if not reason.is_empty() else "可领取 / 换领")
-		var claim: Button = _command(entry.actions, "领取 / 换领", "claim_loan", str(definition.loan_service_id))
-		claim.disabled = not reason.is_empty()
+		# A short tag on the card, the full reason in the detail column and the tooltip:
+		# the long sentence used to wrap and squeeze the hull name into three lines.
+		_ships_card(list, str(definition.loan_service_id), ship_id, _ship_name(ship_id), _loan_tag(reason), _ship_description(ship_id) + "
+归还 " + _station_name(str(definition.return_station_id)) + "；绑定设备不可交易，换发保留任务与采额。", "服务费 %d 信用点" % int(definition.fee_credit), "", [{"title": "领取 / 换领", "action": "claim_loan", "target": str(definition.loan_service_id), "disabled": not reason.is_empty(), "reason": reason if not reason.is_empty() else "领取后绑定当前合同，换发保留任务与采额。"}])
 	list.call("add_section", "借船归还")
 	for loan: Dtos.LoanStateDto in state.rows("loan_state"):
 		if loan.status not in [Types.LoanStatus.ACTIVE, Types.LoanStatus.LOST]: continue
@@ -881,9 +1016,82 @@ func _ships() -> void:
 			var quota_note := "教学样本丢失可补采缺额，已有有效样本不会重复补领" if definition.get("gathered_policy_id", "") == "mission_bound" else "普通合同累计额度；补领不会恢复额度"
 			description += "\n剩余可采额度 %d · %s" % [loan.quota_remaining_units, quota_note]
 		var ship_id: String = str(loadout.get("ship_id", ""))
-		var entry: Dictionary = _asset_row(list, loan.loan_id, "ship", ship_id, "借船管理 · " + _ship_name(ship_id), description, "艘", "1", "—", "—", "借船使用中" if loan.status == Types.LoanStatus.ACTIVE else "舰体已损失")
-		var handoff: Button = _command(entry.actions, "归还并换舰", "handoff_loan", loan.loan_id)
-		handoff.disabled = definition.get("return_station_id") != state.player().docked_station_id
+		var at_home: bool = str(definition.get("return_station_id", "")) == state.player().docked_station_id
+		_ships_card(list, loan.loan_id, ship_id, _ship_name(ship_id), "借船使用中" if loan.status == Types.LoanStatus.ACTIVE else "舰体已损失", description, "", "", [{"title": "归还并换舰", "action": "handoff_loan", "target": loan.loan_id, "disabled": not at_home, "reason": "" if at_home else "需要先返回 " + _station_name(str(definition.get("return_station_id", "")))}])
+	# The list selects its first row as that row is created, which is before the card
+	# data for it exists. Fill the detail column once everything is registered.
+	var chosen: String = str(list.get("selected_id"))
+	if not chosen.is_empty(): _ships_select(chosen)
+
+## A loan's state as a card tag rather than a sentence. The card column is narrow and
+## the full sentence lives in the detail column and the action's tooltip.
+func _loan_tag(reason: String) -> String:
+	if reason.is_empty(): return "可领取"
+	if reason.contains("需解锁") or reason.contains("需先接取"): return "需前置"
+	if reason.contains("已有借船") or reason.contains("已有另一份"): return "已有借船"
+	if reason.contains("补领等待"): return "补领等待"
+	if reason.contains("信用点不足"): return "信用点不足"
+	if reason.contains("损毁换发"): return "不予换发"
+	return "不可领取"
+
+## One ship in the card column. The card carries what identifies it; everything else
+## waits in the detail column so the list stays scannable.
+func _ships_card(list: Node, id: String, ship_def_id: String, title: String, status: String, description: String, price_line: String, price_value: String, actions: Array[Dictionary]) -> void:
+	var entry: Dictionary = list.call("append_row", id, ItemPortraits.texture("ship", ship_def_id), title, "", "", "", price_value, price_value, status)
+	entry.row.set_meta("asset_kind", "ship")
+	entry.row.set_meta("asset_id", ship_def_id)
+	stage_rows[id] = {"def_id": ship_def_id, "title": title, "status": status, "description": description, "price_line": price_line, "actions": actions}
+
+func _ships_select(id: String) -> void:
+	for child: Node in stage_detail.get_children():
+		stage_detail.remove_child(child)
+		child.queue_free()
+	var record: Dictionary = stage_rows.get(id, {})
+	if record.is_empty(): return
+	var def_id: String = str(record.get("def_id", ""))
+	if not def_id.is_empty(): requested.emit("showcase_ship", def_id, 1, "")
+	var title: Label = _text_to(stage_detail, str(record.get("title", "")), UISkin.SIZE_PAGE)
+	UISkin.apply_text_style(title, "page")
+	var status: Label = _text_to(stage_detail, str(record.get("status", "")), UISkin.SIZE_BODY)
+	status.add_theme_color_override("font_color", UISkin.ICE)
+	# The hull's own numbers, read from the catalog: this is what the player compares
+	# between two ships, and it is the same for a hull they own and one they can
+	# only borrow, so the column does not change shape from card to card.
+	var hull: Dictionary = _one("ship_defs", "ship_id", def_id)
+	if not hull.is_empty():
+		var line: HSeparator = HSeparator.new()
+		stage_detail.add_child(line)
+		for pair: Array in [["护盾", "%.0f" % float(hull.shield_max)], ["装甲", "%.0f" % float(hull.armor_max)], ["结构", "%.0f" % float(hull.hull_max)], ["速度", XJSpaceUnits.speed(float(hull.max_speed_mps))], ["货舱", "%.0f L" % float(hull.cargo_l)], ["矿舱", "%.0f L" % float(hull.mineral_cargo_l)], ["供能 / 算力", "%.0f / %.0f" % [float(hull.power_capacity), float(hull.cpu_capacity)]]]:
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", UISkin.GAP)
+			stage_detail.add_child(row)
+			var caption: Label = _text_to(row, str(pair[0]), UISkin.SIZE_NOTE)
+			UISkin.apply_text_style(caption, "note")
+			caption.add_theme_color_override("font_color", UISkin.MUTED)
+			caption.custom_minimum_size.x = 76
+			var value: Label = _text_to(row, str(pair[1]), UISkin.SIZE_BODY)
+			value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var spacer: Control = Control.new()
+	spacer.custom_minimum_size.y = 4
+	stage_detail.add_child(spacer)
+	var body_text: Label = _text_to(stage_detail, str(record.get("description", "")), UISkin.SIZE_BODY)
+	body_text.add_theme_color_override("font_color", UISkin.MUTED)
+	var price_line: String = str(record.get("price_line", ""))
+	if not price_line.is_empty():
+		var price_label: Label = _text_to(stage_detail, price_line, UISkin.SIZE_SECTION)
+		UISkin.apply_text_style(price_label, "section")
+	var actions: Array[Dictionary] = record.get("actions", [])
+	if actions.is_empty(): return
+	var bar: HFlowContainer = HFlowContainer.new()
+	bar.add_theme_constant_override("h_separation", UISkin.GAP)
+	bar.add_theme_constant_override("v_separation", UISkin.GAP)
+	stage_detail.add_child(bar)
+	for spec: Dictionary in actions:
+		var button: Button = _command(bar, str(spec.title), str(spec.action), str(spec.target))
+		button.disabled = bool(spec.disabled)
+		var reason: String = str(spec.get("reason", ""))
+		if not reason.is_empty(): button.tooltip_text = reason
 
 func _warehouse() -> void:
 	for operation: RefCounted in state.rows("operation_state"):
@@ -2784,6 +2992,7 @@ func _responsive() -> void:
 		panel.offset_top = maxf(safe, operation_bar.position.y + operation_bar.size.y + 8) if is_instance_valid(operation_bar) and operation_bar.visible else safe
 		panel.offset_bottom = -52
 		if page == "title": _responsive_title()
+	_responsive_stage(compact, safe)
 	if is_instance_valid(panel):
 		var heading: Label = panel.find_child("PageHeading", true, false)
 		if heading != null and page != "title":
@@ -3569,6 +3778,42 @@ func _back() -> void:
 	history_suspended = true
 	show_page(destination)
 	history_suspended = false
+
+## Positions the three stage regions and leaves the centre clear. The panel itself
+## keeps its screen-wide rect so the regions can be measured from the screen edges.
+func _responsive_stage(compact: bool, safe: float) -> void:
+	if not stage_mode or not is_instance_valid(stage_header): return
+	panel.offset_left = 0.0
+	panel.offset_right = 0.0
+	panel.offset_top = 0.0
+	panel.offset_bottom = 0.0
+	var gap: float = 8.0 if compact else 12.0
+	var header_height: float = 48.0 if compact else 58.0
+	var strip_height: float = 68.0 if compact else 84.0
+	var left_width: float = 232.0 if compact else 300.0
+	var right_width: float = 258.0 if compact else 340.0
+	stage_header.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	stage_header.offset_left = safe
+	stage_header.offset_right = -safe
+	stage_header.offset_top = safe
+	stage_header.offset_bottom = safe + header_height
+	var body_top: float = safe + header_height + gap
+	var body_bottom: float = -(safe + strip_height + gap)
+	stage_left.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+	stage_left.offset_left = safe
+	stage_left.offset_right = safe + left_width
+	stage_left.offset_top = body_top
+	stage_left.offset_bottom = body_bottom
+	stage_right.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
+	stage_right.offset_left = -(safe + right_width)
+	stage_right.offset_right = -safe
+	stage_right.offset_top = body_top
+	stage_right.offset_bottom = body_bottom
+	stage_bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	stage_bottom.offset_left = safe
+	stage_bottom.offset_right = -safe
+	stage_bottom.offset_top = -(safe + strip_height)
+	stage_bottom.offset_bottom = -safe
 
 func _responsive_title() -> void:
 	if page != "title" or not is_instance_valid(panel): return

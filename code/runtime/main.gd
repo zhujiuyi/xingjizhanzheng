@@ -950,6 +950,11 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		"hangar_focus":
 			if hangar != null and state != null and state.ship().status == Types.ShipStatus.DOCKED:
 				hangar.focus_service(target)
+		"showcase_ship":
+			# Presentation only: the stage shows the hull the page has selected. It
+			# never changes which ship is flown.
+			if hangar != null and state != null and not target.is_empty():
+				hangar.change_ship(target)
 		"quit", "return_title":
 			if state == null:
 				if action == "quit": get_tree().quit()
