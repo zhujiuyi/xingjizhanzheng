@@ -167,7 +167,7 @@ var fitting_show_all: bool = false
 ## on the left, the selected subject and its actions on the right, a strip of large
 ## readouts along the bottom. Dense tables stay in workbench mode, where the width
 ## is what makes them readable.
-const STAGE_PAGES: Array[String] = ["ships"]
+const STAGE_PAGES: Array[String] = ["ships", "fitting"]
 var stage_mode: bool = false
 var stage_header: PanelContainer
 var stage_left: PanelContainer
@@ -178,6 +178,9 @@ var stage_detail: VBoxContainer
 var stage_strip: HFlowContainer
 ## Card data for the current stage page, keyed by row id.
 var stage_rows: Dictionary = {}
+## The hangar's exhibit, handed over like the camera rig: a view the UI drives
+## directly, not a business request that belongs in the `requested` stream.
+var hangar: Node = null
 
 ## The trail of pages the player actually walked. Back pops it, so the same page
 ## returns somewhere different depending on how it was reached. Deep links and the
@@ -390,7 +393,7 @@ func _ready() -> void:
 	show_title([])
 	_responsive()
 
-func bind(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted, world: XJSector, rig: XJCameraRig) -> void:
+func bind(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted, world: XJSector, rig: XJCameraRig, showcase: Node = null) -> void:
 	if state == null or state.world_id != runtime.world_id or state.session_id != runtime.session_id:
 		mission_filter = "all"; mission_status_filter = "current"; mission_location_filter = "local"
 		industry_tab = "manufacture"
@@ -407,6 +410,7 @@ func bind(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted, world: X
 	gameplay = business
 	sector = world
 	camera = rig
+	hangar = showcase
 	definition_cache.clear()
 	telemetry_signature = ""
 	_build_names()
@@ -1049,7 +1053,7 @@ func _ships_select(id: String) -> void:
 	var record: Dictionary = stage_rows.get(id, {})
 	if record.is_empty(): return
 	var def_id: String = str(record.get("def_id", ""))
-	if not def_id.is_empty(): requested.emit("showcase_ship", def_id, 1, "")
+	if not def_id.is_empty() and is_instance_valid(hangar): hangar.call("change_ship", def_id)
 	var title: Label = _text_to(stage_detail, str(record.get("title", "")), UISkin.SIZE_PAGE)
 	UISkin.apply_text_style(title, "page")
 	var status: Label = _text_to(stage_detail, str(record.get("status", "")), UISkin.SIZE_BODY)
@@ -1185,13 +1189,28 @@ func _resize_warehouse_panel() -> void:
 		warehouse_panel.fit_height(page_scroll.size.y)
 
 func _fitting() -> void:
+	# Stage layout. The hangar keeps showing the ship being worked on; the slot list
+	# is the card column, and whatever is selected there is described and acted on in
+	# the detail column. The stage is deliberately not driven by the selection: this
+	# page is always about the ship you are flying, and swapping the exhibit would
+	# suggest otherwise.
+	stage_rows.clear()
 	var tools: HFlowContainer = _action_bar(body, "FittingTools")
-	if gameplay.fitting_analysis.supported():_button(tools,"比较配装与资源预算",show_page.bind("fitting_analysis")).name="FittingAnalysisEntry"
-	if gameplay.scenarios.supported():_button(tools,"配装挑战",show_page.bind("trials")).name="FittingTrialEntry"
-	if DroneAvailability.capable(gameplay): _button(tools, "无人机整备", show_page.bind("drones")).name = "FittingDroneManagement"
+	if gameplay.fitting_analysis.supported():
+		_button(tools, "比较配装与资源预算", show_page.bind("fitting_analysis")).name = "FittingAnalysisEntry"
+	if gameplay.scenarios.supported():
+		_button(tools, "配装挑战", show_page.bind("trials")).name = "FittingTrialEntry"
+	if DroneAvailability.capable(gameplay):
+		_button(tools, "无人机整备", show_page.bind("drones")).name = "FittingDroneManagement"
 	var metrics: Dictionary = gameplay.call("metrics", state.ship())
-	_text("供能 %.0f/%.0f · 算力 %.0f/%.0f · 总质量 %.2f kg" % [metrics.power_used, metrics.power_capacity, metrics.cpu_used, metrics.cpu_capacity, metrics.total_mass_kg])
-	var list: VBoxContainer = _business_list("舰船挂点与适配设备")
+	_stage_stat("供能", "%.0f / %.0f" % [metrics.power_used, metrics.power_capacity])
+	_stage_stat("算力", "%.0f / %.0f" % [metrics.cpu_used, metrics.cpu_capacity])
+	_stage_stat("总质量", "%.0f kg" % float(metrics.total_mass_kg))
+	_stage_stat("防御", "%.0f / %.0f / %.0f" % [metrics.shield_max, metrics.armor_max, metrics.hull_max])
+	var list: VBoxContainer = _information_list(body, "舰船挂点与适配设备", "fitting")
+	list.set("details_external", true)
+	list.set("status_min_width", 56)
+	list.connect("selection_changed", _fitting_select)
 	list.call("add_section", "当前驾驶舰挂点")
 	var empty_slots: Array[Dictionary] = []
 	var hull_slot_types: Array[String] = []
@@ -1205,18 +1224,22 @@ func _fitting() -> void:
 			var item: Dtos.ItemInstanceStateDto = state.find("item_instance_state", "item_instance_id", equipped.item_instance_id)
 			var description: String = _item_description(equipped.module_def_id)
 			if item != null: description += "\n耐久 %.0f · 品质 %.2f · %s" % [item.durability, item.quality_multiplier, _policy_name(item.policy_id)]
-			var entry: Dictionary = _asset_row(list, equipped.item_instance_id, "item", equipped.module_def_id, _item_name(equipped.module_def_id), description, "件", "1", "—", "—", slot_name + "\n" + ("已启用" if equipped.enabled else "已关闭"))
-			var unfit: Button = _command(entry.actions, "卸至仓库", "unfit_module", equipped.item_instance_id)
-			unfit.disabled = item == null or item.policy_id != "normal_owned" or not _service_reason("fitting").is_empty()
-			_command(entry.actions, "关闭设备" if equipped.enabled else "启用设备", "set_module_enabled", equipped.item_instance_id, "off" if equipped.enabled else "on")
+			var may_unfit: bool = item != null and item.policy_id == "normal_owned" and _service_reason("fitting").is_empty()
+			_fitting_card(list, equipped.item_instance_id, equipped.module_def_id, _item_name(equipped.module_def_id), "已启用" if equipped.enabled else "已关闭", "%s
+%s" % [slot_name, description], [
+				{"title": "卸至仓库", "action": "unfit_module", "target": equipped.item_instance_id, "disabled": not may_unfit, "reason": "" if may_unfit else "保障或借用设备随舰固定；停靠本站后才能改装自有设备。"},
+				{"title": "关闭设备" if equipped.enabled else "启用设备", "action": "set_module_enabled", "target": equipped.item_instance_id, "disabled": false, "reason": "", "extra": "off" if equipped.enabled else "on"},
+			])
+
 		else:
-			empty_slots.append({"type": slot_type, "index": container.slot_index, "title": slot_name})
-			var slot_description: String = "空挂点；在下方设备列表选择适配模块安装。"
+			var slot_description: String = "空挂点；在左侧设备列表中选择适配模块安装。"
 			if slot_type == "weapon": slot_description += "\n" + _ship_weapon_description(state.ship().ship_def_id)
-			_asset_row(list, container.container_id, "generic", slot_type, slot_name, slot_description, "槽", "1", "—", "—", "未安装")
+			empty_slots.append({"type": slot_type, "index": container.slot_index, "title": slot_name})
+			_fitting_card(list, container.container_id, slot_type, slot_name, "未安装", slot_description, [])
 	if state.ship().policy_id != "normal_owned":
-		_text("当前为保障或借用舰，使用随船设备；切换自有舰后可调整装配。", 13)
+		_text("当前为保障或借用舰，使用随船设备；切换自有舰后可调整装配。", UISkin.SIZE_BODY)
 		_button(tools, "选择自有舰", show_page.bind("ships")).name = "FittingOwnedShipEntry"
+		_fitting_finish(list)
 		return
 	var filter: Button = _button(tools, "全部本地设备" if not fitting_show_all else "仅适配当前舰", func(): fitting_show_all = not fitting_show_all; refresh_page())
 	filter.name = "FittingEquipmentFilter"
@@ -1237,24 +1260,71 @@ func _fitting() -> void:
 		var reason: String = _fitting_reason(item, metrics)
 		if reason.is_empty() and compatible.is_empty(): reason = "没有同类空挂点"
 		var container: Dtos.ContainerStateDto = state.find("container_state", "container_id", item.container_id)
-		var entry: Dictionary = _asset_row(list, item.item_instance_id, "item", item.item_def_id, _item_name(item.item_def_id), _item_description(item.item_def_id) + "\n耐久 %.0f · 品质 %.2f" % [item.durability, item.quality_multiplier], "件", "1", "—", "—", reason if not reason.is_empty() else _container_name(container) + "\n可安装")
-		if not compatible.is_empty():
-			var slot_picker := OptionButton.new()
-			slot_picker.name = "FittingSlot_" + item.item_instance_id.validate_node_name()
-			slot_picker.custom_minimum_size = Vector2(124, 36)
-			for empty: Dictionary in compatible:
-				slot_picker.add_item(str(empty.title))
-				slot_picker.set_item_metadata(slot_picker.item_count - 1, "%s:%d" % [str(empty.type), int(empty.index)])
-			entry.actions.add_child(slot_picker)
-			var slots_ref: WeakRef = weakref(slot_picker)
-			var item_id: String = item.item_instance_id
-			var install: Button = _button(entry.actions, "安装设备", func():
-				var choice: OptionButton = slots_ref.get_ref() as OptionButton
-				if is_instance_valid(choice) and choice.selected >= 0: requested.emit("fit_module", item_id, 1, str(choice.get_item_metadata(choice.selected))))
-			install.set_meta("action", "fit_module"); install.set_meta("target", item_id)
-			install.disabled = not reason.is_empty()
-			install.tooltip_text = reason if not reason.is_empty() else "安装到所选挂点；舰种、口径、预算与科技在提交时再次校验。"
-	if available == 0: _text("本地没有可安装设备；可在市场购买或工业制造。", 14)
+		_fitting_card(list, item.item_instance_id, item.item_def_id, _item_name(item.item_def_id), reason if not reason.is_empty() else "可安装", "%s槽 · " % str(module.get("slot_title", "")) + _item_description(item.item_def_id) + "
+耐久 %.0f · 品质 %.2f
+存放 " % [item.durability, item.quality_multiplier] + _container_name(container), [], compatible, reason)
+	if available == 0:
+		_text("本地没有可安装设备；可在市场购买或工业制造。", UISkin.SIZE_BODY)
+	_fitting_finish(list)
+
+func _fitting_finish(list: Node) -> void:
+	# The list selects its first row while that row is still being created, so the
+	# detail column is filled once every card has registered its data.
+	var chosen: String = str(list.get("selected_id"))
+	if not chosen.is_empty(): _fitting_select(chosen)
+
+func _fitting_card(list: Node, id: String, asset_id: String, title: String, status: String, description: String, actions: Array[Dictionary], compatible: Array[Dictionary] = [], install_reason: String = "") -> void:
+	var entry: Dictionary = list.call("append_row", id, ItemPortraits.texture("item", asset_id), title, "", "", "", "", "", status)
+	entry.row.set_meta("asset_kind", "item")
+	entry.row.set_meta("asset_id", asset_id)
+	stage_rows[id] = {"asset_id": asset_id, "title": title, "status": status, "description": description, "actions": actions, "compatible": compatible, "install_reason": install_reason}
+
+func _fitting_select(id: String) -> void:
+	for child: Node in stage_detail.get_children():
+		stage_detail.remove_child(child)
+		child.queue_free()
+	var record: Dictionary = stage_rows.get(id, {})
+	if record.is_empty(): return
+	var title: Label = _text_to(stage_detail, str(record.get("title", "")), UISkin.SIZE_PAGE)
+	UISkin.apply_text_style(title, "page")
+	var status: Label = _text_to(stage_detail, str(record.get("status", "")), UISkin.SIZE_BODY)
+	status.add_theme_color_override("font_color", UISkin.ICE)
+	var line: HSeparator = HSeparator.new()
+	stage_detail.add_child(line)
+	var description: Label = _text_to(stage_detail, str(record.get("description", "")), UISkin.SIZE_BODY)
+	description.add_theme_color_override("font_color", UISkin.MUTED)
+	var bar: HFlowContainer = HFlowContainer.new()
+	bar.add_theme_constant_override("h_separation", UISkin.GAP)
+	bar.add_theme_constant_override("v_separation", UISkin.GAP)
+	stage_detail.add_child(bar)
+	var compatible: Array = record.get("compatible", [])
+	var install_reason: String = str(record.get("install_reason", ""))
+	if not compatible.is_empty() or not install_reason.is_empty():
+		var picker := OptionButton.new()
+		picker.name = "FittingSlot_" + id.validate_node_name()
+		picker.custom_minimum_size = Vector2(124, 36)
+		for empty: Dictionary in compatible:
+			picker.add_item(str(empty.title))
+			picker.set_item_metadata(picker.item_count - 1, "%s:%d" % [str(empty.type), int(empty.index)])
+		if compatible.is_empty(): picker.disabled = true
+		bar.add_child(picker)
+		var picker_ref: WeakRef = weakref(picker)
+		var item_id: String = id
+		var install: Button = _button(bar, "安装设备", func():
+			var choice: OptionButton = picker_ref.get_ref() as OptionButton
+			if is_instance_valid(choice) and choice.selected >= 0: requested.emit("fit_module", item_id, 1, str(choice.get_item_metadata(choice.selected))))
+		install.set_meta("action", "fit_module")
+		install.set_meta("target", item_id)
+		install.disabled = not install_reason.is_empty()
+		install.tooltip_text = install_reason if not install_reason.is_empty() else "安装到所选挂点；舰种、口径、预算与科技在提交时再次校验。"
+	for spec: Dictionary in record.get("actions", []):
+		var button: Button = _button(bar, str(spec.title), func(): requested.emit(str(spec.action), str(spec.target), 1, str(spec.get("extra", ""))))
+		button.set_meta("action", str(spec.action))
+		button.set_meta("target", str(spec.target))
+		if spec.has("extra"): button.set_meta("extra", str(spec.extra))
+		button.disabled = bool(spec.disabled)
+		var reason: String = str(spec.get("reason", ""))
+		if not reason.is_empty(): button.tooltip_text = reason
 
 func _market() -> void:
 	var filters: HFlowContainer = HFlowContainer.new()

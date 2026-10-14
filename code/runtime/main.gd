@@ -950,11 +950,6 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		"hangar_focus":
 			if hangar != null and state != null and state.ship().status == Types.ShipStatus.DOCKED:
 				hangar.focus_service(target)
-		"showcase_ship":
-			# Presentation only: the stage shows the hull the page has selected. It
-			# never changes which ship is flown.
-			if hangar != null and state != null and not target.is_empty():
-				hangar.change_ship(target)
 		"quit", "return_title":
 			if state == null:
 				if action == "quit": get_tree().quit()
@@ -1525,7 +1520,7 @@ func _activate(candidate: XJRuntimeState) -> void:
 		if not warp_visual.bind(world, camera, visual_rules.parameters): ui.notify(warp_visual.last_error, true)
 	else: ui.notify(visual_rules.last_error, true)
 	ui.slots = store.list_slots()
-	ui.bind(state, store.catalog, gameplay, world, camera)
+	ui.bind(state, store.catalog, gameplay, world, camera, hangar)
 	gameplay.civilizations.status_changed.connect(_civilization_status)
 	gameplay.exploration.warning_changed.connect(_exploration_warning)
 	gameplay.specializations.warning_changed.connect(_tactical_warning)
