@@ -318,11 +318,17 @@ class FeatureIntegrityTests(unittest.TestCase):
     def test_every_implemented_business_action_has_player_entrypoint(self) -> None:
         act = function(self.runtime["runtime/gameplay.gd"], "act")
         actions = set(re.findall(r'(?m)^\s*"([a-z_]+)":', act))
+        # V0.34 recommends the current incomplete goal without rewriting the
+        # historical saved manual selection. Retain that old command for
+        # archive/replay compatibility; it is deliberately absent from UI.
+        legacy_only = {"growth_select"}
         # Host input/interaction/GUI are independent producers. Exclude the
         # Gameplay definitions themselves so dispatch names cannot prove reachability.
         producers = "\n".join(self.runtime[name] for name in self.runtime
                               if name.startswith("runtime/ui") or name in ("runtime/main.gd", "runtime/interaction_context.gd"))
-        self.assertEqual(actions - strings(producers), set())
+        self.assertTrue(legacy_only <= actions)
+        self.assertFalse(legacy_only & strings(producers))
+        self.assertEqual(actions - legacy_only - strings(producers), set())
 
     def test_every_static_gui_action_resolves_to_host_or_gameplay(self) -> None:
         host = function(self.runtime["runtime/main.gd"], "_command")

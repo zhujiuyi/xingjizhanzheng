@@ -2,6 +2,13 @@ extends "tactics_world_v29.gd"
 ## Real UI research, readonly projected replacement and physical tuned beam range.
 var range_item: String=""
 var burst_item: String=""
+func settle() -> void:
+	# Async loading keeps the native frame loop alive while the Store worker
+	# runs. Wait for Main completion before manually pumping presentation.
+	var deadline: int=Time.get_ticks_msec()+60000
+	while is_instance_valid(host) and host.busy and Time.get_ticks_msec()<deadline:await frames()
+	if not check(is_instance_valid(host) and not host.busy,"fitting Main action settles within the bounded asynchronous loading window"):return
+	host._process(0.0);await frames()
 func _ready() -> void:
 	get_tree().set_meta("xj_fitting_world_v31_diagnostic",true)
 	get_tree().create_timer(540.0).timeout.connect(func():check(false,"native fitting watchdog");finish())
@@ -71,6 +78,8 @@ func run() -> void:
 	await click(host.ui.body.find_child("FittingCalculate",true,false),"calculate locked projected specialization")
 	check(state_signature()==before and host.ui.body.find_child("FittingApply",true,false).disabled,"locked preview remains readonly and cannot install")
 	await show("research")
+	if not await click(host.ui.body.find_child("ResearchTab_specialization",true,false),"opens actual specialization category"):await finish();return
+	if not await click(host.ui.body.find_child("ResearchSelect_spec_range",true,false),"selects actual range research detail"):await finish();return
 	await enter_number(host.ui.body.find_child("SpecializationQuantity",true,false),"10")
 	var credit: int=host.state.player().credit
 	await click(host.ui.body.find_child("SpecializationDonate",true,false),"real material analysis donation")

@@ -2,12 +2,14 @@ class_name XJWarehousePanel
 extends HBoxContainer
 ## Warehouse presentation only. Eligibility and capacities come from Inventory.
 signal transfer_requested(kind: String, id: String, quantity: int, destination: String)
+signal open_salvage_requested(package_id: String)
 const UISkin = preload("res://runtime/ui_theme.gd")
 const Interaction = preload("res://runtime/ui/ui_interaction.gd")
 var refs: Dictionary = {"ship_rows": [], "station_rows": [], "rows_by_id": {}}
 var _quote: Callable
 var _quantity_limit: int = 1
 var _compact: bool = false
+var _has_salvage_actions: bool = false
 
 func configure(ship_rows: Array[Dictionary], station_rows: Array[Dictionary], ship_title: String, station_title: String, quantity_limit: int, quote: Callable) -> void:
 	name = "WarehousePanel"
@@ -16,6 +18,7 @@ func configure(ship_rows: Array[Dictionary], station_rows: Array[Dictionary], sh
 	add_theme_constant_override("separation", UISkin.GAP)
 	_quote = quote
 	_quantity_limit = quantity_limit
+	_has_salvage_actions = (ship_rows + station_rows).any(func(row: Dictionary): return row.kind == "salvage" and not bool(row.remote))
 	var ship: Dictionary = _column("ShipWarehouse", "当前舰船货舱", ship_title, "物资 / 持有数量", "所在舱室")
 	var station: Dictionary = _column("StationWarehouse", "空间站仓库", station_title, "物资 / 持有数量", "所属空间站")
 	refs["ship_scroll"] = ship.scroll
@@ -58,7 +61,7 @@ func _set_compact(compact: bool) -> void:
 		_size_cell(column.inventory_heading, float(cell.name), true)
 		_size_cell(column.location_heading, float(cell.location))
 		_size_cell(column.amount_heading, float(cell.amount))
-		_size_cell(column.action_heading, float(cell.button))
+		_size_cell(column.action_heading, float(cell.actions))
 		column.content.add_theme_constant_override("separation", 3 if compact else 5)
 	for row: Dictionary in refs.rows_by_id.values():
 		(row.row.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(int(cell.margin))
@@ -74,6 +77,8 @@ func _set_compact(compact: bool) -> void:
 		for label: Label in [row.location, row.description, row.status]: label.add_theme_font_size_override("font_size", 10 if compact else 11)
 		if is_instance_valid(row.amount):
 			_size_cell(row.amount, float(cell.amount))
+			row.action_group.add_theme_constant_override("separation", int(cell.gap))
+			_size_cell(row.action_group, float(cell.actions))
 			_size_cell(row.button, float(cell.button))
 			row.amount.custom_minimum_size.y = 30 if compact else 34
 			row.button.custom_minimum_size.y = 30 if compact else 34
@@ -81,15 +86,22 @@ func _set_compact(compact: bool) -> void:
 			row.amount.get_line_edit().add_theme_font_size_override("font_size", 11 if compact else 12)
 			row.button.add_theme_font_size_override("font_size", 11 if compact else 12)
 			row.amount_heading.add_theme_font_size_override("font_size", 10 if compact else 11)
+			if is_instance_valid(row.claim):
+				_size_cell(row.claim, float(cell.button))
+				row.claim.custom_minimum_size.y = 30 if compact else 34
+				row.claim.add_theme_font_size_override("font_size", 10 if compact else 12)
 		else:
 			_size_cell(row.amount_placeholder, float(cell.amount))
-			_size_cell(row.action_placeholder, float(cell.button))
+			_size_cell(row.action_placeholder, float(cell.actions))
 			for label: Label in [row.amount_placeholder, row.action_placeholder]: label.add_theme_font_size_override("font_size", 10 if compact else 11)
 
 func _cell_sizes() -> Dictionary:
 	# Presentation dimensions only. The table scrolls horizontally when a pane
 	# is narrower; cargo, location and controls never reflow into another line.
-	return {"image": 24, "name": 156, "location": 72, "amount": 70, "button": 68, "gap": 4, "margin": 3} if _compact else {"image": 32, "name": 184, "location": 86, "amount": 82, "button": 76, "gap": 6, "margin": 5}
+	var sizes: Dictionary = {"image": 24, "name": 156, "location": 72, "amount": 70, "button": 68, "gap": 4, "margin": 3} if _compact else {"image": 32, "name": 184, "location": 86, "amount": 82, "button": 76, "gap": 6, "margin": 5}
+	# All rows keep the same operation column when a local package adds a claim.
+	sizes["actions"] = int(sizes.button) * (2 if _has_salvage_actions else 1) + (int(sizes.gap) if _has_salvage_actions else 0)
+	return sizes
 
 func _size_cell(control: Control, width: float, expand: bool = false) -> void:
 	control.custom_minimum_size.x = width
@@ -230,7 +242,7 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	actions.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	top.add_child(actions)
 	var row: Dictionary = data.duplicate()
-	row.merge({"row": frame, "content": content, "top": top, "info": info, "names": names, "name_line": name_line, "image": image, "name": title, "policy_badge": policy_badge, "description": details, "description_full": str(data.description), "quantity": quantity, "held_quantity": int(data.quantity), "location": location, "location_full": str(data.location).replace("\n", " · "), "status": status, "actions": actions, "amount": null, "button": null}, true)
+	row.merge({"row": frame, "content": content, "top": top, "info": info, "names": names, "name_line": name_line, "image": image, "name": title, "policy_badge": policy_badge, "description": details, "description_full": str(data.description), "quantity": quantity, "held_quantity": int(data.quantity), "location": location, "location_full": str(data.location).replace("\n", " · "), "status": status, "actions": actions, "action_group": null, "amount": null, "button": null, "claim": null}, true)
 	refs.rows_by_id[data.id] = row
 	if remote:
 		status.text = "异地仓库 · 只读，需前往该站搬运"
@@ -282,12 +294,36 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	button.set_meta("extra", data.destination)
 	button.set_meta("uses_quantity", data.kind == "stack")
 	button.set_meta("row_id", data.id)
-	actions.add_child(button)
+	var action_group: HBoxContainer = HBoxContainer.new()
+	action_group.name = "WarehouseRowOperations"
+	action_group.add_theme_constant_override("separation", 6)
+	actions.add_child(action_group)
+	action_group.add_child(button)
 	button.focus_entered.connect(_reveal_local_control.bind(button))
 	button.set_meta("business_focus_bound", true)
 	row.amount = amount
 	row.button = button
 	row.amount_heading = amount_heading
+	row.action_group = action_group
+	if data.kind == "salvage":
+		var claim: Button = Button.new()
+		claim.name = "WarehouseOpenSalvage"
+		claim.text = "领取战利品"
+		claim.custom_minimum_size = Vector2(76, 34)
+		claim.add_theme_font_size_override("font_size", 12)
+		UISkin.apply_button(claim, "primary", true)
+		claim.set_meta("action", "open_salvage")
+		claim.set_meta("target", data.id)
+		claim.set_meta("extra", "")
+		claim.set_meta("uses_quantity", false)
+		claim.set_meta("row_id", data.id)
+		claim.disabled = not bool(get_meta("can_open_salvage", false))
+		claim.tooltip_text = str(get_meta("salvage_reason", "需在有仓储服务的当前空间站领取")) if claim.disabled else "物资进入本站仓库，信用点进入钱包。"
+		action_group.add_child(claim)
+		claim.pressed.connect(_request_salvage.bind(str(data.id), weakref(frame)))
+		claim.focus_entered.connect(_reveal_local_control.bind(claim))
+		claim.set_meta("business_focus_bound", true)
+		row.claim = claim
 	Interaction.watch_integer(amount, _update_quote.bind(row))
 	button.pressed.connect(func():
 		# Commit a typed value even if the player has not pressed Enter first.
@@ -298,6 +334,13 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 		if not button.disabled: transfer_requested.emit(str(data.kind), str(data.id), quantity_value, str(data.destination)))
 	_update_quote(row)
 	return row
+
+func _request_salvage(package_id: String, reference: WeakRef) -> void:
+	var frame: Control = reference.get_ref() as Control
+	if not is_visible_in_tree() or is_queued_for_deletion() or not is_instance_valid(frame) or frame.is_queued_for_deletion() or not frame.is_inside_tree() or not is_ancestor_of(frame) or not refs.rows_by_id.has(package_id): return
+	var row: Dictionary = refs.rows_by_id[package_id]
+	if row.row != frame or not is_instance_valid(row.claim) or row.claim.is_queued_for_deletion() or row.claim.disabled: return
+	open_salvage_requested.emit(package_id)
 
 func _update_quote(row: Dictionary) -> void:
 	if not is_instance_valid(row.button) or not _quote.is_valid(): return
@@ -335,15 +378,16 @@ func _reveal_local_control_after_layout(reference: WeakRef) -> void:
 		ancestor = ancestor.get_parent()
 
 func snapshot_view() -> Dictionary:
-	var view: Dictionary = {"ship_scroll": refs.ship_scroll.scroll_vertical, "station_scroll": refs.station_scroll.scroll_vertical, "ship_scroll_horizontal": refs.ship_scroll.scroll_horizontal, "station_scroll_horizontal": refs.station_scroll.scroll_horizontal, "amounts": {}, "focus_id": "", "focus_amount": false}
+	var view: Dictionary = {"ship_scroll": refs.ship_scroll.scroll_vertical, "station_scroll": refs.station_scroll.scroll_vertical, "ship_scroll_horizontal": refs.ship_scroll.scroll_horizontal, "station_scroll_horizontal": refs.station_scroll.scroll_horizontal, "amounts": {}, "focus_id": "", "focus_amount": false, "focus_action": ""}
 	var focus: Control = get_viewport().gui_get_focus_owner()
 	for id: String in refs.rows_by_id:
 		var row: Dictionary = refs.rows_by_id[id]
 		if not is_instance_valid(row.amount): continue
 		view.amounts[id] = int(row.amount.value)
-		if focus == row.button or focus == row.amount or focus == row.amount.get_line_edit():
+		if focus == row.button or focus == row.amount or focus == row.amount.get_line_edit() or (is_instance_valid(row.claim) and focus == row.claim):
 			view.focus_id = id
 			view.focus_amount = focus != row.button
+			view.focus_action = "open_salvage" if is_instance_valid(row.claim) and focus == row.claim else ""
 	return view
 
 func restore_view(view: Dictionary) -> void:
@@ -358,7 +402,8 @@ func _restore_position(view: Dictionary) -> void:
 	var id: String = str(view.get("focus_id", ""))
 	if refs.rows_by_id.has(id):
 		var row: Dictionary = refs.rows_by_id[id]
-		if bool(view.get("focus_amount", false)) and is_instance_valid(row.amount) and row.amount.editable: row.amount.get_line_edit().grab_focus()
+		if view.get("focus_action", "") == "open_salvage" and is_instance_valid(row.claim) and not row.claim.disabled: row.claim.grab_focus()
+		elif bool(view.get("focus_amount", false)) and is_instance_valid(row.amount) and row.amount.editable: row.amount.get_line_edit().grab_focus()
 		elif is_instance_valid(row.button) and not row.button.disabled: row.button.grab_focus()
 	refs.ship_scroll.set_deferred("scroll_vertical", int(view.get("ship_scroll", 0)))
 	refs.station_scroll.set_deferred("scroll_vertical", int(view.get("station_scroll", 0)))

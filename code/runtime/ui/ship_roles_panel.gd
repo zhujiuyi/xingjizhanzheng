@@ -16,5 +16,5 @@ func setup(u: Node) -> void:
 			short+="\n裸舰调查×%.2f" % clampf(float(ship.scan_strength)*float(cap.survey_multiplier)/float(b.scan_reference_strength),float(b.min_survey_rate),float(b.max_survey_rate))
 			if cap.remote_repair_allowed:short+=" · 可远修护盾/装甲"
 			if float(cap.sensor_multiplier)>1.0:short+=" · 扫描器感知×%.1f" % cap.sensor_multiplier
-		var entry: Dictionary=u._asset_row(list,spec.ship_id,"ship",spec.ship_id,u._ship_name(spec.ship_id)+" · "+str(spec.role_name),short,"艘","1","—",str(ship.base_ask_credit)+"信用点","船体基础预算")
+		var entry: Dictionary=u._asset_row(list,spec.ship_id,"ship",spec.ship_id,u._ship_name(spec.ship_id)+" · "+str(spec.role_name),text,"艘","1","—",str(ship.base_ask_credit)+"信用点","船体基础预算")
 		entry.name.tooltip_text=text;entry.description.tooltip_text=text

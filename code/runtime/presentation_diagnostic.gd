@@ -81,10 +81,17 @@ static func run(host: Node, output_dir: String) -> bool:
 	var crew: Node3D = host.hangar.get_service_anchor("operations")
 	_check(evidence, is_instance_valid(crew) and crew.is_visible_in_tree(), "packed 3D NPC service model is visible")
 	var service_icons_valid: bool = host.ui.station_services.find_child("NpcPortrait0", true, false) == null
-	for entry: Dictionary in XJServiceNavigation.PAGES:
-		var service_button: Button = host.ui.station_services.find_child("Service" + str(entry.id).to_pascal_case(), true, false)
-		service_icons_valid = service_icons_valid and service_button != null and service_button.text == str(entry.label) and service_button.icon != null
-	_check(evidence, service_icons_valid, "packed hangar exposes eleven canonical compact icon services without portrait controls")
+	var expected_services: Array[String] = ["station", "ships", "warehouse", "fitting", "market", "industry", "missions", "civilizations", "research", "map", "pause"]
+	var live_services: Array[Dictionary] = host.ui._service_pages(true)
+	var rendered_services: Array[String] = []
+	for service_button: Button in host.ui.station_services.find_children("*", "Button", true, false):
+		if str(service_button.get_meta("service_surface", "")) != "hangar": continue
+		var destination: String = str(service_button.get_meta("service_page_id", ""))
+		rendered_services.append(destination)
+		service_icons_valid = service_icons_valid and service_button.text == host.ui._service_label(destination) and service_button.icon != null and service_button.icon == host.ui._service_icon(destination)
+	var live_ids: Array[String] = []
+	for entry: Dictionary in live_services: live_ids.append(str(entry.id))
+	_check(evidence, service_icons_valid and live_ids == expected_services and rendered_services == expected_services and host.ui.station_services.find_child("ServiceSalvage", true, false) == null, "packed hangar renders the exact eleven live compact icon services, routes salvage through warehouse and has no portrait controls")
 	await host._command("hangar_focus", "operations", 1, "")
 	var focus_deadline := Time.get_ticks_msec() + 3000
 	while Time.get_ticks_msec() < focus_deadline and host.hangar.get_camera().position.distance_to(host.hangar._camera_destination) > 1.0:
@@ -465,6 +472,75 @@ static func _business_rows(host: Node) -> Array[Dictionary]:
 			for entry: Dictionary in values: result.append(entry)
 	return result
 
+static func _information_page_valid(host: Node, page: String) -> bool:
+	var rows: Array[Dictionary] = []
+	for node: Node in host.ui.body.find_children("*", "VBoxContainer", true, false):
+		if bool(node.get_meta("info_list", false)):
+			for row: Dictionary in node.get("rows"): rows.append(row)
+	if rows.is_empty(): return false
+	var ids: Array[String] = []
+	var open_details: int = 0
+	for row: Dictionary in rows:
+		var id: String = str(row.row.get_meta("row_id", ""))
+		if id.is_empty() or id in ids or row.image.texture == null or row.name.text.is_empty() or row.description.text.is_empty() or row.status.text.is_empty(): return false
+		ids.append(id)
+		if row.details.visible:
+			open_details += 1
+			if not row.selector.button_pressed: return false
+	if open_details != 1: return false
+	if page == "ships":
+		var expected: Array[String] = []
+		for ship: RefCounted in host.state.rows("ship_state"):
+			if ship.status not in [Types.ShipStatus.RETURNED, Types.ShipStatus.DESTROYED]: expected.append(str(ship.ship_instance_id))
+		for definition: Dictionary in host.ui._defs("loan_service_defs"):
+			if str(definition.station_id) != str(host.state.player().docked_station_id): continue
+			expected.append(str(definition.loan_service_id))
+			var has_claim: bool = false
+			for row: Dictionary in rows:
+				if str(row.id) != str(definition.loan_service_id): continue
+				for button: Button in row.actions.find_children("*", "Button", true, false):
+					has_claim = has_claim or str(button.get_meta("action", "")) == "claim_loan" and str(button.get_meta("target", "")) == str(definition.loan_service_id)
+			if not has_claim: return false
+		for loan: RefCounted in host.state.rows("loan_state"):
+			if loan.status in [Types.LoanStatus.ACTIVE, Types.LoanStatus.LOST]: expected.append(str(loan.loan_id))
+		return ids == expected and str(host.state.ship().ship_instance_id) in ids
+	if page == "fitting":
+		var slot_ids: Array[String] = []
+		for container: RefCounted in host.state.rows("container_state"):
+			if container.ship_instance_id != host.state.ship().ship_instance_id or container.kind != Types.ContainerKind.SLOT: continue
+			var equipped: RefCounted = host.state.find("equipment_state", "slot_container_id", container.container_id)
+			slot_ids.append(str(equipped.item_instance_id) if equipped != null else str(container.container_id))
+		for id: String in slot_ids:
+			if id not in ids: return false
+		return not slot_ids.is_empty() and (host.state.ship().policy_id == "normal_owned" or ids == slot_ids)
+	var definitions: Array[Dictionary] = host.ui._filtered_mission_definitions()
+	var expected_missions: Array[String] = []
+	for definition: Dictionary in definitions.slice(host.ui.mission_page * 6, mini((host.ui.mission_page + 1) * 6, definitions.size())):
+		expected_missions.append(str(definition.mission_id))
+	return page == "missions" and ids == expected_missions
+
+static func _research_content_valid(host: Node) -> bool:
+	var list: Node = host.ui.body.find_child("ResearchList", true, false)
+	if not is_instance_valid(list): return false
+	var panel: Node = list.get_parent()
+	var category: String = str(panel.get("category"))
+	var contracts: Dictionary = {"faction": ["research_defs", "research_id", "research"], "specialization": ["specialization_research_defs", "research_id", "specialization_research"], "exploration": ["exploration_research_defs", "research_id", "exploration_research"], "facility": ["base_module_defs", "base_module_id", "build_base"]}
+	if not contracts.has(category): return false
+	var rows: Array[Dictionary] = panel.get("rows")
+	if rows.is_empty(): return false
+	var ids: Array[String] = []
+	for row: Dictionary in rows:
+		var id: String = str(row.entry.id)
+		var definition: Dictionary = host.ui._one(str(contracts[category][0]), str(contracts[category][1]), id)
+		if id in ids or definition.is_empty() or str(row.entry.kind) != category or row.button.text != str(definition.display_name) or str(row.frame.get_meta("asset_id", "")) != id or row.status.text.is_empty() or row.fee.text != str(panel.call("_fee", row.entry)): return false
+		ids.append(id)
+	var expected: Array[String] = []
+	for entry: Dictionary in panel.get("entries"):
+		if str(entry.kind) == category and (bool(panel.get("show_completed")) or not bool(panel.call("_done", entry))): expected.append(str(entry.id))
+	var selected: String = str(panel.get("selected"))
+	var primary: Button = panel.get("primary")
+	return ids == expected and selected in ids and is_instance_valid(panel.find_child("ResearchTab_" + category, true, false)) and is_instance_valid(primary) and primary.is_visible_in_tree() and str(primary.get_meta("action", "")) == str(contracts[category][2]) and str(primary.get_meta("target", "")) == selected
+
 static func _business_show(host: Node, page: String, filter: String = "") -> void:
 	if not filter.is_empty(): host.ui.market_filter = filter
 	host.ui.show_page(page)
@@ -555,8 +631,10 @@ static func _business_list_checks(host: Node, evidence: Dictionary, output_dir: 
 			var warehouse: Control = host.ui.warehouse_panel
 			all_lists = all_lists and is_instance_valid(warehouse) and not warehouse.refs.rows_by_id.is_empty()
 			await _warehouse_fixed_checks(host, evidence, output_dir)
+		elif variant.page in ["ships", "fitting", "missions"]: all_lists = all_lists and _information_page_valid(host, str(variant.page))
+		elif variant.page == "research": all_lists = all_lists and _research_content_valid(host)
 		else: all_lists = all_lists and not _business_rows(host).is_empty()
-	_check(evidence, all_lists, "packed warehouse uses its two inventory panes while fleet, loans, fitting, industry, research, missions and all market modes retain populated business lists")
+	_check(evidence, all_lists, "packed warehouse retains two inventory panes; fleet, loan, slot and mission summaries match actual records with one detail; classified research retains actual definitions, fees and selected action; industry and market retain populated transaction rows")
 	host.ui.quantity_value = initial_quantity
 	host.ui.market_filter = initial_filter
 	await _business_show(host, "station")

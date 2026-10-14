@@ -63,6 +63,12 @@ func research_case() -> void:
 	var warehouse: String=host.gameplay.inventory.warehouse(host.gameplay.station())
 	host.gameplay.inventory.grant(warehouse,str(balance.donation_item_id),int(balance.donation_units_per_point)*4)
 	await show_interaction("research")
+	await actual_click(host.ui.body.find_child("ResearchTab_specialization",true,false) as Button,"open real specialization category")
+	await frames(5)
+	var completed: Button=host.ui.body.find_child("ResearchShowCompleted",true,false) as Button
+	if completed!=null and completed.text=="显示已完成":await actual_click(completed,"show completed specialization for donation controls")
+	await actual_click(host.ui.body.find_child("ResearchSelect_spec_range",true,false) as Button,"select actual range specialization")
+	await frames(5)
 	var spin: SpinBox=host.ui.body.find_child("SpecializationQuantity",true,false) as SpinBox
 	var donate: Button=host.ui.body.find_child("SpecializationDonate",true,false) as Button
 	if not check(spin!=null and donate!=null,"real research controls exist"):return

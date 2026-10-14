@@ -4,7 +4,7 @@ extends Node
 const Main = preload("res://runtime/main.gd")
 const T = preload("res://contracts/contract_types.gd")
 const AuditTheme = preload("res://runtime/ui_theme.gd")
-const PAGES: Array[String] = ["title", "station", "ships", "warehouse", "fitting", "market", "industry", "salvage", "missions", "research", "civilizations", "map", "pause", "settings", "hire", "frontier", "trials", "blockades", "projects", "expeditions", "reports", "consignments", "fitting_analysis", "ship_roles", "operations", "drones", "exploration", "sources"]
+const PAGES: Array[String] = ["title", "station", "ships", "warehouse", "fitting", "market", "industry", "missions", "research", "civilizations", "map", "pause", "settings", "hire", "frontier", "trials", "blockades", "projects", "expeditions", "reports", "consignments", "fitting_analysis", "ship_roles", "operations", "drones", "exploration", "sources"]
 var host: Node
 var directory: String
 var label: String
@@ -19,7 +19,7 @@ var owned_ship_id: String = ""
 var auxiliary_items: Dictionary = {}
 var paid_fixture: Array[String] = []
 var interaction_checks: int = 0
-var caption_samples: Dictionary = {"drone_recall": 0, "research": 0, "growth_grant": 0}
+var caption_samples: Dictionary = {"drone_recall": 0, "research": 0, "growth_action": 0}
 var root: Window:
 	get:return get_tree().root
 var process_frame: Signal:
@@ -77,7 +77,7 @@ func structural_assertions(ui: Node, name: String) -> void:
 			button_states = button_states and normal != hover and hover != pressed and normal != disabled
 			var role: String = str(node.get_meta("ui_role", "default"))
 			if role in ["primary", "secondary", "danger"] and not role_samples.has(role): role_samples[role] = {"style": normal, "font": node.get_theme_color("font_color").to_html(true), "page": name}
-			var category: String = "drone_recall" if str(node.name) == "DroneOrder_recall" else "growth_grant" if str(node.name).begins_with("GrowthGrant_") or node.text.contains("整备款") else "research" if node.text.contains("研究") else ""
+			var category: String = "drone_recall" if str(node.name) == "DroneOrder_recall" else "growth_action" if str(node.name).begins_with("Growth_growth_") else "research" if node.text.contains("研究") else ""
 			if not category.is_empty():
 				caption_samples[category] = int(caption_samples[category]) + 1
 				captions[category] = bool(captions.get(category, true)) and caption_fits(node)
@@ -111,7 +111,38 @@ func structural_assertions(ui: Node, name: String) -> void:
 				aligned = aligned and absf(rect.position.x - columns[column].position.x) <= 1.0 and absf(rect.size.x - columns[column].size.x) <= 1.0
 				aligned = aligned and cell.horizontal_alignment == (HORIZONTAL_ALIGNMENT_LEFT if column == 0 else HORIZONTAL_ALIGNMENT_RIGHT)
 		check(aligned, "actual fitting key-value columns align names left and numbers right " + name)
+	if ui.page == "research":
+		var quantity_label: Label = ui.body.find_child("SpecializationQuantityLabel", true, false) as Label
+		var quantity: SpinBox = ui.body.find_child("SpecializationQuantity", true, false) as SpinBox
+		if quantity_label != null and quantity_label.is_visible_in_tree() and quantity != null:
+			var font: Font = quantity_label.get_theme_font("font")
+			var font_size: int = quantity_label.get_theme_font_size("font_size")
+			var text_width: float = font.get_string_size(quantity_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+			check(quantity_label.autowrap_mode == TextServer.AUTOWRAP_OFF and quantity_label.get_line_count() == 1 and quantity_label.size.x + 1.0 >= text_width and quantity_label.size.y <= font.get_height(font_size) + 2.0, "actual specialization quantity caption stays a complete single line " + name)
+			var label_rect: Rect2 = quantity_label.get_global_rect()
+			var editor_rect: Rect2 = quantity.get_global_rect()
+			var gap: float = editor_rect.position.x - label_rect.end.x
+			check(gap >= 0.0 and gap <= 16.0 and absf(label_rect.get_center().y - editor_rect.get_center().y) <= 1.0, "actual specialization caption and editor remain a compact horizontal pair " + name)
+			check(quantity.size.y >= 30.0 and quantity.size.y <= maxf(48.0, quantity.get_combined_minimum_size().y + 1.0) and quantity.size_flags_vertical == Control.SIZE_SHRINK_CENTER, "actual specialization editor does not stretch with flow line height " + name)
 	for node: Node in descendants(ui.body):
+		if node is HFlowContainer and node.name == "InfoFacts" and node.is_visible_in_tree():
+			for child: Node in node.get_children():
+				if not child is Label or not child.is_visible_in_tree(): continue
+				var fact: Label = child as Label
+				var font: Font = fact.get_theme_font("font")
+				var text_width: float = font.get_string_size(fact.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fact.get_theme_font_size("font_size")).x
+				check(fact.size.x + 1.0 >= fact.custom_minimum_size.x, "visible information fact retains its intended readable minimum width " + name + " " + fact.text)
+				if not fact.text.contains("\n") and text_width + 2.0 <= fact.custom_minimum_size.x + 0.5:
+					check(fact.get_line_count() == 1, "short information fact stays on one actual rendered line " + name + " " + fact.text)
+		if node.has_meta("info_list"):
+			var current_rows: Array = node.get("rows")
+			var open_count: int = 0
+			var selected_matches: bool = true
+			for row: Dictionary in current_rows:
+				var current: bool = str(row.id) == str(node.get("selected_id"))
+				if row.details.visible: open_count += 1
+				selected_matches = selected_matches and row.details.visible == current and row.selector.button_pressed == current and bool(row.row.get_meta("details_open", false)) == current and row.actions is HFlowContainer
+			check(open_count == (0 if current_rows.is_empty() else 1) and selected_matches, "non-trading list exposes exactly the real selected detail and horizontal actions " + name)
 		if not node.has_meta("business_list"): continue
 		var header: HBoxContainer = node.get("header")
 		var aligned: bool = header != null
@@ -147,28 +178,49 @@ func settle_writer(message: String) -> void:
 
 func actual_click(button: Button, message: String) -> bool:
 	if not check(is_instance_valid(button) and button.is_visible_in_tree() and not button.disabled, "actual GUI target available " + message): return false
-	if host.ui.page_scroll.is_ancestor_of(button):
-		host.ui.page_scroll.ensure_control_visible(button)
-		await frames(5)
-	root.grab_focus()
-	var center: Vector2 = button.get_global_rect().get_center()
-	host.get_viewport().warp_mouse(center)
-	var motion := InputEventMouseMotion.new()
-	motion.position = center; motion.global_position = center
-	root.push_input(motion, true)
-	await frames(5)
+	var ancestor: Node = button.get_parent()
+	while ancestor != null:
+		if ancestor is ScrollContainer: ancestor.ensure_control_visible(button)
+		ancestor = ancestor.get_parent()
+	var deadline: int = Time.get_ticks_msec() + 2000
+	var stable: int = 0
+	var center := Vector2.ZERO
+	while Time.get_ticks_msec() < deadline:
+		if DisplayServer.get_name() != "headless" and not root.has_focus(): root.grab_focus()
+		center = button.get_global_transform_with_canvas() * (button.size * 0.5)
+		host.get_viewport().warp_mouse(center)
+		var motion := InputEventMouseMotion.new()
+		motion.position = center; motion.global_position = center
+		root.push_input(motion, true)
+		await frames(1)
+		var hover: Control = root.gui_get_hovered_control()
+		var clip: Array = clip_info(button, Rect2(Vector2.ZERO, host.ui.root.size)).visible_rect
+		var visible_area := Rect2(Vector2(clip[0], clip[1]), Vector2(clip[2], clip[3]))
+		var complete: bool = visible_area.grow(1.0).encloses(button.get_global_rect())
+		var native_pointer: bool = DisplayServer.get_name() == "headless" or root.has_focus() and button.get_global_rect().has_point(button.get_global_mouse_position())
+		stable = stable + 1 if complete and native_pointer and hover != null and (hover == button or button.is_ancestor_of(hover)) else 0
+		if stable >= 2: break
+	if not check(stable >= 2, "stable actual pointer reaches complete control " + message): return false
+	center = button.get_global_transform_with_canvas() * (button.size * 0.5)
 	var observed: Dictionary = {"pressed": 0}
 	button.pressed.connect(func(): observed.pressed += 1, CONNECT_ONE_SHOT)
 	for down: bool in [true, false]:
 		var event := InputEventMouseButton.new()
 		event.position = center; event.global_position = center; event.button_index = MOUSE_BUTTON_LEFT; event.pressed = down
+		event.button_mask = MOUSE_BUTTON_MASK_LEFT if down else 0
 		root.push_input(event, true)
-		await frames(2)
+	await frames(4)
 	interaction_checks += 1
 	return check(int(observed.pressed) == 1, "real viewport GUI dispatch emits one press " + message)
 
 func probe_states(button: Button, message: String) -> void:
 	if not check(button != null and not button.disabled, "state probe uses actionable semantic button " + message): return
+	var original_page: String = host.ui.page
+	var original_state: RefCounted = host.state
+	var requests: Dictionary = {"count": 0}
+	var request_observer: Callable = func(_action: String, _target: String, _quantity: int, _extra: String): requests.count += 1
+	host.ui.requested.connect(request_observer)
+	Input.flush_buffered_events()
 	button.grab_focus()
 	root.grab_focus()
 	var center: Vector2 = button.get_global_rect().get_center()
@@ -181,22 +233,56 @@ func probe_states(button: Button, message: String) -> void:
 	check(hovered != null and (hovered == button or button.is_ancestor_of(hovered)) and button.has_focus(), "native semantic hover and focus reach actual control " + message)
 	var normal: StyleBox = button.get_theme_stylebox("normal")
 	var emitted: Dictionary = {"pressed": 0}
-	button.pressed.connect(func(): emitted.pressed += 1, CONNECT_ONE_SHOT)
-	var event := InputEventMouseButton.new()
-	event.position = center; event.global_position = center; event.button_index = MOUSE_BUTTON_LEFT; event.pressed = true
-	root.push_input(event, true)
+	var pressed_observer: Callable = func(): emitted.pressed += 1
+	button.pressed.connect(pressed_observer)
+	pointer_trace("probe-before-down " + message)
+	var down := InputEventMouseButton.new()
+	down.position = center; down.global_position = center; down.button_index = MOUSE_BUTTON_LEFT; down.pressed = true
+	down.button_mask = MOUSE_BUTTON_MASK_LEFT; down.window_id = root.get_window_id()
+	root.push_input(down, true)
+	Input.flush_buffered_events()
 	await frames(2)
 	check(button.get_draw_mode() in [BaseButton.DRAW_PRESSED, BaseButton.DRAW_HOVER_PRESSED], "actual held pointer enters pressed draw state " + message)
 	# Disable while held, then release. Dangerous/new-world actions never fire.
 	button.disabled = true
-	event.pressed = false
-	root.push_input(event, true)
-	await frames(2)
+	# Never mutate the down event already handed to input dispatch. Drain native
+	# events with the source still disabled and the pointer outside every button.
+	var release := InputEventMouseButton.new()
+	release.position = center; release.global_position = center; release.button_index = MOUSE_BUTTON_LEFT; release.pressed = false
+	release.button_mask = 0; release.window_id = root.get_window_id()
+	root.push_input(release, true)
+	Input.flush_buffered_events()
+	var safe_point: Vector2 = Vector2(4, 4)
+	host.get_viewport().warp_mouse(safe_point)
+	var away := InputEventMouseMotion.new()
+	away.position = safe_point; away.global_position = safe_point; away.button_mask = 0; away.window_id = root.get_window_id()
+	root.push_input(away, true)
+	var started: int = Time.get_ticks_msec()
+	var stable: int = 0
+	while Time.get_ticks_msec() - started < 1500:
+		Input.flush_buffered_events()
+		await frames(1)
+		var hover: Control = root.gui_get_hovered_control()
+		var outside: bool = hover == null or (hover != button and not button.is_ancestor_of(hover))
+		var released: bool = not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not button.is_pressed() and button.get_draw_mode() == BaseButton.DRAW_DISABLED
+		stable = stable + 1 if outside and released else 0
+		if stable >= 3 and Time.get_ticks_msec() - started >= 120: break
+	check(stable >= 3 and Time.get_ticks_msec() - started >= 120, "disabled probe drains release and leaves its pointer safely within finite deadline " + message)
+	pointer_trace("probe-disabled-after-release " + message)
 	check(button.get_draw_mode() == BaseButton.DRAW_DISABLED and style_data(normal) != style_data(button.get_theme_stylebox("disabled")) and button.get_theme_color("font_disabled_color") != button.get_theme_color("font_color"), "actual disabled draw state changes plate and foreground " + message)
-	check(int(emitted.pressed) == 0, "state probe suppresses business action on release " + message)
 	button.disabled = false
 	root.gui_release_focus()
+	Input.flush_buffered_events(); await frames(3)
+	check(int(emitted.pressed) == 0 and int(requests.count) == 0 and host.ui.page == original_page and host.state == original_state and not button.is_pressed(), "state probe suppresses every press and business action through release and restoration " + message)
+	pointer_trace("probe-restored " + message)
+	if button.pressed.is_connected(pressed_observer): button.pressed.disconnect(pressed_observer)
+	if host.ui.requested.is_connected(request_observer): host.ui.requested.disconnect(request_observer)
 	interaction_checks += 1
+
+func pointer_trace(stage: String) -> void:
+	var focus: Control = root.gui_get_focus_owner()
+	var hover: Control = root.gui_get_hovered_control()
+	print("UI_QUALITY_INPUT_BOUNDARY " + JSON.stringify({"stage": stage, "page": host.ui.page, "busy": host.busy, "left": Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT), "middle": Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE), "right": Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT), "focus": str(focus.get_path()) if is_instance_valid(focus) else "", "hover": str(hover.get_path()) if is_instance_valid(hover) else "", "mouse": [root.get_mouse_position().x, root.get_mouse_position().y], "native_focus": root.has_focus()}))
 
 func horizontal_scroll_interaction(suffix: String) -> void:
 	var list: Node = host.ui.body.find_child("BusinessList", true, false)
@@ -430,6 +516,10 @@ func fixture() -> void:
 		var assignment: RefCounted = host.gameplay.crew.assignment(profile)
 		check(assignment != null and assignment.ship_instance_id == owned_ship_id, "actual crew assignment exposes populated management controls")
 	paid_fixture.append("actual paid pilot hire and assignment")
+	if label == "after" and not owned_ship_id.is_empty():
+		await host._command("switch_ship", owned_ship_id, 1, "")
+		await settle_writer("controlled drone-capable hull for station page inventory")
+		check(host.state.ship().ship_instance_id == owned_ship_id, "station UI inventory is exercised on an actual supported controlled hull")
 
 func variants(suffix: String) -> void:
 	for section: String in ["owned", "crew"]:
@@ -473,6 +563,58 @@ func variants(suffix: String) -> void:
 		host.ui.page_scroll.scroll_vertical = int(host.ui.page_scroll.get_v_scroll_bar().max_value)
 		await inspect(page + "-bottom-" + suffix, page)
 	if label == "after": await after_variants(suffix)
+	if label == "after": await information_variants(suffix)
+
+func information_variants(suffix: String) -> void:
+	pointer_trace("alias-before-dispatch " + suffix)
+	host.ui.show_page("salvage")
+	pointer_trace("alias-immediate " + suffix)
+	for index: int in range(6):
+		await frames(1)
+		pointer_trace("alias-settle-%d " % index + suffix)
+	check(host.ui.page == "warehouse" and host.ui.warehouse_panel != null, "legacy salvage route resolves to the real warehouse service")
+	await inspect("warehouse-salvage-alias-" + suffix, "warehouse")
+	pointer_trace("alias-inspected " + suffix)
+	host.ui.show_page("research"); await frames(6)
+	for kind: String in ["faction", "specialization", "exploration", "facility"]:
+		var tab: Button = host.ui.body.find_child("ResearchTab_" + kind, true, false)
+		if tab == null: continue
+		await actual_click(tab, "research category " + kind)
+		await frames(5)
+		var show_done: Button = host.ui.body.find_child("ResearchShowCompleted", true, false)
+		if show_done != null and show_done.text == "显示已完成": await actual_click(show_done, "show researched history " + kind)
+		var selectors: Array[Node] = host.ui.body.find_children("ResearchSelect_*", "Button", true, false)
+		if not selectors.is_empty(): await actual_click(selectors[-1] as Button, "select actual research detail " + str(selectors[-1].name))
+		check(host.ui.body.find_children("ResearchDetail", "VBoxContainer", true, false).size() == 1, "technology category constructs a single selected detail " + kind)
+		await inspect("research-category-" + kind + "-" + suffix, "research")
+	for kind: String in ["manufacture", "jobs", "demands", "recycle"]:
+		host.ui.show_page("industry"); await frames(5)
+		var tab: Button = host.ui.body.find_child("IndustryTab_" + kind, true, false)
+		if tab == null: continue
+		await actual_click(tab, "industry category " + kind)
+		await frames(5)
+		check(host.ui.industry_tab == kind, "industry category is actually selected " + kind)
+		await inspect("industry-category-" + kind + "-" + suffix, "industry")
+	for kind: String in ["progress", "contribution", "command", "campaign"]:
+		host.ui.show_page("civilizations"); await frames(5)
+		var tab: Button = host.ui.body.find_child("CivilizationSection_" + kind, true, false)
+		if not check(tab != null, "civilization category exists " + kind): continue
+		await actual_click(tab, "civilization category " + kind)
+		await frames(5)
+		check(str(host.ui.get_meta("civilization_section", "progress")) == kind, "civilization selected category follows actual input " + kind)
+		await inspect("civilizations-category-" + kind + "-" + suffix, "civilizations")
+	for page: String in ["fitting", "missions", "ships", "ship_roles"]:
+		host.ui.show_page(page); await frames(6)
+		for node: Node in descendants(host.ui.body):
+			if not node.has_meta("info_list"): continue
+			var current_rows: Array = node.get("rows")
+			if current_rows.size() < 2: continue
+			var chosen: String = str(current_rows[-1].id)
+			await actual_click(current_rows[-1].selector, "non-trading row " + page + " " + chosen)
+			check(str(node.get("selected_id")) == chosen and current_rows[-1].details.visible and not current_rows[0].details.visible, "new selection closes old detail " + page)
+			await actual_click(current_rows[-1].selector, "reactivate current detail " + page)
+			check(current_rows[-1].details.visible and current_rows[-1].selector.button_pressed, "current item stays explicitly selected on repeated activation " + page)
+		await inspect(page + "-selected-detail-" + suffix, page)
 
 func after_variants(suffix: String) -> void:
 	for group: Dictionary in [{"page": "projects", "table": "construction_project_defs", "key": "project_id", "prefix": "ProjectSelect_", "selection": "project_selected_id"}, {"page": "exploration", "table": "exploration_event_defs", "key": "event_id", "prefix": "ExploreSelect_", "selection": "exploration_selected"}, {"page": "trials", "table": "trial_defs", "key": "trial_id", "prefix": "ScenarioSelect_", "selection": "trial_selected_id"}, {"page": "blockades", "table": "blockade_defs", "key": "blockade_id", "prefix": "ScenarioSelect_", "selection": "blockade_selected_id"}]:
@@ -562,6 +704,13 @@ func _run() -> void:
 			if label == "after" and page == "market" and size == Vector2i(1024, 648): await horizontal_scroll_interaction(suffix)
 			if label == "after" and page == "research": await research_top(suffix)
 		if size == Vector2i(1440, 900): await variants(suffix)
+	# Keep native pixels and logical canvas distinct at the supported 200% edge.
+	root.size = Vector2i(1280, 720)
+	root.content_scale_size = Vector2i(640, 360)
+	await frames(8)
+	for page: String in PAGES: await show_and_inspect(page, "1280x720-200pct")
+	root.size = Vector2i(1440, 900); root.content_scale_size = root.size
+	await frames(6)
 	# Actual undock transaction supplies the flight HUD without invented state.
 	host.ui.menu_open = false
 	host.ui.show_page("station")
@@ -569,12 +718,16 @@ func _run() -> void:
 		await host._command("switch_ship", owned_ship_id, 1, "")
 		await settle_writer("switch to paid auxiliary-capable hull")
 		check(host.state.ship().ship_instance_id == owned_ship_id, "real switch_ship selects the paid cruiser")
-		for pair: Array in [["module_aux_repair_i", "work:0"], ["module_aux_recon_i", "work:1"]]:
+		for item: RefCounted in host.state.rows("item_instance_state"):
+			if item.item_def_id == "module_drone_swarm_i" and item.container_id == host.gameplay.inventory.warehouse(host.gameplay.station()):
+				auxiliary_items["module_drone_swarm_i"] = item.item_instance_id
+				break
+		for pair: Array in [["module_aux_repair_i", "work:0"], ["module_aux_recon_i", "work:1"], ["module_drone_swarm_i", "weapon:0"]]:
 			if not check(auxiliary_items.has(pair[0]), "declared auxiliary module exists " + str(pair[0])): continue
 			await host._command("fit_module", str(auxiliary_items[pair[0]]), 1, pair[1])
 			await settle_writer("legal auxiliary fit " + str(pair[0]))
 			check(host.state.find("equipment_state", "item_instance_id", str(auxiliary_items[pair[0]])) != null, "real fit_module equips catalog auxiliary " + str(pair[0]))
-		paid_fixture.append("actual switch_ship and legal repair/recon fitting")
+		paid_fixture.append("actual switch_ship and legal repair/recon/attack fitting")
 	await host._command("undock", "", 1, "")
 	deadline = Time.get_ticks_msec() + 10000
 	while host.busy and Time.get_ticks_msec() < deadline: await process_frame
@@ -587,6 +740,8 @@ func _run() -> void:
 			root.size = size
 			root.content_scale_size = size
 			await show_and_inspect("", "%dx%d" % [size.x, size.y])
+		root.size = Vector2i(1280, 720); root.content_scale_size = Vector2i(640, 360)
+		await show_and_inspect("", "1280x720-200pct")
 		if label == "after":
 			root.size = Vector2i(1440, 900)
 			root.content_scale_size = root.size

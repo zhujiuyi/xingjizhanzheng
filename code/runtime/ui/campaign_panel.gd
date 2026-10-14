@@ -9,11 +9,14 @@ var context: Dictionary
 var signature: String=""
 var elapsed: float=0.0
 var live_labels: Array[Dictionary]=[]
+var report_history_open: bool=false
+var report_statistics_open: bool=false
+var report_history_rows: Array[Control]=[]
 func setup(ui: Node,page: String) -> void:
 	u=ui;mode=page;context={"state":u.state,"session":u.state.session_id,"epoch":u.state.epoch,"generation":u.business_generation}
 	add_theme_constant_override("separation",UISkin.GAP);_build()
 func _current() -> bool:
-	return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(u) and u.page==mode and u.state==context.state and u.state.session_id==context.session and u.state.epoch==context.epoch and u.business_generation==context.generation and u.body.is_ancestor_of(self)
+	return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(u) and not u.loading_suspended and u.page==mode and u.state==context.state and u.state.session_id==context.session and u.state.epoch==context.epoch and u.business_generation==context.generation and u.body.is_ancestor_of(self)
 func _signature() -> String:
 	if mode=="projects":
 		var text: String=u.project_selected_id
@@ -34,8 +37,13 @@ func _build() -> void:
 	else:_reports()
 	signature=_signature();_update();u.finish_local_rebuild(self,view)
 func _request(parent: Node,title: String,action: String,target: String,extra: String,quantity: int=1) -> Button:
+	var owner_ref: WeakRef=weakref(parent)
 	var button: Button=u._button(parent,title,func():
-		if _current():u.requested.emit(action,target,quantity,extra))
+		if not _current():return
+		var action_parent: Control=owner_ref.get_ref() as Control
+		if not is_instance_valid(action_parent) or not action_parent.is_inside_tree() or action_parent.is_queued_for_deletion() or not action_parent.is_visible_in_tree():return
+		u.requested.emit(action,target,quantity,extra))
+	button.set_meta("action",action);button.set_meta("target",target)
 	return button
 func _nav(parent: Node,kind: String,id: String,token: String) -> void:
 	_request(parent,"星图定位","campaign_map",kind+":"+id,token)
@@ -100,10 +108,16 @@ func _expeditions() -> void:
 	var label: Label=u._text_to(self,"",14);label.name="ExpeditionFocus";label.add_theme_color_override("font_color",UISkin.MUTED);live_labels.append({"label":label,"kind":"focus"})
 	var run: RefCounted=service.active()
 	if run==null:
-		for def: Dictionary in u.catalog.rows("expedition_route_defs"):
-			u._text_to(self,def.display_name+" · 准备费 %d" % int(def.start_fee_credit),19)
-			u._text_to(self,"受领站："+u._station_name(def.origin_station_id)+" · "+def.description,13).add_theme_color_override("font_color",UISkin.MUTED)
-			var options: HFlowContainer=HFlowContainer.new();add_child(options)
+		var routes: Array=u.catalog.rows("expedition_route_defs")
+		if routes.is_empty():u._text_to(self,"当前没有可规划的远征航线。",14);return
+		var preferred: String=str(focus.get("route_id",routes[0].route_id))
+		var list: VBoxContainer=u._information_list(self,"选择远征路线","expedition-routes",preferred)
+		list.name="ExpeditionRoutes"
+		u._text_to(self,"协调重点提供本轮额外收益；其他路线仍可按原资格选择。",13).add_theme_color_override("font_color",UISkin.MUTED)
+		for def: Dictionary in routes:
+			var entry: Dictionary=list.call("append_row",str(def.route_id),null,str(def.display_name),"受领站："+u._station_name(def.origin_station_id)+" · "+str(def.description),"","","","准备费 %d 信用点" % int(def.start_fee_credit),"本轮重点" if str(def.route_id)==preferred else "可选路线")
+			entry.row.set_meta("expedition_route_id",str(def.route_id));entry.image.hide()
+			var options: HFlowContainer=entry.actions
 			_request(options,"定位准备站","campaign_map","station:"+str(def.origin_station_id),"")
 			for choice: Dictionary in service.options(def.route_id,1):
 				var button: Button=_request(options,"出航 · "+u.gameplay.exploration.definition(choice.event_id).display_name,"expedition_action",def.route_id,"start|"+str(choice.option_id)+"|"+service.token(def.route_id))
@@ -122,23 +136,58 @@ func _expeditions() -> void:
 	UISkin.apply_button(end,"danger");Interaction.action_state(end,service.reason(run.run_id,"withdraw"),"结束本轮远征；已结算段落保留，未结算目标停止继续。")
 	if run.phase=="checkpoint":
 		u._text_to(self,"已结算段落保留。选择下一段，或在此结束本轮。",14)
+		var next_options:=HFlowContainer.new();next_options.name="ExpeditionNextOptions";add_child(next_options)
 		for choice: Dictionary in service.options(run.route_id,run.stage_index+1):
-			var button: Button=_request(self,"继续 · "+u.gameplay.exploration.definition(choice.event_id).display_name,"expedition_action",run.run_id,"continue|"+str(choice.option_id)+"|"+token)
+			var button: Button=_request(next_options,"继续 · "+u.gameplay.exploration.definition(choice.event_id).display_name,"expedition_action",run.run_id,"continue|"+str(choice.option_id)+"|"+token)
+			button.name="ExpeditionContinue_"+str(choice.option_id)
 			button.disabled=not service.reason(run.run_id,"continue",choice.option_id).is_empty();button.tooltip_text=service.reason(run.run_id,"continue",choice.option_id)
 func _reports() -> void:
 	var service: RefCounted=u.gameplay.telemetry
+	report_history_rows.clear()
 	var total_label: Label=u._text_to(self,"",17);total_label.add_theme_color_override("font_color",UISkin.ICE);live_labels.append({"kind":"total","label":total_label})
 	var actions: HFlowContainer=HFlowContainer.new();add_child(actions)
 	_request(actions,"导出CSV","export_flight_report","csv","").name="ReportExportCSV"
 	_request(actions,"导出JSON","export_flight_report","json","").name="ReportExportJSON"
 	u._text_to(self,"导出仅包含本地游戏指标；不含角色名称、凭据、输入内容或系统路径。飞行中升级的部分记录会明确标注。",13).add_theme_color_override("font_color",UISkin.MUTED)
 	if u.gameplay.journal.supported():
-		u._text_to(self,"活动与物资",17)
-		var measured: Label=u._text_to(self,"",14);measured.name="ReportMeasurements";measured.add_theme_color_override("font_color",UISkin.MUTED);live_labels.append({"kind":"measurements","label":measured})
-		var recent: Label=u._text_to(self,"",14);recent.name="ReportRecentActivities";recent.add_theme_color_override("font_color",UISkin.MUTED);live_labels.append({"kind":"activities","label":recent})
-	for report: Dictionary in service.export_rows():
-		u._text_to(self,"#%d · %s · %s%s" % [report.sequence,report.hull,{"active":"出航中","docked":"已返港","lost":"损毁"}[report.status]," · 部分基线" if report.partial_baseline else ""],17)
-		var label: Label=u._text_to(self,"",13);label.add_theme_color_override("font_color",UISkin.MUTED);live_labels.append({"kind":"report","sequence":report.sequence,"label":label})
+		var statistics:=VBoxContainer.new();statistics.name="ReportStatistics";statistics.visible=report_statistics_open
+		var toggle: Button=u._button(actions,"活动与物资统计",func():
+			if _current():
+				report_statistics_open=not report_statistics_open;statistics.visible=report_statistics_open
+				var live: Button=actions.get_node_or_null("ReportStatisticsToggle") as Button
+				if is_instance_valid(live):live.text="收起活动与物资统计" if report_statistics_open else "活动与物资统计"
+				u._link_page_focus.call_deferred())
+		toggle.name="ReportStatisticsToggle";add_child(statistics)
+		toggle.text="收起活动与物资统计" if report_statistics_open else "活动与物资统计"
+		var measured: Label=u._text_to(statistics,"",14);measured.name="ReportMeasurements";measured.add_theme_color_override("font_color",UISkin.MUTED);live_labels.append({"kind":"measurements","label":measured})
+		var recent: Label=u._text_to(statistics,"",14);recent.name="ReportRecentActivities";recent.add_theme_color_override("font_color",UISkin.MUTED);live_labels.append({"kind":"activities","label":recent})
+	var reports: Array[Dictionary]=service.export_rows()
+	if reports.is_empty():u._text_to(self,"尚无航行战报。正常出港后开始记录，导出入口仍可查看累计数据。",14);return
+	var latest_id: String=str(reports[0].sequence)
+	var list: VBoxContainer=u._information_list(self,"最近航行","flight-reports",latest_id)
+	list.name="ReportList"
+	for report: Dictionary in reports:
+		var status: String=str({"active":"出航中","docked":"已返港","lost":"损毁"}[report.status])+(" · 部分基线" if report.partial_baseline else "")
+		var entry: Dictionary=list.call("append_row",str(report.sequence),null,"#%d · %s" % [report.sequence,report.hull],"","","","","",status)
+		entry.row.set_meta("report_sequence",int(report.sequence));entry.image.hide()
+		var label: Label=u._text_to(entry.details,"",13);label.name="ReportDetails_"+str(report.sequence);label.add_theme_color_override("font_color",UISkin.MUTED)
+		live_labels.append({"kind":"report","sequence":report.sequence,"label":label})
+		if str(report.sequence)!=latest_id:
+			report_history_rows.append(entry.row);entry.row.visible=report_history_open
+	if not report_history_open:list.call("select_row",latest_id)
+	list.connect("selection_changed",func(_id: String):
+		if _current():_update())
+	if not report_history_rows.is_empty():
+		var history: Button=u._button(actions,("收起" if report_history_open else "查看")+"历史航行 · "+str(report_history_rows.size()),func():
+			if not _current():return
+			report_history_open=not report_history_open
+			var live: Button=actions.get_node_or_null("ReportHistoryToggle") as Button
+			if is_instance_valid(live):live.text=("收起" if report_history_open else "查看")+"历史航行 · "+str(report_history_rows.size())
+			for row: Control in report_history_rows:
+				if is_instance_valid(row):row.visible=report_history_open
+			if not report_history_open:list.call("select_row",latest_id)
+			u._link_page_focus.call_deferred())
+		history.name="ReportHistoryToggle"
 func _update() -> void:
 	for entry: Dictionary in live_labels:
 		if not is_instance_valid(entry.label):continue

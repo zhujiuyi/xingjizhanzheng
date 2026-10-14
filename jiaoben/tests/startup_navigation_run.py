@@ -75,7 +75,7 @@ def run(args):
     if args.executable:
         spec = importlib.util.spec_from_file_location("startup_build_metadata", ROOT / "jiaoben/build_client.py")
         module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-        version = module.inspect_windows_binary_version(binary, "0.33.0.0" if args.legacy_v61 else "0.33.1.0")
+        version = module.inspect_windows_binary_version(binary, "0.33.0.0" if args.legacy_v61 else "0.34.0.0")
         if version.get("result") != "PASS":
             raise RuntimeError("Native Windows version metadata could not be verified")
         pck = binary.with_suffix(".pck")

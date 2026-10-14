@@ -39,7 +39,7 @@ static func current(ui: Variant, token: Dictionary, witness: Variant = null) -> 
 	if typeof(witness)!=TYPE_NIL:
 		if not is_instance_valid(witness) or not witness is Control:return false
 		var control: Control=witness as Control
-		if control.is_queued_for_deletion() or not control.is_inside_tree():return false
+		if control.is_queued_for_deletion() or not control.is_visible_in_tree():return false
 		var surface: Control=owner.station_layer if owner.page=="station" else owner.panel
 		if not is_instance_valid(surface) or (surface!=control and not surface.is_ancestor_of(control)):return false
 	if owner.state == null: return true

@@ -2,7 +2,7 @@
 
 Run from the repository root: py jiaoben/tests/ui_quality_audit_run.py --label before
 Use --label after --strict-layout for the corrected critical viewport boundaries.
-Source uses a thin launcher; release 0.33.1.0 uses only its fixed diagnostic flag.
+Source uses a thin launcher; release 0.34.0.0 uses only its fixed diagnostic flag.
 Neither route opens a personal save database.
 """
 from pathlib import Path
@@ -34,9 +34,9 @@ def ui_source_snapshot():
 def inspect_release_binary(executable):
     sys.path.insert(0, str(ROOT / "jiaoben"))
     from build_client import inspect_windows_binary_version
-    result = inspect_windows_binary_version(executable, "0.33.1.0")
+    result = inspect_windows_binary_version(executable, "0.34.0.0")
     if result.get("result") != "PASS":
-        raise RuntimeError("Release diagnostics require verified Windows file/product version 0.33.1.0")
+        raise RuntimeError("Release diagnostics require verified Windows file/product version 0.34.0.0")
     return result
 
 
@@ -131,10 +131,11 @@ def run(args):
     assert result_path.exists() and record["summary"]["result"] == "PASS" and record["summary"]["failures"] == 0
     assert not re.search(r"^FAIL(?:\s|$)", text, re.M), "Nested assertion failed"
     expected_pages = set(record["summary"]["pages"])
-    assert len(expected_pages) == 29, "Update explicit page inventory when XJUI changes"
-    for size in ((1440, 900), (1024, 648), (1920, 1080)):
+    assert len(expected_pages) == 28, "Update explicit page inventory when XJUI changes"
+    for size in ((1440, 900), (1024, 648), (1920, 1080), (1280, 720)):
         observed = {entry["page"] for entry in full["observations"] if tuple(entry["native_size"]) == size}
         assert expected_pages.issubset(observed), f"Missing pages at {size}: {expected_pages - observed}"
+    assert all(tuple(entry["logical_size"]) == (640, 360) for entry in full["observations"] if tuple(entry["native_size"]) == (1280, 720)), "200% cases must use their actual 640x360 logical canvas"
     assert len(captures) == (0 if args.headless else record["observations_count"])
     print(f"UI_QUALITY_AUDIT_ACCEPTANCE PASS pages={len(expected_pages)} captures={len(captures)} findings={len(record['findings'])} {report}", flush=True)
 
@@ -143,7 +144,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--label", choices=("before", "after"), required=True)
     parser.add_argument("--engine", type=Path, default=Path("D:/DevTools/Godot/4.7.2/Godot_v4.7.2-stable_win64.exe"))
-    parser.add_argument("--executable", type=Path, help="Actual Windows 0.33.1.0 client; fixed v61 diagnostic only")
+    parser.add_argument("--executable", type=Path, help="Actual Windows 0.34.0.0 client; fixed v61 diagnostic only")
     parser.add_argument("--headless", action="store_true", help="Structure only; no screenshot acceptance")
     parser.add_argument("--strict-layout", action="store_true", help="Fail critical frame viewport overflow")
     args = parser.parse_args()

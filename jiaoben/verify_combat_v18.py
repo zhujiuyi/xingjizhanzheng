@@ -520,7 +520,7 @@ def run_suite():
             assert {item["label"] for item in windows} == {
                 f"{width}x{height}-{scale}" for width, height in ((1280, 720), (1440, 900), (3440, 1370)) for scale in (100, 200)
             }
-            assert len(windows) == 6 and len([item for item in summary["observations"] if item["kind"] == "row"]) == 72
+            assert len(windows) == 6 and len([item for item in summary["observations"] if item["kind"] == "row"]) == 66
         print(f"PASS {mode} {name}: {len(captures)} screenshots; {record['seconds']} s", flush=True)
     print(f"V18_ACCEPTANCE PASS {report_path}", flush=True)
 

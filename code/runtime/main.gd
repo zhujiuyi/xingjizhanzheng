@@ -60,6 +60,7 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-ui-information-v63","file":"ui_information_v63.gd","prefix":"ui-information-v63","env":"XJ_UI_INFORMATION_V63","meta":"xj_ui_information_v63_diagnostic"},
 		{"flag":"--xj-verify-loading-failure-v62","file":"loading_failure_v62.gd","prefix":"loading-failure-v62","env":"XJ_LOADING_FAILURE_V62","meta":"xj_loading_failure_v62_diagnostic"},
 		{"flag":"--xj-verify-startup-navigation-v62","file":"startup_navigation_v62.gd","prefix":"startup-navigation-v62","env":"XJ_STARTUP_NAVIGATION_V62","meta":"xj_startup_navigation_v62_diagnostic"},
 		{"flag":"--xj-verify-ui-consistency-v61","file":"ui_interaction_consistency.gd","prefix":"ui-interaction","env":"XJ_UI_CONSISTENCY_V61","meta":"xj_ui_consistency_v61_diagnostic"},
@@ -1268,6 +1269,8 @@ func _growth_open(stage_id: String,selection: String) -> void:
 	if stage.is_empty() or selected.is_empty():return
 	if stage.faction_id!=null:ui.civilization_selected_faction=str(stage.faction_id)
 	var page: String=gameplay.growth.service_page(stage_id,int(selection))
+	if page == "civilizations":
+		ui.set_meta("civilization_section", "command" if selected.activity_kind in ["honor", "honor_register"] else "campaign" if selected.activity_kind == "war" else "progress")
 	ui.show_page(page)
 	if page=="civilizations":
 		var focus_name: String="CommanderRegister" if selected.activity_kind=="honor_register" else "CommanderCertify" if selected.activity_kind=="honor" else "CivilizationJoin" if stage.criterion_kind=="membership" else "CivilizationWar_"+str(stage.reference_id) if selected.activity_kind=="war" else ""

@@ -64,7 +64,9 @@ func frames(count: int = 3) -> void:
 	for frame: int in range(count): await process_frame
 
 func wait_writer() -> void:
-	var deadline: int = Time.get_ticks_msec() + 6000
+	# Continue may verify/upgrade a frozen archive on Main's serial worker.
+	# Rendering responsiveness has its own v62 test; completion remains bounded.
+	var deadline: int = Time.get_ticks_msec() + 60000
 	while host.busy and Time.get_ticks_msec() < deadline: await process_frame
 	check(not host.busy, "real SQLite writer settles")
 
@@ -130,6 +132,19 @@ func visible_control(control: Control) -> bool:
 
 func actual_click(button: Button, label: String) -> bool:
 	if not check(button != null and not button.disabled, "legal GUI action exists " + label): return false
+	# Non-trading rows now expose actions only for the selected detail. Reach
+	# the exact row with a real pointer click before the original domain action.
+	var ancestor: Node = button.get_parent()
+	while ancestor != null and ancestor != host.ui.body:
+		if ancestor.has_meta("row_id"):
+			var details: Control = ancestor.find_child("InfoDetails",true,false) as Control
+			if details != null and details.is_ancestor_of(button) and not details.is_visible_in_tree():
+				var id: String = str(ancestor.get_meta("row_id"))
+				var selector: Button = ancestor.find_child("InfoSelect_"+id.validate_node_name(),true,false) as Button
+				if not await actual_click(selector,"selects the exact current information row "+id):return false
+				if not check(details.is_visible_in_tree(),"selected information row exposes its original qualified action "+id):return false
+			break
+		ancestor = ancestor.get_parent()
 	await reveal(button)
 	var count: Dictionary = {"value": 0}
 	var observer: Callable = func(): count["value"] = int(count["value"]) + 1
@@ -291,7 +306,7 @@ func business_rows() -> Array[Dictionary]:
 	var pending: Array[Node] = [host.ui.body]
 	while not pending.is_empty():
 		var node: Node = pending.pop_back()
-		if bool(node.get_meta("business_list", false)):
+		if bool(node.get_meta("business_list", false)) or bool(node.get_meta("info_list", false)):
 			for row: Dictionary in node.get("rows"): result.append(row)
 		for child: Node in node.get_children(): pending.append(child)
 	return result
@@ -324,6 +339,8 @@ func campaign_entry_checks() -> void:
 	host.ui.mission_location_filter = "local"
 	await show_page("research")
 	var research: Dictionary = host.store.catalog.one("research_defs", "research_id", "research_tech_ii")
+	if not await actual_click(host.ui.body.find_child("ResearchTab_faction",true,false) as Button,"research faction category before prerequisite detail"):return
+	if not await actual_click(host.ui.body.find_child("ResearchSelect_research_tech_ii",true,false) as Button,"select exact research project before prerequisite"):return
 	var prerequisite: Button = action_button("show_mission", str(research.verification_mission_id))
 	if await actual_click(prerequisite, "research mainline prerequisite"):
 		check(host.ui.page == "missions" and host.ui.mission_filter == "story" and host.ui.mission_status_filter == "all" and host.ui.mission_location_filter == "all" and host.ui.mission_focus_id == str(research.verification_mission_id), "research action opens the precise locked remote story chapter with focus despite prior status and location filters")

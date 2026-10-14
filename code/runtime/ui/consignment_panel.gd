@@ -2,6 +2,7 @@ extends VBoxContainer
 const UISkin=preload("res://runtime/ui_theme.gd")
 const Interaction=preload("res://runtime/ui/ui_interaction.gd")
 const T=preload("res://contracts/contract_types.gd")
+const Services=preload("res://runtime/ui/service_navigation.gd")
 var u: Node
 var context: Dictionary
 var entries: Dictionary={}
@@ -9,17 +10,18 @@ func setup(ui: Node) -> void:
 	u=ui;name="ConsignmentPanel"
 	context={"state":u.state,"epoch":u.state.epoch,"session":u.state.session_id,"ship":u.state.ship().ship_instance_id,"generation":u.business_generation}
 	add_theme_constant_override("separation",UISkin.SECTION_GAP)
-	u._text_to(self,"按实际舱容选批数；送达退押金并结算奖励。增推时受击可能损失货物。",13).add_theme_color_override("font_color",UISkin.MUTED)
+	var focused: RefCounted=u.gameplay.consignments.focused()
+	var list: VBoxContainer=u._information_list(self,"承运航线","consignments",str(focused.contract_id) if focused!=null else "")
 	for spec: Dictionary in u.gameplay.rows("consignment_defs"):
-		var frame: PanelContainer=PanelContainer.new();frame.add_theme_stylebox_override("panel",UISkin.panel_style());add_child(frame)
-		var card: VBoxContainer=VBoxContainer.new();card.add_theme_constant_override("separation",UISkin.GAP);frame.add_child(card)
-		u._text_to(card,str(spec.display_name),18)
+		var entry: Dictionary=list.append_row(str(spec.contract_id),Services.icon("warehouse"),str(spec.display_name),"","","","","","")
+		var card: VBoxContainer=entry.details
+		u._text_to(card,"按实际舱容选批数；送达退押金并结算奖励。增推时受击可能损失货物。",13).add_theme_color_override("font_color",UISkin.MUTED)
 		u._text_to(card,"%s → %s" % [u._station_name(spec.origin_station_id),u._station_name(spec.destination_station_id)],13)
 		u._text_to(card,"限时%.0f分 · 整备%.0f分 · 货损押金不退" % [float(spec.deadline_s)/60.0,float(spec.cooldown_s)/60.0],12).add_theme_color_override("font_color",UISkin.MUTED)
 		var status: Label=u._text_to(card,"",14);status.name="FreightStatus_"+str(spec.contract_id)
 		var quote: Label=u._text_to(card,"",12);quote.name="FreightQuote_"+str(spec.contract_id)
 		quote.add_theme_color_override("font_color",UISkin.MUTED)
-		var actions: HFlowContainer=HFlowContainer.new();actions.add_theme_constant_override("h_separation",UISkin.GAP);card.add_child(actions)
+		var actions: HFlowContainer=entry.actions;card.move_child(actions,card.get_child_count()-1)
 		var quantity: SpinBox=SpinBox.new();quantity.name="FreightQuantity_"+str(spec.contract_id)
 		quantity.min_value=1;quantity.max_value=spec.max_units;quantity.step=1;quantity.value=maxi(1,u.gameplay.consignments.available(spec.contract_id));actions.add_child(quantity)
 		var buttons: Dictionary={}
@@ -28,18 +30,20 @@ func setup(ui: Node) -> void:
 			button.name="Freight_"+action+"_"+str(spec.contract_id);buttons[action]=button
 			if action=="withdraw":UISkin.apply_button(button,"danger")
 		var route: Button=u._button(actions,"前往站点",func():
-			if _current():u.requested.emit("consignment_navigate",str(spec.contract_id),1,str(u.gameplay.consignments.instance(spec.contract_id).generation)))
+			if _row_current(str(spec.contract_id)):u.requested.emit("consignment_navigate",str(spec.contract_id),1,str(u.gameplay.consignments.instance(spec.contract_id).generation)))
 		route.name="FreightRoute_"+str(spec.contract_id)
 		var locate: Button=u._button(actions,"星图定位",func():
-			if _current():u.requested.emit("consignment_map",str(spec.contract_id),1,str(u.gameplay.consignments.instance(spec.contract_id).generation)))
+			if _row_current(str(spec.contract_id)):u.requested.emit("consignment_map",str(spec.contract_id),1,str(u.gameplay.consignments.instance(spec.contract_id).generation)))
 		locate.name="FreightMap_"+str(spec.contract_id)
-		entries[spec.contract_id]={"status":status,"quote":quote,"quantity":quantity,"buttons":buttons,"route":route}
+		entries[spec.contract_id]={"status":status,"quote":quote,"quantity":quantity,"buttons":buttons,"route":route,"summary":entry.status,"details":card}
 		Interaction.watch_integer(quantity,refresh)
 	refresh()
 func _current() -> bool:
-	return is_inside_tree() and is_instance_valid(u) and u.page=="consignments" and u.state==context.state and u.state.epoch==context.epoch and u.state.session_id==context.session and u.state.ship().ship_instance_id==context.ship and u.business_generation==context.generation
+	return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(u) and not u.loading_suspended and u.page=="consignments" and u.state==context.state and u.state.epoch==context.epoch and u.state.session_id==context.session and u.state.ship().ship_instance_id==context.ship and u.business_generation==context.generation
+func _row_current(id: String) -> bool:
+	return _current() and entries.has(id) and is_instance_valid(entries[id].details) and entries[id].details.is_visible_in_tree()
 func _act(id: String,action: String) -> void:
-	if not _current():return
+	if not _row_current(id):return
 	var row: RefCounted=u.gameplay.consignments.instance(id)
 	var amount: int=Interaction.integer_input(entries[id].quantity) if action=="dispatch" else 1
 	if amount<=0:refresh();u.notify("请输入范围内的整数批数。",true);return
@@ -55,6 +59,9 @@ func refresh() -> void:
 		if row.phase=="active":view.status.text+=" · 剩余%.0f秒" % row.remaining_s
 		elif row.phase=="claimed":view.status.text+=" · %.0f秒" % row.cooldown_remaining_s
 		view.status.add_theme_color_override("font_color",UISkin.AMBER if row.exposure_remaining_s>0.0 else UISkin.ICE)
+		view.summary.text={"idle":"可承运","active":"运输中","ready":"待结算","claimed":"整备中"}[row.phase]+(" · %d批" % row.cargo_units if row.phase=="active" else "")
+		view.summary.tooltip_text=view.status.text
+		view.summary.add_theme_color_override("font_color",UISkin.AMBER if row.exposure_remaining_s>0.0 else UISkin.MUTED)
 		view.quantity.visible=row.phase=="idle"
 		var amount: int=Interaction.integer_input(view.quantity) if row.phase=="idle" else 1
 		if row.phase=="idle":view.quote.text="本舰可载%d批 · 每批%.0fm³ / %.0f吨 · 押金%d + 手续费%d · 奖励%d" % [u.gameplay.consignments.available(id),float(d.unit_volume_l)/1000.0,float(d.unit_mass_kg)/1000.0,amount*int(d.deposit_per_unit),d.fee_credit,amount*int(d.reward_per_unit)]

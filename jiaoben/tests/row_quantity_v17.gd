@@ -40,16 +40,29 @@ func check(value: bool, label: String) -> bool:
 func frames(count: int = 3) -> void:
 	for index: int in range(count): await get_tree().process_frame
 
-func wait_writer() -> void:
-	var deadline: int = Time.get_ticks_msec() + 5000
-	while host.busy and Time.get_ticks_msec() < deadline: await get_tree().process_frame
-	check(not host.busy, "real SQLite writer settles")
+func wait_writer(action: String = "GUI transaction") -> bool:
+	if not check(is_instance_valid(host), "waiting transaction retains its actual Main " + action): return false
+	var started: int = Time.get_ticks_msec()
+	var loading: bool = action in ["new_world", "load", "continue"] or host.loading_job != null or (host.ui != null and host.ui.loading_suspended)
+	var limit_ms: int = 60000 if loading else 10000
+	var deadline: int = started + limit_ms
+	# Main owns the worker handshake in its process_frame coroutine. Do not
+	# force process_mode out of its production loading freeze or poll Store
+	# while its serial worker owns it. Yield actual scene frames until activation.
+	while is_instance_valid(host) and (host.busy or host.loading_job != null or (host.ui != null and host.ui.loading_suspended) or host.process_mode == Node.PROCESS_MODE_DISABLED) and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	var complete: bool = is_instance_valid(host) and not host.busy and host.loading_job == null and host.ui != null and not host.ui.loading_suspended and host.process_mode != Node.PROCESS_MODE_DISABLED
+	if is_instance_valid(host):
+		print("ROW_QUANTITY_V17_WAIT " + JSON.stringify({"action": action, "elapsed_ms": Time.get_ticks_msec() - started, "limit_ms": limit_ms, "busy": host.busy, "loading_job": host.loading_job != null, "loading_suspended": host.ui.loading_suspended if host.ui != null else true, "state_active": host.state != null, "process_mode": host.process_mode, "complete": complete}))
+	return check(complete, "real SQLite writer and loading activation settle within finite deadline " + action)
 
 func start_host() -> bool:
 	host = Main.new(); host.progress_database_path = database_path
 	root.add_child(host); host.set_process(false); host.set_physics_process(false)
-	await frames(4)
-	if not check(host.services_ready, "Main opens production catalog and fresh scoped SQLite"): return false
+	var ready_deadline: int = Time.get_ticks_msec() + 30000
+	while is_instance_valid(host) and not host.services_ready and Time.get_ticks_msec() < ready_deadline: await process_frame
+	await frames(2)
+	if not check(is_instance_valid(host) and host.services_ready, "Main opens production catalog and fresh scoped SQLite"): return false
 	host.ui.requested.connect(func(action: String, target: String, quantity: int, extra: String): requested_events.append({"action": action, "target": target, "quantity": quantity, "extra": extra}))
 	if DisplayServer.get_name() != "headless":
 		root.grab_focus()
@@ -62,12 +75,24 @@ func release_host() -> void:
 	if is_instance_valid(host): host.queue_free()
 	host = null; await frames(3); await get_tree().create_timer(0.25).timeout
 
-func command(action: String, target: String = "", quantity: int = 1, extra: String = "") -> void:
-	host._command(action, target, quantity, extra); await frames(4); await wait_writer()
+func command(action: String, target: String = "", quantity: int = 1, extra: String = "") -> bool:
+	# Start without an unbounded await on the command coroutine, then observe
+	# its actual loading/commit endpoint while preserving the hard test deadline.
+	host._command(action, target, quantity, extra); await frames(2)
+	return await wait_writer(action)
 
 func show_page(page: String = "market", filter: String = "") -> void:
 	if not filter.is_empty(): host.ui.market_filter = filter
 	host.ui.show_page(page); await frames(4); host.ui.tick(1.0); await frames(3)
+	if page == "industry": await select_industry_tab("manufacture")
+
+func select_industry_tab(tab: String) -> void:
+	var button: Button = host.ui.body.find_child("IndustryTab_" + tab, true, false) as Button
+	if not check(button != null, "real industry category button exists " + tab): return
+	if host.ui.industry_tab != tab:
+		if not await actual_click(button, ""): return
+		await frames(4); host.ui.tick(1.0); await frames(3)
+	check(host.ui.industry_tab == tab, "real category selection exposes intended industry controls " + tab)
 
 func quote_for(id: String) -> Dictionary:
 	for quote: Dictionary in host.ui.quotes:
@@ -157,14 +182,16 @@ func actual_click(button: Button, expected_action: String, expected_target: Stri
 		event.button_index = MOUSE_BUTTON_LEFT; event.pressed = pressed
 		event.position = button.get_global_rect().get_center(); event.global_position = event.position
 		host.get_viewport().push_input(event, true)
-	await frames(4); await wait_writer()
+	await frames(4)
+	var settled: bool = await wait_writer(expected_action if not expected_action.is_empty() else "industry category")
 	if is_instance_valid(button) and button.pressed.is_connected(observer): button.pressed.disconnect(observer)
-	var matched: bool = requested_events.size() == before_events + 1
-	if matched:
+	if not settled: return false
+	var matched: bool = requested_events.size() == before_events + (0 if expected_action.is_empty() else 1)
+	if matched and not expected_action.is_empty():
 		var request: Dictionary = requested_events[-1]
 		matched = str(request.action) == expected_action and (expected_target.is_empty() or str(request.target) == expected_target)
-	var passed: bool = check(int(emitted["count"]) == 1 and matched, "one actual GUI click emits one production command " + expected_action)
-	if passed: gui_transactions += 1
+	var passed: bool = check(int(emitted["count"]) == 1 and matched, "one actual GUI category click changes only presentation" if expected_action.is_empty() else "one actual GUI click emits one production command " + expected_action)
+	if passed and not expected_action.is_empty(): gui_transactions += 1
 	return passed
 
 func amount_for(id: String) -> SpinBox:
@@ -193,7 +220,7 @@ func execute(id: String, quantity: int, action: String, dirty: bool = false) -> 
 	return check(requested_events.size() == before + 1 and int(requested_events[-1].quantity) == quantity, "GUI transaction sends exact per-row amount " + id)
 
 func prepare() -> bool:
-	await command("new_world", "行内数量和紧凑仓储独立验收")
+	if not await command("new_world", "行内数量和紧凑仓储独立验收"): return false
 	if not check(host.state != null and host.state.player().has_docked_station_id, "fresh world starts legally at its formal station"): return false
 	station_id = host.state.player().docked_station_id
 	var inventory: RefCounted = host.gameplay.get("inventory")
@@ -307,7 +334,9 @@ func manufacture_check(id: String, batches: int, hull: bool = false, dirty: bool
 		check((host.state.rows("ship_state").size() if hull else count(str(definition.output_item_id))) == before_output, "queued manufacturing does not create premature output " + id)
 		service.tick(job.duration_s)
 		host.ui.refresh_page(); await frames(4)
+		await select_industry_tab("jobs")
 		if not await actual_click(host.ui.body.find_child("IndustryClaim_" + job.job_id, true, false), "claim_industry", job.job_id): return
+		await select_industry_tab("manufacture")
 	for material: String in inputs: check(count(material) == int(before_inputs[material]) - int(inputs[material]) * batches, "actual manufacturing consumes precise batch input " + id + " " + material)
 	check(host.state.player().credit == credit - cost, "manufacturing pays exact independently rounded batch fee " + id)
 	if hull:
@@ -328,6 +357,7 @@ func industry_checks() -> void:
 	var manufactured: String
 	for item_row: D.ItemInstanceStateDto in host.state.rows("item_instance_state"):
 		if item_row.container_id == warehouse and item_row.origin_kind == T.ItemOrigin.MANUFACTURE and item_row.item_def_id == "module_kinetic_needle_i": manufactured = item_row.item_instance_id; break
+	await select_industry_tab("recycle")
 	var recycle: Dictionary = quote_for(manufactured)
 	if not check(not recycle.is_empty() and recycle.get("amount") == null and str(recycle.quantity_label.text) == "1", "recycling retains fixed one real instance"): return
 	var before_returns: Dictionary = {}; var expected_returns: Dictionary = {}
@@ -543,12 +573,14 @@ func lifecycle_checks() -> void:
 	if not check(sealed.size() == 1, "row-quantity checkpoint is actually sealed in SQLite"): return
 	var slot: Dictionary = sealed[0]; var expected: Dictionary = totals(); var world: String = host.state.world_id
 	stale = quote_for("ore_ferrosilicate")
-	await command("load", str(slot.slot_id), int(slot.generation), str(slot.current_snapshot_id)); await show_page("market", "buy")
+	if not await command("load", str(slot.slot_id), int(slot.generation), str(slot.current_snapshot_id)): return
+	await show_page("market", "buy")
 	await stale_check(stale, "same-world snapshot load")
 	check(totals() == expected and int(amount_for("ore_ferrosilicate").value) == 1, "load preserves exact authoritative assets and discards prior presentation quantity")
 	await release_host()
 	if not await start_host(): return
-	await command("load", str(slot.slot_id), int(slot.generation), str(slot.current_snapshot_id)); await show_page("market", "buy")
+	if not await command("load", str(slot.slot_id), int(slot.generation), str(slot.current_snapshot_id)): return
+	await show_page("market", "buy")
 	restarts += 1
 	check(host.state.world_id == world and totals() == expected, "independent Main SQLite restart restores exact GUI-derived money, inventory and production")
 	stale = quote_for("ore_ferrosilicate")

@@ -7,8 +7,12 @@ const Codec = preload("res://runtime/data/codec.gd")
 const State = preload("res://runtime/state.gd")
 const Types = preload("res://contracts/contract_types.gd")
 const UISkin = preload("res://runtime/ui_theme.gd")
+const DroneAvailability = preload("res://runtime/ui/drone_availability.gd")
+## The signed historical registry remains intact; the live UI filters it by context.
 const IDS: Array[String] = ["station", "ships", "warehouse", "fitting", "market", "industry", "salvage", "missions", "civilizations", "research", "map", "pause"]
 const LABELS: Array[String] = ["空间站", "舰队与借船", "仓库与货舱", "舰船配装", "站点市场", "工业与回收", "打捞鉴定", "任务与合同", "文明与声望", "科技与设施", "星域航路", "暂停与存读档"]
+const DOCKED_IDS: Array[String] = ["station", "ships", "warehouse", "fitting", "market", "industry", "missions", "civilizations", "research", "map", "pause"]
+const FLIGHT_IDS: Array[String] = ["ships", "fitting", "missions", "civilizations", "map", "pause"]
 const SIZES: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1440, 900), Vector2i(3440, 1370)]
 var host: Main
 var directory: String = ""
@@ -152,19 +156,40 @@ func sequence(buttons: Array[Button]) -> Array[String]:
 	for button: Button in buttons: ids.append(str(button.get_meta("service_page_id", "")))
 	return ids
 
+func menu_ids(docked: bool) -> Array[String]:
+	var expected: Array[String] = []
+	if docked: expected.append_array(DOCKED_IDS)
+	else:
+		expected.append_array(FLIGHT_IDS)
+		if not host.gameplay.fitting_analysis.supported(): expected.erase("fitting")
+		if DroneAvailability.capable(host.gameplay) and not DroneAvailability.equipped(host.gameplay).is_empty(): expected.append("drones")
+	var actual: Array[String] = []
+	for record: Dictionary in host.ui._service_pages(docked): actual.append(str(record.id))
+	check(actual == expected, "live service menu matches the independent docked or flight contract")
+	observations.append({"kind": "context-menu", "docked": docked, "expected": expected, "actual": actual})
+	return actual
+
+func menu_label(id: String) -> String:
+	if id == "drones": return "无人机整备" if host.state.player().has_docked_station_id else "无人机控制"
+	if id == "fitting" and not host.state.player().has_docked_station_id: return "配装分析"
+	var index: int = IDS.find(id)
+	return LABELS[index] if index >= 0 else ""
+
+func menu_icon(id: String) -> Texture2D:
+	return Navigation.icon("fitting" if id == "drones" else id)
+
 func identity(buttons: Array[Button], expected: Array[String], label: String) -> void:
 	check(sequence(buttons) == expected, "one canonical page order " + label)
 	var valid: bool = true
 	for button: Button in buttons:
 		var id: String = str(button.get_meta("service_page_id", ""))
-		var index: int = IDS.find(id)
-		valid = valid and index >= 0 and button.text == LABELS[index] and button.icon == Navigation.icon(id) and button.icon != null
+		valid = valid and expected.has(id) and button.text == menu_label(id) and button.icon == menu_icon(id) and button.icon != null
 	check(valid, "canonical labels and matching functional icons " + label)
 
 func panel_identity(id: String, expected: Array[String]) -> void:
 	var heading: Label = host.ui.panel.find_child("PageHeading", true, false)
 	var icon: TextureRect = host.ui.panel.find_child("PageHeadingIcon", true, false)
-	check(heading != null and heading.text == LABELS[IDS.find(id)] and icon != null and icon.texture == Navigation.icon(id), "actual page heading matches menu " + id)
+	check(heading != null and heading.text == menu_label(id) and icon != null and icon.texture == menu_icon(id), "actual page heading matches menu " + id)
 	identity(rows(host.ui.sidebar, "sidebar"), expected, "sidebar/" + id)
 	var selector: OptionButton = host.ui.panel.find_child("PageSelector", true, false)
 	var valid: bool = selector != null and selector.item_count == expected.size()
@@ -173,8 +198,14 @@ func panel_identity(id: String, expected: Array[String]) -> void:
 		for index: int in range(selector.item_count):
 			var key_id: String = str(selector.get_item_metadata(index))
 			options.append(key_id)
-			valid = valid and IDS.has(key_id) and selector.get_item_text(index) == LABELS[IDS.find(key_id)] and selector.get_item_icon(index) == Navigation.icon(key_id)
-		valid = valid and options == expected and str(selector.get_item_metadata(selector.selected)) == id
+			valid = valid and expected.has(key_id) and selector.get_item_text(index) == menu_label(key_id) and selector.get_item_icon(index) == menu_icon(key_id)
+		valid = valid and options == expected
+		if expected.has(id):
+			valid = valid and selector.selected >= 0 and selector.selected < selector.item_count
+			if selector.selected >= 0 and selector.selected < selector.item_count:
+				valid = valid and str(selector.get_item_metadata(selector.selected)) == id
+		else:
+			valid = valid and selector.selected == -1 and selector.text == menu_label(id) and not options.has(id)
 	check(valid, "actual dropdown label icon order selection agrees " + id)
 
 func geometry(button: Button, label: String, kind: String = "row") -> void:
@@ -239,7 +270,7 @@ func tab_rows(label: String) -> void:
 		accessible = accessible and focused == entries[index] and complete(entries[index])
 		if focused != null: visited.append(str(focused.get_meta("service_page_id", "")))
 		if index < entries.size() - 1: await key(KEY_TAB)
-	check(accessible and visited == IDS, "real Tab reaches and reveals every compact row " + label)
+	check(accessible and visited == menu_ids(true), "real Tab reaches and reveals every compact row " + label)
 	var before: String = authority()
 	var count: int = events.size()
 	for control_name: String in ["HangarOverview", "StationRepair"]:
@@ -268,7 +299,8 @@ func layout_matrix() -> void:
 			host.ui.tick(1.0)
 			await frames(4)
 			var label: String = "%dx%d-%d" % [size.x, size.y, int(scale * 100)]
-			identity(rows(host.ui.station_services, "hangar"), IDS, "hangar/" + label)
+			var expected: Array[String] = menu_ids(true)
+			identity(rows(host.ui.station_services, "hangar"), expected, "hangar/" + label)
 			var heading: Label = host.ui.station_services.find_child("StationNavigationHeading", true, false)
 			check(heading != null and heading.text == "服务导航" and host.ui.station_services.find_child("PageHeading", true, false) == null and host.ui.station_services.find_child("PageHeadingIcon", true, false) == null, "landing has one navigation heading instead of duplicate station title and icon " + label)
 			var station_captions: int = 0
@@ -293,7 +325,7 @@ func layout_matrix() -> void:
 			await capture("hangar-" + label)
 			await click(row(host.ui.station_services, "hangar", "pause"), "last scrollable row " + label)
 			check(host.ui.page == "pause", "last row reaches actual system page " + label)
-			panel_identity("pause", IDS)
+			panel_identity("pause", expected)
 
 func dropdown_navigation() -> void:
 	root.size = Vector2i(1280, 720)
@@ -305,7 +337,10 @@ func dropdown_navigation() -> void:
 	if not await click(selector, "open compact page dropdown"): return
 	var popup: PopupMenu = selector.get_popup()
 	if not check(popup.visible, "real click opens native dropdown popup"): return
-	var index: int = IDS.find("warehouse")
+	var index: int = -1
+	for item: int in range(selector.item_count):
+		if str(selector.get_item_metadata(item)) == "warehouse": index = item; break
+	if not check(index >= 0, "current compact dropdown contains the warehouse service"): await key(KEY_ESCAPE, popup); return
 	var trace: Array[Dictionary] = []
 	trace.append({"step": -1, "focused_index": popup.get_focused_item(), "popup_focus": popup.has_focus(), "root_focus": root.has_focus(), "visible": popup.visible})
 	for step: int in range(popup.item_count + 1):
@@ -320,7 +355,7 @@ func dropdown_navigation() -> void:
 	await key(KEY_ENTER, popup)
 	await frames(4)
 	check(host.ui.page == "warehouse", "actual dropdown keyboard selection reaches production page")
-	panel_identity("warehouse", IDS)
+	panel_identity("warehouse", menu_ids(true))
 
 func only_industry_active() -> bool:
 	var active: Array[String] = []
@@ -360,7 +395,7 @@ func industry_focus_regression() -> void:
 	var before: String = authority()
 	var count: int = events.size()
 	var reached: bool = false
-	for step: int in range(IDS.size() + 8):
+	for step: int in range(menu_ids(true).size() + 8):
 		await key(KEY_TAB, null, true)
 		if root.gui_get_focus_owner() == station: reached = true; break
 	check(reached and complete(station), "real reverse Tab reaches fully visible station while industry stays open")
@@ -390,12 +425,13 @@ func navigation_and_observation() -> void:
 	await show("station")
 	await frames(5)
 	var before: String = authority()
-	for id: String in IDS:
+	var expected: Array[String] = menu_ids(true)
+	for id: String in expected:
 		await show("station")
 		await frames(3)
 		await click(row(host.ui.station_services, "hangar", id), "hangar destination " + id)
 		check(host.ui.page == id, "real hangar row reaches declared page " + id)
-		if id != "station": panel_identity(id, IDS)
+		if id != "station": panel_identity(id, expected)
 		if id == "industry": await industry_focus_regression()
 		if id in ["missions", "market"]: await capture("service-" + id)
 	await show("missions")
@@ -403,6 +439,9 @@ func navigation_and_observation() -> void:
 	await click(row(host.ui.sidebar, "sidebar", "industry"), "sidebar industry")
 	check(host.ui.page == "industry", "real sidebar reaches matching industry page")
 	await dropdown_navigation()
+	await show("salvage")
+	check(host.ui.page == "warehouse" and row(host.ui.sidebar, "sidebar", "salvage") == null, "legacy salvage route reaches the real warehouse without a redundant menu entry")
+	panel_identity("warehouse", expected)
 	check(authority() == before and events.is_empty(), "page navigation leaves all typed state SQL endpoints and preferences unchanged")
 	root.size = Vector2i(1440, 900)
 	root.content_scale_factor = 1.0
@@ -430,14 +469,17 @@ func guarded_departure() -> void:
 	check(repairs == 1 and rows(host.ui.station_departure, "hangar").is_empty(), "repair stays singular and departure stays separate from page navigation")
 	await click(host.ui.station_departure.find_child("UndockButton", true, false), "authoritative separate undock", 1)
 	check(host.state.ship().status == Types.ShipStatus.FLYING and not host.state.player().has_docked_station_id and host.ui.page.is_empty() and not host.ui.station_layer.visible and not host.hangar.visible and host.world.visible and host.presentation_stage == "flight", "real undock reaches flight and hides landing controls")
-	var expected: Array[String] = IDS.duplicate()
-	expected.erase("station")
+	var expected: Array[String] = menu_ids(false)
 	var before: String = authority()
 	var count: int = events.size()
 	await show("missions")
 	await frames(4)
 	panel_identity("missions", expected)
-	await click(row(host.ui.sidebar, "sidebar", "market"), "flight guarded market access")
+	for id: String in ["station", "warehouse", "market", "industry", "research", "salvage"]:
+		check(row(host.ui.sidebar, "sidebar", id) == null, "flight navigation omits unavailable station service " + id)
+	check(not DroneAvailability.capable(host.gameplay) and DroneAvailability.equipped(host.gameplay).is_empty() and row(host.ui.sidebar, "sidebar", "drones") == null and not host.ui.toolbar_buttons.drones.is_visible_in_tree(), "fresh unsupported un-equipped hull has no drone control navigation or HUD shortcut")
+	# Removed menu rows are tested through their still-guarded legacy route.
+	await show("market")
 	check(host.ui.page == "market" and not host.ui.station_layer.visible, "flight service row respects hidden hangar state")
 	panel_identity("market", expected)
 	var reason: bool = false
@@ -448,6 +490,14 @@ func guarded_departure() -> void:
 	check(reason and business_actions == 0, "guarded service exposes docking reason and no actionable business shortcuts")
 	check(authority() == before and events.size() == count, "guarded menu access cannot mutate flight state permissions or SQL save endpoints")
 	await capture("flight-market-docking-guard")
+	await show("missions")
+	if await click(row(host.ui.sidebar, "sidebar", "fitting"), "real flight fitting navigation"):
+		check(host.ui.page == "fitting_analysis" and host.ui.body.find_children("BusinessQuantity_*", "SpinBox", true, false).is_empty(), "flight fitting navigation reaches analysis without installation or transaction editors")
+		panel_identity("fitting", expected)
+		check(host.ui.body.find_child("FittingCalculate", true, false) != null, "actual read-only fitting analysis controls remain accessible in flight")
+	await show("drones")
+	check(host.ui.page.is_empty() and not host.ui.panel.visible, "direct unsupported drone route also returns to actual flight")
+	check(authority() == before and events.size() == count, "flight analysis and denied drone navigation preserve every world and SQLite authority field")
 
 func _run() -> void:
 	started_ms = Time.get_ticks_msec()
