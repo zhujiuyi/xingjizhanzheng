@@ -3423,17 +3423,30 @@ func _parent_page() -> String:
 ## The label of the single return control, short form where the header cannot
 ## spare the width. Returns the destination name so the control says where it goes
 ## instead of the generic "back".
-func _close_label(short: bool = false, tooltip: bool = false) -> String:
+## Where the single return control goes. One function serves both the label and the
+## action. They used to be derived separately and drifted: the settings page was
+## labelled a bare "返回" while actually returning to the page it was opened from,
+## and every other page mixed page names with scene names without saying which.
+func _back_destination() -> String:
+	if state == null: return "title"
+	if page == "settings" and not return_page.is_empty(): return return_page
 	var parent_page: String = _parent_page()
-	var destination: String = ""
-	if page != "settings" and not parent_page.is_empty():
-		destination = ServiceNavigation.label(parent_page, "上级页面")
-	elif state != null and state.player().has_docked_station_id:
-		destination = "空间站机库"
-	else:
-		destination = "航行视图"
+	if not parent_page.is_empty(): return parent_page
+	return "station" if state.player().has_docked_station_id else ""
+
+## The destination's name. Pages come from the shared registry; the three that are
+## scenes rather than services are named here, so the control always reads as
+## "goes to <somewhere>" instead of sometimes naming a page and sometimes a place.
+func _destination_label(destination: String) -> String:
+	if destination == "title": return "主菜单"
+	if destination == "station": return "空间站机库"
+	if destination.is_empty(): return "航行视图"
+	return ServiceNavigation.label(destination, "上级页面")
+
+func _close_label(short: bool = false, tooltip: bool = false) -> String:
 	if short: return "←"
-	return "返回 " + destination if tooltip else "← 返回" if page == "settings" else "← " + destination
+	var destination: String = _destination_label(_back_destination())
+	return ("返回 " + destination) if tooltip else ("← " + destination)
 
 func _action_bar(parent: Node, name_hint: String) -> HFlowContainer:
 	var bar := HFlowContainer.new()
@@ -3514,9 +3527,7 @@ func _secondary(button: Button) -> void:
 	UISkin.apply_button(button, "secondary")
 
 func _back() -> void:
-	var parent_page: String = _parent_page()
-	var destination: String = return_page if page == "settings" and not return_page.is_empty() else "title" if state == null else parent_page if not parent_page.is_empty() else "station" if state.player().has_docked_station_id else ""
-	show_page(destination)
+	show_page(_back_destination())
 
 func _responsive_title() -> void:
 	if page != "title" or not is_instance_valid(panel): return
