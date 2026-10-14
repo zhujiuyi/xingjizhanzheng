@@ -32,13 +32,13 @@ class Radar extends Control:
 	func _draw() -> void:
 		var center := size * Vector2(0.5, 0.47)
 		var radius := minf(size.x * 0.42, size.y * 0.39)
-		draw_circle(center, radius, Color(0.025, 0.055, 0.075, 0.76))
-		for fraction: float in [0.33, 0.66, 1.0]: draw_arc(center, radius * fraction, 0, TAU, 72, Color(0.19, 0.38, 0.44, 0.65), 1, true)
+		draw_circle(center, radius, Color(UISkin.SURFACE, 0.76))
+		for fraction: float in [0.33, 0.66, 1.0]: draw_arc(center, radius * fraction, 0, TAU, 72, Color(UISkin.BORDER, 0.65), 1, true)
 		for index: int in range(24):
 			var direction := Vector2.from_angle(float(index) * TAU / 24.0)
 			draw_line(center + direction * (radius - 3), center + direction * (radius + (4 if index % 3 == 0 else 1)), UISkin.ICE * Color(1, 1, 1, 0.7), 1, true)
-		draw_line(center - Vector2(radius, 0), center + Vector2(radius, 0), Color(0.24, 0.45, 0.5, 0.38), 1, true)
-		draw_line(center - Vector2(0, radius), center + Vector2(0, radius), Color(0.24, 0.45, 0.5, 0.38), 1, true)
+		draw_line(center - Vector2(radius, 0), center + Vector2(radius, 0), Color(UISkin.BORDER, 0.38), 1, true)
+		draw_line(center - Vector2(0, radius), center + Vector2(0, radius), Color(UISkin.BORDER, 0.38), 1, true)
 		draw_colored_polygon(PackedVector2Array([center + Vector2(0, -7), center + Vector2(-5, 6), center + Vector2(5, 6)]), UISkin.TEXT)
 		for contact: Dictionary in host.contacts:
 			var point: Vector2 = host.radar_point(contact, size)
@@ -83,11 +83,11 @@ func _ready() -> void:
 	scales.sort()
 	radar_frame = PanelContainer.new()
 	radar_frame.name = "LocalRadar"
-	radar_frame.add_theme_stylebox_override("panel", UISkin.plate())
+	radar_frame.add_theme_stylebox_override("panel", UISkin.hud_panel(UISkin.GAP))
 	add_child(radar_frame)
 	UISkin.decorate(radar_frame, 0.38)
 	var layout := VBoxContainer.new()
-	layout.add_theme_constant_override("separation", 2)
+	layout.add_theme_constant_override("separation", 4)
 	radar_frame.add_child(layout)
 	var row := HBoxContainer.new()
 	layout.add_child(row)
@@ -102,8 +102,7 @@ func _ready() -> void:
 		button.tooltip_text = "减小雷达范围" if direction < 0 else "增大雷达范围"
 		button.custom_minimum_size = Vector2(24, 24)
 		button.add_theme_font_size_override("font_size", 11)
-		button.add_theme_stylebox_override("normal", UISkin.flat(Color.TRANSPARENT, UISkin.ICE, 2))
-		button.add_theme_stylebox_override("hover", UISkin.flat(Color(0.1, 0.25, 0.3, 0.5), UISkin.ICE, 2))
+		UISkin.apply_button(button, "default", true)
 		button.focus_mode = Control.FOCUS_NONE
 		button.pressed.connect(func(): scale_index = clampi(scale_index + direction, 0, scales.size() - 1); refresh())
 		row.add_child(button)
@@ -114,7 +113,7 @@ func _ready() -> void:
 	layout.add_child(radar)
 	selection_frame = PanelContainer.new()
 	selection_frame.name = "SelectedContact"
-	selection_frame.add_theme_stylebox_override("panel", UISkin.plate())
+	selection_frame.add_theme_stylebox_override("panel", UISkin.hud_panel(UISkin.GAP))
 	selection_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(selection_frame)
 	UISkin.decorate(selection_frame, 0.28)
@@ -135,9 +134,9 @@ func _ready() -> void:
 	target_caption.add_theme_constant_override("shadow_offset_x", 0)
 	target_caption.add_theme_constant_override("shadow_offset_y", 0)
 	target_caption.add_theme_color_override("font_shadow_color", Color.TRANSPARENT)
-	var backing: StyleBoxFlat = UISkin.flat(Color(0.007, 0.02, 0.03, 0.9), Color(0.2, 0.3, 0.34, 0.45), 6)
-	backing.content_margin_top = 3
-	backing.content_margin_bottom = 3
+	var backing: StyleBoxFlat = UISkin.flat(Color(UISkin.SURFACE, 0.94), Color(UISkin.BORDER, 0.65), UISkin.GAP)
+	backing.content_margin_top = 4
+	backing.content_margin_bottom = 4
 	target_caption.add_theme_stylebox_override("normal", backing)
 	add_child(target_caption)
 	target_caption.hide()
@@ -200,21 +199,19 @@ func refresh() -> void:
 
 func responsive(viewport_size: Vector2) -> void:
 	var compact: bool = viewport_size.x < 950
-	var safe: float = 14 if compact else 22
+	var safe: float = 16 if compact else 24
 	radar_frame.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	radar_frame.offset_left = safe
 	radar_frame.offset_right = safe + (174 if compact else 236)
 	radar_frame.offset_bottom = -48 if compact else -54
 	radar_frame.offset_top = -204 if compact else -300
-	var inset: StyleBox = UISkin.plate()
-	inset.content_margin_top = 6 if compact else 12
-	inset.content_margin_bottom = 6 if compact else 12
+	var inset: StyleBox = UISkin.hud_panel(4 if compact else UISkin.GAP)
 	radar_frame.add_theme_stylebox_override("panel", inset)
 	radar.custom_minimum_size = Vector2(146, 112) if compact else Vector2(200, 186)
 	selection_frame.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	selection_frame.offset_left = -minf(190, viewport_size.x * 0.2)
 	selection_frame.offset_right = -selection_frame.offset_left
-	selection_frame.offset_top = 12 if compact else 18
+	selection_frame.offset_top = 12 if compact else 16
 	selection_frame.offset_bottom = 64 if compact else 86
 	selection_frame.visible = selection_readout_enabled and selection_frame.visible and not compact
 
@@ -229,10 +226,10 @@ func radar_point(contact: Dictionary, canvas_size: Vector2) -> Vector2:
 	return center + planar / maxf(radius_m(), 1.0) * radius
 
 func contact_color(kind: String) -> Color:
-	if kind == "ally": return Color("7fcca4")
-	if kind in ["npc","drone"]: return Color("ee816e")
+	if kind == "ally": return UISkin.ICE
+	if kind in ["npc","drone"]: return UISkin.DANGER
 	if kind == "planet": return UISkin.AMBER
-	if kind == "gate": return Color("b7c9e8")
+	if kind == "gate": return UISkin.TEXT
 	return UISkin.ICE
 
 func target_geometry() -> Dictionary:

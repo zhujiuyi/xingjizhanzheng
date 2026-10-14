@@ -2,6 +2,7 @@ extends VBoxContainer
 ## Compact asset/crew management under the existing fleet service.
 const T=preload("res://contracts/contract_types.gd")
 const Services=preload("res://runtime/ui/service_navigation.gd")
+const UISkin=preload("res://runtime/ui_theme.gd")
 var u: Node
 var section: String
 var _signature: String=""
@@ -12,20 +13,18 @@ var _state: RefCounted
 var _generation: int
 
 func setup(ui: Node,kind: String) -> void:
-	u=ui;section=kind;name="CrewPanel" if kind=="crew" else "OwnedFleetPanel";add_theme_constant_override("separation",10)
+	u=ui;section=kind;name="CrewPanel" if kind=="crew" else "OwnedFleetPanel";add_theme_constant_override("separation",UISkin.SECTION_GAP)
 	_state=u.state;_generation=u.business_generation
 	if section=="crew":_crew()
 	else:_fleet()
 	_signature=_current_signature();_update()
 
 func _flow(parent: Node) -> HFlowContainer:
-	var flow:=HFlowContainer.new();flow.add_theme_constant_override("h_separation",8);flow.add_theme_constant_override("v_separation",6);parent.add_child(flow);return flow
+	var flow:=HFlowContainer.new();flow.add_theme_constant_override("h_separation",UISkin.GAP);flow.add_theme_constant_override("v_separation",UISkin.GAP);parent.add_child(flow);return flow
 
 func _card(title: String,icon: String) -> VBoxContainer:
-	var panel:=PanelContainer.new();add_child(panel)
-	var margin:=MarginContainer.new();panel.add_child(margin)
-	for edge: String in ["left","right","top","bottom"]:margin.add_theme_constant_override("margin_"+edge,10)
-	var content:=VBoxContainer.new();content.add_theme_constant_override("separation",6);margin.add_child(content)
+	var panel:=PanelContainer.new();panel.add_theme_stylebox_override("panel",UISkin.panel_style());add_child(panel)
+	var content:=VBoxContainer.new();content.add_theme_constant_override("separation",UISkin.GAP);panel.add_child(content)
 	var heading:=HBoxContainer.new();content.add_child(heading)
 	var image:=TextureRect.new();image.texture=Services.icon(icon);image.custom_minimum_size=Vector2(24,24);image.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;image.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;heading.add_child(image)
 	u._text_to(heading,title,16).size_flags_horizontal=Control.SIZE_EXPAND_FILL
@@ -53,7 +52,7 @@ func _crew() -> void:
 	for member: RefCounted in u.state.rows("crew_member_state"):
 		var profile: Dictionary=service.profile(member.profile_id);var job: Dictionary=service.profession(member.profile_id)
 		var card: VBoxContainer=_card(str(profile.display_name)+" · "+str(job.display_name),{"pilot":"ships","gunner":"fitting","engineer":"industry","scout":"map"}.get(job.duty_kind,"ships"))
-		var label: Label=u._text_to(card,"",14);label.name="CrewReadout_"+member.profile_id;readouts.append({"id":member.profile_id,"label":label})
+		var label: Label=u._text_to(card,"",14);label.name="CrewReadout_"+member.profile_id;label.add_theme_color_override("font_color",UISkin.ICE);readouts.append({"id":member.profile_id,"label":label})
 		var flow: HFlowContainer=_flow(card)
 		if member.phase=="available":_action(flow,"招募 · %d" % int(job.hire_fee_credit),member.profile_id,"hire")
 		else:
@@ -69,13 +68,13 @@ func _fleet() -> void:
 	var service: RefCounted=u.gameplay.owned_fleet
 	u._text_to(self,"自有僚舰 %d / %d · 雇佣合同单独管理" % [service.active().size(),int(service.balance.max_owned_companions)],16)
 	u._text_to(self,"随行 %d 艘 · 总质量 %.1f 吨 · 过门按舰计费" % [u.gameplay.hired.party_fee(1),(float(u.gameplay.metrics(u.state.ship()).total_mass_kg)+u.gameplay.hired.party_mass_kg())/1000.0],14)
-	u._text_to(self,"停靠后部署；出航前指派操舰员。跃迁前集结，弹药和电容取自各舰。",13)
+	u._text_to(self,"停靠后部署；出航前指派操舰员。跃迁前集结，弹药和电容取自各舰。",13).add_theme_color_override("font_color",UISkin.MUTED)
 	var count: int=0
 	for ship: RefCounted in u.state.rows("ship_state"):
 		if ship.policy_id!="normal_owned" or ship==u.state.ship() or ship.status==T.ShipStatus.RETURNED:continue
 		count+=1
 		var card: VBoxContainer=_card(str(u.gameplay.definition("ship_defs","ship_id",ship.ship_def_id).display_name)+" · "+ship.ship_instance_id.right(6),"ships")
-		var label: Label=u._text_to(card,"",14);label.name="OwnedReadout_"+ship.ship_instance_id;readouts.append({"id":ship.ship_instance_id,"label":label})
+		var label: Label=u._text_to(card,"",14);label.name="OwnedReadout_"+ship.ship_instance_id;label.add_theme_color_override("font_color",UISkin.ICE);readouts.append({"id":ship.ship_instance_id,"label":label})
 		var flow: HFlowContainer=_flow(card);var deployment: RefCounted=service.row(ship.ship_instance_id)
 		if deployment==null or deployment.phase=="docked":_action(flow,"部署 · %d" % service.quote(ship.ship_instance_id),ship.ship_instance_id,"deploy")
 		elif deployment.phase=="deployed":

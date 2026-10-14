@@ -1,4 +1,5 @@
 extends RefCounted
+const UISkin=preload("res://runtime/ui_theme.gd")
 var u: Node
 var faction: String=""
 var title: Label
@@ -12,6 +13,7 @@ func build(ui: Node,id: String,owner: RefCounted) -> void:
 	if not u.gameplay.honors.supported():return
 	var row: RefCounted=u.gameplay.honors.instance(faction)
 	title=u._text_to(u.body,"",18);title.name="CommanderExaminationStatus"
+	title.add_theme_color_override("font_color",UISkin.ICE)
 	var actions: HFlowContainer=HFlowContainer.new();u.body.add_child(actions)
 	register_button=owner._command(actions,"登记考核","honor_action",faction,null,"register:"+str(row.phase))
 	register_button.name="CommanderRegister"
@@ -19,10 +21,12 @@ func build(ui: Node,id: String,owner: RefCounted) -> void:
 	certify_button.name="CommanderCertify"
 	var spec: Dictionary=u.gameplay.honors.definition(faction)
 	var reward: Label=u._text_to(u.body,"认证奖励 · %d信用点 / %d声望" % [spec.reward_credit,spec.reward_reputation],13)
+	reward.add_theme_color_override("font_color",UISkin.MUTED)
 	reward.tooltip_text="完成登记后的四类实际行动，回所属核心站认证一次；新战争还需达到原爵位。旧战役继续履行。"
 	for task: Dictionary in u.gameplay.honors.tasks(faction):
 		var block: VBoxContainer=VBoxContainer.new();block.add_theme_constant_override("separation",4);u.body.add_child(block)
 		var label: Label=u._text_to(block,"",14);label.name="CommanderProgress_"+str(task.task_kind)
+		label.add_theme_color_override("font_color",UISkin.ICE)
 		values[str(task.task_id)]=label
 		var controls: HFlowContainer=HFlowContainer.new();block.add_child(controls)
 		var sources: Array[Dictionary]=u.gameplay.honors.sources(task.task_id)

@@ -1,5 +1,11 @@
 # 测试与辅助文件
 
+## 全界面UI审查
+
+源码原生检查：`py jiaoben/tests/ui_quality_audit_run.py --label before` 或 `--label after --strict-layout`。工具持有共享运行锁，使用fresh UUID测试库，覆盖29页/三尺寸/声明的子视图、真实控件交互、UI源文件前后摘要与严格双日志；不接受导出EXE，不使用个人存档。信用点/解锁/有限库存为明示展示夹具，购船/招募/配装/保存/出港调用真实入口；不能将其作为自然成长或全战斗运行态验收。报告在logs、截图及控件JSON在tmp/ui-quality-audit。`--headless`仅检查结构，不能替代原生图。问题与实际证据见[68](../doc/68-全界面工业风审查与整改.md)。
+
+## 既有专项入口
+
 正常成长续段来源统一使用`prepare_natural_checkpoint.py --report <logs中的已通过报告> --case natural-research|natural-rescue`。输出只读核对后的来源凭据和路径文件。`--only natural-rescue`读取`XJ_NATURAL_RESEARCH_ORIGIN`，运行实际战斗、修复护送、交付与整备款；源库不写入。此组尚待运行，不能因脚本存在就视为通过。
 
 主线/研究正常续段：`--only natural-research`读取`XJ_NATURAL_SCOUT_ORIGIN`指定的`logs/v52-scout-origin-*.json`，只使用已通过正常探索回放的关闭副本，执行原有主线、市场和研究入口。当前运行状态与来源边界见67。

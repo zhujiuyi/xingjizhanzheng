@@ -1,5 +1,6 @@
 extends VBoxContainer
 const T = preload("res://contracts/contract_types.gd")
+const UISkin = preload("res://runtime/ui_theme.gd")
 var u: CanvasLayer
 var context_state: RefCounted
 var context_epoch: int
@@ -7,16 +8,18 @@ var summaries: Array[Dictionary] = []
 var signature: String = ""
 func setup(ui: CanvasLayer) -> void:
 	u = ui; context_state = u.state; context_epoch = u.state.epoch
+	add_theme_constant_override("separation", UISkin.SECTION_GAP)
 	u._text_to(self, "战术行动 · 拆除与封锁突破", 20)
-	u._text_to(self, "在对应签发站接取，出港后抵达起点开始。无需清场；实际到达撤离点后返回签发站交付。暂停与退出不推进计时。", 14)
+	u._text_to(self, "在对应签发站接取，出港后抵达起点开始。无需清场；实际到达撤离点后返回签发站交付。暂停与退出不推进计时。", 14).add_theme_color_override("font_color", UISkin.MUTED)
 	for spec: Dictionary in u.gameplay.rows("operation_defs"):
 		var row: RefCounted = u.gameplay.operations.instance(spec.operation_id)
 		var card: VBoxContainer = VBoxContainer.new(); add_child(card)
 		u._text_to(card, str(spec.display_name), 18)
 		var text: Label = u._text_to(card, "", 14)
+		text.add_theme_color_override("font_color", UISkin.ICE)
 		var guide: String = "实际射击拆除推进干扰装置。装置周围降低推进效率，与截击干扰取较强效果。完成部分拆除可保留对应成果，敌舰仍可存活。" if spec.operation_kind == "demolition" else "最多运送%d批物资，每批占%.0f升 / %.0f千克。按本舰真实空余装载；加速暴露%.0f秒，暴露时每累计%.0f实际伤害损失一批，允许主动抛货。" % [spec.target_units,spec.cargo_volume_l,spec.cargo_mass_kg,spec.exposure_duration_s,spec.loss_damage_hp]
-		u._text_to(card, guide, 14)
-		u._text_to(card,"签发/交付：%s · 起点/撤离范围 %.0f 米 · 时限 %.0f 秒 · 每完成一份 %d 信用点、%d 声望" % [u._station_name(spec.station_id),spec.interaction_radius_m,spec.duration_s,spec.credit_per_unit,spec.reputation_per_unit],13)
+		u._text_to(card, guide, 14).add_theme_color_override("font_color", UISkin.MUTED)
+		u._text_to(card,"签发/交付：%s · 起点/撤离范围 %.0f 米 · 时限 %.0f 秒 · 每完成一份 %d 信用点、%d 声望" % [u._station_name(spec.station_id),spec.interaction_radius_m,spec.duration_s,spec.credit_per_unit,spec.reputation_per_unit],13).add_theme_color_override("font_color", UISkin.MUTED)
 		var controls: HFlowContainer = HFlowContainer.new(); card.add_child(controls)
 		var id: String = spec.operation_id; var gen: String = str(row.generation)
 		u._button(controls,"星图定位",func():
@@ -30,6 +33,7 @@ func setup(ui: CanvasLayer) -> void:
 			var button: Button = u._button(controls,str({"accept":"接取行动","start":"抵达起点并开始","exit":"确认送达/撤离","withdraw":"撤回行动","jettison":"抛弃一批货物","claim":"交付成果"}[verb]),func():
 				if _current(): u.requested.emit("operation_action",id,1,verb+":"+gen))
 			button.name = "OperationAction_"+id+"_"+verb
+			if verb in ["withdraw", "jettison"]: UISkin.apply_button(button, "danger")
 			buttons.append({"button":button,"action":verb})
 		summaries.append({"id":id,"text":text,"buttons":buttons})
 	signature = _signature(); _update()

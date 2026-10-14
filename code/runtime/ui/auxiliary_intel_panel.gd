@@ -1,4 +1,5 @@
 extends VBoxContainer
+const UISkin=preload("res://runtime/ui_theme.gd")
 ## Observed coordinates stay frozen; a live contact is independently validated.
 var u: Node
 var original: RefCounted
@@ -10,7 +11,7 @@ var body: VBoxContainer
 var build: int=0
 var readouts: Array[Dictionary]=[]
 func setup(ui: Node) -> void:
-	u=ui;original=u.state;generation=u.business_generation;name="AuxiliaryIntelPanel";add_theme_constant_override("separation",6)
+	u=ui;original=u.state;generation=u.business_generation;name="AuxiliaryIntelPanel";add_theme_constant_override("separation",UISkin.GAP)
 	u._text_to(self,"侦察情报 · 失联后只保留上次位置",16);body=VBoxContainer.new();add_child(body);_update()
 func current() -> bool:return not is_queued_for_deletion() and is_instance_valid(u) and u.state==original and u.business_generation==generation and u.page=="drones"
 func _change_page(direction: int,built: int) -> Callable:
@@ -46,6 +47,7 @@ func _update() -> void:
 		var label: Label=u._text_to(line,"",13);label.name="IntelReadout_"+record.target_id.validate_node_name()
 		var marker: Button=u._button(line,"定位上次位置",_locate(record,built))
 		marker.name="AuxiliaryLocate_"+record.target_id.validate_node_name();readouts.append({"record":record,"label":label,"marker":marker})
+		UISkin.apply_button(marker,"secondary")
 	_refresh_readouts()
 func _refresh_readouts() -> void:
 	var service: RefCounted=u.gameplay.auxiliary_drones
@@ -54,6 +56,7 @@ func _refresh_readouts() -> void:
 		var live: bool=valid and not info.is_empty() and info.generation==record.target_generation and service.detected(record.target_id)
 		var state: String="当前探测" if live else "上次观测" if valid else "已失效"
 		readout.label.text="%s · %s · %.0f秒前%s" % [record.observed_label,state,service.age(record)," · 剩余 %d" % record.remaining_units if record.target_kind=="resource" else ""]
+		readout.label.add_theme_color_override("font_color",UISkin.ICE if live else UISkin.MUTED)
 		var position: Vector3=Vector3(record.pos_x,record.pos_y,record.pos_z)
 		readout.marker.disabled=not valid;readout.marker.tooltip_text="%s；这里记录的是观测坐标" % XJSpaceUnits.distance(position.distance_to(u.gameplay.position(u.state.ship())))
 func _process(delta: float) -> void:

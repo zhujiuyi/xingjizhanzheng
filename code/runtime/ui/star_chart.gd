@@ -209,15 +209,14 @@ class ChartDrawing extends Control:
 			var opacity: float = 0.7 if emphasized else 0.32
 			if not chart.matches_filter(origin) and not chart.matches_filter(destination) and not on_route: opacity *= 0.24
 			var status: String = str(link.get("status", "open"))
-			var color: Color = Color(UISkin.AMBER if emphasized else Color("75a6b8"), opacity)
-			if status != "open": color = Color(Color("657382"), opacity * 0.75)
+			var color: Color = Color(UISkin.AMBER if emphasized else UISkin.ICE, opacity)
+			if status != "open": color = Color(UISkin.MUTED, opacity * 0.75)
 			var width: float = 2.0 if on_route else 1.25
 			if bool(link.get("wandering", false)):
-				_dashed_line(from, to, Color(Color("8a7ca6"), 0.8 if emphasized else opacity), width, 2.0, 5.0)
+				_dashed_line(from, to, color, width, 2.0, 4.0)
 			elif status != "open":
-				_dashed_line(from, to, color, width, 6.0, 5.0)
+				_dashed_line(from, to, color, width, 8.0, 4.0)
 			else:
-				draw_line(from, to, Color(color, color.a * 0.1), width + 4.0, true)
 				draw_line(from, to, color, width, true)
 			if not bool(link.get("bidirectional", true)):
 				_draw_arrow(from.lerp(to, 0.55), (to - from).normalized(), color)
@@ -231,18 +230,13 @@ class ChartDrawing extends Control:
 			var opacity: float = 1.0 if chart.matches_filter(id) or context else 0.2
 			var color: Color = Color(chart._sovereignty_color(id), opacity)
 			var radius: float = 5.5 if world_points.size() <= 40 or zoom > fit_zoom * 1.3 else 3.6
-			draw_circle(point, radius * 3.0, Color(color, 0.07 * opacity))
-			draw_circle(point, radius * 1.8, Color(color, 0.13 * opacity))
 			draw_circle(point, radius, color)
 			if bool(chart.sectors[id].get("contested", false)):
 				var edge: float = radius + 5.0
 				draw_polyline(PackedVector2Array([point + Vector2(0, -edge), point + Vector2(edge, 0), point + Vector2(0, edge), point + Vector2(-edge, 0), point + Vector2(0, -edge)]), UISkin.AMBER, 1.5, true)
-			if chart.catalog.table_names.has("civilization_defs"):
-				draw_arc(point, radius + 2.0, 0, TAU, 24, Color(chart._risk_color(str(chart.sectors[id].risk_zone_id)), opacity), 1.0, true)
-			draw_circle(point + Vector2(-1.2, -1.2), maxf(radius * 0.32, 1.0), Color(UISkin.TEXT, opacity))
+			draw_arc(point, radius + 2.0, 0, TAU, 24, Color(chart._risk_color(str(chart.sectors[id].risk_zone_id)), opacity), 1.0, true)
 			if selected:
 				draw_arc(point, radius + 7.0, 0, TAU, 48, UISkin.AMBER, 1.8, true)
-				draw_arc(point, radius + 11.0, -0.3, 1.1, 18, Color(UISkin.AMBER, 0.55), 1.0, true)
 			if current:
 				draw_arc(point, radius + 15.0, 0, TAU, 48, UISkin.TEXT, 1.1, true)
 				draw_line(point + Vector2(0, -radius - 21), point + Vector2(0, -radius - 15), UISkin.TEXT, 1.0, true)
@@ -252,22 +246,14 @@ class ChartDrawing extends Control:
 		_draw_coordinates()
 
 	func _draw_space() -> void:
-		draw_rect(Rect2(Vector2.ZERO, size), Color("090f18"))
-		for cloud: int in range(3):
-			var center: Vector2 = Vector2(size.x * [0.22, 0.72, 0.46][cloud], size.y * [0.35, 0.58, 0.9][cloud])
-			var tint: Color = [Color("163448"), Color("232942"), Color("193333")][cloud]
-			for layer: int in range(10, 0, -1): draw_circle(center, float(layer) * 26.0, Color(tint, 0.018))
-		for index: int in range(145):
-			var x: float = fposmod(float(index * 137 + 53), maxf(size.x, 1.0))
-			var y: float = fposmod(float(index * 83 + index * index * 7 + 29), maxf(size.y, 1.0))
-			draw_circle(Vector2(x, y), 1.1 if index % 13 == 0 else 0.55, Color(Color("bed0da"), 0.4 if index % 13 == 0 else 0.19))
-		var grid: float = 90.0
+		draw_rect(Rect2(Vector2.ZERO, size), UISkin.COAL)
+		var grid: float = 96.0
 		for x: int in range(int(size.x / grid) + 1):
-			draw_line(Vector2(float(x) * grid, 0), Vector2(float(x) * grid, size.y), Color(Color("506b80"), 0.045), 1)
+			draw_line(Vector2(float(x) * grid, 0), Vector2(float(x) * grid, size.y), Color(UISkin.BORDER, 0.16), 1)
 		for y: int in range(int(size.y / grid) + 1):
-			draw_line(Vector2(0, float(y) * grid), Vector2(size.x, float(y) * grid), Color(Color("506b80"), 0.045), 1)
-		draw_rect(Rect2(Vector2.ZERO, size), Color(Color("3c5266"), 0.55), false, 1)
-		if has_focus(): draw_rect(Rect2(Vector2(2, 2), size - Vector2(4, 4)), Color(UISkin.AMBER, 0.6), false, 1)
+			draw_line(Vector2(0, float(y) * grid), Vector2(size.x, float(y) * grid), Color(UISkin.BORDER, 0.16), 1)
+		draw_rect(Rect2(Vector2.ZERO, size), UISkin.BORDER, false, 1)
+		if has_focus(): draw_rect(Rect2(Vector2(2, 2), size - Vector2(4, 4)), Color(UISkin.ICE, 0.8), false, 1)
 
 	func _draw_labels() -> void:
 		var ids: Array[String] = chart._sorted_ids()
@@ -287,8 +273,8 @@ class ChartDrawing extends Control:
 			var point: Vector2 = points[id]
 			var font_size: int = 13 if priority <= 1 else 12
 			var text_size: Vector2 = UISkin.font().get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
-			var label_size: Vector2 = text_size + Vector2(12, 6)
-			var offsets: Array[Vector2] = [Vector2(15, -label_size.y * 0.5), Vector2(-label_size.x - 15, -label_size.y * 0.5), Vector2(-label_size.x * 0.5, -label_size.y - 22), Vector2(-label_size.x * 0.5, 22)]
+			var label_size: Vector2 = text_size + Vector2(16, 8)
+			var offsets: Array[Vector2] = [Vector2(16, -label_size.y * 0.5), Vector2(-label_size.x - 16, -label_size.y * 0.5), Vector2(-label_size.x * 0.5, -label_size.y - 24), Vector2(-label_size.x * 0.5, 24)]
 			var rect: Rect2 = Rect2()
 			var found: bool = false
 			for offset: Vector2 in offsets:
@@ -316,9 +302,9 @@ class ChartDrawing extends Control:
 			hit_rects[id] = Rect2(hit_rects[id]).merge(rect)
 			label_ids.append(id)
 			var bright: bool = priority <= 1 or id == _hovered
-			draw_rect(rect, Color(Color("111d28"), 0.96 if bright else 0.78))
-			draw_rect(rect, Color(Color("4a6378"), 0.55 if bright else 0.22), false, 1)
-			draw_string(UISkin.font(), rect.position + Vector2(6, 3 + UISkin.font().get_ascent(font_size)), title, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, UISkin.AMBER if id == chart.selected_sector else UISkin.TEXT)
+			draw_rect(rect, Color(UISkin.SURFACE, 0.96 if bright else 0.78))
+			draw_rect(rect, Color(UISkin.BORDER, 0.8 if bright else 0.35), false, 1)
+			draw_string(UISkin.font(), rect.position + Vector2(8, 4 + UISkin.font().get_ascent(font_size)), title, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, UISkin.AMBER if id == chart.selected_sector else UISkin.TEXT)
 
 	func _label_priority(id: String) -> int:
 		if id == chart.selected_sector: return 0
@@ -427,9 +413,9 @@ class ChartDrawing extends Control:
 
 func _ready() -> void:
 	name = "StarChart"
-	add_theme_constant_override("separation", 9)
+	add_theme_constant_override("separation", UISkin.GAP)
 	var find_row: HBoxContainer = HBoxContainer.new()
-	find_row.add_theme_constant_override("separation", 8)
+	find_row.add_theme_constant_override("separation", UISkin.GAP)
 	add_child(find_row)
 	search_box = LineEdit.new()
 	search_box.name = "SectorSearch"
@@ -458,7 +444,7 @@ func _ready() -> void:
 	navigator.item_selected.connect(_navigator_selected)
 	find_row.add_child(navigator)
 	var view_row: HBoxContainer = HBoxContainer.new()
-	view_row.add_theme_constant_override("separation", 6)
+	view_row.add_theme_constant_override("separation", 4)
 	add_child(view_row)
 	_toolbar_button(view_row, "全图", "ChartFitAll", fit_all)
 	_toolbar_button(view_row, "当前", "ChartFocusCurrent", focus_current)
@@ -480,12 +466,13 @@ func _ready() -> void:
 	add_child(diagram)
 	var legend: Label = Label.new()
 	legend.name = "ChartLegend"
-	legend.text = "● 高安全 / 中安全 / 低安全（蓝 / 金 / 红）  ◎ 当前位置  ○ 选中\n实线：已开放航路  虚线：锁定或受限  点线：有限游离虫洞\n滚轮缩放 · 左拖平移 · 点击星系查看 · 方向键平移 · Home 全图"
+	legend.text = "外圈安全色：高青 / 中琥珀 / 低红 · 青灰节点归属见详情 · 菱形争夺\n白圈当前位置 · 琥珀圈选中 · 实线开放 / 虚线受限 / 点线游离航路\n滚轮缩放 · 左拖平移 · 点击星系查看 · 方向键平移 · Home 全图"
 	legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	legend.add_theme_font_size_override("font_size", 12)
 	legend.add_theme_color_override("font_color", UISkin.MUTED)
 	legend.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(legend)
+	move_child(legend, diagram.get_index())
 	information = Label.new()
 	information.name = "SectorIntelligence"
 	information.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -506,6 +493,8 @@ func _toolbar_button(parent: Control, title: String, identity: String, callback:
 	button.text = title
 	button.name = identity
 	button.custom_minimum_size = Vector2(36, 29)
+	button.add_theme_font_size_override("font_size", 12)
+	UISkin.apply_button(button, "default", true)
 	button.pressed.connect(callback)
 	parent.add_child(button)
 
@@ -537,8 +526,6 @@ func configure(definitions: XJCatalog, runtime: XJRuntimeState, gameplay: RefCou
 			for faction: Dictionary in catalog.rows("civilization_defs"):
 				sovereignty_filter.add_item(str(catalog.one("faction_defs", "faction_id", faction.faction_id).display_name))
 				sovereignty_filter.set_item_metadata(sovereignty_filter.item_count - 1, str(faction.faction_id))
-			var legend: Label = find_child("ChartLegend", true, false)
-			if legend != null: legend.text = "星点颜色：议会蓝 / 深铸铜 / 同盟绿 / 中立灰；外圈表示安全区。\n文明核心优先标注；主权筛选可查看文明领土和中立星系。\n实线为已开放航路，虚线为受限航路；滚轮缩放、左拖平移。"
 	var endpoints_by_connection: Dictionary = {}
 	for endpoint: Dictionary in catalog.rows("gate_endpoint_defs"):
 		var identity: String = str(endpoint.connection_id)
@@ -626,9 +613,10 @@ func _sovereignty_changed(index: int) -> void:
 	if is_instance_valid(diagram): diagram.queue_redraw()
 
 func _sovereignty_color(id: String) -> Color:
-	if not catalog.table_names.has("civilization_defs"): return _risk_color(str(sectors[id].risk_zone_id))
+	if not catalog.table_names.has("civilization_defs"): return UISkin.ICE
 	var faction: Dictionary = catalog.one("civilization_defs", "faction_id", str(sectors[id].get("owner_id", "")))
-	return Color(str(faction.color_hex)) if not faction.is_empty() else Color("929ba2")
+	# Ownership remains authoritative text; arbitrary faction colors do not widen the UI palette.
+	return UISkin.ICE if not faction.is_empty() else UISkin.MUTED
 
 func _search_changed(text: String) -> void:
 	_filter_text = text.strip_edges().to_lower()
@@ -680,7 +668,7 @@ func _navigator_selected(index: int) -> void:
 	focus_selected()
 
 func _risk_color(id: String) -> Color:
-	return {"risk_high": Color("80b9c8"), "risk_medium": UISkin.AMBER, "risk_low": Color("dc8779")}.get(id, UISkin.MUTED)
+	return {"risk_high": UISkin.ICE, "risk_medium": UISkin.AMBER, "risk_low": UISkin.DANGER}.get(id, UISkin.MUTED)
 
 func _endpoint_reason(endpoint: Dictionary) -> String:
 	if state == null: return "状态未知"
@@ -719,6 +707,10 @@ func _hover_text(id: String) -> String:
 	if not sectors.has(id): return ""
 	var title: String = str(sectors[id].title)
 	if state != null and id == state.current_sector(): title += " · 当前位置"
+	if catalog.table_names.has("civilization_defs"):
+		var owner: String = str(sectors[id].get("owner_id", ""))
+		var faction: Dictionary = catalog.one("faction_defs", "faction_id", owner)
+		title += "\n主权势力：" + str(faction.get("display_name", owner if not owner.is_empty() else "中立"))
 	return title + "\n点击查看此星系详情；仅改变选择。"
 
 func _route_contains(origin: String, destination: String) -> bool:

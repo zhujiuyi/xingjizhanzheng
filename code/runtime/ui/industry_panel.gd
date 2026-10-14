@@ -1,6 +1,7 @@
 extends VBoxContainer
 ## Live job and regional needs board. Timers update without replacing focused controls.
 const D = preload("res://contracts/contract_dtos.gd")
+const UISkin = preload("res://runtime/ui_theme.gd")
 var u: Node
 var mode: String = ""
 var rows: Array[Dictionary] = []
@@ -11,13 +12,14 @@ var view_context: Dictionary = {}
 func setup(ui: Node, panel_mode: String) -> void:
 	u = ui; mode = panel_mode
 	view_context = {"state": u.state, "world": u.state.world_id, "session": u.state.session_id, "epoch": u.state.epoch, "station": u.state.player().docked_station_id, "ship": u.state.ship().ship_instance_id, "generation": u.business_generation}
-	add_theme_constant_override("separation", 10)
+	add_theme_constant_override("separation", UISkin.SECTION_GAP)
 	_build()
 
 func _label(parent: Node, text: String, size: int = 14) -> Label:
 	var label: Label = Label.new()
 	label.text = text; label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL; label.add_theme_font_size_override("font_size", size)
+	label.add_theme_color_override("font_color", UISkin.MUTED if size <= 13 else UISkin.TEXT)
 	parent.add_child(label)
 	return label
 
@@ -44,11 +46,13 @@ func _build() -> void:
 			var output: String = u._item_name(str(u.catalog.one("recipe_defs", "recipe_id", spec.recipe_id).get("output_item_id", ""))) if spec.recipe_id != null else u._ship_name(str(u.catalog.one("hull_recipe_defs", "hull_recipe_id", spec.hull_recipe_id).get("ship_id", "")))
 			_label(card, "%s · %s × %d 批" % [u._station_name(job.station_id), output, job.batches])
 			var status: Label = _label(card, "")
+			status.add_theme_color_override("font_color", UISkin.ICE)
 			var actions: HFlowContainer = HFlowContainer.new(); card.add_child(actions)
 			var claim: Button = u._button(actions, "领取成品", func(): _request("claim_industry", job.job_id))
 			claim.name = "IndustryClaim_" + job.job_id
 			var cancel: Button = u._button(actions, "取消订单", func(): _request("cancel_industry", job.job_id))
 			cancel.name = "IndustryCancel_" + job.job_id
+			UISkin.apply_button(cancel, "danger")
 			cancel.tooltip_text = "等待开工：退还全部材料与服务费。已开工：材料按 %d%% 向下取整返还，服务费不退。" % int(u.gameplay.industry.balance.running_refund_bp / 100)
 			rows.append({"job": job, "label": status, "claim": claim, "cancel": cancel})
 	else:
@@ -59,6 +63,7 @@ func _build() -> void:
 			_label(card, str(row.display_name) + " · " + u._item_name(row.item_id))
 			_label(card, str(row.reason), 13)
 			var status: Label = _label(card, "")
+			status.add_theme_color_override("font_color", UISkin.ICE)
 			var actions: HFlowContainer = HFlowContainer.new(); card.add_child(actions)
 			var amount: SpinBox = SpinBox.new()
 			amount.min_value = 1; amount.max_value = int(row.required_units); amount.step = 1; amount.value = 1

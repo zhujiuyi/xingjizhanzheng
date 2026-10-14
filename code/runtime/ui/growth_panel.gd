@@ -1,5 +1,6 @@
 extends RefCounted
 const T=preload("res://contracts/contract_types.gd")
+const UISkin=preload("res://runtime/ui_theme.gd")
 var u: Node
 var faction: String=""
 var selected_stage: Dictionary={}
@@ -32,6 +33,9 @@ func build(ui: Node,selected_faction: String) -> void:
 	values=u._text_to(box,"",14);values.name="GrowthValues"
 	note=u._text_to(box,"",13);note.name="GrowthGap"
 	outcome=u._text_to(box,"收益 · "+str(selected_stage.outcome_label),13)
+	values.add_theme_color_override("font_color",UISkin.ICE)
+	note.add_theme_color_override("font_color",UISkin.MUTED)
+	outcome.add_theme_color_override("font_color",UISkin.MUTED)
 	paths=growth.activities(selected_stage.stage_id)
 	if not paths.is_empty():
 		choices=OptionButton.new();choices.name="GrowthActivity";choices.size_flags_horizontal=Control.SIZE_EXPAND_FILL;choices.clip_text=true

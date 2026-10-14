@@ -1,4 +1,5 @@
 extends VBoxContainer
+const UISkin = preload("res://runtime/ui_theme.gd")
 var u: Node
 var context: Dictionary
 var order_buttons: Dictionary = {}
@@ -9,7 +10,7 @@ var elapsed: float = 0.0
 var build_generation: int=0
 func setup(ui: Node) -> void:
 	u = ui; context = {"state":u.state,"epoch":u.state.epoch,"session":u.state.session_id,"generation":u.business_generation}
-	add_theme_constant_override("separation", 10); _build()
+	add_theme_constant_override("separation", UISkin.SECTION_GAP); _build()
 func _current() -> bool:
 	return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(u) and u.page == "drones" and u.state == context.state and u.state.epoch == context.epoch and u.state.session_id == context.session and u.business_generation == context.generation and u.body.is_ancestor_of(self)
 func _request(action: String,target: String,quantity: int,extra: String,built: int=0) -> Callable:
@@ -30,14 +31,14 @@ func _build() -> void:
 	cards.clear(); signature = _signature()
 	if not u.gameplay.drone_control.supported(): u._text_to(self, "当前旧规则世界沿用原无人机出击方式。", 15); return
 	if cards_root == null:
-		u._text_to(self, "攻击、维修和侦察各自出击；跟随与回收适用于全编队。", 14)
+		u._text_to(self, "攻击、维修和侦察各自出击；跟随与回收适用于全编队。", 14).add_theme_color_override("font_color", UISkin.MUTED)
 		var orders: HFlowContainer = HFlowContainer.new(); add_child(orders)
 		for kind: String in ["attack","follow","recall"]:
 			var order: String = kind
 			var button: Button = u._button(orders, {"attack":"攻击选中目标","follow":"跟随母舰","recall":"回收全部无人机"}[kind],_request("drone_command","",1,order))
 			button.name = "DroneOrder_" + kind; order_buttons[kind] = button
-		u._text_to(self, "超出通信范围自动返航；损毁或超时扣除存量。在外时保存等待回收。", 13)
-		cards_root = VBoxContainer.new(); cards_root.add_theme_constant_override("separation",10); add_child(cards_root)
+		u._text_to(self, "超出通信范围自动返航；损毁或超时扣除存量。在外时保存等待回收。", 13).add_theme_color_override("font_color", UISkin.MUTED)
+		cards_root = VBoxContainer.new(); cards_root.add_theme_constant_override("separation",UISkin.SECTION_GAP); add_child(cards_root)
 		if u.gameplay.auxiliary_drones.supported():
 			var intel: VBoxContainer=preload("res://runtime/ui/auxiliary_intel_panel.gd").new();add_child(intel);intel.setup(u)
 	for child: Node in cards_root.get_children(): cards_root.remove_child(child); child.queue_free()
@@ -46,12 +47,13 @@ func _build() -> void:
 		var hull: RefCounted=u.gameplay.auxiliary_drones.owner(row.item_instance_id)
 		var deployment: RefCounted=u.gameplay.owned_fleet.row(hull.ship_instance_id) if hull!=null else null
 		if item == null or (not u.gameplay.inventory.accessible(item.container_id) and (deployment==null or not u.gameplay.owned_fleet.connected(deployment))): continue
-		var card: VBoxContainer = VBoxContainer.new(); card.add_theme_constant_override("separation", 6); cards_root.add_child(card)
+		var card: VBoxContainer = VBoxContainer.new(); card.add_theme_constant_override("separation", UISkin.GAP); cards_root.add_child(card)
 		u._text_to(card, u._item_name(item.item_def_id), 19)
 		var label: Label = u._text_to(card, "", 14);label.name="DroneReadout_"+item.item_instance_id
+		label.add_theme_color_override("font_color", UISkin.ICE)
 		var spec: Dictionary = u.gameplay.drone_control.definition(item.item_def_id)
 		var count: int = u.gameplay.drone_control.maximum(item.item_def_id)
-		u._text_to(card,"单机结构 %.0f · 补充：结构料 %d + %d 信用点" % [float(spec.hull_hp),int(spec.material_per_unit),int(spec.credit_per_unit)],13)
+		u._text_to(card,"单机结构 %.0f · 补充：结构料 %d + %d 信用点" % [float(spec.hull_hp),int(spec.material_per_unit),int(spec.credit_per_unit)],13).add_theme_color_override("font_color", UISkin.MUTED)
 		var actions: HFlowContainer = HFlowContainer.new(); card.add_child(actions)
 		var item_id: String = item.item_instance_id
 		var revision: String = str(row.revision)
@@ -66,7 +68,9 @@ func _build() -> void:
 		if spec.has("role_kind"):
 			var definition: Dictionary=u.gameplay.definition("module_defs","module_id",item.item_def_id)
 			var capability: Label=u._text_to(card,"修复装甲 / 结构 · %.0f HP/机" % (float(spec.restore_amount)*item.quality_multiplier) if spec.role_kind=="repair" else "探测 %s · 记录 %.0f 秒" % [XJSpaceUnits.distance(float(spec.sensor_range_m)),float(spec.observation_ttl_s)],13);card.move_child(capability,actions.get_index())
+			capability.add_theme_color_override("font_color", UISkin.MUTED)
 			var budget: Label=u._text_to(card,"通信 %s · 每次电容 %.0f / 热量 %.0f%s" % [XJSpaceUnits.distance(float(definition.range_m)),float(definition.energy_eu),float(definition.heat_hu)," / 维修包 %d" % int(spec.consumable_per_sortie) if spec.role_kind=="repair" else ""],13);card.move_child(budget,actions.get_index())
+			budget.add_theme_color_override("font_color", UISkin.MUTED)
 			var targets: Array=[["侦察选中地点",str(u.target_id)]] if spec.role_kind=="recon" else [["维修选中友舰",str(u.target_id)],["维修主舰",u.state.ship().ship_instance_id]]
 			for pair: Array in targets:
 				var destination: String=pair[1];var expected: String=u.gameplay.auxiliary_drones.token(item_id)

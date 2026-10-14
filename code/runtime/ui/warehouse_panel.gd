@@ -12,7 +12,7 @@ func configure(ship_rows: Array[Dictionary], station_rows: Array[Dictionary], sh
 	name = "WarehousePanel"
 	set_meta("warehouse_panel", true)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_theme_constant_override("separation", 10)
+	add_theme_constant_override("separation", UISkin.GAP)
 	_quote = quote
 	_quantity_limit = quantity_limit
 	var ship: Dictionary = _column("ShipWarehouse", "当前舰船货舱", ship_title, "物资 / 持有数量", "所在舱室")
@@ -42,8 +42,8 @@ func _set_compact(compact: bool) -> void:
 	for column: Dictionary in refs.get("columns", []):
 		var frame: PanelContainer = column.column
 		frame.custom_minimum_size.x = 180 if compact else 220
-		(frame.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(4 if compact else 7)
-		column.content_layout.add_theme_constant_override("separation", 2 if compact else 5)
+		(frame.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(4 if compact else UISkin.GAP)
+		column.content_layout.add_theme_constant_override("separation", 4 if compact else UISkin.GAP)
 		column.heading.add_theme_font_size_override("font_size", 14 if compact else 17)
 		column.subheading.add_theme_font_size_override("font_size", 10 if compact else 11)
 		column.subheading.max_lines_visible = 1 if compact else 2
@@ -101,10 +101,10 @@ func _column(node_name: String, title: String, subtitle: String, inventory_headi
 	frame.custom_minimum_size.x = 220
 	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frame.size_flags_stretch_ratio = 1.0
-	frame.add_theme_stylebox_override("panel", UISkin.flat(Color(0.025, 0.034, 0.042, 0.97), Color(0.27, 0.31, 0.33), 7))
+	frame.add_theme_stylebox_override("panel", UISkin.panel_style(UISkin.GAP))
 	add_child(frame)
 	var column: VBoxContainer = VBoxContainer.new()
-	column.add_theme_constant_override("separation", 5)
+	column.add_theme_constant_override("separation", UISkin.GAP)
 	frame.add_child(column)
 	var heading: Label = _label(column, title, 17, UISkin.AMBER)
 	var subheading: Label = _label(column, subtitle, 11, UISkin.MUTED)
@@ -124,7 +124,7 @@ func _column(node_name: String, title: String, subtitle: String, inventory_headi
 	scroll.add_child(table)
 	var header_frame: PanelContainer = PanelContainer.new()
 	header_frame.name = node_name + "Header"
-	header_frame.add_theme_stylebox_override("panel", UISkin.flat(Color(0.065, 0.077, 0.087, 1.0), Color(0.25, 0.28, 0.30), 5))
+	header_frame.add_theme_stylebox_override("panel", UISkin.table_header(5))
 	table.add_child(header_frame)
 	var header: HBoxContainer = HBoxContainer.new()
 	header.add_theme_constant_override("separation", 6)
@@ -155,13 +155,13 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	var frame: PanelContainer = PanelContainer.new()
 	frame.name = "WarehouseRow_" + str(data.id).validate_node_name()
 	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	frame.add_theme_stylebox_override("panel", UISkin.flat(Color(0.035, 0.042, 0.049, 1.0), Color(0.18, 0.19, 0.20) if remote else Color(0.33, 0.37, 0.39), 6))
+	frame.add_theme_stylebox_override("panel", UISkin.table_row(false, 5))
 	frame.set_meta("warehouse_row", true)
 	for key: String in ["id", "kind", "container_id", "station_id", "current_station", "remote", "destination", "asset_id"]:
 		frame.set_meta("row_id" if key == "id" else "row_kind" if key == "kind" else key, data[key])
 	frame.set_meta("asset_kind", "generic" if data.kind == "salvage" else "item")
 	frame.set_meta("salvage_package", data.kind == "salvage")
-	if remote: frame.modulate = Color(0.66, 0.68, 0.70, 1.0)
+	if remote: frame.modulate = UISkin.MUTED
 	parent.add_child(frame)
 	var content: VBoxContainer = VBoxContainer.new()
 	content.add_theme_constant_override("separation", 5)
@@ -262,8 +262,8 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	amount.set_meta("row_id", data.id)
 	var edit: LineEdit = amount.get_line_edit()
 	edit.add_theme_font_size_override("font_size", 12)
-	edit.add_theme_stylebox_override("normal", UISkin.flat(Color("0b1822"), Color("4b6c7b"), 5))
-	edit.add_theme_stylebox_override("read_only", UISkin.flat(Color("12171c"), Color("343c42"), 5))
+	edit.add_theme_stylebox_override("normal", UISkin.input_style(false, 4))
+	edit.add_theme_stylebox_override("read_only", UISkin.input_style(true, 4))
 	actions.add_child(amount)
 	for focus_control: Control in [amount, edit]:
 		focus_control.focus_entered.connect(_reveal_local_control.bind(focus_control))
@@ -275,8 +275,7 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	button.custom_minimum_size = Vector2(76, 34)
 	button.add_theme_font_size_override("font_size", 12)
-	for style: String in ["normal", "disabled"]: button.add_theme_stylebox_override(style, UISkin.hud_button())
-	for style: String in ["hover", "pressed"]: button.add_theme_stylebox_override(style, UISkin.hud_button(true))
+	UISkin.apply_button(button, "default", true)
 	button.set_meta("action", {"stack": "move_stack", "item": "move_item", "salvage": "move_salvage"}[str(data.kind)])
 	button.set_meta("target", data.id)
 	button.set_meta("extra", data.destination)

@@ -2,6 +2,7 @@ class_name XJCivilizationPanel
 extends RefCounted
 const T = preload("res://contracts/contract_types.gd")
 const Portraits = preload("res://runtime/ui/item_portraits.gd")
+const UISkin = preload("res://runtime/ui_theme.gd")
 var u: Node
 var war_status: Label
 var join_button: Button
@@ -30,7 +31,9 @@ func build(ui: Node) -> void:
 		var button: Button = u._button(selectors, civ.faction_name(id), func(): u.civilization_selected_faction = id; u.show_page("civilizations"))
 		button.name = "CivilizationSelect_" + id
 		button.tooltip_text = str(definition.doctrine)
-		u._service_button_style(button, id == u.civilization_selected_faction)
+		button.toggle_mode = true; button.button_pressed = id == u.civilization_selected_faction
+		button.custom_minimum_size = Vector2(0, 32); button.add_theme_font_size_override("font_size", 13)
+		UISkin.apply_button(button, "filter", true, id == u.civilization_selected_faction)
 	var faction: String = u.civilization_selected_faction
 	var selected: Dictionary = u.catalog.one("civilization_defs", "faction_id", faction)
 	if selected.is_empty(): return
@@ -53,7 +56,7 @@ func build(ui: Node) -> void:
 		var mission: Dictionary = u.catalog.one("mission_defs", "mission_id", step.mission_id)
 		var completed: bool = u.gameplay.missions.completed(step.mission_id)
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
+		row.add_theme_constant_override("separation", UISkin.GAP)
 		u.body.add_child(row)
 		var label: Label = u._text_to(row, ("✓ " if completed else "") + str(mission.display_name), 14)
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -73,12 +76,13 @@ func build(ui: Node) -> void:
 	join.disabled = not join_reason.is_empty()
 	join.tooltip_text = join_reason if not join_reason.is_empty() else "完成入籍，启用此文明的爵位和专属权限。"
 	join_note = u._text_to(u.body, join_reason, 13)
+	join_note.add_theme_color_override("font_color", UISkin.AMBER)
 	u._text("材料捐献", 18)
 	u._text("仅消耗核心站仓库中的普通自有物资；保障和借用物资不参与。", 13)
 	for donation: Dictionary in u.catalog.rows("civilization_donation_defs"):
 		if donation.faction_id != faction: continue
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
+		row.add_theme_constant_override("separation", UISkin.GAP)
 		u.body.add_child(row)
 		var label: Label = u._text_to(row, "%s × %d / 批 → 声望 +%d" % [u._item_name(str(donation.item_id)), int(donation.units_per_batch), int(donation.reputation_per_batch)], 13)
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -108,7 +112,7 @@ func build(ui: Node) -> void:
 		if hull.faction_id != faction: continue
 		var ship: Dictionary = u.catalog.one("ship_defs", "ship_id", hull.ship_id)
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 10)
+		row.add_theme_constant_override("separation", UISkin.GAP)
 		u.body.add_child(row)
 		var image := TextureRect.new()
 		image.texture = Portraits.texture("ship", hull.ship_id)
@@ -123,6 +127,7 @@ func build(ui: Node) -> void:
 	u._text("舰队战争", 18)
 	war_status = u._text_to(u.body, "", 14)
 	war_status.name = "CivilizationWarStatus"
+	war_status.add_theme_color_override("font_color", UISkin.ICE)
 	var campaign: RefCounted = civ.active_war()
 	if campaign != null:
 		if u.gameplay.frontier.owns_campaign(campaign):

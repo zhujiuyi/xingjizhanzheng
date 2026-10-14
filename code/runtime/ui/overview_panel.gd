@@ -6,6 +6,10 @@ signal command(action: String, id: String)
 signal support_requested(item_id: String,target_id: String,stop: bool)
 const UISkin = preload("res://runtime/ui_theme.gd")
 const ResourceStatus = preload("res://runtime/resource_status.gd")
+const DISTANCE_COLUMN_WIDTH: int = 56
+const TYPE_COLUMN_WIDTH: int = 44
+const ROW_INSET: int = 4
+const COLUMN_GAP: int = 4
 var filter_mode: String = "all"
 var sort_key: String = "distance"
 var sort_ascending: bool = true
@@ -14,6 +18,7 @@ var filtered_ids: Array[String] = []
 var selected_id: String = ""
 var filter_buttons: Dictionary = {}
 var sort_buttons: Dictionary = {}
+var sort_header_inset: MarginContainer
 var target_buttons: Dictionary = {}
 var action_buttons: Dictionary = {}
 var support_box: VBoxContainer
@@ -52,7 +57,7 @@ var _layout_queued: bool = false
 
 func _ready() -> void:
 	name = "TargetModule"
-	add_theme_stylebox_override("panel", UISkin.hud_panel(7))
+	add_theme_stylebox_override("panel", UISkin.hud_panel(UISkin.GAP))
 	body_scroll = ScrollContainer.new()
 	body_scroll.name = "OverviewBodyScroll"
 	body_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -60,7 +65,7 @@ func _ready() -> void:
 	add_child(body_scroll)
 	content = VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_theme_constant_override("separation", 8)
+	content.add_theme_constant_override("separation", UISkin.GAP)
 	body_scroll.add_child(content)
 	overview_content = VBoxContainer.new()
 	overview_content.add_theme_constant_override("separation", 4)
@@ -70,19 +75,28 @@ func _ready() -> void:
 	_label(heading, "目标总览", 12, UISkin.AMBER).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	count_label = _label(heading, "", 10, UISkin.MUTED)
 	var filters: HBoxContainer = HBoxContainer.new()
-	filters.add_theme_constant_override("separation", 2)
+	filters.add_theme_constant_override("separation", 4)
 	overview_content.add_child(filters)
 	for key: String in ["all", "combat", "navigation"]:
 		var button: Button = _button(filters, {"all": "全部", "combat": "战斗", "navigation": "导航"}[key])
 		button.name = "OverviewFilter_" + key
 		button.pressed.connect(func(): filter_mode = key; _refresh_rows())
 		filter_buttons[key] = button
+	sort_header_inset = MarginContainer.new()
+	sort_header_inset.name = "OverviewColumnHeaders"
+	sort_header_inset.add_theme_constant_override("margin_left", ROW_INSET)
+	sort_header_inset.add_theme_constant_override("margin_right", ROW_INSET)
+	overview_content.add_child(sort_header_inset)
 	var headers: HBoxContainer = HBoxContainer.new()
-	headers.add_theme_constant_override("separation", 2)
-	overview_content.add_child(headers)
+	headers.add_theme_constant_override("separation", COLUMN_GAP)
+	sort_header_inset.add_child(headers)
 	for key: String in ["distance", "name", "type"]:
 		var button: Button = _button(headers, {"distance": "距离", "name": "名称", "type": "类型"}[key])
 		button.name = "OverviewSort_" + key
+		button.alignment = HORIZONTAL_ALIGNMENT_RIGHT if key == "distance" else HORIZONTAL_ALIGNMENT_LEFT
+		if key != "name":
+			button.size_flags_horizontal = Control.SIZE_FILL
+			button.custom_minimum_size.x = DISTANCE_COLUMN_WIDTH if key == "distance" else TYPE_COLUMN_WIDTH
 		button.pressed.connect(func():
 			if sort_key == key: sort_ascending = not sort_ascending
 			else: sort_key = key; sort_ascending = true
@@ -95,11 +109,12 @@ func _ready() -> void:
 	overview_content.add_child(target_scroll)
 	target_list = VBoxContainer.new()
 	target_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	target_list.add_theme_constant_override("separation", 1)
+	target_list.add_theme_constant_override("separation", 4)
 	target_scroll.add_child(target_list)
+	target_list.resized.connect(_sync_column_headers)
 	selection_card = PanelContainer.new()
 	selection_card.name = "SelectedTargetCard"
-	selection_card.add_theme_stylebox_override("panel", UISkin.hud_panel(6))
+	selection_card.add_theme_stylebox_override("panel", UISkin.hud_panel(UISkin.GAP))
 	content.add_child(selection_card)
 	var details: VBoxContainer = VBoxContainer.new()
 	details.name = "SelectedTargetDetails"
@@ -110,7 +125,7 @@ func _ready() -> void:
 	selected_distance = _label(details, "左键选目标 · Tab切换", 11, UISkin.MUTED)
 	resource_detail = VBoxContainer.new()
 	resource_detail.name = "SelectedResourceDetails"
-	resource_detail.add_theme_constant_override("separation", 2)
+	resource_detail.add_theme_constant_override("separation", 4)
 	details.add_child(resource_detail)
 	resource_label = _label(resource_detail, "", 11, UISkin.TEXT)
 	resource_label.name = "ResourceReserveSummary"
@@ -136,8 +151,8 @@ func _ready() -> void:
 	status_label.max_lines_visible = 2
 	action_grid = GridContainer.new()
 	action_grid.columns = 3
-	action_grid.add_theme_constant_override("h_separation", 3)
-	action_grid.add_theme_constant_override("v_separation", 3)
+	action_grid.add_theme_constant_override("h_separation", 4)
+	action_grid.add_theme_constant_override("v_separation", 4)
 	details.add_child(action_grid)
 	for key: String in ["nav_warp", "nav_approach", "nav_orbit", "nav_stop", "nav_dock", "combat_engage", "combat_toggle"]:
 		var button: Button = _button(action_grid, {"nav_warp": "跃迁", "nav_approach": "接近", "nav_orbit": "环绕", "nav_stop": "停止", "nav_dock": "停靠", "combat_engage": "交战", "combat_toggle": "自动开火"}[key])
@@ -159,7 +174,7 @@ func _ready() -> void:
 	support_status = _label(support_box,"",10,UISkin.MUTED)
 	support_box.hide()
 	npc_detail = VBoxContainer.new()
-	npc_detail.add_theme_constant_override("separation", 2)
+	npc_detail.add_theme_constant_override("separation", 4)
 	details.add_child(npc_detail)
 	npc_title = _label(npc_detail, "", 11, UISkin.MUTED)
 	npc_title.hide() # The selected-card title already identifies this same vessel.
@@ -309,8 +324,8 @@ func responsive(compact: bool, available_height: float = -1.0) -> void:
 	_available_height = available_height
 	if content == null: return
 	content.move_child(selection_card, 0 if compact else content.get_child_count() - 1)
-	selection_card.add_theme_stylebox_override("panel", UISkin.hud_panel(4 if compact else 6))
-	selection_card.get_node("SelectedTargetDetails").add_theme_constant_override("separation", 2 if compact else 4)
+	selection_card.add_theme_stylebox_override("panel", UISkin.hud_panel(4 if compact else UISkin.GAP))
+	selection_card.get_node("SelectedTargetDetails").add_theme_constant_override("separation", 4)
 	selected_title.add_theme_font_size_override("font_size", 12 if compact else 14)
 	selected_distance.add_theme_font_size_override("font_size", 10 if compact else 11)
 	resource_label.add_theme_font_size_override("font_size", 10 if compact else 11)
@@ -339,6 +354,23 @@ func _reflow_list() -> void:
 	chrome += overview_content.get_combined_minimum_size().y - target_scroll.get_combined_minimum_size().y
 	var desired: float = maxf(54.0 if _compact else 96.0, _available_height - selection_card.get_combined_minimum_size().y - chrome)
 	if absf(target_scroll.custom_minimum_size.y - desired) > 0.5: target_scroll.custom_minimum_size.y = desired
+	_sync_column_headers()
+
+func _sync_column_headers() -> void:
+	if not is_instance_valid(sort_header_inset) or not is_instance_valid(target_list) or target_list.size.x <= 0.0: return
+	# The list gives its scrollbar a gutter. Match it in the fixed column header.
+	var gutter: int = maxi(0, roundi(target_scroll.size.x - target_list.size.x))
+	if sort_header_inset.get_theme_constant("margin_right") != ROW_INSET + gutter:
+		sort_header_inset.add_theme_constant_override("margin_right", ROW_INSET + gutter)
+
+func _style_sort_header(button: Button, active: bool) -> void:
+	UISkin.apply_button(button, "default", true, active)
+	# Column captions align with the readout glyphs, without button text padding.
+	for state: String in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var surface: StyleBox = button.get_theme_stylebox(state).duplicate() as StyleBox
+		surface.content_margin_left = 0
+		surface.content_margin_right = 0
+		button.add_theme_stylebox_override(state, surface)
 
 func _refresh_rows() -> void:
 	if target_list == null: return
@@ -366,16 +398,17 @@ func _refresh_rows() -> void:
 			button.gui_input.connect(_target_gui_input.bind(id, button))
 			var row: HBoxContainer = HBoxContainer.new()
 			row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-			row.offset_left = 4; row.offset_right = -4
+			row.offset_left = ROW_INSET; row.offset_right = -ROW_INSET
 			row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			row.add_theme_constant_override("separation", 3)
+			row.add_theme_constant_override("separation", COLUMN_GAP)
 			button.add_child(row)
 			var distance: Label = _label(row, "", 10, UISkin.MUTED)
-			distance.name = "Distance"; distance.custom_minimum_size.x = 48
+			distance.name = "Distance"; distance.custom_minimum_size.x = DISTANCE_COLUMN_WIDTH
+			distance.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			var title: Label = _label(row, "", 11, UISkin.TEXT)
 			title.name = "Name"; title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			var type: Label = _label(row, "", 9, UISkin.MUTED)
-			type.name = "Type"; type.custom_minimum_size.x = 38
+			type.name = "Type"; type.custom_minimum_size.x = TYPE_COLUMN_WIDTH
 			var resource_readout: Label = _label(button, "", 10, UISkin.MUTED)
 			resource_readout.name = "ResourceState"
 			resource_readout.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -405,9 +438,9 @@ func _refresh_rows() -> void:
 		name_label.max_lines_visible = 2 if _compact else 1
 		name_label.clip_text = not _compact
 		button.custom_minimum_size.y = (54 if _compact else 44) if resource else (34 if _compact else 24)
-		button.get_child(0).get_node("Name").add_theme_color_override("font_color", UISkin.AMBER if id == selected_id else Color("7fcca4") if bool(record.get("friendly", false)) else UISkin.TEXT)
+		button.get_child(0).get_node("Name").add_theme_color_override("font_color", UISkin.AMBER if id == selected_id else UISkin.ICE if bool(record.get("friendly", false)) else UISkin.DANGER if str(record.get("kind", "")) in ["npc", "drone"] else UISkin.TEXT)
 		button.get_child(0).get_node("Type").text = str(record.get("type_title", ""))
-		button.add_theme_stylebox_override("normal", UISkin.hud_button(id == selected_id))
+		UISkin.apply_button(button, "default", true, id == selected_id)
 		target_list.move_child(button, filtered_ids.size() - 1)
 	for id: String in target_buttons.keys():
 		if id not in filtered_ids:
@@ -416,10 +449,10 @@ func _refresh_rows() -> void:
 			button.queue_free()
 			target_buttons.erase(id)
 	count_label.text = "%d 目标" % visible_rows.size()
-	for key: String in filter_buttons: filter_buttons[key].add_theme_stylebox_override("normal", UISkin.hud_button(key == filter_mode))
+	for key: String in filter_buttons: UISkin.apply_button(filter_buttons[key], "default", true, key == filter_mode)
 	for key: String in sort_buttons:
 		sort_buttons[key].text = {"distance": "距离", "name": "名称", "type": "类型"}[key] + (" +" if sort_ascending else " −") if sort_key == key else {"distance": "距离", "name": "名称", "type": "类型"}[key]
-		sort_buttons[key].add_theme_stylebox_override("normal", UISkin.hud_button(key == sort_key))
+		_style_sort_header(sort_buttons[key], key == sort_key)
 
 func _target_gui_input(event: InputEvent, id: String, button: Button) -> void:
 	if not event is InputEventMouseButton: return
@@ -453,10 +486,7 @@ func _button(parent: Node, title: String) -> Button:
 	button.custom_minimum_size = Vector2(0, 24)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.add_theme_font_size_override("font_size", 11)
-	button.add_theme_stylebox_override("normal", UISkin.hud_button(false))
-	button.add_theme_stylebox_override("hover", UISkin.hud_button(true))
-	button.add_theme_stylebox_override("pressed", UISkin.hud_button(true))
-	button.add_theme_stylebox_override("disabled", UISkin.hud_button(false))
+	UISkin.apply_button(button, "default", true)
 	parent.add_child(button)
 	return button
 

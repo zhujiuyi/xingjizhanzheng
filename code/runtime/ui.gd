@@ -202,7 +202,7 @@ func _ready() -> void:
 	navigation_frame.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	navigation_frame.add_theme_stylebox_override("panel", UISkin.hud_panel(8))
 	var navigation_layout: VBoxContainer = VBoxContainer.new()
-	navigation_layout.add_theme_constant_override("separation", 3)
+	navigation_layout.add_theme_constant_override("separation", 4)
 	navigation_frame.add_child(navigation_layout)
 	top = _text_to(navigation_layout, "航行", 14)
 	top.add_theme_color_override("font_color", UISkin.AMBER)
@@ -218,7 +218,7 @@ func _ready() -> void:
 	navigation_stop_button = _button(navigation_row, "停止", func(): requested.emit("nav_stop", target_id, 1, ""))
 	navigation_stop_button.custom_minimum_size = Vector2(40, 22)
 	navigation_stop_button.focus_mode = Control.FOCUS_NONE
-	navigation_stop_button.add_theme_stylebox_override("normal", UISkin.hud_button(false))
+	UISkin.apply_button(navigation_stop_button, "default", true)
 	navigation_stop_button.add_theme_font_size_override("font_size", 10)
 	navigation_stop_button.hide()
 	var objective_frame: PanelContainer = _frame(root, "FlightObjective")
@@ -229,7 +229,7 @@ func _ready() -> void:
 	objective_frame.offset_bottom = 214
 	objective_frame.add_theme_stylebox_override("panel", UISkin.hud_panel(8))
 	hud_left = VBoxContainer.new()
-	hud_left.add_theme_constant_override("separation", 9)
+	hud_left.add_theme_constant_override("separation", UISkin.GAP)
 	hud_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	objective_frame.add_child(hud_left)
 	var mission_heading: Label = _text_to(hud_left, "航行任务", 11)
@@ -251,7 +251,7 @@ func _ready() -> void:
 	for action_button: Button in [mission_locate_button, mission_travel_button, mission_guide_button]:
 		action_button.custom_minimum_size = Vector2(76, 24)
 		action_button.add_theme_font_size_override("font_size", 11)
-		action_button.add_theme_stylebox_override("normal", UISkin.hud_button(false))
+		UISkin.apply_button(action_button, "default", true)
 		# A focused HUD button must still leave W/S and other flight controls usable.
 		action_button.focus_mode = Control.FOCUS_NONE
 	mission_navigation_row.hide()
@@ -268,11 +268,11 @@ func _ready() -> void:
 			else: requested.emit("fleet_command", order, 1, target_id if order == "focus" else ""))
 		button.custom_minimum_size = Vector2(76, 24)
 		button.add_theme_font_size_override("font_size", 11)
-		button.add_theme_stylebox_override("normal", UISkin.hud_button())
+		UISkin.apply_button(button, "default", true)
 		button.focus_mode = Control.FOCUS_NONE
 	war_navigation_row.hide()
 	work_box = VBoxContainer.new()
-	work_box.add_theme_constant_override("separation", 5)
+	work_box.add_theme_constant_override("separation", 4)
 	hud_left.add_child(work_box)
 	work_label = _text_to(work_box, "", 13)
 	work_label.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -281,7 +281,7 @@ func _ready() -> void:
 	work_stop = _button(work_box, "停止作业", func(): requested.emit("stop_scan" if work_mode == "scan" else "stop_mining", "", 1, ""))
 	work_stop.custom_minimum_size.y = 24
 	work_stop.focus_mode = Control.FOCUS_NONE
-	work_stop.add_theme_stylebox_override("normal", UISkin.hud_button(false))
+	UISkin.apply_button(work_stop, "default", true)
 	work_box.hide()
 	flight_dock = HBoxContainer.new()
 	flight_dock.name = "FlightDock"
@@ -319,6 +319,7 @@ func _ready() -> void:
 	operation_bar.offset_top = 12
 	operation_bar.offset_bottom = 70
 	var operation_row: HBoxContainer = HBoxContainer.new()
+	operation_row.name = "OperationRow"
 	operation_row.add_theme_constant_override("separation", 16)
 	operation_bar.add_child(operation_row)
 	operation_label = _text_to(operation_row, "", 14)
@@ -386,7 +387,7 @@ func show_title(save_slots: Array[Dictionary]) -> void:
 	new_name.placeholder_text = "远征名称"
 	new_name.text = "断航远征"
 	new_name.max_length = 48
-	new_name.custom_minimum_size.y = 38
+	new_name.custom_minimum_size.y = 36
 	body.add_child(new_name)
 	var start: Button = _button(body, "建立新远征", func(): requested.emit("new_world", new_name.text.strip_edges(), 1, ""))
 	_primary(start) if slots.is_empty() else _secondary(start)
@@ -486,7 +487,7 @@ func show_page(next_page: String) -> void:
 func notify(message: String, is_error: bool = false) -> void:
 	toast.text = _friendly(message)
 	toast.tooltip_text = toast.text
-	toast.modulate = Color("ff8578") if is_error else UISkin.AMBER
+	toast.modulate = UISkin.DANGER if is_error else UISkin.AMBER
 	_responsive()
 	message_age = 0.0
 
@@ -612,7 +613,7 @@ func _build_panel(title: String, description: String) -> void:
 	panel.modulate = Color.WHITE
 	panel.add_theme_stylebox_override("panel", UISkin.plate() if page != "title" else StyleBoxEmpty.new())
 	var shell: HBoxContainer = HBoxContainer.new()
-	shell.add_theme_constant_override("separation", 18)
+	shell.add_theme_constant_override("separation", UISkin.SECTION_GAP)
 	panel.add_child(shell)
 	sidebar = VBoxContainer.new()
 	sidebar.name = "ServiceSidebar"
@@ -631,7 +632,7 @@ func _build_panel(title: String, description: String) -> void:
 		var service_rows: VBoxContainer = VBoxContainer.new()
 		service_rows.name = "ServiceSidebarRows"
 		service_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		service_rows.add_theme_constant_override("separation", 3)
+		service_rows.add_theme_constant_override("separation", 4)
 		service_scroll.add_child(service_rows)
 		for record: Dictionary in ServiceNavigation.pages(state.player().has_docked_station_id):
 			_service_button(service_rows, str(record.id), "sidebar")
@@ -643,7 +644,7 @@ func _build_panel(title: String, description: String) -> void:
 	if sidebar.visible: sidebar.visible = not _service_sidebar_compact()
 	var layout: VBoxContainer = VBoxContainer.new()
 	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	layout.add_theme_constant_override("separation", 14)
+	layout.add_theme_constant_override("separation", UISkin.SECTION_GAP)
 	shell.add_child(layout)
 	var header: HBoxContainer = HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
@@ -697,7 +698,7 @@ func _build_panel(title: String, description: String) -> void:
 	layout.add_child(page_scroll)
 	body = VBoxContainer.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", 14)
+	body.add_theme_constant_override("separation", UISkin.SECTION_GAP)
 	page_scroll.add_child(body)
 	_update_hud_visibility()
 	_responsive()
@@ -796,7 +797,10 @@ func _ships() -> void:
 	if gameplay.owned_fleet.supported():
 		var sections: HFlowContainer=HFlowContainer.new();body.add_child(sections)
 		for pair: Array in [["舰体与借船","hulls"],["自有编队","owned"],["船员","crew"]]:
-			var button: Button=_button(sections,pair[0],_fleet_section.bind(pair[1]));button.name="FleetSection_"+str(pair[1]);button.disabled=fleet_section==pair[1]
+			var button: Button=_button(sections,pair[0],_fleet_section.bind(pair[1]));button.name="FleetSection_"+str(pair[1])
+			button.toggle_mode = true
+			button.set_pressed_no_signal(fleet_section == pair[1])
+			UISkin.apply_button(button, "filter", false, fleet_section == pair[1])
 		if fleet_section in ["owned","crew"]:
 			var management: VBoxContainer=preload("res://runtime/ui/fleet_panel.gd").new();body.add_child(management);management.setup(self,fleet_section);return
 	if not state.player().has_docked_station_id:
@@ -1021,6 +1025,9 @@ func _market() -> void:
 		var button: Button = _button(filters, str({"buy": "购买物资", "ships": "购买船体", "sell": "出售本地资产"}[filter]) + (" · 当前" if filter == market_filter else ""), _set_market_filter.bind(filter))
 		button.autowrap_mode = TextServer.AUTOWRAP_OFF
 		button.custom_minimum_size = Vector2(132, 36)
+		button.toggle_mode = true
+		button.set_pressed_no_signal(filter == market_filter)
+		UISkin.apply_button(button, "filter", false, filter == market_filter)
 	_text("在各行填写成交数量；报价含税与声望优惠。悬停名称查看物品详情。", 14)
 	var count: int = 0
 	var list: VBoxContainer = _business_list("站点交易清单", "实收单价" if market_filter == "sell" else "含税单价", "成交数量")
@@ -1222,10 +1229,7 @@ func _equipment_guide_button(parent: Node, witness_node: Control, info: Dictiona
 func _mission_row_primary(button: Button) -> void:
 	# BusinessList uses compact style margins for every state. Keep those
 	# metrics when emphasizing an action so disabling it cannot shrink its cell.
-	button.add_theme_stylebox_override("normal", UISkin.hud_button(true))
-	button.add_theme_stylebox_override("hover", UISkin.hud_button(true))
-	button.add_theme_stylebox_override("pressed", UISkin.hud_button(true))
-	button.add_theme_color_override("font_color", Color("ffdf9d"))
+	UISkin.apply_button(button, "primary", true)
 
 func _mission_filter_group(dimension: String, title: String, values: Array[String], titles: Dictionary, selected: String) -> void:
 	var row: HFlowContainer = HFlowContainer.new()
@@ -1248,8 +1252,7 @@ func _mission_filter_group(dimension: String, title: String, values: Array[Strin
 		button.button_pressed = value == selected
 		button.set_meta("mission_filter_dimension", dimension)
 		button.set_meta("mission_filter_value", value)
-		if value == selected: _primary(button)
-		else: _secondary(button)
+		UISkin.apply_button(button, "filter", true, value == selected)
 		button.tooltip_text = "仅修改%s筛选，保留其他筛选条件。" % title
 		if dimension == "location": button.tooltip_text += "\n按任务接取站点筛选；当前任务始终显示在页首。"
 		if dimension == "status" and value == "completed": button.tooltip_text += "\n展示已领取过奖励的任务；重接后正在进行的任务归入“进行中”。"
@@ -1633,7 +1636,7 @@ func _pause() -> void:
 	_text_to(flight_card, "仅在驾驶舰损毁后可请求救援。", 13).add_theme_color_override("font_color", UISkin.MUTED)
 	var session_card: VBoxContainer = _card("保存与离开")
 	_text_to(session_card, "保存完成后再离开；保存请求仍受当前航行状态校验。", 13)
-	_primary(_wide_button(_button(session_card, "快速保存", func(): requested.emit("save", "0", 1, "quick"))))
+	_wide_button(_button(session_card, "快速保存", func(): requested.emit("save", "0", 1, "quick")))
 	_secondary(_wide_button(_button(session_card, "保存并返回主菜单", func(): requested.emit("return_title", "", 1, ""))))
 	_secondary(_wide_button(_button(session_card, "保存并退出", func(): requested.emit("quit", "", 1, ""))))
 	if operation_waiting and operation_kind == "save":
@@ -1644,8 +1647,7 @@ func _pause() -> void:
 	_text_to(danger, "此操作直接退出；下次从最后成功存档恢复。本次尚未保存的变化会丢失。", 14)
 	var discard: Button = _wide_button(_button(danger, "放弃未保存进度并退出", func(): requested.emit("quit_without_save", "", 1, "")))
 	discard.name = "QuitWithoutSave"
-	discard.add_theme_stylebox_override("normal", UISkin.button_style(Color("c88d79")))
-	discard.add_theme_color_override("font_color", Color("efbca6"))
+	UISkin.apply_button(discard, "danger")
 
 func _settings() -> void:
 	if preferences.is_empty():
@@ -1671,7 +1673,9 @@ func _settings() -> void:
 	body.add_child(quality_row)
 	for quality: String in ["high", "medium", "low"]:
 		var label: String = {"high": "高", "medium": "中", "low": "低"}[quality]
-		_button(quality_row, "画质 · " + label + ("（当前）" if preferences.get("quality_mode") == quality else ""), func(): requested.emit("preference", "quality_mode", 1, quality))
+		var selected: bool = preferences.get("quality_mode") == quality
+		var choice: Button = _button(quality_row, "画质 · " + label + ("（当前）" if selected else ""), func(): requested.emit("preference", "quality_mode", 1, quality))
+		UISkin.apply_button(choice, "filter", false, selected)
 
 func _show_slots(allow_save: bool = false) -> void:
 	var shown: Array[String] = []
@@ -1716,7 +1720,7 @@ func _slot_card(slot: Dictionary, title: String, save_index: int = -1) -> void:
 		if not slot.is_empty(): _text_to(card, "保存将替换此槽当前档案。", 12).add_theme_color_override("font_color", UISkin.MUTED)
 	if not slot.is_empty():
 		var load: Button = _wide_button(_button(card, "读取 " + title, func(): requested.emit("load", str(slot.slot_id), int(slot.get("generation", 0)), str(slot.get("current_snapshot_id", "")))))
-		_primary(load)
+		_secondary(load)
 
 func _refresh_targets() -> void:
 	if sector == null or not is_instance_valid(sector.flight) or not is_instance_valid(overview):
@@ -2335,12 +2339,10 @@ func _mission_list_description(definition: Dictionary, current: Dtos.MissionStat
 func _button(parent: Node, title: String, callback: Callable) -> Button:
 	var button: Button = Button.new()
 	button.text = title
-	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	button.custom_minimum_size = Vector2(118, 38)
+	button.autowrap_mode = TextServer.AUTOWRAP_OFF
+	button.custom_minimum_size = Vector2(120, 36)
 	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	button.pressed.connect(callback)
-	button.mouse_entered.connect(func(): _button_feedback(button, true))
-	button.mouse_exited.connect(func(): _button_feedback(button, false))
 	parent.add_child(button)
 	return button
 
@@ -2374,13 +2376,13 @@ func _card(title: String) -> VBoxContainer:
 		card_grid.name = "ModuleCards"
 		card_grid.columns = 2 if root.size.x >= 1200 and page != "title" else 1
 		card_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card_grid.add_theme_constant_override("h_separation", 14)
-		card_grid.add_theme_constant_override("v_separation", 14)
+		card_grid.add_theme_constant_override("h_separation", UISkin.SECTION_GAP)
+		card_grid.add_theme_constant_override("v_separation", UISkin.SECTION_GAP)
 		body.add_child(card_grid)
 	var frame: PanelContainer = _frame(card_grid, "ModuleCard")
 	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var card: VBoxContainer = VBoxContainer.new()
-	card.add_theme_constant_override("separation", 10)
+	card.add_theme_constant_override("separation", UISkin.GAP)
 	frame.add_child(card)
 	var heading: Label = _text_to(card, title, 18)
 	heading.add_theme_color_override("font_color", UISkin.ICE)
@@ -2620,8 +2622,7 @@ func _responsive() -> void:
 		for button: Variant in toolbar_buttons.values():
 			button.add_theme_font_size_override("font_size", 9 if compact else 10)
 			button.custom_minimum_size = Vector2(0,36 if compact else 42)
-			button.add_theme_stylebox_override("normal", UISkin.flat(Color(0,0,0,0),Color(0,0,0,0),1))
-		if is_instance_valid(radar_button): radar_button.modulate = UISkin.AMBER if radar_expanded else Color.WHITE
+			UISkin.apply_toolbar_button(button, button == radar_button and radar_expanded)
 	if is_instance_valid(navigation_frame):
 		navigation_frame.offset_left = left_edge
 		navigation_frame.offset_right = left_edge + left_width
@@ -2665,7 +2666,7 @@ func _responsive() -> void:
 		var instrument_row: HBoxContainer = instrument.find_child("InstrumentReadouts",true,false)
 		instrument_row.add_theme_constant_override("separation",4 if compact else 8)
 		for entry: Dictionary in condition_bars:
-			entry.label.add_theme_font_size_override("font_size",10)
+			entry.label.add_theme_font_size_override("font_size",10 if compact else 12)
 			entry.label.autowrap_mode = TextServer.AUTOWRAP_OFF
 			entry.label.clip_text = true
 			entry.bar.visible = not compact
@@ -2675,13 +2676,13 @@ func _responsive() -> void:
 		energy_bar.custom_minimum_size.y = 3
 		heat_bar.custom_minimum_size.y = 3
 		for readout_label: Label in [energy_label,heat_label,cargo_label]:
-			readout_label.add_theme_font_size_override("font_size",10)
+			readout_label.add_theme_font_size_override("font_size",10 if compact or readout_label == cargo_label else 12)
 			readout_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 			readout_label.clip_text = true
 		cargo_label.visible = not compact
 		for name_value: String in ["DefenseReadout","ResourceReadout"]:
 			var readout: VBoxContainer = instrument.find_child(name_value,true,false)
-			readout.custom_minimum_size.x = 54 if compact else 68
+			readout.custom_minimum_size.x = 54 if compact else 76
 			readout.add_theme_constant_override("separation",2)
 	if is_instance_valid(equipment_bar): equipment_bar.call("responsive",compact)
 	if is_instance_valid(navigation_hud):
@@ -2723,7 +2724,7 @@ func _responsive() -> void:
 		operation_label.max_lines_visible = 3 if compact else 2
 		operation_cancel.custom_minimum_size = Vector2(64 if compact else 96, 24 if compact else 28)
 		operation_cancel.add_theme_font_size_override("font_size", 10 if compact else 11)
-		operation_bar.get_child(1).add_theme_constant_override("separation", 6 if compact else 10)
+		operation_bar.find_child("OperationRow", true, false).add_theme_constant_override("separation", 4 if compact else UISkin.GAP)
 	if is_instance_valid(toast):
 		toast.visible = not toast.text.is_empty() and not (operation_bar.visible and toast.text == operation_message)
 		toast.offset_left = notice_left
@@ -3202,9 +3203,7 @@ func _build_navigation() -> void:
 			button.name = "ShowPlayerShip"
 			button.tooltip_text = "恢复跟随视角、默认观察角度和镜头距离，舰船居中显示。V 切换视角；左键拖动观察，松开后保留角度。"
 		_secondary(button)
-		button.add_theme_stylebox_override("normal", UISkin.flat(Color(0.08, 0.105, 0.125, 0.65), Color("384650"), 4))
-		button.add_theme_stylebox_override("hover", UISkin.flat(Color("253b45"), UISkin.ICE, 4))
-		button.add_theme_stylebox_override("pressed", UISkin.flat(Color("192b34"), UISkin.ICE, 4))
+		UISkin.apply_button(button, "default", true)
 	radar_button = _button(row, "雷达", func():
 		radar_expanded = not radar_expanded
 		_update_hud_visibility()
@@ -3313,6 +3312,10 @@ func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 		condition_bars[index].label.text = "%s %.0f%%" % [condition_bars[index].name, values[index] / maxf(maximums[index], 1.0) * 100.0]
 		condition_bars[index].bar.max_value = maxf(maximums[index], 1.0)
 		condition_bars[index].bar.value = values[index]
+		# Exact exhausted/destroyed layers, not new gameplay warning thresholds.
+		var exposed: bool = index > 0 and values[0] <= 0.0 and (index == 1 or values[1] <= 0.0)
+		var tone: Color = UISkin.DANGER if values[index] <= 0.0 or (index == 2 and exposed) else UISkin.AMBER if exposed else UISkin.TEXT
+		condition_bars[index].label.add_theme_color_override("font_color", tone)
 	dial.speed = _display_speed()
 	dial.ratios = Vector3(values[0] / maxf(maximums[0], 1.0), values[1] / maxf(maximums[1], 1.0), values[2] / maxf(maximums[2], 1.0))
 	dial.queue_redraw()
@@ -3320,10 +3323,13 @@ func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 	energy_label.text = "电容 %.0f%%" % (ship.energy / maxf(float(metrics.energy_max), 1.0) * 100)
 	energy_bar.max_value = maxf(float(metrics.energy_max), 1.0)
 	energy_bar.value = ship.energy
+	energy_label.add_theme_color_override("font_color", UISkin.AMBER if ship.energy <= 0.0 else UISkin.TEXT)
 	var heat_ratio: float = ship.heat / maxf(float(metrics.heat_max), 1.0)
 	var heat_warning: bool = heat_ratio >= float(catalog.rule("overheat_warning_ratio"))
-	heat_label.text = ("过热锁定 " if ship.overheated else "热量预警 " if heat_warning else "热量 ") + "%.0f%%" % (heat_ratio * 100)
-	heat_label.add_theme_color_override("font_color", UISkin.AMBER if ship.overheated or heat_warning else UISkin.TEXT)
+	heat_label.text = ("锁定 " if ship.overheated else "预警 " if heat_warning else "热量 ") + "%.0f%%" % (heat_ratio * 100)
+	heat_label.add_theme_color_override("font_color", UISkin.DANGER if ship.overheated else UISkin.AMBER if heat_warning else UISkin.TEXT)
+	heat_label.tooltip_text = ("过热锁定 · " if ship.overheated else "热量预警 · " if heat_warning else "") + "热量 %.0f / %.0f HU" % [ship.heat, float(metrics.heat_max)]
+	heat_bar.add_theme_stylebox_override("fill", UISkin.flat(UISkin.DANGER if ship.overheated else UISkin.AMBER, Color.TRANSPARENT, 0))
 	heat_bar.max_value = maxf(float(metrics.heat_max), 1.0)
 	heat_bar.value = ship.heat
 	cargo_label.tooltip_text = "货 %.0f/%.0f L · 矿 %.0f/%.0f L" % [float(metrics.cargo_used_l), float(metrics.cargo_capacity_l), float(metrics.mineral_used_l), float(metrics.mineral_capacity_l)]
@@ -3370,32 +3376,15 @@ func _service_button_style(button: Button, active: bool) -> void:
 	button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.expand_icon = true
 	button.add_theme_constant_override("icon_max_width", 20 if small else 22)
-	button.add_theme_constant_override("h_separation", 7)
+	button.add_theme_constant_override("h_separation", UISkin.GAP)
 	button.add_theme_font_size_override("font_size", 11 if small else 13)
-	button.add_theme_color_override("font_color", UISkin.AMBER if active else UISkin.TEXT)
-	button.add_theme_color_override("icon_normal_color", UISkin.AMBER if active else Color.WHITE)
-	for color_key: String in ["font_hover_color", "font_pressed_color", "font_focus_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color"]:
-		button.add_theme_color_override(color_key, UISkin.AMBER if active else Color.WHITE)
-	button.add_theme_stylebox_override("normal", UISkin.hud_button(active))
-	var hover: StyleBoxFlat = UISkin.hud_button(active)
-	if not active:
-		hover.bg_color = Color(0.06, 0.075, 0.085, 0.6)
-		hover.border_color = Color(0.31, 0.36, 0.39, 0.7)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", hover)
-	button.add_theme_stylebox_override("disabled", UISkin.hud_button())
-	# The amber fill identifies the current page; keyboard focus is a thin outline.
-	var keyboard_focus: StyleBoxFlat = UISkin.flat(Color.TRANSPARENT, Color("56717d"), 0)
-	keyboard_focus.draw_center = false
-	button.add_theme_stylebox_override("focus", keyboard_focus)
+	UISkin.apply_button(button, "filter", true, active)
 
 func _primary(button: Button) -> void:
-	button.add_theme_stylebox_override("normal", UISkin.button_style(Color("e2b46d")))
-	button.add_theme_color_override("font_color", Color("ffdf9d"))
+	UISkin.apply_button(button, "primary")
 
 func _secondary(button: Button) -> void:
-	button.add_theme_stylebox_override("normal", UISkin.flat(Color(0.08, 0.105, 0.125, 0.65), Color("384650"), 8))
-	button.add_theme_color_override("font_color", UISkin.MUTED)
+	UISkin.apply_button(button, "secondary")
 
 func _back() -> void:
 	var destination: String = return_page if page == "settings" and not return_page.is_empty() else "title" if state == null else "station" if state.player().has_docked_station_id else ""
@@ -3413,18 +3402,6 @@ func _responsive_title() -> void:
 	panel.offset_right = minf(width - 28, 430 if compact else 520)
 	panel.offset_top = 28 if compact else 120
 	panel.offset_bottom = -50 if compact else -100
-
-func _button_feedback(candidate: Variant, hovering: bool) -> void:
-	# A queued signal can outlive the page; validate before casting a freed Object.
-	if not is_instance_valid(candidate) or not candidate is Button: return
-	var button: Button = candidate
-	if button.is_queued_for_deletion() or not button.is_inside_tree() or button.disabled: return
-	# A null get_meta default still reports a missing key; first hover has no tween.
-	var old: Variant = button.get_meta("hover_tween") if button.has_meta("hover_tween") else null
-	if is_instance_valid(old) and old is Tween and old.is_valid(): old.kill()
-	var animation: Tween = button.create_tween()
-	animation.tween_property(button, "modulate", Color(1.09, 1.09, 1.09, 1.0) if hovering else Color.WHITE, 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	button.set_meta("hover_tween", animation)
 
 func _animate_panel() -> void:
 	if ui_motion != null and ui_motion.is_valid(): ui_motion.kill()

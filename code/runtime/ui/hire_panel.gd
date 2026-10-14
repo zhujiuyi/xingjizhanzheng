@@ -1,4 +1,5 @@
 extends VBoxContainer
+const UISkin=preload("res://runtime/ui_theme.gd")
 var u: Node
 var status: Label
 var health: Label
@@ -7,34 +8,38 @@ var _token: String=""
 var _elapsed: float=0.0
 var _party_count: int=1
 func setup(ui: Node) -> void:
-	u=ui;name="HirePanel";add_theme_constant_override("separation",12)
+	u=ui;name="HirePanel";add_theme_constant_override("separation",UISkin.SECTION_GAP)
 	var service: RefCounted=u.gameplay.hired
 	if not service.supported():u._text_to(self,"当前世界尚未升级雇佣规则。",14);return
 	_token=service.token();_party_count=service.party_fee(1);status=u._text_to(self,service.status_text(),18);status.name="HireStatus"
+	status.add_theme_color_override("font_color",UISkin.ICE)
 	var row: RefCounted=service.active()
 	if row==null:
 		for spec: Dictionary in u.gameplay.rows("hire_profile_defs"):
-			var frame: VBoxContainer=VBoxContainer.new();frame.add_theme_constant_override("separation",6);add_child(frame)
+			var frame: VBoxContainer=VBoxContainer.new();frame.add_theme_constant_override("separation",UISkin.GAP);add_child(frame)
 			u._text_to(frame,spec.display_name,16)
 			u._text_to(frame,"雇佣费 %d · 押金 %d · 租期 %.0f秒" % [spec.hire_fee_credit,spec.deposit_credit,spec.lease_s],14)
 			var reason: String=service.hire_reason(spec.profile_id);var button: Button=_button(frame,"雇佣","hire_action",spec.profile_id,_token)
 			button.name="Hire_"+str(spec.profile_id);button.disabled=not reason.is_empty();button.tooltip_text=reason
 			if not reason.is_empty():u._text_to(frame,reason,13)
-		u._text_to(self,"押金按返航船况结算；主舰损毁会触发紧急回收，押金不退。",13)
+		u._text_to(self,"押金按返航船况结算；主舰损毁会触发紧急回收，押金不退。",13).add_theme_color_override("font_color",UISkin.MUTED)
 		if not u.state.rows("hire_contract_state").is_empty():
 			var previous: RefCounted=u.state.rows("hire_contract_state")[-1]
 			u._text_to(self,"上次结算 · %s · 退押 %d" % ["归港" if previous.phase=="returned" else "损失",previous.refund_credit],13)
 		return
 	health=u._text_to(self,"",14);health.name="HireHealth"
 	supplies=u._text_to(self,"",14);supplies.name="HireSupplies"
-	u._text_to(self,"已付雇佣费 %d · 押金 %d · 同行航门按 %d 舰计费" % [row.fee_paid_credit,row.deposit_paid_credit,_party_count],13)
-	var commands: HFlowContainer=HFlowContainer.new();commands.add_theme_constant_override("h_separation",8);commands.add_theme_constant_override("v_separation",6);add_child(commands)
+	health.add_theme_color_override("font_color",UISkin.ICE)
+	supplies.add_theme_color_override("font_color",UISkin.ICE)
+	u._text_to(self,"已付雇佣费 %d · 押金 %d · 同行航门按 %d 舰计费" % [row.fee_paid_credit,row.deposit_paid_credit,_party_count],13).add_theme_color_override("font_color",UISkin.MUTED)
+	var commands: HFlowContainer=HFlowContainer.new();commands.add_theme_constant_override("h_separation",UISkin.GAP);commands.add_theme_constant_override("v_separation",UISkin.GAP);add_child(commands)
 	for pair: Array in [["推进","advance"],["集结","regroup"],["集火","focus"],["撤退","retreat"]]:
 		var focus_id: String=str(u.target_id) if pair[1]=="focus" else "";var reason: String=service.order_reason(pair[1],focus_id)
 		var button: Button=_button(commands,pair[0],"hire_action",pair[1],_token+("|"+focus_id if pair[1]=="focus" else ""));button.name="HireOrder_"+str(pair[1]);button.disabled=not reason.is_empty();button.tooltip_text=reason
 	var reason: String=service.order_reason("dismiss");var button: Button=_button(self,"解约归港","hire_action","dismiss",_token)
 	button.name="HireDismiss";button.disabled=not reason.is_empty();button.tooltip_text=reason
-	u._text_to(self,"维修储备有限；撤退需实际脱离后返航，暂停和退出不推进计时。",13)
+	UISkin.apply_button(button,"danger")
+	u._text_to(self,"维修储备有限；撤退需实际脱离后返航，暂停和退出不推进计时。",13).add_theme_color_override("font_color",UISkin.MUTED)
 	_update()
 func _button(parent: Node,title: String,action: String,target: String,extra: String) -> Button:
 	var ui_ref: WeakRef=weakref(u);var state: RefCounted=u.state;var catalog: RefCounted=u.catalog;var epoch: int=state.epoch;var generation: int=u.business_generation

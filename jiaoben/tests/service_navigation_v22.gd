@@ -330,9 +330,9 @@ func only_industry_active() -> bool:
 		var font_color: Color = button.get_theme_color("font_color")
 		var icon_color: Color = button.get_theme_color("icon_normal_color")
 		if font_color == UISkin.AMBER: active.append(id)
-		valid = valid and font_color == (UISkin.AMBER if id == "industry" else UISkin.TEXT) and icon_color == (UISkin.AMBER if id == "industry" else Color.WHITE)
+		valid = valid and font_color == (UISkin.AMBER if id == "industry" else UISkin.TEXT) and icon_color == (UISkin.AMBER if id == "industry" else UISkin.TEXT)
 		for color_key: String in ["font_hover_color", "font_pressed_color", "font_focus_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color"]:
-			valid = valid and button.get_theme_color(color_key) == (UISkin.AMBER if id == "industry" else Color.WHITE)
+			valid = valid and button.get_theme_color(color_key) == (UISkin.AMBER if id == "industry" else UISkin.TEXT)
 	return valid and active == ["industry"]
 
 func industry_focus_regression() -> void:

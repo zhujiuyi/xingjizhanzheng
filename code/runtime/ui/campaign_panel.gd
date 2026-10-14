@@ -1,6 +1,7 @@
 extends VBoxContainer
 const T=preload("res://contracts/contract_types.gd")
 const ResourceStatus=preload("res://runtime/resource_status.gd")
+const UISkin=preload("res://runtime/ui_theme.gd")
 var u: Node
 var mode: String
 var context: Dictionary
@@ -9,7 +10,7 @@ var elapsed: float=0.0
 var live_labels: Array[Dictionary]=[]
 func setup(ui: Node,page: String) -> void:
 	u=ui;mode=page;context={"state":u.state,"session":u.state.session_id,"epoch":u.state.epoch,"generation":u.business_generation}
-	add_theme_constant_override("separation",10);_build()
+	add_theme_constant_override("separation",UISkin.GAP);_build()
 func _current() -> bool:
 	return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(u) and u.page==mode and u.state==context.state and u.state.session_id==context.session and u.state.epoch==context.epoch and u.business_generation==context.generation and u.body.is_ancestor_of(self)
 func _signature() -> String:
@@ -46,13 +47,16 @@ func _projects() -> void:
 	if u.project_selected_id.is_empty():u.project_selected_id=definitions[0].project_id
 	for def: Dictionary in definitions:
 		var id: String=def.project_id
-		u._button(choices,def.display_name,func():
-			if _current():u.project_selected_id=id;_build()).name="ProjectSelect_"+id
+		var choice: Button=u._button(choices,def.display_name,func():
+			if _current():u.project_selected_id=id;_build())
+		choice.name="ProjectSelect_"+id;choice.toggle_mode=true;choice.set_pressed_no_signal(id==u.project_selected_id)
+		choice.custom_minimum_size=Vector2(0,32);choice.add_theme_font_size_override("font_size",13)
+		UISkin.apply_button(choice,"filter",true,id==u.project_selected_id)
 	var id: String=u.project_selected_id
 	var row: RefCounted=service.instance(id);var def: Dictionary=service.definition(id);var token: String=service.token(id)
 	u._text_to(self,def.display_name+" · "+u._sector_name(def.sector_id),20)
 	u._text_to(self,"阶段 %d/3 · %s · 探索贡献 %d/%d" % [row.stage_index,"已完成" if row.phase=="completed" else service.stage(id,row.stage_index).display_name,service.evidence(id),def.required_evidence_units],14)
-	var status: Label=u._text_to(self,"",14);status.name="ProjectStatus";live_labels.append({"label":status,"kind":"project","id":id})
+	var status: Label=u._text_to(self,"",14);status.name="ProjectStatus";status.add_theme_color_override("font_color",UISkin.ICE);live_labels.append({"label":status,"kind":"project","id":id})
 	var actions: HFlowContainer=HFlowContainer.new();add_child(actions);_nav(actions,"project",id,token)
 	var pause: Button=_request(actions,"恢复工程" if row.paused else "暂停工程","construction_action",id,("resume" if row.paused else "pause")+"||"+token)
 	pause.name="ProjectPause"
@@ -83,12 +87,12 @@ func _expeditions() -> void:
 	var focus: Dictionary={}
 	for def: Dictionary in u.catalog.rows("expedition_route_defs"):
 		if int(def.focus_index)==director.focus_index:focus=def
-	var label: Label=u._text_to(self,"",14);label.name="ExpeditionFocus";live_labels.append({"label":label,"kind":"focus"})
+	var label: Label=u._text_to(self,"",14);label.name="ExpeditionFocus";label.add_theme_color_override("font_color",UISkin.MUTED);live_labels.append({"label":label,"kind":"focus"})
 	var run: RefCounted=service.active()
 	if run==null:
 		for def: Dictionary in u.catalog.rows("expedition_route_defs"):
 			u._text_to(self,def.display_name+" · 准备费 %d" % int(def.start_fee_credit),19)
-			u._text_to(self,"受领站："+u._station_name(def.origin_station_id)+" · "+def.description,13)
+			u._text_to(self,"受领站："+u._station_name(def.origin_station_id)+" · "+def.description,13).add_theme_color_override("font_color",UISkin.MUTED)
 			var options: HFlowContainer=HFlowContainer.new();add_child(options)
 			_request(options,"定位准备站","campaign_map","station:"+str(def.origin_station_id),"")
 			for choice: Dictionary in service.options(def.route_id,1):
@@ -99,7 +103,7 @@ func _expeditions() -> void:
 	var current: RefCounted=service.stage(run);var token: String=service.token(run.run_id)
 	u._text_to(self,service.route(run.route_id).display_name+" · 第%d/3段" % run.stage_index,20)
 	u._text_to(self,"本轮协调成果已入账：%d信用点 / %d探索证据" % [run.bonus_credit_total,run.bonus_insight_total],14)
-	var state_label: Label=u._text_to(self,"",14);state_label.name="ExpeditionStatus";live_labels.append({"label":state_label,"kind":"expedition","id":run.run_id})
+	var state_label: Label=u._text_to(self,"",14);state_label.name="ExpeditionStatus";state_label.add_theme_color_override("font_color",UISkin.ICE);live_labels.append({"label":state_label,"kind":"expedition","id":run.run_id})
 	var actions: HFlowContainer=HFlowContainer.new();add_child(actions);_nav(actions,"expedition",run.run_id,token)
 	u._button(actions,"处理本段事件",func():
 		if _current():u.open_exploration(current.event_id)).name="ExpeditionEvent"
@@ -112,18 +116,18 @@ func _expeditions() -> void:
 			button.disabled=not service.reason(run.run_id,"continue",choice.option_id).is_empty();button.tooltip_text=service.reason(run.run_id,"continue",choice.option_id)
 func _reports() -> void:
 	var service: RefCounted=u.gameplay.telemetry
-	var total_label: Label=u._text_to(self,"",17);live_labels.append({"kind":"total","label":total_label})
+	var total_label: Label=u._text_to(self,"",17);total_label.add_theme_color_override("font_color",UISkin.ICE);live_labels.append({"kind":"total","label":total_label})
 	var actions: HFlowContainer=HFlowContainer.new();add_child(actions)
 	_request(actions,"导出CSV","export_flight_report","csv","").name="ReportExportCSV"
 	_request(actions,"导出JSON","export_flight_report","json","").name="ReportExportJSON"
-	u._text_to(self,"导出仅包含本地游戏指标；不含角色名称、凭据、输入内容或系统路径。飞行中升级的部分记录会明确标注。",13)
+	u._text_to(self,"导出仅包含本地游戏指标；不含角色名称、凭据、输入内容或系统路径。飞行中升级的部分记录会明确标注。",13).add_theme_color_override("font_color",UISkin.MUTED)
 	if u.gameplay.journal.supported():
 		u._text_to(self,"活动与物资",17)
-		var measured: Label=u._text_to(self,"",14);measured.name="ReportMeasurements";live_labels.append({"kind":"measurements","label":measured})
-		var recent: Label=u._text_to(self,"",14);recent.name="ReportRecentActivities";live_labels.append({"kind":"activities","label":recent})
+		var measured: Label=u._text_to(self,"",14);measured.name="ReportMeasurements";measured.add_theme_color_override("font_color",UISkin.MUTED);live_labels.append({"kind":"measurements","label":measured})
+		var recent: Label=u._text_to(self,"",14);recent.name="ReportRecentActivities";recent.add_theme_color_override("font_color",UISkin.MUTED);live_labels.append({"kind":"activities","label":recent})
 	for report: Dictionary in service.export_rows():
 		u._text_to(self,"#%d · %s · %s%s" % [report.sequence,report.hull,{"active":"出航中","docked":"已返港","lost":"损毁"}[report.status]," · 部分基线" if report.partial_baseline else ""],17)
-		var label: Label=u._text_to(self,"",13);live_labels.append({"kind":"report","sequence":report.sequence,"label":label})
+		var label: Label=u._text_to(self,"",13);label.add_theme_color_override("font_color",UISkin.MUTED);live_labels.append({"kind":"report","sequence":report.sequence,"label":label})
 func _update() -> void:
 	for entry: Dictionary in live_labels:
 		if not is_instance_valid(entry.label):continue

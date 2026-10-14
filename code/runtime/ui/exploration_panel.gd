@@ -1,5 +1,6 @@
 extends VBoxContainer
 const T = preload("res://contracts/contract_types.gd")
+const UISkin = preload("res://runtime/ui_theme.gd")
 var u: Node
 var context: Dictionary
 var signature: String = ""
@@ -10,7 +11,7 @@ var current_event: String = ""
 
 func setup(ui: Node) -> void:
 	u = ui; context = {"state": u.state, "session": u.state.session_id, "epoch": u.state.epoch, "generation": u.business_generation}
-	add_theme_constant_override("separation", 10)
+	add_theme_constant_override("separation", UISkin.GAP)
 	_build()
 
 func _current() -> bool:
@@ -32,21 +33,24 @@ func _build() -> void:
 		var button: Button = u._button(choices, event.display_name, func():
 			if _current(): u.exploration_selected = id; _build())
 		button.name = "ExploreSelect_" + id
-		u._service_button_style(button, id == u.exploration_selected)
+		button.toggle_mode = true; button.button_pressed = id == u.exploration_selected
+		button.custom_minimum_size = Vector2(0, 32); button.add_theme_font_size_override("font_size", 13)
+		UISkin.apply_button(button, "filter", true, id == u.exploration_selected)
 	current_event = u.exploration_selected
 	var row: RefCounted = service.instance(current_event)
 	var event: Dictionary = service.definition(current_event)
 	var variant: Dictionary = service.variant(row)
 	signature = _signature(row)
 	u._text_to(self, str(event.display_name) + " · " + u._sector_name(event.sector_id), 20)
-	u._text_to(self, str(event.clue_text), 14)
+	u._text_to(self, str(event.clue_text), 14).add_theme_color_override("font_color", UISkin.MUTED)
 	var detail: String = "环境：" + str({"fragments": "碎片碰撞与遮挡", "em": "电磁扰动影响扫描和护盾恢复", "solar": "恒星喷流有预告，离开中心可避开"}[event.environment_kind])
 	var unlocked: bool = u.gameplay.unlocked(event.required_unlock_id)
 	if not unlocked: detail += "\n开放条件：完成新手教学并取得远域航路许可。"
 	detail += "\n交付站：" + u._station_name(event.station_id) + "。暂停与退出不推进；活动窗口开始后离场仍会计时。"
 	if row.phase != "clue": detail += "\n本轮 %s · 截击者 %d · 完整奖励 %d 信用点 / %d 探索证据 / %d 声望" % [str(variant.display_name), int(variant.enemy_count), int(variant.full_credit), int(variant.insight_units), int(variant.reputation_units)]
-	u._text_to(self, detail, 13)
+	u._text_to(self, detail, 13).add_theme_color_override("font_color", UISkin.MUTED)
 	status = u._text_to(self, service.status_text(current_event), 15); status.name = "ExploreStatus"
+	status.add_theme_color_override("font_color", UISkin.ICE)
 	var navigation: HFlowContainer = HFlowContainer.new(); add_child(navigation)
 	var generation: String = str(row.generation)
 	u._button(navigation, "星图定位", func(): _navigation("exploration_map", current_event, generation)).name = "ExploreMap"

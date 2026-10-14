@@ -13,14 +13,17 @@ var apply_button: Button
 var last_quote: Dictionary={}
 func setup(ui: Node) -> void:
 	u=ui;context={"state":u.state,"epoch":u.state.epoch,"session":u.state.session_id,"station":u.state.player().docked_station_id,"ship":u.state.ship().ship_instance_id,"generation":u.business_generation}
-	add_theme_constant_override("separation",10)
+	add_theme_constant_override("separation",UISkin.GAP)
 	var filters: HFlowContainer=HFlowContainer.new()
 	var conditions: Button=u._button(self,"计算条件",func():filters.visible=not filters.visible)
 	conditions.name="FittingConditionsToggle"
 	conditions.toggle_mode=true
 	conditions.toggled.connect(func(open: bool):conditions.text="收起条件" if open else "计算条件")
 	add_child(filters);filters.hide()
-	u._text_to(filters,"局部射击距离（米）",14)
+	var distance_label: Label = u._text_to(filters,"局部射击距离（米）",14)
+	distance_label.name = "FittingDistanceLabel"
+	distance_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	distance_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	distance=SpinBox.new();distance.name="FittingDistance";distance.min_value=0;distance.max_value=10000000;distance.step=100;distance.value=u.gameplay.fitting_analysis.config().default_distance_m;filters.add_child(distance)
 	target=OptionButton.new();target.name="FittingTarget";target.add_item("无抗性参考");target.set_item_metadata(0,"")
 	for spec: Dictionary in u.gameplay.rows("npc_archetype_defs"):
@@ -71,8 +74,8 @@ func _summary(before: Dictionary,after: Dictionary) -> void:
 	caption.tooltip_text="使用当前弹药、无人机库存、设备开关、品质与耐久。电容充满、热量归零、冷却就绪起算。目标静止、无遮挡且处于射界内；未计机动、掩体和无人机损失。"
 	caption.mouse_filter=Control.MOUSE_FILTER_PASS
 	var table: GridContainer=GridContainer.new();table.name="FittingKeyValues";table.columns=4 if not after.is_empty() else 2
-	table.add_theme_constant_override("h_separation",16);table.add_theme_constant_override("v_separation",10)
-	var plate: PanelContainer=PanelContainer.new();plate.add_theme_stylebox_override("panel",UISkin.hud_panel(12));results.add_child(plate);plate.add_child(table)
+	table.add_theme_constant_override("h_separation",UISkin.SECTION_GAP);table.add_theme_constant_override("v_separation",UISkin.GAP)
+	var plate: PanelContainer=PanelContainer.new();plate.add_theme_stylebox_override("panel",UISkin.panel_style());results.add_child(plate);plate.add_child(table)
 	_cell(table,"关键指标",UISkin.MUTED);_cell(table,"当前",UISkin.MUTED)
 	if not after.is_empty():_cell(table,"替换后",UISkin.MUTED);_cell(table,"变化",UISkin.MUTED)
 	_metric(table,"理论输出",before.nominal_dps,after.get("nominal_dps"),"DPS")
@@ -96,14 +99,17 @@ func _summary(before: Dictionary,after: Dictionary) -> void:
 	results=summary;detail.hide()
 func _cell(parent: Node,value: String,color: Color=UISkin.TEXT) -> Label:
 	var label: Label=u._text_to(parent,value,14);label.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-	label.add_theme_color_override("font_color",color);label.mouse_filter=Control.MOUSE_FILTER_PASS;return label
+	label.add_theme_color_override("font_color",color);label.mouse_filter=Control.MOUSE_FILTER_PASS
+	var grid: GridContainer=parent as GridContainer
+	if grid!=null and (grid.get_child_count()-1)%grid.columns>0:label.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
+	return label
 func _metric(table: GridContainer,title: String,before: float,after: Variant,unit: String,hint: String="") -> void:
 	_cell(table,title,UISkin.MUTED).tooltip_text=hint
 	_cell(table,XJSpaceUnits.distance(before) if unit=="m" else "%.1f %s" % [before,unit])
 	if after==null:return
 	_cell(table,XJSpaceUnits.distance(float(after)) if unit=="m" else "%.1f %s" % [float(after),unit])
 	var change: float=float(after)-before
-	_cell(table,"—" if absf(change)<0.05 else "%+.1f %s" % [change,unit],Color("86cbb0") if change>0.05 else UISkin.AMBER if change< -0.05 else UISkin.MUTED)
+	_cell(table,"—" if absf(change)<0.05 else "%+.1f %s" % [change,unit],UISkin.ICE if change>0.05 else UISkin.AMBER if change< -0.05 else UISkin.MUTED)
 func _text_row(table: GridContainer,title: String,before: String,after: String,hint: String,change: String="") -> void:
 	_cell(table,title,UISkin.MUTED).tooltip_text=hint;_cell(table,before,UISkin.AMBER if before.contains("受限") else UISkin.TEXT).tooltip_text=hint
 	if table.columns==4:_cell(table,after,UISkin.AMBER if after.contains("受限") else UISkin.TEXT).tooltip_text=hint;_cell(table,change if not change.is_empty() else "—" if before==after else "见数值",UISkin.MUTED)
@@ -128,7 +134,7 @@ func _render(title: String,report: Dictionary) -> void:
 	if not report.ok:u._text_to(results,str(report.reason),14);return
 	u._text_to(results,title,18)
 	var m: Dictionary=report.metrics
-	var table: GridContainer=GridContainer.new();table.columns=2;table.add_theme_constant_override("h_separation",16);results.add_child(table)
+	var table: GridContainer=GridContainer.new();table.columns=2;table.add_theme_constant_override("h_separation",UISkin.SECTION_GAP);results.add_child(table)
 	var values: Array[Array]=[
 		["%.0f秒平均" % report.horizon_s,"%.1f DPS" % report.average_dps],
 		["条件命中估计","%.1f DPS · %.0f秒到达 %.1f伤害" % [report.conditional_dps,report.burst_window_s,report.conditional_burst]],

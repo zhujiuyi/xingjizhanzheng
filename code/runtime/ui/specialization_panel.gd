@@ -1,4 +1,5 @@
 extends VBoxContainer
+const UISkin=preload("res://runtime/ui_theme.gd")
 var u: Node
 var context: Dictionary
 var quantity: SpinBox
@@ -7,23 +8,25 @@ var cards: Array[Dictionary]=[]
 var donation: Button
 func setup(ui: Node) -> void:
 	u=ui;context={"state":u.state,"epoch":u.state.epoch,"session":u.state.session_id,"station":u.state.player().docked_station_id,"generation":u.business_generation}
-	add_theme_constant_override("separation",8)
+	add_theme_constant_override("separation",UISkin.SECTION_GAP)
 	u._text_to(self,"火控专精 · 可积累研究",20)
 	status=u._text_to(self,"",14);status.name="SpecializationEvidence"
-	u._text_to(self,"探索成果、战术敌舰和行动交付均可取得分析证据；普通材料分析提供稳定替代来源。研究分批投入并保存，完成后解锁采购和制造设计。一舰限一项火控专精。",14)
+	status.add_theme_color_override("font_color",UISkin.ICE)
+	u._text_to(self,"探索成果、战术敌舰和行动交付均可取得分析证据；普通材料分析提供稳定替代来源。研究分批投入并保存，完成后解锁采购和制造设计。一舰限一项火控专精。",14).add_theme_color_override("font_color",UISkin.MUTED)
 	var inputs: HFlowContainer=HFlowContainer.new();add_child(inputs)
 	u._text_to(inputs,"本次投入分析点",14)
 	quantity=SpinBox.new();quantity.name="SpecializationQuantity";quantity.min_value=1;quantity.max_value=u.gameplay.specializations.balance.max_donation_points;quantity.step=1;quantity.value=1;inputs.add_child(quantity)
 	donation=u._button(inputs,"投入结构料进行分析",func():
 		if _current():u.requested.emit("specialization_donate","",int(quantity.value),""));donation.name="SpecializationDonate"
 	var balance: Dictionary=u.gameplay.specializations.balance
-	u._text_to(self,"材料分析每点：本站仓库普通结构料 × %d、%d信用点；研究每点另按设计列出的费用投入。" % [balance.donation_units_per_point,balance.donation_credit_per_point],13)
+	u._text_to(self,"材料分析每点：本站仓库普通结构料 × %d、%d信用点；研究每点另按设计列出的费用投入。" % [balance.donation_units_per_point,balance.donation_credit_per_point],13).add_theme_color_override("font_color",UISkin.MUTED)
 	for spec: Dictionary in u.gameplay.rows("specialization_research_defs"):
 		var card: VBoxContainer=VBoxContainer.new();add_child(card)
 		u._text_to(card,str(spec.display_name),18)
-		u._text_to(card,u.gameplay.specializations.description(spec.module_id),14)
+		u._text_to(card,u.gameplay.specializations.description(spec.module_id),14).add_theme_color_override("font_color",UISkin.MUTED)
 		var progress: Label=u._text_to(card,"",14)
-		u._text_to(card,"所需分析 %d 点 · 每点 %d信用点" % [spec.required_points,spec.credit_per_point],13)
+		progress.add_theme_color_override("font_color",UISkin.ICE)
+		u._text_to(card,"所需分析 %d 点 · 每点 %d信用点" % [spec.required_points,spec.credit_per_point],13).add_theme_color_override("font_color",UISkin.MUTED)
 		var id: String=spec.research_id;var controls: HFlowContainer=HFlowContainer.new();card.add_child(controls)
 		var invest: Button=u._button(controls,"投入所选分析点",func():
 			if not _current():return

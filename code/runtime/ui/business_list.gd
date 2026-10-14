@@ -31,12 +31,12 @@ func _ensure_layout() -> void:
 	name = "BusinessList"
 	set_meta("business_list", true)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_theme_constant_override("separation", 5)
+	add_theme_constant_override("separation", UISkin.GAP)
 	heading = _label(self, "", 16)
 	heading.add_theme_color_override("font_color", UISkin.AMBER)
 	scroll_tools = HBoxContainer.new()
 	scroll_tools.name = "BusinessScrollTools"
-	scroll_tools.add_theme_constant_override("separation", 12)
+	scroll_tools.add_theme_constant_override("separation", UISkin.GAP)
 	add_child(scroll_tools)
 	var hint: Label = _label(scroll_tools, "左右滚动查看完整列表", 11)
 	hint.add_theme_color_override("font_color", UISkin.MUTED)
@@ -61,7 +61,7 @@ func _ensure_layout() -> void:
 	horizontal_scroll.add_child(content)
 	var frame: PanelContainer = PanelContainer.new()
 	frame.name = "BusinessHeaderFrame"
-	frame.add_theme_stylebox_override("panel", UISkin.flat(Color(0.06, 0.071, 0.08, 0.97), Color(0.28, 0.30, 0.32, 0.9), 8))
+	frame.add_theme_stylebox_override("panel", UISkin.table_header())
 	content.add_child(frame)
 	header = _columns(frame, "BusinessHeader")
 	for index: int in range(COLUMN_WIDTHS.size()):
@@ -92,8 +92,7 @@ func append_row(id: String, thumbnail: Texture2D, title: String, description: St
 	frame.set_meta("business_row", true)
 	frame.set_meta("row_id", id)
 	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var fill: Color = Color(0.032, 0.040, 0.047, 0.94) if rows.size() % 2 == 0 else Color(0.046, 0.055, 0.063, 0.94)
-	frame.add_theme_stylebox_override("panel", UISkin.flat(fill, Color(0.19, 0.21, 0.23, 0.55), 8))
+	frame.add_theme_stylebox_override("panel", UISkin.table_row(rows.size() % 2 != 0))
 	content.add_child(frame)
 	var columns: HBoxContainer = _columns(frame, "BusinessColumns")
 	var cells: Array[VBoxContainer] = []
@@ -162,8 +161,8 @@ func enable_row_quantity(entry: Dictionary, maximum: int, value: int = 1, editab
 	amount.set_meta("row_id", entry.id)
 	var edit: LineEdit = amount.get_line_edit()
 	edit.add_theme_font_size_override("font_size", 12)
-	edit.add_theme_stylebox_override("normal", UISkin.flat(Color("0b1822"), Color("4b6c7b"), 5))
-	edit.add_theme_stylebox_override("read_only", UISkin.flat(Color("12171c"), Color("343c42"), 5))
+	edit.add_theme_stylebox_override("normal", UISkin.input_style(false, 4))
+	edit.add_theme_stylebox_override("read_only", UISkin.input_style(true, 4))
 	entry.quantity.get_parent().add_child(amount)
 	entry.quantity.hide()
 	entry["amount"] = amount
@@ -176,7 +175,7 @@ func _columns(parent: Node, node_name: String) -> HBoxContainer:
 	var result: HBoxContainer = HBoxContainer.new()
 	result.name = node_name
 	result.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	result.add_theme_constant_override("separation", 10)
+	result.add_theme_constant_override("separation", UISkin.GAP)
 	parent.add_child(result)
 	return result
 
@@ -219,10 +218,7 @@ func _prepare_action(node: Node) -> void:
 	if inline_quantities:
 		button.custom_minimum_size.y = 32
 	button.add_theme_font_size_override("font_size", 13)
-	button.add_theme_stylebox_override("normal", UISkin.hud_button())
-	button.add_theme_stylebox_override("hover", UISkin.hud_button(true))
-	button.add_theme_stylebox_override("pressed", UISkin.hud_button(true))
-	button.add_theme_stylebox_override("disabled", UISkin.hud_button())
+	UISkin.apply_button(button, "default", true)
 	button.focus_entered.connect(_reveal_action.bind(button))
 	button.set_meta("business_focus_bound", true)
 

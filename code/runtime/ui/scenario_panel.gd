@@ -1,6 +1,7 @@
 extends VBoxContainer
 const T=preload("res://contracts/contract_types.gd")
 const Status=preload("res://runtime/resource_status.gd")
+const UISkin=preload("res://runtime/ui_theme.gd")
 var u: Node
 var kind: String
 var context: Dictionary
@@ -12,7 +13,7 @@ func setup(ui: Node,page: String) -> void:
 	u=ui;kind="trial" if page=="trials" else "blockade"
 	selected=u.get(kind+"_selected_id")
 	context={"state":u.state,"epoch":u.state.epoch,"generation":u.business_generation,"page":page}
-	add_theme_constant_override("separation",10);build()
+	add_theme_constant_override("separation",UISkin.GAP);build()
 func current() -> bool:return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(u) and u.state==context.state and u.state.epoch==context.epoch and u.business_generation==context.generation and u.page==context.page and u.body.is_ancestor_of(self)
 func service() -> RefCounted:return u.gameplay.scenarios
 func stamp() -> String:
@@ -53,8 +54,8 @@ func build() -> void:
 		var choice: Button=u._button(choices,def.display_name,func():
 			if current():selected=id;u.set(kind+"_selected_id",id);build())
 		choice.name="ScenarioSelect_"+id;choice.toggle_mode=true;choice.button_pressed=id==selected
-		if id==selected:u._primary(choice)
-		else:u._secondary(choice)
+		choice.custom_minimum_size=Vector2(0,32);choice.add_theme_font_size_override("font_size",13)
+		UISkin.apply_button(choice,"filter",true,id==selected)
 	var spec: Dictionary=service().definition(kind,selected);var row: RefCounted=service().instance(kind,selected)
 	u._text_to(self,spec.display_name,20)
 	if kind=="trial":
@@ -69,8 +70,8 @@ func build() -> void:
 	else:
 		u._text_to(self,"签发：%s · 服务费 %d · 送达每批 %d 信用点" % [u._station_name(spec.station_id),spec.fee_credit,spec.credit_per_unit],14)
 		u._text_to(self,"侦测 %.1f km · 静默 ≤%.0f m/s · 侧路 %.0f 秒" % [spec.detection_radius_m/1000.0,spec.quiet_speed_mps,spec.bypass_window_s],14)
-	u._text_to(self,spec.description,14)
-	status_label=u._text_to(self,"",15);status_label.name="ScenarioStatus"
+	u._text_to(self,spec.description,14).add_theme_color_override("font_color",UISkin.MUTED)
+	status_label=u._text_to(self,"",15);status_label.name="ScenarioStatus";status_label.add_theme_color_override("font_color",UISkin.ICE)
 	var nav: HFlowContainer=HFlowContainer.new();add_child(nav);route(nav)
 	var actions: HFlowContainer=HFlowContainer.new();add_child(actions)
 	for action: String in ["accept","start","withdraw","claim"]:

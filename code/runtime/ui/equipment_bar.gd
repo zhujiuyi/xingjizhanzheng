@@ -30,7 +30,7 @@ func _ready() -> void:
 	name = "EquipmentCycles"
 	add_theme_stylebox_override("panel", UISkin.hud_panel(4))
 	var layout: VBoxContainer = VBoxContainer.new()
-	layout.add_theme_constant_override("separation", 3)
+	layout.add_theme_constant_override("separation", 4)
 	add_child(layout)
 	header = HBoxContainer.new()
 	_header_label(header, "设备循环", 11, UISkin.AMBER)
@@ -54,7 +54,7 @@ func _ready() -> void:
 	engine_button.focus_mode = Control.FOCUS_NONE
 	engine_button.custom_minimum_size = Vector2(54, 28)
 	engine_button.add_theme_font_size_override("font_size", 11)
-	engine_button.add_theme_stylebox_override("normal", UISkin.hud_button(true))
+	UISkin.apply_button(engine_button, "filter", true, true)
 	engine_button.pressed.connect(func(): engine_requested.emit())
 	row.add_child(engine_button)
 	engine_button.hide()
@@ -120,9 +120,7 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 		slot_records.append(slot_snapshot)
 		slot_buttons[str(record.get("slot_id", id))] = button
 		button.set_pressed_no_signal(bool(record.get("enabled", false)))
-		button.add_theme_stylebox_override("normal", UISkin.hud_button(bool(record.get("enabled", false))))
-		button.add_theme_stylebox_override("pressed", UISkin.hud_button(bool(record.get("enabled", false))))
-		button.add_theme_stylebox_override("hover", UISkin.hud_button(true))
+		UISkin.apply_button(button, "filter", true, bool(record.get("enabled", false)))
 		button.tooltip_text = "%s\n%s槽 %d · %s\n循环 %.1f s · 电容 %.0f · 热量 %.0f\n耐久 %.0f · 点击%s设备" % [str(record.title), str(record.get("slot_title", "")), int(record.get("slot_index", 0)) + 1, str(record.get("state_label", "")), float(record.get("cycle_s", 0.0)), float(record.get("energy_eu", 0.0)), float(record.get("heat_hu", 0.0)), float(record.get("durability", 0.0)), "关闭" if bool(record.get("enabled", false)) else "启用"]
 		var labels: Dictionary = module_labels[id]
 		labels.title.text = "%s%d · %s" % [str(record.get("slot_short", "")), int(record.get("slot_index", 0)) + 1, str(record.title)]
@@ -153,7 +151,7 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 			placeholder.name = "EmptySlot_" + slot_id.validate_node_name()
 			placeholder.focus_mode = Control.FOCUS_NONE
 			placeholder.disabled = true
-			placeholder.add_theme_stylebox_override("disabled", UISkin.hud_button(false))
+			UISkin.apply_button(placeholder, "secondary", true)
 			row.add_child(placeholder)
 			empty_slot_buttons[slot_id] = placeholder
 		placeholder.text = "%s%d · 空槽" % [str(record.slot_short), int(record.slot_index) + 1]
@@ -212,10 +210,8 @@ func _build_combat_options(parent: VBoxContainer) -> void:
 		check.mouse_filter = Control.MOUSE_FILTER_STOP
 		check.custom_minimum_size.y = 24
 		check.add_theme_font_size_override("font_size", 11)
-		check.add_theme_constant_override("h_separation", 3)
-		check.add_theme_stylebox_override("hover", UISkin.hud_button(true))
-		check.add_theme_stylebox_override("disabled", UISkin.hud_button(false))
-		check.add_theme_stylebox_override("focus", UISkin.focus_style())
+		check.add_theme_constant_override("h_separation", 4)
+		UISkin.apply_button(check, "filter", true)
 		check.set_meta("action", "set_combat_option")
 		check.set_meta("option", option)
 		check.set_meta("combat_hint", str(hints[option]))
@@ -271,8 +267,7 @@ func _refresh_combat_controls() -> void:
 		if check.disabled != _combat_blocked: check.disabled = _combat_blocked
 		# Unchanged snapshots must not allocate styles or invalidate the theme.
 		if not check.has_meta("combat_visual_enabled") or bool(check.get_meta("combat_visual_enabled")) != enabled:
-			check.add_theme_stylebox_override("normal", UISkin.hud_button(enabled))
-			check.add_theme_stylebox_override("pressed", UISkin.hud_button(enabled))
+			UISkin.apply_button(check, "filter", true, enabled)
 			check.add_theme_color_override("font_color", UISkin.AMBER if enabled else UISkin.TEXT)
 			check.set_meta("combat_visual_enabled", enabled)
 		var hint: String = str(check.get_meta("combat_hint")) + "\n当前：" + _combat_message
