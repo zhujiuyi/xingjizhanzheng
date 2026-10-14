@@ -81,7 +81,12 @@ static func run(host: Node, output_dir: String) -> bool:
 	var crew: Node3D = host.hangar.get_service_anchor("operations")
 	_check(evidence, is_instance_valid(crew) and crew.is_visible_in_tree(), "packed 3D NPC service model is visible")
 	var service_icons_valid: bool = host.ui.station_services.find_child("NpcPortrait0", true, false) == null
+	# The registry order and the drawn order are no longer the same list: the hangar
+	# draws its entries grouped by routine of use (舰船 / 物资 / 任务 / 势力 / 系统) with
+	# the station landing page ahead of every group. Both orders are written out here
+	# rather than read back from the page, so a service silently vanishing still fails.
 	var expected_services: Array[String] = ["station", "ships", "warehouse", "fitting", "market", "industry", "missions", "civilizations", "research", "map", "pause"]
+	var expected_render_order: Array[String] = ["station", "ships", "fitting", "warehouse", "market", "industry", "missions", "map", "civilizations", "research", "pause"]
 	var live_services: Array[Dictionary] = host.ui._service_pages(true)
 	var rendered_services: Array[String] = []
 	for service_button: Button in host.ui.station_services.find_children("*", "Button", true, false):
@@ -91,7 +96,7 @@ static func run(host: Node, output_dir: String) -> bool:
 		service_icons_valid = service_icons_valid and service_button.text == host.ui._service_label(destination) and service_button.icon != null and service_button.icon == host.ui._service_icon(destination)
 	var live_ids: Array[String] = []
 	for entry: Dictionary in live_services: live_ids.append(str(entry.id))
-	_check(evidence, service_icons_valid and live_ids == expected_services and rendered_services == expected_services and host.ui.station_services.find_child("ServiceSalvage", true, false) == null, "packed hangar renders the exact eleven live compact icon services, routes salvage through warehouse and has no portrait controls")
+	_check(evidence, service_icons_valid and live_ids == expected_services and rendered_services == expected_render_order and host.ui.station_services.find_child("ServiceSalvage", true, false) == null, "packed hangar renders all eleven live compact icon services in grouped order, routes salvage through warehouse and has no portrait controls")
 	await host._command("hangar_focus", "operations", 1, "")
 	var focus_deadline := Time.get_ticks_msec() + 3000
 	while Time.get_ticks_msec() < focus_deadline and host.hangar.get_camera().position.distance_to(host.hangar._camera_destination) > 1.0:
@@ -472,22 +477,59 @@ static func _business_rows(host: Node) -> Array[Dictionary]:
 			for entry: Dictionary in values: result.append(entry)
 	return result
 
+## A stage page mounts the selected row's actions in the page's own detail column, so a
+## loan's claim control only exists once that loan is the open row. Opening it is the
+## point of the check rather than a workaround: it proves the control is reachable.
+static func _claim_action_present(host: Node, list_node: Node, rows: Array[Dictionary], external_details: bool, loan_id: String) -> bool:
+	var holder: Node = null
+	if external_details:
+		if not is_instance_valid(list_node): return false
+		list_node.call("select_row", loan_id)
+		await host.get_tree().process_frame
+		holder = host.ui.stage_detail
+	else:
+		for row: Dictionary in rows:
+			if str(row.id) == loan_id: holder = row.actions
+	if not is_instance_valid(holder): return false
+	for button: Button in holder.find_children("*", "Button", true, false):
+		if str(button.get_meta("action", "")) == "claim_loan" and str(button.get_meta("target", "")) == loan_id: return true
+	return false
+
 static func _information_page_valid(host: Node, page: String) -> bool:
 	var rows: Array[Dictionary] = []
+	# A stage page keeps its cards to what identifies a row and moves the description
+	# and actions into the page's own detail column, so "which row is open" is the
+	# row's own flag rather than an inline block being visible. The description is
+	# checked there instead of on the card, so the information is still required to
+	# exist — it just lives in one place rather than two.
+	var external_details: bool = false
+	var list_node: Node = null
 	for node: Node in host.ui.body.find_children("*", "VBoxContainer", true, false):
 		if bool(node.get_meta("info_list", false)):
+			external_details = bool(node.get("details_external"))
+			list_node = node
 			for row: Dictionary in node.get("rows"): rows.append(row)
 	if rows.is_empty(): return false
 	var ids: Array[String] = []
-	var open_details: int = 0
+	var selected: Array[String] = []
 	for row: Dictionary in rows:
 		var id: String = str(row.row.get_meta("row_id", ""))
-		if id.is_empty() or id in ids or row.image.texture == null or row.name.text.is_empty() or row.description.text.is_empty() or row.status.text.is_empty(): return false
+		if id.is_empty() or id in ids or row.image.texture == null or row.name.text.is_empty() or row.status.text.is_empty(): return false
+		if not external_details and row.description.text.is_empty(): return false
 		ids.append(id)
-		if row.details.visible:
-			open_details += 1
+		var is_open: bool = bool(row.row.get_meta("details_open", false)) if external_details else bool(row.details.visible)
+		if is_open:
 			if not row.selector.button_pressed: return false
-	if open_details != 1: return false
+			selected.append(id)
+	if selected.size() != 1: return false
+	if external_details:
+		if not is_instance_valid(host.ui.stage_detail): return false
+		var detail_text: String = ""
+		for label: Label in host.ui.stage_detail.find_children("*", "Label", true, false): detail_text += label.text
+		var selected_name: String = ""
+		for row: Dictionary in rows:
+			if str(row.row.get_meta("row_id", "")) == selected[0]: selected_name = row.name.text
+		if selected_name.is_empty() or not detail_text.contains(selected_name): return false
 	if page == "ships":
 		var expected: Array[String] = []
 		for ship: RefCounted in host.state.rows("ship_state"):
@@ -495,11 +537,7 @@ static func _information_page_valid(host: Node, page: String) -> bool:
 		for definition: Dictionary in host.ui._defs("loan_service_defs"):
 			if str(definition.station_id) != str(host.state.player().docked_station_id): continue
 			expected.append(str(definition.loan_service_id))
-			var has_claim: bool = false
-			for row: Dictionary in rows:
-				if str(row.id) != str(definition.loan_service_id): continue
-				for button: Button in row.actions.find_children("*", "Button", true, false):
-					has_claim = has_claim or str(button.get_meta("action", "")) == "claim_loan" and str(button.get_meta("target", "")) == str(definition.loan_service_id)
+			var has_claim: bool = await _claim_action_present(host, list_node, rows, external_details, str(definition.loan_service_id))
 			if not has_claim: return false
 		for loan: RefCounted in host.state.rows("loan_state"):
 			if loan.status in [Types.LoanStatus.ACTIVE, Types.LoanStatus.LOST]: expected.append(str(loan.loan_id))
@@ -631,7 +669,9 @@ static func _business_list_checks(host: Node, evidence: Dictionary, output_dir: 
 			var warehouse: Control = host.ui.warehouse_panel
 			all_lists = all_lists and is_instance_valid(warehouse) and not warehouse.refs.rows_by_id.is_empty()
 			await _warehouse_fixed_checks(host, evidence, output_dir)
-		elif variant.page in ["ships", "fitting", "missions"]: all_lists = all_lists and _information_page_valid(host, str(variant.page))
+		elif variant.page in ["ships", "fitting", "missions"]:
+			var information_valid: bool = await _information_page_valid(host, str(variant.page))
+			all_lists = all_lists and information_valid
 		elif variant.page == "research": all_lists = all_lists and _research_content_valid(host)
 		else: all_lists = all_lists and not _business_rows(host).is_empty()
 	_check(evidence, all_lists, "packed warehouse retains two inventory panes; fleet, loan, slot and mission summaries match actual records with one detail; classified research retains actual definitions, fees and selected action; industry and market retain populated transaction rows")
