@@ -167,7 +167,7 @@ var fitting_show_all: bool = false
 ## on the left, the selected subject and its actions on the right, a strip of large
 ## readouts along the bottom. Dense tables stay in workbench mode, where the width
 ## is what makes them readable.
-const STAGE_PAGES: Array[String] = ["ships", "fitting"]
+const STAGE_PAGES: Array[String] = ["ships", "fitting", "ship_roles"]
 var stage_mode: bool = false
 var stage_header: PanelContainer
 var stage_left: PanelContainer
@@ -825,6 +825,14 @@ func _stage_region(parent: Node, name_hint: String) -> PanelContainer:
 	region.add_theme_stylebox_override("panel", UISkin.hud_panel(10))
 	parent.add_child(region)
 	return region
+
+## Clears the bottom strip so a page whose readouts follow the selection can rebuild
+## them without the old ones lingering.
+func _stage_strip_clear() -> void:
+	if not is_instance_valid(stage_strip): return
+	for child: Node in stage_strip.get_children():
+		stage_strip.remove_child(child)
+		child.queue_free()
 
 ## One entry in the bottom readout strip. Large value, small caption: the strip is
 ## read at a glance, so the number carries and the label only names it.
