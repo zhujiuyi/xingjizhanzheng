@@ -167,6 +167,9 @@ var fitting_show_all: bool = false
 ## on the left, the selected subject and its actions on the right, a strip of large
 ## readouts along the bottom. Dense tables stay in workbench mode, where the width
 ## is what makes them readable.
+## Widest a settings control may get. Three sliders at window width was the
+## clearest case of a sparse page stretching its own controls.
+const SETTINGS_COLUMN_WIDTH: int = 360
 const STAGE_PAGES: Array[String] = ["ships", "fitting", "ship_roles"]
 var stage_mode: bool = false
 var stage_header: PanelContainer
@@ -1938,31 +1941,50 @@ func _settings() -> void:
 	if preferences.is_empty():
 		_text("偏好尚未加载，请稍后重新打开设置。")
 		return
+	# One bounded column. A slider dropped straight into the page body stretched to
+	# the full window width on a screen that holds three of them and little else.
+	var column: VBoxContainer = VBoxContainer.new()
+	column.custom_minimum_size.x = SETTINGS_COLUMN_WIDTH
+	column.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	column.add_theme_constant_override("separation", UISkin.SECTION_GAP)
+	body.add_child(column)
 	for field: String in ["master_volume", "mouse_sensitivity", "vfx_intensity"]:
 		var title: String = {"master_volume": "主音量", "mouse_sensitivity": "观察灵敏度", "vfx_intensity": "特效强度"}[field]
 		var current: float = float(preferences.get(field, 0.0))
-		var value_label: Label = _text_to(body, _setting_text(title, current, field))
+		var group: VBoxContainer = VBoxContainer.new()
+		group.add_theme_constant_override("separation", 4)
+		column.add_child(group)
+		var heading: HBoxContainer = HBoxContainer.new()
+		heading.add_theme_constant_override("separation", UISkin.GAP)
+		group.add_child(heading)
+		var value_label: Label = _text_to(heading, _setting_text(title, current, field))
 		var slider: HSlider = HSlider.new()
 		slider.name = "Preference_" + field
 		if field == "vfx_intensity": slider.tooltip_text = "实时调整命中、爆炸、采矿光束、虫洞和跃迁等附加反馈；0关闭这些效果，保留可读的战斗实体与声音。"
 		slider.min_value = minf(0.0002, current) if field == "mouse_sensitivity" else 0.0
 		slider.max_value = maxf(0.008, current) if field == "mouse_sensitivity" else 1.0
 		slider.step = 0.0001 if field == "mouse_sensitivity" else 0.01
-		slider.custom_minimum_size.y = 36
+		slider.custom_minimum_size = Vector2(SETTINGS_COLUMN_WIDTH, 36)
+		slider.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		slider.value = current # 先赋实际值，再绑定事件；打开页面不写回数据库。
-		body.add_child(slider)
+		group.add_child(slider)
 		var slider_context: Dictionary=UIInteraction.context(self)
 		slider.value_changed.connect(func(value: float):
 			if not UIInteraction.current(self,slider_context,slider):return
 			value_label.text = _setting_text(title, value, field)
 			requested.emit("preference", field, 1, str(value)))
-	_text("观察灵敏度调整左键拖动镜头；普通鼠标移动不控制舰船。主音量为 0 时静音。")
+	var note: Label = _text_to(column, "观察灵敏度调整左键拖动镜头；普通鼠标移动不控制舰船。主音量为 0 时静音。", UISkin.SIZE_NOTE)
+	UISkin.apply_text_style(note, "note")
+	note.add_theme_color_override("font_color", UISkin.MUTED)
 	var quality_row: HFlowContainer = HFlowContainer.new()
-	body.add_child(quality_row)
+	quality_row.add_theme_constant_override("h_separation", UISkin.GAP)
+	quality_row.add_theme_constant_override("v_separation", UISkin.GAP)
+	column.add_child(quality_row)
 	for quality: String in ["high", "medium", "low"]:
 		var label: String = {"high": "高", "medium": "中", "low": "低"}[quality]
 		var selected: bool = preferences.get("quality_mode") == quality
-		var choice: Button = _button(quality_row, "画质 · " + label + ("（当前）" if selected else ""), func(): requested.emit("preference", "quality_mode", 1, quality))
+		var choice: Button = _button(quality_row, "画质 · " + label, func(): requested.emit("preference", "quality_mode", 1, quality))
+		choice.tooltip_text = "当前画质" if selected else "切换到画质 · " + label
 		UISkin.apply_button(choice, "filter", false, selected)
 
 func _show_slots(allow_save: bool = false) -> void:

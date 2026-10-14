@@ -438,7 +438,9 @@ func _ready() -> void:
 	find_row.add_child(sovereignty_filter)
 	navigator = OptionButton.new()
 	navigator.name = "SectorNavigator"
-	navigator.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Content-sized. Two children of this row used to expand and shared the slack, so
+	# a four-character sector dropdown was drawn 552 px wide next to the search box.
+	navigator.size_flags_horizontal = Control.SIZE_FILL
 	navigator.fit_to_longest_item = false
 	navigator.custom_minimum_size.x = 100
 	navigator.item_selected.connect(_navigator_selected)
