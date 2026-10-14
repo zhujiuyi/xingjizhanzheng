@@ -354,7 +354,7 @@ func restore_view(view: Dictionary) -> void:
 	_restore_position.call_deferred(view)
 
 func _restore_position(view: Dictionary) -> void:
-	if not is_inside_tree() or is_queued_for_deletion(): return
+	if not is_visible_in_tree() or is_queued_for_deletion(): return
 	var id: String = str(view.get("focus_id", ""))
 	if refs.rows_by_id.has(id):
 		var row: Dictionary = refs.rows_by_id[id]

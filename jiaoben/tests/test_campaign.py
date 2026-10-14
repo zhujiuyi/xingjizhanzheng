@@ -40,7 +40,7 @@ class CampaignSql(unittest.TestCase):
    path=ROOT/name
    self.assertEqual(path.read_bytes(),subprocess.check_output(['git','show','f357712:'+path.relative_to(ROOT).as_posix()],cwd=ROOT),path.name)
  def test_new_initial_world_has_no_free_outcomes(self):
-  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(26,));self.assertEqual(len(p.STATE_TABLES),114)
+  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(27,));self.assertEqual(len(p.STATE_TABLES),114)
   for table in ['expedition_run_state','expedition_receipt_state','construction_receipt_state','construction_evidence_state','flight_record_state']:
    self.assertEqual(self.db.execute('SELECT count(*) FROM '+table).fetchone(),(0,))
   self.seal()

@@ -23,8 +23,8 @@ import build_catalog
 
 PROGRESS_DIR = ROOT / "code/database/progress"
 MIGRATIONS = ("001_core.sql", "002_frozen_catalog.sql", "003_seal_validation.sql", "004_immutability.sql", "005_singleplayer_expansion.sql", "006_signal_and_gate_lifetime.sql", "007_profile_resume.sql", "008_paid_engine_family.sql", "009_encounters_and_salvage.sql", "010_combat_and_lighting.sql", "011_space_locations.sql", "012_civilizations.sql", "013_industry.sql", "014_resource_intel.sql", "015_exploration.sql", "016_mobile_belts.sql", "017_tactics.sql", "018_operations.sql", "019_fitting.sql", "020_roles.sql", "021_honors.sql", "022_frontier.sql", "023_hire.sql", "024_situational.sql", "025_campaign.sql", "026_metrics.sql")
-MIGRATIONS += ("027_scenarios.sql", "028_owned_fleet.sql", "029_march.sql")
-FORMAT_VERSION = 26
+MIGRATIONS += ("027_scenarios.sql", "028_owned_fleet.sql", "029_march.sql", "030_loading_indexes.sql")
+FORMAT_VERSION = 27
 ADAPTER = PROGRESS_DIR / "catalog_adapter_v0_24.sql"
 ADAPTER_VERSION = "frozen_catalog_v0_24"
 REVIEWED_ADAPTERS = {

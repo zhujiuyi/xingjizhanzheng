@@ -16,7 +16,7 @@ static func watch_integer(spin: SpinBox, update: Callable) -> void:
 	var witness: WeakRef=weakref(spin)
 	var refresh: Callable=func():
 		var current_spin: SpinBox=witness.get_ref() as SpinBox
-		if is_instance_valid(current_spin) and current_spin.is_inside_tree() and not current_spin.is_queued_for_deletion() and update.is_valid():update.call()
+		if is_instance_valid(current_spin) and current_spin.is_visible_in_tree() and not current_spin.is_queued_for_deletion() and update.is_valid():update.call()
 	spin.value_changed.connect(func(_value: float): refresh.call())
 	spin.get_line_edit().text_changed.connect(func(_text: String): refresh.call())
 	spin.get_line_edit().focus_exited.connect(func(): refresh.call_deferred())
@@ -34,6 +34,7 @@ static func context(ui: Node) -> Dictionary:
 static func current(ui: Variant, token: Dictionary, witness: Variant = null) -> bool:
 	if not is_instance_valid(ui) or not ui is Node:return false
 	var owner: Node=ui as Node
+	if owner.loading_suspended: return false
 	if not owner.is_inside_tree() or owner.state != token.state or owner.catalog != token.catalog or owner.page != token.page or owner.business_generation != token.generation: return false
 	if typeof(witness)!=TYPE_NIL:
 		if not is_instance_valid(witness) or not witness is Control:return false

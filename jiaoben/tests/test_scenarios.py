@@ -17,7 +17,7 @@ class ScenarioSql(unittest.TestCase):
   self.ctx=p.context('scenarios','world-a',self.content)
  def seal(self):self.db.execute("UPDATE save_snapshot SET status='sealed' WHERE snapshot_id='scenarios'")
  def test_new_world_complete_and_empty_of_free_results(self):
-  self.assertEqual(len(p.STATE_TABLES),114);self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(26,))
+  self.assertEqual(len(p.STATE_TABLES),114);self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(p.FORMAT_VERSION,))
   for table,count in [('trial_state',3),('blockade_state',3),('blockade_node_state',12),('telemetry_timing_state',1),('trial_result_state',0),('blockade_result_state',0),('tactical_award_state',0),('activity_total_state',0)]:
    self.assertEqual(self.db.execute('SELECT count(*) FROM '+table+" WHERE snapshot_id='scenarios'").fetchone(),(count,))
   self.seal()

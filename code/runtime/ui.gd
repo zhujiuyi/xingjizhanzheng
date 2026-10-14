@@ -156,6 +156,7 @@ var top_toolbar_frame: PanelContainer
 var toolbar_buttons: Dictionary = {}
 var flight_content_top: float = 0.0
 var flight_content_bottom: float = 0.0
+var loading_suspended: bool = false
 
 func set_operation_status(kind: String, message: String, waiting: bool = false, blocks_flight: bool = false) -> void:
 	operation_kind = kind
@@ -406,6 +407,7 @@ func show_title(save_slots: Array[Dictionary]) -> void:
 	_focus_page.call_deferred()
 
 func show_page(next_page: String) -> void:
+	if loading_suspended: return
 	last_page_focus={}
 	requested_page_focus={}
 	if not business_preserve_view:
@@ -569,6 +571,7 @@ func keyboard_blocked() -> bool:
 	return menu_open or panel.visible or station_layer.visible or focus is LineEdit or focus is TextEdit
 
 func refresh_page() -> void:
+	if loading_suspended: return
 	if not page.is_empty() and page != "settings" and page != "title":
 		var focus_view: Dictionary = capture_local_view(body)
 		var previous_scroll: int = page_scroll.scroll_vertical if is_instance_valid(page_scroll) else 0
@@ -918,7 +921,11 @@ func _warehouse() -> void:
 	warehouse_panel = WarehousePanel.new()
 	body.add_child(warehouse_panel)
 	var inventory: RefCounted = gameplay.get("inventory")
-	warehouse_panel.configure(ship_rows, station_rows, _ship_name(state.ship().ship_def_id) + " · 分舱位置见右列", "本站：" + _station_name(state.player().docked_station_id) + " · 异地只读", int(catalog.rule("business_quantity_limit")), Callable(inventory, "quote_transfer"))
+	var quote_context: Dictionary = UIInteraction.context(self)
+	var quote: Callable = func(kind: String, id: String, amount: int, destination: String) -> Dictionary:
+		if not UIInteraction.current(self, quote_context, warehouse_panel): return {"ok": false, "reason": "航行档案处理中，请稍候"}
+		return inventory.quote_transfer(kind, id, amount, destination)
+	warehouse_panel.configure(ship_rows, station_rows, _ship_name(state.ship().ship_def_id) + " · 分舱位置见右列", "本站：" + _station_name(state.player().docked_station_id) + " · 异地只读", int(catalog.rule("business_quantity_limit")), quote)
 	var token: Dictionary = {"state": state, "world_id": state.world_id, "session_id": state.session_id, "epoch": state.epoch, "station_id": state.player().docked_station_id, "ship_id": state.ship().ship_instance_id}
 	warehouse_panel.transfer_requested.connect(_warehouse_transfer.bind(warehouse_panel, token))
 	page_scroll.resized.connect(_resize_warehouse_panel)
@@ -944,6 +951,7 @@ func _warehouse_row_before(left: Dictionary, right: Dictionary) -> bool:
 	return compared < 0 if compared != 0 else str(left.id) < str(right.id)
 
 func _warehouse_transfer(kind: String, id: String, quantity: int, destination: String, source: XJWarehousePanel, token: Dictionary) -> void:
+	if loading_suspended: return
 	if not is_inside_tree() or page != "warehouse" or not is_instance_valid(source) or source.is_queued_for_deletion() or warehouse_panel != source or state != token.state: return
 	if state.world_id != token.world_id or state.session_id != token.session_id or state.epoch != token.epoch: return
 	if not state.player().has_docked_station_id or state.player().docked_station_id != token.station_id or state.ship().ship_instance_id != token.ship_id: return
@@ -2160,6 +2168,7 @@ func _business_asset_signature(action: String, target: String) -> String:
 	return "%s:%s:%s:%s" % [target, stack.item_def_id, stack.container_id, stack.policy_id] if stack != null else ""
 
 func _business_context_valid(row: Dictionary) -> bool:
+	if loading_suspended: return false
 	var token: Dictionary = row.get("context", {})
 	if token.is_empty() or state == null or state != token.state or catalog != token.catalog or gameplay != token.gameplay: return false
 	if not is_inside_tree() or page != token.page or business_generation != token.generation: return false
@@ -3564,6 +3573,7 @@ func _link_page_focus() -> Array[Control]:
 	return entries
 
 func _focus_page() -> void:
+	if loading_suspended: return
 	if not is_instance_valid(body) or page.is_empty():
 		root.get_viewport().gui_release_focus()
 		return

@@ -1,5 +1,9 @@
 # 测试与辅助文件
 
+## 航行加载响应
+
+`py jiaoben/tests/startup_navigation_run.py [--executable <v0.33.1 EXE>]` 使用真实标题按钮、共享审计锁、fresh UUID 库与严格双日志，验证新建/继续/保存返回标题的响应以及加载后持续运行。可传 `--profile-copy <jiaoben/tmp 内已关闭的副本>`，先继续原世界再新建；不得传个人原件。旧 v0.33.0 反例另加 `--legacy-v61`，只在 tmp 暂存适配脚本。原始报告在 logs，截图/副本在 tmp，边界与验收见 [71](../doc/71-航行加载响应与旧档性能修复.md)。
+
 ## 全界面UI审查
 
 源码原生检查：`py jiaoben/tests/ui_quality_audit_run.py --label before` 或 `--label after --strict-layout`。工具持有共享运行锁，使用fresh UUID测试库，覆盖29页/三尺寸/声明的子视图、真实控件交互、UI源文件前后摘要与严格双日志；不使用个人存档。实际Windows 0.33.0.0可加`--executable <EXE>`，仅固定v61入口，拒绝向旧EXE传新参数或使用通用`--script`。信用点/解锁/有限库存为明示展示夹具，购船/招募/配装/保存/出港调用真实入口；不能将其作为自然成长或全战斗运行态验收。报告在logs、截图及控件JSON在tmp/ui-quality-audit。`--headless`仅检查结构，不能替代原生图。问题与实际证据见[68](../doc/68-全界面工业风审查与整改.md)。

@@ -72,7 +72,7 @@ class FleetSealing(unittest.TestCase):
         p.insert(self.db,'auxiliary_bay_state',{**self.ctx,'item_instance_id':'aux-item','stock_units':rule['drone_count'],'command_kind':'follow',**fields})
         return rule
     def test_initial_crew_are_available_without_free_progress(self):
-        self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(26,))
+        self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(p.FORMAT_VERSION,))
         self.assertEqual(self.db.execute("SELECT count(*) FROM crew_member_state WHERE snapshot_id=? AND phase='available' AND experience=0 AND hire_paid_credit=0",(self.initial,)).fetchone(),(8,))
         self.assertEqual(self.db.execute('SELECT deployments,losses,paid_credit FROM fleet_total_state WHERE snapshot_id=?',(self.initial,)).fetchone(),(0,0,0))
         self.assertEqual(self.db.execute('SELECT count(*) FROM fleet_deployment_state').fetchone(),(0,))

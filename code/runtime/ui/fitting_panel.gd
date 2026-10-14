@@ -61,7 +61,7 @@ func setup(ui: Node) -> void:
 	distance.get_line_edit().text_changed.connect(func(_text: String):_invalidate())
 	_calculate()
 func _current() -> bool:
-	return is_inside_tree() and is_instance_valid(u) and u.page=="fitting_analysis" and u.state==context.state and u.state.epoch==context.epoch and u.state.session_id==context.session and u.state.ship().ship_instance_id==context.ship and u.state.player().docked_station_id==context.station and u.business_generation==context.generation
+	return is_inside_tree() and is_instance_valid(u) and not u.loading_suspended and u.page=="fitting_analysis" and u.state==context.state and u.state.epoch==context.epoch and u.state.session_id==context.session and u.state.ship().ship_instance_id==context.ship and u.state.player().docked_station_id==context.station and u.business_generation==context.generation
 func _clear() -> void:
 	for child: Node in results.get_children():results.remove_child(child);child.queue_free()
 

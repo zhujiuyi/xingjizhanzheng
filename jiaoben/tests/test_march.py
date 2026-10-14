@@ -81,7 +81,7 @@ class MarchSealing(unittest.TestCase):
     def seal(self):self.db.execute("UPDATE save_snapshot SET status='sealed' WHERE snapshot_id='march-candidate'")
 
     def test_initial_world_has_no_army_or_automatic_awards(self):
-        self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(26,))
+        self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(p.FORMAT_VERSION,))
         for table in ['march_state','march_member_state','growth_grant_receipt_state','growth_milestone_state']:
             self.assertEqual(self.db.execute(f'SELECT count(*) FROM {table}').fetchone(),(0,))
         self.seal()

@@ -3,6 +3,13 @@ extends Node3D
 const Types = preload("res://contracts/contract_types.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
 const CombatAutomation = preload("res://runtime/combat_automation.gd")
+const LoadingJob = preload("res://runtime/data/loading_job.gd")
+const LoadingOverlay = preload("res://runtime/ui/loading_overlay.gd")
+var loading_job: RefCounted
+var loading_overlay: CanvasLayer
+var loading_previous_mode: int = Node.PROCESS_MODE_INHERIT
+var loading_ui_visible: bool = true
+var loading_exit_requested: bool = false
 var progress_database_path: String = "user://database/progress.db"
 var store: XJGameStore
 var state: XJRuntimeState
@@ -53,6 +60,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-loading-failure-v62","file":"loading_failure_v62.gd","prefix":"loading-failure-v62","env":"XJ_LOADING_FAILURE_V62","meta":"xj_loading_failure_v62_diagnostic"},
+		{"flag":"--xj-verify-startup-navigation-v62","file":"startup_navigation_v62.gd","prefix":"startup-navigation-v62","env":"XJ_STARTUP_NAVIGATION_V62","meta":"xj_startup_navigation_v62_diagnostic"},
 		{"flag":"--xj-verify-ui-consistency-v61","file":"ui_interaction_consistency.gd","prefix":"ui-interaction","env":"XJ_UI_CONSISTENCY_V61","meta":"xj_ui_consistency_v61_diagnostic"},
 		{"flag":"--xj-verify-ui-quality-v61","file":"ui_quality_audit.gd","prefix":"ui-quality-audit","env":"XJ_UI_QUALITY_AUDIT","meta":"xj_ui_quality_v61_diagnostic"},
 		{"flag":"--xj-verify-render-quality-v61","file":"render_quality_audit.gd","prefix":"render-quality-audit","env":"XJ_RENDER_QUALITY_AUDIT","meta":"xj_render_quality_v61_diagnostic"},
@@ -183,7 +192,7 @@ func _ready() -> void:
 	camera = XJCameraRig.new()
 	add_child(camera)
 	store = XJGameStore.new(progress_database_path)
-	store.status_changed.connect(_store_status)
+	store.status_changed.connect(_store_status, CONNECT_DEFERRED)
 	if not store.open():
 		last_error = store.last_error
 		ui.notify("航行档案初始化失败；已有进度保留。详情已写入运行日志。", true)
@@ -346,9 +355,16 @@ func _start_row_quantity_diagnostic() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and is_instance_valid(ui):
+		if is_instance_valid(loading_overlay):
+			loading_exit_requested = true
+			loading_overlay.set_stage("正在完成档案操作，随后退出")
+			return
 		_command("quit", "", 1, "")
 
 func _exit_tree() -> void:
+	if loading_job != null:
+		loading_job.shutdown()
+		loading_job = null
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if gameplay != null and gameplay.has_method("dispose"):
 		gameplay.call("dispose")
@@ -777,7 +793,7 @@ func _interact(target_id: String = "") -> void:
 func _command(action: String, target: String, quantity: int, extra: String) -> void:
 	if busy:
 		ui.notify("存档操作正在完成，请稍候。")
-		if action == "set_combat_option": _sync_combat_automation()
+		if action == "set_combat_option" and not ui.loading_suspended: _sync_combat_automation()
 		return
 	if _exit_save_pending() and action not in ["cancel_save", "quit_without_save", "quit", "return_title", "preference", "show_ship", "hangar_focus"]:
 		ui.notify("正在等待稳定保存后离开；取消保存请求后可继续操作。")
@@ -871,8 +887,8 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			_sync_combat_automation()
 			ui.set_operation_status("load", "正在建立远征")
 			ui.notify("正在建立远征")
-			await get_tree().process_frame
-			var created := store.new_world(target.strip_edges() if not target.strip_edges().is_empty() else "断航远征", int(Time.get_unix_time_from_system()), _prepare_loaded)
+			_begin_loading("正在建立远征档案")
+			var created: XJRuntimeState = await _run_loading("new_world", target.strip_edges() if not target.strip_edges().is_empty() else "断航远征")
 			if created != null:
 				_activate(created)
 				ui.notify("远征已建立，选择任务与合同开始教学。")
@@ -883,16 +899,17 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			busy = false
 			_sync_combat_automation()
 			ui.set_operation_status("idle", "")
+			_end_loading()
 		"load":
 			source_goal.clear()
 			busy = true
 			_sync_combat_automation()
 			ui.set_operation_status("load", "正在验证存档并准备星系")
 			ui.notify("验证存档并准备星系")
-			await get_tree().process_frame
-			var loaded := store.load(target, extra, quantity, _prepare_loaded)
+			_begin_loading("正在验证航行档案")
+			var loaded: XJRuntimeState = await _run_loading("load", target, quantity, extra)
 			if loaded != null:
-				loaded = _upgrade_loaded(loaded)
+				loaded = await _upgrade_loaded(loaded)
 				_activate(loaded)
 				ui.notify("存档已读取。")
 			else:
@@ -902,14 +919,15 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			busy = false
 			_sync_combat_automation()
 			ui.set_operation_status("idle", "")
+			_end_loading()
 		"continue":
 			busy = true
 			_sync_combat_automation()
 			ui.set_operation_status("load", "正在恢复上次航行")
-			await get_tree().process_frame
-			var resumed := store.resume(_prepare_loaded)
+			_begin_loading("正在恢复上次航行")
+			var resumed: XJRuntimeState = await _run_loading("continue")
 			if resumed != null:
-				resumed = _upgrade_loaded(resumed)
+				resumed = await _upgrade_loaded(resumed)
 				_activate(resumed)
 			else:
 				_discard_staged()
@@ -918,6 +936,7 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			busy = false
 			_sync_combat_automation()
 			ui.set_operation_status("idle", "")
+			_end_loading()
 		"save": _request_save(extra, int(target))
 		"cancel_save":
 			deferred_save = {}
@@ -1087,13 +1106,66 @@ func _stage_candidate(candidate: XJRuntimeState, definitions: XJCatalog) -> bool
 func _prepare_loaded(candidate: XJRuntimeState) -> bool:
 	return _stage_candidate(candidate, store.staging_catalog)
 
+func _begin_loading(message: String) -> void:
+	# Freeze every consumer before handing the sole Store to the serial worker.
+	# Only the independent overlay processes frames until the worker is joined.
+	loading_previous_mode = process_mode
+	loading_ui_visible = ui.root.visible
+	ui.loading_suspended = true
+	get_viewport().gui_release_focus()
+	ui.root.hide()
+	process_mode = Node.PROCESS_MODE_DISABLED
+	loading_overlay = LoadingOverlay.new()
+	loading_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
+	loading_overlay.set_stage(message)
+	add_child(loading_overlay)
+
+func _run_loading(action: String, target: String = "", quantity: int = 1, extra: String = "", candidate: XJRuntimeState = null) -> Variant:
+	ui.loading_suspended = true
+	await get_tree().process_frame
+	loading_job = LoadingJob.new()
+	var operation: Callable
+	match action:
+		"new_world": operation = store.new_world.bind(target, int(Time.get_unix_time_from_system()), loading_job.prepare)
+		"load": operation = store.load.bind(target, extra, quantity, loading_job.prepare)
+		"continue": operation = store.resume.bind(loading_job.prepare)
+		"upgrade": operation = store.upgrade_content.bind(candidate, loading_job.prepare)
+		"save": operation = store.save.bind(candidate, target, quantity)
+	if loading_job.start(store, operation) != OK:
+		loading_job = null
+		ui.loading_suspended = false
+		last_error = "无法启动航行档案加载任务"
+		return null
+	while loading_job.thread.is_alive():
+		var request: Dictionary = loading_job.take_preparation()
+		if not request.is_empty():
+			loading_overlay.set_stage("正在准备星系与舰船")
+			# All Node/GPU construction stays on the main thread. The worker waits.
+			var ready: bool = _stage_candidate(request.state, request.catalog)
+			loading_overlay.set_stage("正在完成航行档案")
+			loading_job.accept_preparation(ready)
+		await get_tree().process_frame
+	var result: Variant = loading_job.finish()
+	loading_job = null
+	ui.loading_suspended = false
+	return result
+
+func _end_loading() -> void:
+	ui.loading_suspended = false
+	process_mode = loading_previous_mode
+	ui.root.visible = loading_ui_visible
+	if is_instance_valid(loading_overlay): loading_overlay.queue_free()
+	loading_overlay = null
+	if loading_exit_requested: get_tree().quit()
+
 func _upgrade_loaded(candidate: XJRuntimeState) -> XJRuntimeState:
 	# Keep the original validated staging scene until the complete replacement
 	# commits. Failed new construction must never require rebuilding the fallback.
 	var previous_world: XJSector = staged_world
 	var previous_gameplay: RefCounted = staged_gameplay
 	staged_world = null; staged_gameplay = null
-	var upgraded: XJRuntimeState = store.upgrade_content(candidate, _prepare_loaded)
+	loading_overlay.set_stage("正在核对旧档案与当前星域")
+	var upgraded: XJRuntimeState = await _run_loading("upgrade", "", 1, "", candidate)
 	if upgraded == candidate:
 		staged_world = previous_world; staged_gameplay = previous_gameplay
 		return candidate
@@ -1789,8 +1861,14 @@ func _save_now(kind: String, index: int, after: String = "") -> void:
 	busy = true
 	_sync_combat_automation()
 	ui.set_operation_status("save", "正在保存航行进度")
-	await get_tree().process_frame
-	if store.save(state, kind, index):
+	var saved: bool
+	if not after.is_empty():
+		_begin_loading("正在保存航行进度")
+		saved = bool(await _run_loading("save", kind, index, "", state))
+	else:
+		await get_tree().process_frame
+		saved = store.save(state, kind, index)
+	if saved:
 		if presentation != null and after.is_empty(): presentation.ui_result(true)
 		ui.slots = store.list_slots()
 		ui.notify("已保存 · " + {"manual": "手动", "auto": "自动", "quick": "快速"}[kind] + " " + str(index + 1))
@@ -1819,6 +1897,7 @@ func _save_now(kind: String, index: int, after: String = "") -> void:
 	busy = false
 	_sync_combat_automation()
 	ui.set_operation_status("idle", "")
+	if not after.is_empty(): _end_loading()
 
 func _store_status(_phase: String, message: String) -> void:
 	# Storage diagnostics belong in logs. Product feedback uses operation states.

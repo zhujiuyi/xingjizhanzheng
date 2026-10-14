@@ -39,7 +39,7 @@ class ObservationSql(unittest.TestCase):
    published=subprocess.check_output(['git','show','52f91f0:'+path.relative_to(ROOT).as_posix()],cwd=ROOT)
    self.assertEqual(path.read_bytes(),published,path.name)
  def test_new_format_empty_observations_and_all_72_groups(self):
-  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(26,))
+  self.assertEqual(self.db.execute('PRAGMA user_version').fetchone(),(p.FORMAT_VERSION,))
   self.assertEqual(len(p.STATE_TABLES),114)
   self.assertEqual(self.db.execute('SELECT count(*) FROM resource_intel_state').fetchone(),(0,))
   self.assertEqual(self.db.execute('SELECT count(*) FROM demand_intel_state').fetchone(),(0,));self.seal()
