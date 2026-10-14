@@ -36,5 +36,5 @@ for ship_id in selected:
     row=d.finish(OUT)
     row.update({'faction':faction,'geometry_source':'assets/civilization_v1/geometry.json' if ship_id not in COMMON else 'assets/models/geometry.json','collision_box_m':GEO[ship_id]['collision_box_m'],'glb_sha256':hashlib.sha256((OUT/f'{ship_id}.glb').read_bytes()).hexdigest()})
     records[ship_id]=row
-    manifest_path.write_text(json.dumps(records,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    manifest_path.write_text(json.dumps(records,ensure_ascii=False,indent=2)+'\n',encoding='utf-8',newline='\n')
     print('SHIP_V4',ship_id,row,flush=True)
