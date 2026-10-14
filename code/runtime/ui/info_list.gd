@@ -14,8 +14,9 @@ func configure(title: String = "", _price_heading: String = "", _quantity_headin
 	add_theme_constant_override("separation", UISkin.GAP)
 	preferred_id = selected_id
 	if not title.is_empty():
-		var heading: Label = _label(self, title, 16)
-		heading.add_theme_color_override("font_color", UISkin.AMBER)
+		var heading: Label = _label(self, title, UISkin.SIZE_SECTION)
+		UISkin.apply_text_style(heading, "section")
+		heading.add_theme_color_override("font_color", UISkin.TEXT)
 
 func add_section(title: String) -> void:
 	var heading: Label = _label(self, title, 13)
@@ -28,6 +29,12 @@ func append_row(id: String, thumbnail: Texture2D, title: String, description: St
 	frame.set_meta("business_row", true)
 	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frame.add_theme_stylebox_override("panel", UISkin.table_row(rows.size() % 2 != 0))
+	frame.mouse_filter = Control.MOUSE_FILTER_STOP
+	# Whole-row selection. Interactive children keep MOUSE_FILTER_STOP, so clicks on
+	# a quantity box or an action button are consumed there and never reach here.
+	frame.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			select_row(id))
 	add_child(frame)
 	var layout := VBoxContainer.new()
 	layout.add_theme_constant_override("separation", UISkin.GAP)
@@ -55,12 +62,17 @@ func append_row(id: String, thumbnail: Texture2D, title: String, description: St
 	status_label.max_lines_visible = 2
 	status_label.tooltip_text = status
 	status_label.add_theme_color_override("font_color", UISkin.MUTED)
+	# A compact selection marker, not a repeated "详情" button. Every row carried an
+	# identical button in the same place, which is a control doing a whole row's
+	# job; the row itself is the target now and this only reports which one is open.
 	var toggle := Button.new()
 	toggle.name = "InfoSelect_" + id.validate_node_name()
-	toggle.text = "详情"
-	toggle.custom_minimum_size = Vector2(64, 30)
+	toggle.text = ""
+	toggle.icon = UISkin.glyph("radio", UISkin.MUTED)
+	toggle.custom_minimum_size = Vector2(24, 30)
 	toggle.toggle_mode = true
 	toggle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	toggle.tooltip_text = "展开此条目的说明与操作。"
 	UISkin.apply_button(toggle, "secondary", true)
 	summary.add_child(toggle)
 	var selector_ref: WeakRef = weakref(toggle)
@@ -113,7 +125,7 @@ func select_row(id: String) -> void:
 		row.details.visible = selected
 		row.row.set_meta("details_open", selected)
 		row.selector.set_pressed_no_signal(selected)
-		row.selector.text = "当前" if selected else "详情"
+		row.selector.icon = UISkin.glyph("radio_on" if selected else "radio", UISkin.AMBER if selected else UISkin.MUTED)
 		row.name.add_theme_color_override("font_color", UISkin.AMBER if selected else UISkin.TEXT)
 	selection_changed.emit(id)
 

@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <g fill="none" stroke="#b8c6ce" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/>
-    <circle cx="12" cy="12" r="3.5"/>
+  <!-- 舰载徽记语言 v1 · 原创矢量。单舰体：右向梭形。舰船与跟随视角。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 8.5L18 11L4 13.5L6.5 11Z"/>
   </g>
 </svg>

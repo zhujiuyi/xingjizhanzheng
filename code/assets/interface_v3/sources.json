@@ -1,12 +1,32 @@
 {
   "font_repository": "https://github.com/notofonts/noto-cjk",
   "commit": "f8d157532fbfaeda587e826d4cd5b21a49186f7c",
-  "font_download_url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
   "license_url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/LICENSE",
+  "font_download_url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
   "upstream_font_git_blob_sha1": "dc15562470b4f842321894787a0d066879ccff8b",
   "font_sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
   "source_original_bytes_preserved": true,
   "font_edit_history": [],
+  "fonts": [
+    {
+      "file": "NotoSansCJKsc-Regular.otf",
+      "weight": "Regular",
+      "role": "正文、数据、注释",
+      "bytes": 16437364,
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+      "upstream_git_blob_sha1": "dc15562470b4f842321894787a0d066879ccff8b",
+      "acquired_on": "2026-10-03"
+    },
+    {
+      "file": "NotoSansCJKsc-Medium.otf",
+      "weight": "Medium",
+      "role": "显示、页标题、区块标题",
+      "bytes": 16523632,
+      "sha256": "ca094f6b0001fb048ca39ddd797a0cdb0179e1e55c6561e111c49c3e6a61d7b7",
+      "upstream_git_blob_sha1": "00b01dff38ff8d0a345c53d64a71bfcf9ec55522",
+      "acquired_on": "2026-10-14"
+    }
+  ],
   "vector_and_shader_source": "Original procedural project assets. No EVE/Second Galaxy texture, logo or UI asset extracted.",
-  "acquired_on": "2026-10-03"
+  "glyph_coverage_note": "两个字重的Unicode cmap覆盖在候选字符上一致；U+25B8▸、U+25B0▰、U+2715✕不在字体内，界面不得使用；U+2190←、U+00D7×、U+2026…、U+00B7·、U+2014—存在，可用。检查方法见 jiaoben/tests/font_v3_glyphs.py。"
 }

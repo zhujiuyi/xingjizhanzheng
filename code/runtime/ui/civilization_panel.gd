@@ -125,7 +125,7 @@ func _build_progress(faction: String,civ: RefCounted,joined: String,title: Strin
 	join.disabled = not join_reason.is_empty()
 	join.tooltip_text = join_reason if not join_reason.is_empty() else "完成入籍，启用此文明的爵位和专属权限。"
 	join_note = u._text_to(u.body, join_reason, 13)
-	join_note.add_theme_color_override("font_color", UISkin.AMBER)
+	join_note.add_theme_color_override("font_color", UISkin.WARN)
 
 func _build_contribution(faction: String,civ: RefCounted) -> void:
 	u._text("材料捐献", 18)

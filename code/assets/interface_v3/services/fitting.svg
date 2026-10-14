@@ -1,6 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <g fill="none" stroke="#b8c6ce" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M14 3a6 6 0 0 0-6.2 7.8l-5 5a2.9 2.9 0 0 0 4.1 4.1l5-5A6 6 0 0 0 20 8l-4 3-3-3 1-5Z"/>
-    <circle cx="5.3" cy="17.8" r=".8"/>
+  <!-- 舰载徽记语言 v1 · 原创矢量。装入挂点：箭首进入右侧开口槽。不用扳手或齿轮，避免读成设置。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19 5.5H14V16.5H19"/>
+    <path d="M4 11H12"/>
+    <path d="M9 8.5L11.5 11L9 13.5"/>
   </g>
 </svg>

@@ -32,8 +32,9 @@ func _ensure_layout() -> void:
 	set_meta("business_list", true)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_theme_constant_override("separation", UISkin.GAP)
-	heading = _label(self, "", 16)
-	heading.add_theme_color_override("font_color", UISkin.AMBER)
+	heading = _label(self, "", UISkin.SIZE_SECTION)
+	UISkin.apply_text_style(heading, "section")
+	heading.add_theme_color_override("font_color", UISkin.TEXT)
 	scroll_tools = HBoxContainer.new()
 	scroll_tools.name = "BusinessScrollTools"
 	scroll_tools.add_theme_constant_override("separation", UISkin.GAP)
@@ -79,9 +80,10 @@ func _ensure_layout() -> void:
 
 func add_section(title: String) -> void:
 	_ensure_layout()
-	var label: Label = _label(content, title, 13)
+	var label: Label = _label(content, title, UISkin.SIZE_BODY)
 	label.name = "BusinessSection"
-	label.add_theme_color_override("font_color", UISkin.AMBER)
+	UISkin.apply_text_style(label, "subhead")
+	label.add_theme_color_override("font_color", UISkin.TEXT)
 	label.custom_minimum_size.y = 28
 	label.set_meta("business_section", title)
 
@@ -129,7 +131,8 @@ func append_row(id: String, thumbnail: Texture2D, title: String, description: St
 	value_labels[1].name = "BusinessQuantity"
 	value_labels[2].name = "BusinessUnitPrice"
 	value_labels[3].name = "BusinessTotal"
-	value_labels[3].add_theme_color_override("font_color", UISkin.AMBER)
+	# The total is a number in a right-aligned column; the header already names it.
+	value_labels[3].add_theme_color_override("font_color", UISkin.TEXT)
 	value_labels[4].name = "BusinessStatus"
 	value_labels[4].add_theme_color_override("font_color", UISkin.MUTED)
 	if inline_quantities:

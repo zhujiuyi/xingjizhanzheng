@@ -176,8 +176,26 @@ func settle_writer(message: String) -> void:
 	check(not host.busy, "real fixture transaction closes " + message)
 	await frames(4)
 
+func _count_buttons(node: Node) -> int:
+	var total: int = 0
+	if node is Button: total += 1
+	for child: Node in node.get_children(): total += _count_buttons(child)
+	return total
+
 func actual_click(button: Button, message: String) -> bool:
-	if not check(is_instance_valid(button) and button.is_visible_in_tree() and not button.disabled, "actual GUI target available " + message): return false
+	if not check(is_instance_valid(button) and button.is_visible_in_tree() and not button.disabled, "actual GUI target available " + message):
+		# Say which of the three conditions failed, and where the UI was, instead
+		# of leaving a bare FAIL that cannot be diagnosed after the run.
+		print("ACTUAL_CLICK_UNAVAILABLE " + JSON.stringify({
+			"message": message,
+			"page": host.ui.page,
+			"exists": is_instance_valid(button),
+			"visible_in_tree": button.is_visible_in_tree() if is_instance_valid(button) else null,
+			"disabled": button.disabled if is_instance_valid(button) else null,
+			"rect": str(button.get_global_rect()) if is_instance_valid(button) else null,
+			"button_count": _count_buttons(host.ui.body),
+		}))
+		return false
 	var ancestor: Node = button.get_parent()
 	while ancestor != null:
 		if ancestor is ScrollContainer: ancestor.ensure_control_visible(button)
@@ -349,14 +367,16 @@ func instrument_boundaries() -> void:
 		ship.shield = float(metrics.shield_max) * 0.25
 		var threshold: float = float(metrics.heat_max) * warning
 		var epsilon: float = maxf(0.001, float(metrics.heat_max) * 0.000001)
-		for thermal: Dictionary in [{"id": "below_warning", "heat": maxf(0.0, threshold - epsilon), "locked": false, "caption": "热量 ", "color": AuditTheme.TEXT}, {"id": "above_warning", "heat": threshold + epsilon, "locked": false, "caption": "预警 ", "color": AuditTheme.AMBER}, {"id": "overheat_locked", "heat": float(metrics.heat_max), "locked": true, "caption": "锁定 ", "color": AuditTheme.DANGER}]:
+		# Heat now has three distinct states, so the meter must show three distinct
+		# visuals rather than one accent colour for both warning and idle.
+		for thermal: Dictionary in [{"id": "below_warning", "heat": maxf(0.0, threshold - epsilon), "locked": false, "caption": "热量 ", "color": AuditTheme.TEXT, "fill": AuditTheme.ICE}, {"id": "above_warning", "heat": threshold + epsilon, "locked": false, "caption": "预警 ", "color": AuditTheme.WARN, "fill": AuditTheme.WARN}, {"id": "overheat_locked", "heat": float(metrics.heat_max), "locked": true, "caption": "锁定 ", "color": AuditTheme.DANGER, "fill": AuditTheme.DANGER}]:
 			ship.heat = thermal.heat; ship.overheated = thermal.locked
 			host.ui._update_instrument(ship, metrics)
 			await frames(3)
 			var heat: Label = host.ui.heat_label
 			check(heat.text.begins_with(thermal.caption) and heat.get_theme_color("font_color") == thermal.color and label_fits(heat), "database thermal boundary has distinct readable caption and semantic color " + str(thermal.id) + " " + suffix)
 			var fill: StyleBoxFlat = host.ui.heat_bar.get_theme_stylebox("fill") as StyleBoxFlat
-			check(fill != null and fill.bg_color == (AuditTheme.DANGER if thermal.locked else AuditTheme.AMBER), "thermal meter reflects warning or lock semantics " + str(thermal.id) + " " + suffix)
+			check(fill != null and fill.bg_color == thermal.fill, "thermal meter reflects warning or lock semantics " + str(thermal.id) + " " + suffix)
 			boundary_observations.append({"case": thermal.id, "size": [size.x, size.y], "database_warning_ratio": warning, "heat": ship.heat, "overheated": ship.overheated, "text": heat.text, "color": heat.get_theme_color("font_color").to_html(true), "rect": rectangle(heat.get_global_rect())})
 		for field: String in original: ship.set(field, original[field])
 		host.ui._update_instrument(ship, metrics)

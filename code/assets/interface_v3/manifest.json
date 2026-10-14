@@ -9,13 +9,16 @@
   },
   "font_contract": {
     "primary_font": "res://assets/interface_v3/NotoSansCJKsc-Regular.otf",
+    "heading_font": "res://assets/interface_v3/NotoSansCJKsc-Medium.otf",
     "shared_by": [
       "XJUITheme",
       "XJStationHangar Label3D"
     ],
     "system_fallback": false,
     "font_file_modified": false,
-    "git_blob_sha1": "dc15562470b4f842321894787a0d066879ccff8b"
+    "git_blob_sha1": "dc15562470b4f842321894787a0d066879ccff8b",
+    "heading_git_blob_sha1": "00b01dff38ff8d0a345c53d64a71bfcf9ec55522",
+    "weight_metrics": "Line height, ascent and descent are identical between weights and CJK advances are identical; Latin/digit advances grow 1-4 px with weight. Evidence: jiaoben/logs/font-metrics-v3.json"
   },
   "resources": [
     {
@@ -35,6 +38,14 @@
         "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
         "license_path": "res://assets/interface_v3/LICENSE-OFL.txt"
       }
+    },
+    {
+      "id": "font_cjk_sc_medium",
+      "path": "res://assets/interface_v3/NotoSansCJKsc-Medium.otf",
+      "sha256": "ca094f6b0001fb048ca39ddd797a0cdb0179e1e55c6561e111c49c3e6a61d7b7",
+      "size_bytes": 16523632,
+      "role": "shared_heading_font",
+      "source": "Unmodified upstream Noto Sans CJK SC Medium; see sources.json."
     },
     {
       "id": "font_license",
@@ -58,8 +69,8 @@
       "id": "font_copyright",
       "role": "embedded original font copyright and version",
       "path": "res://assets/interface_v3/FONT_COPYRIGHT.txt",
-      "sha256": "44beeeaf021a6b0a6d55c57c018fa28ecdb386867d73188544516615696567a5",
-      "size_bytes": 199,
+      "sha256": "71078966dc23c02e17b58b9573fdec56256aacc6783f7daa501786c8c1ca1e44",
+      "size_bytes": 353,
       "source": {
         "kind": "upstream_font",
         "creator": "Adobe / Noto CJK contributors",
@@ -172,5 +183,5 @@
     ],
     "visual_review": "SC Chinese, common symbols, keyboard focus brackets and selector/slider vector marks viewed at 1440x900 and 1280x720, 100/200 percent. Profession Label3D viewed in the real hangar. Full integrated HUD and Windows execution remain integration checks."
   },
-  "manifest_sha256": "42f53658d8394fc595c7d4b6968e27a51ac31bd08438d6dceb447c08f0dc72ab"
+  "manifest_sha256": "40901459e653480b3756f95b919f291316f736846439e1c534d87a2dac252ef0"
 }

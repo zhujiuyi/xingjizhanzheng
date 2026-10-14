@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!-- 舰载徽记语言 v1 · 原创矢量。僚舰双列：雇佣僚舰。两枚较大的同向箭首，与舰队的三枚小箭首同族而数量不同。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7.5 6.5L12.5 11L7.5 15.5"/>
+    <path d="M13 6.5L18 11L13 15.5"/>
+  </g>
+</svg>

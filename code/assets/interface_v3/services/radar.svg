@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!-- 舰载徽记语言 v1 · 原创矢量。扫描扇：两段同心弧加扫描线。雷达。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.5 13.5A6 6 0 0 1 10.5 19.5"/>
+    <path d="M4.5 6.5A13 13 0 0 1 17.5 19.5"/>
+    <path d="M4.5 19.5L16 8"/>
+  </g>
+</svg>

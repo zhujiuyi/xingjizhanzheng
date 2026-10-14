@@ -58,10 +58,10 @@ func refresh() -> void:
 		view.status.text={"idle":"可承运","active":"运输中","ready":"待结算","claimed":"整备中"}[row.phase]+" · 在途%d / 送达%d / 损失%d批" % [row.cargo_units,row.delivered_units,row.lost_units]
 		if row.phase=="active":view.status.text+=" · 剩余%.0f秒" % row.remaining_s
 		elif row.phase=="claimed":view.status.text+=" · %.0f秒" % row.cooldown_remaining_s
-		view.status.add_theme_color_override("font_color",UISkin.AMBER if row.exposure_remaining_s>0.0 else UISkin.ICE)
+		view.status.add_theme_color_override("font_color",UISkin.WARN if row.exposure_remaining_s>0.0 else UISkin.ICE)
 		view.summary.text={"idle":"可承运","active":"运输中","ready":"待结算","claimed":"整备中"}[row.phase]+(" · %d批" % row.cargo_units if row.phase=="active" else "")
 		view.summary.tooltip_text=view.status.text
-		view.summary.add_theme_color_override("font_color",UISkin.AMBER if row.exposure_remaining_s>0.0 else UISkin.MUTED)
+		view.summary.add_theme_color_override("font_color",UISkin.WARN if row.exposure_remaining_s>0.0 else UISkin.MUTED)
 		view.quantity.visible=row.phase=="idle"
 		var amount: int=Interaction.integer_input(view.quantity) if row.phase=="idle" else 1
 		if row.phase=="idle":view.quote.text="本舰可载%d批 · 每批%.0fm³ / %.0f吨 · 押金%d + 手续费%d · 奖励%d" % [u.gameplay.consignments.available(id),float(d.unit_volume_l)/1000.0,float(d.unit_mass_kg)/1000.0,amount*int(d.deposit_per_unit),d.fee_credit,amount*int(d.reward_per_unit)]

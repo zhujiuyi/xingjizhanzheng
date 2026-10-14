@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!-- 舰载徽记语言 v1 · 原创矢量。三角编队：无人机。三枚外指三角环绕中心。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 3.5L15 9.5L7 9.5Z"/>
+    <path d="M5.5 12L9.5 18L1.5 18Z"/>
+    <path d="M16.5 12L20.5 18L12.5 18Z"/>
+  </g>
+</svg>

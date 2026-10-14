@@ -17,48 +17,48 @@
     {
       "asset_id": "service_station_icon",
       "resource_path": "res://assets/interface_v3/services/station.svg",
-      "sha256": "cf5a8f6e575aba652e2609d9a9382c3e3bbb29f929f85bacf6b24b027ad4159b",
-      "size_bytes": 307,
+      "sha256": "2da80bdc69f02bd70afc518156a85bc1ca68ed14dcdeadadf9d4c9a4bd1e99a8",
+      "size_bytes": 538,
       "role": "function_navigation_icon",
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
     {
       "asset_id": "service_ships_icon",
       "resource_path": "res://assets/interface_v3/services/ships.svg",
-      "sha256": "fa75c94242e16ee73288f194860945fb809aa375664afc511e5989bb031947df",
-      "size_bytes": 303,
+      "sha256": "590ed10ad54629cf04ac324ca32d5ba7677f56b3d95d59e48b68d8d76e151c57",
+      "size_bytes": 536,
       "role": "function_navigation_icon",
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
     {
       "asset_id": "service_warehouse_icon",
       "resource_path": "res://assets/interface_v3/services/warehouse.svg",
-      "sha256": "a467e4f4aa95e756b458516bf4e4d0dbd8c1a560725a38c6eb9a730f7a6d39db",
-      "size_bytes": 290,
+      "sha256": "dbbf751a39bb5d7545d3fbe31d81c349982c159dbef023798aadefcb6647c3b8",
+      "size_bytes": 524,
       "role": "function_navigation_icon",
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
     {
       "asset_id": "service_fitting_icon",
       "resource_path": "res://assets/interface_v3/services/fitting.svg",
-      "sha256": "738243210384b6cbb7a7c714e14f3a3d2e56bd94c5888c2c8b79006eec748dae",
-      "size_bytes": 339,
+      "sha256": "efca781009ae7fb9ea8d72820056a64bc66962b7680ccb7becb6706930a3b75e",
+      "size_bytes": 539,
       "role": "function_navigation_icon",
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
     {
       "asset_id": "service_market_icon",
       "resource_path": "res://assets/interface_v3/services/market.svg",
-      "sha256": "933e0c24f78f1dd6f93dda712a6798d78751d2e6d4871579a623d2b18e8781dc",
-      "size_bytes": 328,
+      "sha256": "f339856c8a86636c17d85601cc27d293e0590ba88a34e65cb28f0f8f880c7a6f",
+      "size_bytes": 507,
       "role": "function_navigation_icon",
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
     {
       "asset_id": "service_industry_icon",
       "resource_path": "res://assets/interface_v3/services/industry.svg",
-      "sha256": "d036bc68ce3103eeeafcf97b752fba6ed49c31e35021817610a22286e91581a3",
-      "size_bytes": 311,
+      "sha256": "21279ca45a11f7001d5ef7a50dbb5b6237fc1e369e825c0504a15ff2801c28c3",
+      "size_bytes": 539,
       "role": "function_navigation_icon",
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
@@ -73,56 +73,80 @@
     {
       "asset_id": "service_missions_icon",
       "resource_path": "res://assets/interface_v3/services/missions.svg",
-      "sha256": "9bda9fb94daa49c50636d38002b3e23f411827f5749504286f468eed4c51135b",
-      "size_bytes": 288,
+      "sha256": "62dbd7aa97a44d6f0e6a92c4de24834aebd8277a6e88752c8d02d5f21ce26f3b",
+      "size_bytes": 559,
       "role": "function_navigation_icon",
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
     {
       "asset_id": "service_civilizations_icon",
       "resource_path": "res://assets/interface_v3/services/civilizations.svg",
-      "sha256": "2768d036091c1243de3c4db508e94ba10f93c6ffd3ff815870846c1ebad0845e",
-      "size_bytes": 285,
+      "sha256": "aa2890d334c31a72978027d4838a96df6ef6f623d87334bac0ecec295bc49d42",
+      "size_bytes": 483,
       "role": "function_navigation_icon",
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
     {
       "asset_id": "service_research_icon",
       "resource_path": "res://assets/interface_v3/services/research.svg",
-      "sha256": "19134157527e6324c3dad05483f84bf447eb0ab20278433456096df8458654a9",
-      "size_bytes": 420,
+      "sha256": "7ecba9ac0f2e74db7f84de7d6f761f9c9f046e4ecfbaa393b712b4e0f0e42f06",
+      "size_bytes": 613,
       "role": "function_navigation_icon",
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
     {
       "asset_id": "service_map_icon",
       "resource_path": "res://assets/interface_v3/services/map.svg",
-      "sha256": "dcc38e0ef6a5db5b9f0346fec22f384744238618c41ae71ac16fb49015951519",
-      "size_bytes": 376,
+      "sha256": "762eaceef72431a43d25d6e3915edef3294af828a910108601978c70d051fae1",
+      "size_bytes": 600,
       "role": "function_navigation_icon",
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
     {
       "asset_id": "service_pause_icon",
       "resource_path": "res://assets/interface_v3/services/pause.svg",
-      "sha256": "ece83137d4a3c6e58897d034d73d875b9c18aafc0cbb1521a17ca5b1a237272f",
-      "size_bytes": 283,
+      "sha256": "2c7790ddaa6f42094411b8b7baf342a95741ca79e7106165dc4878adb4e9748f",
+      "size_bytes": 456,
       "role": "function_navigation_icon",
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
     {
       "asset_id": "service_observe_ship_icon",
       "resource_path": "res://assets/interface_v3/services/observe.svg",
-      "sha256": "decfbdabc54fae5fbc61194238ad79babbce451f2b1fa1ad0f88a40df69f36b0",
-      "size_bytes": 298,
+      "sha256": "d2236067da88f5b1c402484f6f5d84d8af7d71e1751eae466fe12dcd6087bd7d",
+      "size_bytes": 446,
       "role": "hangar_observation_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "flight_drones_icon",
+      "resource_path": "res://assets/interface_v3/services/drones.svg",
+      "sha256": "e690df60c29dac9efa2aa075e724948db24b5c8daaad1c9ae0b3db6fa971a74f",
+      "size_bytes": 530,
+      "role": "flight_rail_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "flight_hire_icon",
+      "resource_path": "res://assets/interface_v3/services/hire.svg",
+      "sha256": "497de3d2eee53e058e0fe52d40d720660f66dec8cb0b5365c13c4ed17e9668f9",
+      "size_bytes": 542,
+      "role": "flight_rail_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
+      "asset_id": "flight_radar_icon",
+      "resource_path": "res://assets/interface_v3/services/radar.svg",
+      "sha256": "902c47921a981a5c05868481f696ed99a5d2685470266793147268fd89d3bb0b",
+      "size_bytes": 526,
+      "role": "flight_rail_icon",
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
     {
       "asset_id": "service_navigation_registry",
       "resource_path": "res://runtime/ui/service_navigation.gd",
-      "sha256": "8e4bca36e2ee4b1ec269ae37f14c1f2e20460743f79ba6bef88ef6aa5c2f1878",
-      "size_bytes": 2519,
+      "sha256": "38d439de41ec1f0e5abda8c239d06ed79e1250c1e98661d7205698297fdb0aae",
+      "size_bytes": 3882,
       "role": "shared_order_captions_and_icons",
       "source": "Project-authored presentation registry; no gameplay or persistent state."
     }

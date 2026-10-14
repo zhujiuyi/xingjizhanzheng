@@ -33,7 +33,7 @@ func _ready() -> void:
 	layout.add_theme_constant_override("separation", 4)
 	add_child(layout)
 	header = HBoxContainer.new()
-	_header_label(header, "设备循环", 11, UISkin.AMBER)
+	_header_label(header, "设备循环", UISkin.SIZE_NOTE, UISkin.TEXT)
 	summary_label = _header_label(header, "", 10, UISkin.MUTED)
 	summary_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	summary_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -108,7 +108,7 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 			progress.offset_top = -3; progress.offset_bottom = -1
 			progress.show_percentage = false
 			progress.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			progress.add_theme_stylebox_override("fill", UISkin.flat(UISkin.AMBER, UISkin.AMBER, 0))
+			progress.add_theme_stylebox_override("fill", UISkin.flat(UISkin.ICE, UISkin.ICE, 0))
 			button.add_child(progress)
 			module_progress[id] = progress
 			module_buttons[id] = button
@@ -127,7 +127,8 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 		labels.status.text = str(record.get("state_label", ""))
 		labels.cost.text = "电容 %.0f · 热量 %.0f" % [float(record.get("energy_eu", 0.0)), float(record.get("heat_hu", 0.0))]
 		labels.cost.hide()
-		labels.status.add_theme_color_override("font_color", UISkin.AMBER if not bool(record.get("ready", false)) and bool(record.get("enabled", false)) else UISkin.TEXT if bool(record.get("enabled", false)) else UISkin.MUTED)
+		# Enabled but not ready: cycling, i.e. momentarily blocked, not selected.
+		labels.status.add_theme_color_override("font_color", UISkin.WARN if not bool(record.get("ready", false)) and bool(record.get("enabled", false)) else UISkin.TEXT if bool(record.get("enabled", false)) else UISkin.MUTED)
 		button.custom_minimum_size = Vector2(68,58) if _compact else Vector2(80,62)
 		var progress: ProgressBar = module_progress[id]
 		progress.max_value = maxf(float(record.get("cycle_s", 0.0)), 0.001)
@@ -140,9 +141,18 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 			row.remove_child(button); button.queue_free()
 			module_buttons.erase(id); module_labels.erase(id); module_progress.erase(id)
 	var empty_ids: Array[String] = []
-	for record: Dictionary in resources.get("empty_slots", []):
+	var empty_titles: Array[String] = []
+	var empty_records: Array[Dictionary] = resources.get("empty_slots", [])
+	# One tile stands for every empty slot. Twelve 80 px placeholders produced
+	# 1088 px of tiles inside a 656 px viewport, which forced a horizontal scroll
+	# bar into the flight HUD. The count is the useful signal; twelve identical
+	# "空槽" labels are not. Every placeholder is still created, so the slot
+	# bookkeeping and ordering below are unchanged - the extras are just hidden.
+	var summary_id: String = str(empty_records[0].slot_id) if not empty_records.is_empty() else ""
+	for record: Dictionary in empty_records:
 		var slot_id: String = str(record.slot_id)
 		empty_ids.append(slot_id)
+		empty_titles.append("%s槽 %d" % [str(record.slot_title), int(record.slot_index) + 1])
 		slot_records.append(record)
 		var placeholder: Button
 		if empty_slot_buttons.has(slot_id): placeholder = empty_slot_buttons[slot_id]
@@ -154,10 +164,16 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 			UISkin.apply_button(placeholder, "secondary", true)
 			row.add_child(placeholder)
 			empty_slot_buttons[slot_id] = placeholder
-		placeholder.text = "%s%d · 空槽" % [str(record.slot_short), int(record.slot_index) + 1]
-		placeholder.add_theme_font_size_override("font_size", 10)
-		placeholder.custom_minimum_size = Vector2(68,58) if _compact else Vector2(80,62)
-		placeholder.tooltip_text = "%s槽 %d · 当前未安装设备\n停靠空间站后前往配装页面安装兼容设备。" % [str(record.slot_title), int(record.slot_index) + 1]
+		placeholder.visible = slot_id == summary_id
+		placeholder.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
+		if slot_id == summary_id:
+			placeholder.text = "空槽 ×%d" % empty_records.size()
+			placeholder.custom_minimum_size = Vector2(68,58) if _compact else Vector2(80,62)
+			placeholder.tooltip_text = "%d 个空槽 · %s\n停靠空间站后前往配装页面安装兼容设备。" % [empty_records.size(), " / ".join(empty_titles)]
+		else:
+			placeholder.text = ""
+			placeholder.tooltip_text = ""
+			placeholder.custom_minimum_size = Vector2.ZERO
 		slot_buttons[slot_id] = placeholder
 	for slot_id: String in empty_slot_buttons.keys():
 		if slot_id in empty_ids: continue

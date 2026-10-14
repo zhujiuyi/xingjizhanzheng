@@ -1,5 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <g fill="none" stroke="#b8c6ce" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="m12 3 9 5v10l-9 4-9-4V8l9-5Zm-9 5 9 5 9-5M12 13v9M7 5.8l9 5v5.7M6 15l3 1.5"/>
+  <!-- 舰载徽记语言 v1 · 原创矢量。货格：竖向两格仓储架。竖分格与工业的横向分层区分。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.5 4.5H17.5V19.5H4.5Z"/>
+    <path d="M11 4.5V19.5"/>
+    <path d="M4.5 12H17.5"/>
   </g>
 </svg>

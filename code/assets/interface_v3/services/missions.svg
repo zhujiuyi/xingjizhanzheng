@@ -1,5 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <g fill="none" stroke="#b8c6ce" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 4H5v18h14V4h-3M9 2h6v5H9V2ZM11 11h5M11 16h5m-9-5 1 1 2-2m-3 6 1 1 2-2"/>
+  <!-- 舰载徽记语言 v1 · 原创矢量。目标环：四段准星加中心菱形。任务与合同。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 4V7"/>
+    <path d="M11 15V18"/>
+    <path d="M4 11H7"/>
+    <path d="M15 11H18"/>
+    <path d="M11 9.5L12.5 11L11 12.5L9.5 11Z"/>
   </g>
 </svg>

@@ -1,6 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <g fill="none" stroke="#b8c6ce" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3 21V10l6 3V9l6 4V3h4l2 18H3ZM6 17h2M11 17h2M17 17h2M16 6h3"/>
-    <path d="M3 6h6M7 4l2 2-2 2"/>
+  <!-- 舰载徽记语言 v1 · 原创矢量。熔炉：炉体加料口横线加两条支脚。工业与回收。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 5.5H18L15.5 14H6.5Z"/>
+    <path d="M5.5 9H16.5"/>
+    <path d="M8.5 14V19"/>
+    <path d="M13.5 14V19"/>
   </g>
 </svg>

@@ -37,4 +37,4 @@ func refresh(game: RefCounted, small: bool, show_hud: bool) -> void:
 		label.text=str(cue.title)+" · "+str(cue.detail)
 		var badge: Label=row.get_child(2);badge.text="+%d" % (cues.size()-count) if index==count-1 and cues.size()>count else ""
 		badge.add_theme_font_size_override("font_size",10 if compact else 12)
-		label.add_theme_color_override("font_color",Color("ffbba2") if cue.severity=="danger" else UISkin.AMBER if cue.severity=="warning" else UISkin.ICE)
+		label.add_theme_color_override("font_color",Color("ffbba2") if cue.severity=="danger" else UISkin.WARN if cue.severity=="warning" else UISkin.ICE)

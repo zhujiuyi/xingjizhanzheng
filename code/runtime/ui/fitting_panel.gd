@@ -54,7 +54,7 @@ func setup(ui: Node) -> void:
 		if _current():u.show_page("ship_roles")).name="FittingRoles"
 	u._button(links,"火控研究",func():
 		if _current():u.show_page("research")).name="FittingSpecializations"
-	comparison_note=u._text_to(self,"",13);comparison_note.name="FittingComparisonStatus";comparison_note.add_theme_color_override("font_color",UISkin.AMBER);comparison_note.hide()
+	comparison_note=u._text_to(self,"",13);comparison_note.name="FittingComparisonStatus";comparison_note.add_theme_color_override("font_color",UISkin.ICE);comparison_note.hide()
 	results=VBoxContainer.new();results.name="FittingResults";add_child(results)
 	for picker: OptionButton in [candidate,slot,target,layer]:picker.item_selected.connect(func(_index: int):_invalidate())
 	distance.value_changed.connect(func(_value: float):_invalidate())
@@ -128,10 +128,10 @@ func _metric(table: GridContainer,title: String,before: float,after: Variant,uni
 	if after==null:return
 	_cell(table,XJSpaceUnits.distance(float(after)) if unit=="m" else "%.1f %s" % [float(after),unit])
 	var change: float=float(after)-before
-	_cell(table,"—" if absf(change)<0.05 else "%+.1f %s" % [change,unit],UISkin.ICE if change>0.05 else UISkin.AMBER if change< -0.05 else UISkin.MUTED)
+	_cell(table,"—" if absf(change)<0.05 else "%+.1f %s" % [change,unit],UISkin.GAIN if change>0.05 else UISkin.WARN if change< -0.05 else UISkin.MUTED)
 func _text_row(table: GridContainer,title: String,before: String,after: String,hint: String,change: String="") -> void:
-	_cell(table,title,UISkin.MUTED).tooltip_text=hint;_cell(table,before,UISkin.AMBER if before.contains("受限") else UISkin.TEXT).tooltip_text=hint
-	if table.columns==4:_cell(table,after,UISkin.AMBER if after.contains("受限") else UISkin.TEXT).tooltip_text=hint;_cell(table,change if not change.is_empty() else "—" if before==after else "见数值",UISkin.MUTED)
+	_cell(table,title,UISkin.MUTED).tooltip_text=hint;_cell(table,before,UISkin.WARN if before.contains("受限") else UISkin.TEXT).tooltip_text=hint
+	if table.columns==4:_cell(table,after,UISkin.WARN if after.contains("受限") else UISkin.TEXT).tooltip_text=hint;_cell(table,change if not change.is_empty() else "—" if before==after else "见数值",UISkin.MUTED)
 func _budget(report: Dictionary) -> String:
 	return "%.0f%% / %.0f%%" % [100.0*report.metrics.power_used/report.metrics.power_capacity,100.0*report.metrics.cpu_used/report.metrics.cpu_capacity]
 func _range(report: Dictionary) -> float:
@@ -148,7 +148,7 @@ func _issues(report: Dictionary,title: String) -> void:
 	if active==0:issues.append("无可用武器")
 	if outside>0:issues.append("%d件武器超射程" % outside)
 	if report.first_ammo_stall_s>=0:issues.append("%.1f秒缺弹" % report.first_ammo_stall_s)
-	if not issues.is_empty():_cell(results,title+" · "+" / ".join(issues),UISkin.AMBER)
+	if not issues.is_empty():_cell(results,title+" · "+" / ".join(issues),UISkin.WARN)
 func _render(title: String,report: Dictionary) -> void:
 	if not report.ok:u._text_to(results,str(report.reason),14);return
 	u._text_to(results,title,18)

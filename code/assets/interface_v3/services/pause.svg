@@ -1,5 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <g fill="none" stroke="#b8c6ce" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3 5h3v14H3V5ZM9 5h3v14H9V5ZM15 4h5l2 3v13h-7V4ZM17 4v5h3M17 15h3v5"/>
+  <!-- 舰载徽记语言 v1 · 原创矢量。停止：双竖条。系统与暂停存读档。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 4.5V19.5"/>
+    <path d="M16 4.5V19.5"/>
   </g>
 </svg>

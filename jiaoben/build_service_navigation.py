@@ -75,21 +75,37 @@ def manifest_bytes() -> bytes:
         source,
     )
     observe = re.findall(r'^const OBSERVE_ICON: String = "(res://assets/interface_v3/services/[a-z_]+\.svg)"$', source, re.MULTILINE)
+    extras = re.findall(
+        r'^\t"([a-z_]+)": "(res://assets/interface_v3/services/[a-z_]+\.svg)",$',
+        source,
+        re.MULTILINE,
+    )
     if len(records) != 12 or len({record[0] for record in records}) != 12 or len(observe) != 1:
         raise ValueError("Registry must define twelve unique pages and one ship observation icon")
-    paths = [record[2] for record in records] + observe
-    if len(set(paths)) != 13 or set(paths) != {"res://" + path.relative_to(CODE).as_posix() for path in ICON_DIR.glob("*.svg")}:
-        raise ValueError("Registry references must match the exact set of thirteen service SVGs")
+    if len(extras) != 3 or len({extra[0] for extra in extras}) != 3:
+        raise ValueError("Registry must define three unique flight-rail marks outside the service list")
+    paths = [record[2] for record in records] + observe + [extra[1] for extra in extras]
+    if len(set(paths)) != 16 or set(paths) != {"res://" + path.relative_to(CODE).as_posix() for path in ICON_DIR.glob("*.svg")}:
+        raise ValueError("Registry references must match the exact set of sixteen service SVGs")
     resources = []
     for index, resource_path in enumerate(paths):
         path = CODE / resource_path.removeprefix("res://")
         data = validate_svg(path)
+        if index < len(records):
+            asset_id: str = "service_" + records[index][0] + "_icon"
+            role: str = "function_navigation_icon"
+        elif index == len(records):
+            asset_id = "service_observe_ship_icon"
+            role = "hangar_observation_icon"
+        else:
+            asset_id = "flight_" + extras[index - len(records) - 1][0] + "_icon"
+            role = "flight_rail_icon"
         resources.append({
-            "asset_id": "service_" + records[index][0] + "_icon" if index < len(records) else "service_observe_ship_icon",
+            "asset_id": asset_id,
             "resource_path": resource_path,
             "sha256": digest(data),
             "size_bytes": len(data),
-            "role": "function_navigation_icon" if index < len(records) else "hangar_observation_icon",
+            "role": role,
             "source": "Project-authored static SVG geometry; no third-party artwork.",
         })
     resources.append({
@@ -120,7 +136,7 @@ def build(check: bool = False, report: Path | None = None) -> dict:
     if changed and not check:
         MANIFEST.parent.mkdir(parents=True, exist_ok=True)
         MANIFEST.write_bytes(expected)
-    result = {"status": "PASS", "asset_version": "service-navigation-v3", "resources": 14, "svg_icons": 13,
+    result = {"status": "PASS", "asset_version": "service-navigation-v3", "resources": 17, "svg_icons": 16,
               "manifest_changed": changed, "manifest_sha256": digest(expected),
               "registry_sha256": digest(REGISTRY.read_bytes()), "utf8_lf": True, "svg_static_xml_24x24": True,
               "verification_scope": "Static source validation; Godot import/render and actual-PCK verification are separate."}
@@ -139,4 +155,4 @@ if __name__ == "__main__":
         result = build(arguments.check, arguments.report)
     except (OSError, UnicodeError, ValueError, ET.ParseError) as error:
         parser.exit(1, f"SERVICE_NAVIGATION_ASSETS FAIL: {error}\n")
-    print(f"SERVICE_NAVIGATION_ASSETS PASS resources=14 svg_icons=13 changed={str(result['manifest_changed']).lower()} sha256={result['manifest_sha256']}")
+    print(f"SERVICE_NAVIGATION_ASSETS PASS resources={result['resources']} svg_icons={result['svg_icons']} changed={str(result['manifest_changed']).lower()} sha256={result['manifest_sha256']}")

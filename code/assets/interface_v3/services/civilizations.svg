@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <g fill="none" stroke="#b8c6ce" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M5 21V3h14l-3 5 3 5H5M3 21h7"/>
-    <path d="m10 6 1 2 2-2 1 3H9l1-3Z"/>
+  <!-- 舰载徽记语言 v1 · 原创矢量。徽记盾：盾形加内部人字纹。文明与声望。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 4.5H17V12L11 19.5L5 12Z"/>
+    <path d="M8 9L11 12L14 9"/>
   </g>
 </svg>

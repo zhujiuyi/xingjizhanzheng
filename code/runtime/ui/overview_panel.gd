@@ -72,7 +72,9 @@ func _ready() -> void:
 	content.add_child(overview_content)
 	var heading: HBoxContainer = HBoxContainer.new()
 	overview_content.add_child(heading)
-	_label(heading, "目标总览", 12, UISkin.AMBER).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var overview_heading: Label = _label(heading, "目标总览", UISkin.SIZE_NOTE, UISkin.TEXT)
+	overview_heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UISkin.apply_text_style(overview_heading, "subhead")
 	count_label = _label(heading, "", 10, UISkin.MUTED)
 	var filters: HBoxContainer = HBoxContainer.new()
 	filters.add_theme_constant_override("separation", 4)
@@ -120,7 +122,8 @@ func _ready() -> void:
 	details.name = "SelectedTargetDetails"
 	details.add_theme_constant_override("separation", 4)
 	selection_card.add_child(details)
-	_label(details, "选中目标", 10, UISkin.AMBER)
+	var selected_heading: Label = _label(details, "选中目标", UISkin.SIZE_NOTE, UISkin.TEXT)
+	UISkin.apply_text_style(selected_heading, "subhead")
 	selected_title = _label(details, "尚未选择目标", 14, UISkin.TEXT)
 	selected_distance = _label(details, "左键选目标 · Tab切换", 11, UISkin.MUTED)
 	resource_detail = VBoxContainer.new()
@@ -144,7 +147,7 @@ func _ready() -> void:
 	resource_bar.add_theme_stylebox_override("fill", UISkin.flat(UISkin.ICE, UISkin.ICE, 0))
 	resource_detail.add_child(resource_bar)
 	resource_detail.hide()
-	status_label = _label(details, "", 11, UISkin.AMBER)
+	status_label = _label(details, "", UISkin.SIZE_NOTE, UISkin.ICE)
 	for readout: Label in [selected_title, selected_distance, status_label]: readout.mouse_filter = Control.MOUSE_FILTER_PASS
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.clip_text = false
@@ -178,7 +181,9 @@ func _ready() -> void:
 	details.add_child(npc_detail)
 	npc_title = _label(npc_detail, "", 11, UISkin.MUTED)
 	npc_title.hide() # The selected-card title already identifies this same vessel.
-	for layer_name: String in ["护盾", "装甲", "结构"]:
+	var npc_layers: Array[String] = ["护盾", "装甲", "结构"]
+	for layer_index: int in npc_layers.size():
+		var layer_name: String = npc_layers[layer_index]
 		var row: HBoxContainer = HBoxContainer.new()
 		row.add_theme_constant_override("separation", 4)
 		npc_detail.add_child(row)
@@ -189,7 +194,10 @@ func _ready() -> void:
 		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		bar.custom_minimum_size.y = 4
 		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		bar.add_theme_stylebox_override("fill", UISkin.flat(UISkin.AMBER, UISkin.AMBER, 0))
+		# Same grey-blue ramp as the player instrument, so shield/armour/structure
+		# read as one family wherever they appear.
+		var layer_color: Color = UISkin.LAYER_SERIES[layer_index]
+		bar.add_theme_stylebox_override("fill", UISkin.flat(layer_color, layer_color, 0))
 		row.add_child(bar)
 		npc_bars.append({"label": label, "bar": bar, "name": layer_name})
 	npc_detail.hide()
@@ -429,7 +437,7 @@ func _refresh_rows() -> void:
 			var full_summary: String = str(record.get("resource_summary", "资源状态不可用"))
 			reserve.text = compact_resource_summary(record.get("resource_info", {})) if _compact else full_summary
 			reserve.add_theme_font_size_override("font_size", 9 if _compact else 10)
-			reserve.add_theme_color_override("font_color", UISkin.AMBER if bool(record.get("resource_info", {}).get("depleted", false)) else UISkin.MUTED)
+			reserve.add_theme_color_override("font_color", UISkin.WARN if bool(record.get("resource_info", {}).get("depleted", false)) else UISkin.MUTED)
 			button.tooltip_text += "\n" + full_summary + "\n再生按世界时间推进；暂停与退出不推进。"
 		button.get_child(0).get_node("Distance").text = format_distance(float(record.distance_m))
 		button.get_child(0).get_node("Name").text = str(record.title)

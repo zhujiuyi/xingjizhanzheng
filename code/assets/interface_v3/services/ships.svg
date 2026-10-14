@@ -1,6 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <g fill="none" stroke="#b8c6ce" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="m8 3 5 13-5-2-5 2L8 3Zm0 11v5M16 5l5 13-5-2-3 1M16 16v5"/>
-    <path d="M6 21h4M15 22h3"/>
+  <!-- 舰载徽记语言 v1 · 原创矢量。三舰横列：舰队与借船。三枚同向箭首并排表示编队名册。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 7L8.5 11L5 15"/>
+    <path d="M10.5 7L14 11L10.5 15"/>
+    <path d="M16 7L19.5 11L16 15"/>
   </g>
 </svg>

@@ -35,8 +35,6 @@ def required(codepoint: int) -> bool:
             or 0x20 <= codepoint <= 0x7E)
 
 def run(report_path: Path | None) -> int:
-    ranges = cmap_ranges(FONT.read_bytes())
-    starts = [item[0] for item in ranges]
     seen: dict[int, set[str]] = {}
     defects = []
     source_count = 0
@@ -61,13 +59,25 @@ def run(report_path: Path | None) -> int:
                     if isinstance(value, str): collect(value, "catalog:" + name)
     # UI frequently uses these to express distance, rates, selection and state.
     collect("星际战舰航行采矿护盾装甲结构保存读取任务取消远征 · × / → ← ↑ ↓ ± % Ⅰ Ⅱ Ⅲ", "required UI sample")
+    # Every shipped weight is scanned: headings render in Medium, so a character
+    # present only in Regular would show as tofu on a heading and nowhere else.
+    fonts = sorted(FONT.parent.glob("NotoSansCJKsc-*.otf"))
+    if not fonts:
+        raise ValueError(f"No shipped weights found beside {FONT.relative_to(ROOT)}")
     missing = []
-    for value, origins in sorted(seen.items()):
-        index = bisect.bisect_right(starts, value) - 1
-        covered = index >= 0 and ranges[index][0] <= value <= ranges[index][1] and ranges[index][2] + value - ranges[index][0] != 0
-        if not covered:
-            missing.append({"codepoint": f"U+{value:04X}", "character": chr(value), "name": unicodedata.name(chr(value), "UNNAMED"), "origins": sorted(origins)})
-    report = {"font": str(FONT.relative_to(ROOT)), "source_files": source_count, "catalog_tables": table_count, "required_unique_codepoints": len(seen), "required_codepoints": sorted(seen), "missing": missing, "encoding_defects": defects}
+    scans = []
+    for font_path in fonts:
+        ranges = cmap_ranges(font_path.read_bytes())
+        starts = [item[0] for item in ranges]
+        font_missing = 0
+        for value, origins in sorted(seen.items()):
+            index = bisect.bisect_right(starts, value) - 1
+            covered = index >= 0 and ranges[index][0] <= value <= ranges[index][1] and ranges[index][2] + value - ranges[index][0] != 0
+            if not covered:
+                font_missing += 1
+                missing.append({"font": font_path.name, "codepoint": f"U+{value:04X}", "character": chr(value), "name": unicodedata.name(chr(value), "UNNAMED"), "origins": sorted(origins)})
+        scans.append({"font": str(font_path.relative_to(ROOT)), "missing": font_missing, "required": len(seen)})
+    report = {"fonts": scans, "source_files": source_count, "catalog_tables": table_count, "required_unique_codepoints": len(seen), "required_codepoints": sorted(seen), "missing": missing, "encoding_defects": defects}
     if report_path:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

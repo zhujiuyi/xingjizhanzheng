@@ -213,7 +213,9 @@ func _ready() -> void:
 	navigation_layout.add_theme_constant_override("separation", 4)
 	navigation_frame.add_child(navigation_layout)
 	top = _text_to(navigation_layout, "航行", 14)
-	top.add_theme_color_override("font_color", UISkin.AMBER)
+	# Location / risk zone / credits / ship name: three plain facts, so they read
+	# in body colour. Amber is reserved for "selected" and "the one primary action".
+	top.add_theme_color_override("font_color", UISkin.TEXT)
 	flight_header = _frame(root, "FlightHeader")
 	flight_header.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	top.reparent(flight_header)
@@ -240,9 +242,10 @@ func _ready() -> void:
 	hud_left.add_theme_constant_override("separation", UISkin.GAP)
 	hud_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	objective_frame.add_child(hud_left)
-	var mission_heading: Label = _text_to(hud_left, "航行任务", 11)
+	var mission_heading: Label = _text_to(hud_left, "航行任务", UISkin.SIZE_NOTE)
 	mission_heading.name = "MissionHeading"
-	mission_heading.add_theme_color_override("font_color", UISkin.AMBER)
+	UISkin.apply_text_style(mission_heading, "note")
+	mission_heading.add_theme_color_override("font_color", UISkin.TEXT)
 	objective = _text_to(hud_left, "", 14)
 	objective.max_lines_visible = 4
 	mission_navigation_row = HFlowContainer.new()
@@ -284,13 +287,20 @@ func _ready() -> void:
 	hud_left.add_child(work_box)
 	work_label = _text_to(work_box, "", 13)
 	work_label.mouse_filter = Control.MOUSE_FILTER_PASS
-	work_progress = _bar(work_box, UISkin.AMBER, 6)
+	# Mining/scan progress is neutral information, not a warning or a selection.
+	work_progress = _bar(work_box, UISkin.ICE, 6)
 	work_progress.show_percentage = true
 	work_stop = _button(work_box, "停止作业", func(): requested.emit("stop_scan" if work_mode == "scan" else "stop_mining", "", 1, ""))
 	work_stop.custom_minimum_size.y = 24
 	work_stop.focus_mode = Control.FOCUS_NONE
 	UISkin.apply_button(work_stop, "default", true)
 	work_box.hide()
+	# One card instead of two stacked ones. The navigation line used to float in
+	# its own frame above the objective card, so this corner held two panels with
+	# different heights and a visible seam between them. The frame node stays
+	# (callers test it for pointer capture) but is collapsed and hidden.
+	navigation_layout.reparent(hud_left)
+	navigation_frame.hide()
 	flight_dock = HBoxContainer.new()
 	flight_dock.name = "FlightDock"
 	flight_dock.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -509,7 +519,8 @@ func show_page(next_page: String) -> void:
 func notify(message: String, is_error: bool = false) -> void:
 	toast.text = _friendly(message)
 	toast.tooltip_text = toast.text
-	toast.modulate = UISkin.DANGER if is_error else UISkin.AMBER
+	# A save notice is information, not a selection and not a warning.
+	toast.modulate = UISkin.DANGER if is_error else UISkin.ICE
 	_responsive()
 	message_age = 0.0
 
@@ -663,11 +674,18 @@ func _build_panel(title: String, description: String) -> void:
 		service_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		service_rows.add_theme_constant_override("separation", 4)
 		service_scroll.add_child(service_rows)
-		for record: Dictionary in _service_pages(state.player().has_docked_station_id):
-			_service_button(service_rows, str(record.id), "sidebar")
+		_service_grouped_rows(service_rows, state.player().has_docked_station_id, "sidebar")
 		var divider: HSeparator = HSeparator.new()
 		sidebar.add_child(divider)
-		var location: Label = _text_to(sidebar, _station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), 12)
+		# The scene switch lives with the location, not beside "back". Two adjacent
+		# buttons that both leave the page read as a choice the player does not have.
+		var home: Button = _button(sidebar, "返回机库" if state.player().has_docked_station_id else "返回航行", func(): show_page("station" if state.player().has_docked_station_id else ""))
+		home.name = "PanelHome"
+		home.tooltip_text = "离开当前服务，回到" + ("空间站机库" if state.player().has_docked_station_id else "航行视图") + "。"
+		_wide_button(home)
+		_secondary(home)
+		var location: Label = _text_to(sidebar, _station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), UISkin.SIZE_NOTE)
+		UISkin.apply_text_style(location, "note")
 		location.add_theme_color_override("font_color", UISkin.MUTED)
 	else: sidebar.hide()
 	if sidebar.visible: sidebar.visible = not _service_sidebar_compact()
@@ -688,7 +706,8 @@ func _build_panel(title: String, description: String) -> void:
 		heading_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		heading_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		header.add_child(heading_icon)
-	var heading: Label = _text_to(header, title, 48 if page == "title" else 25)
+	var heading: Label = _text_to(header, title, UISkin.SIZE_DISPLAY if page == "title" else UISkin.SIZE_PAGE)
+	UISkin.apply_text_style(heading, "display" if page == "title" else "page")
 	heading.name = "PageHeading"
 	heading.custom_minimum_size.x = 90
 	heading.max_lines_visible = 2
@@ -715,16 +734,21 @@ func _build_panel(title: String, description: String) -> void:
 		header.add_child(selector)
 	if page != "title":
 		var parent_page: String = _parent_page()
-		var close: Button = _button(header, "返回" if page == "settings" else "返回上级" if not parent_page.is_empty() else "返回机库" if state != null and state.player().has_docked_station_id else "返回航行", _back)
+		# One return control, named for where it actually goes. The old header could
+		# show two adjacent back buttons with different destinations ("返回上级" and
+		# "返回机库"), which reads as a choice when it is not one. The scene switch
+		# now lives with the location in the sidebar.
+		var close_label: String = "← 返回机库" if state != null and state.player().has_docked_station_id else "← 返回航行"
+		if page == "settings":
+			close_label = "← 返回"
+		elif not parent_page.is_empty():
+			close_label = "← " + ServiceNavigation.label(parent_page, "上级页面")
+		var close: Button = _button(header, close_label, _back)
 		close.name = "PanelClose"
-		close.custom_minimum_size.x = 96
+		close.custom_minimum_size.x = 132
 		close.size_flags_horizontal = Control.SIZE_SHRINK_END
 		_secondary(close)
-		if not parent_page.is_empty():
-			close.tooltip_text = "返回 " + ServiceNavigation.label(parent_page, "上级页面")
-			var home: Button = _button(header, "返回机库" if state.player().has_docked_station_id else "返回航行", func(): show_page("station" if state.player().has_docked_station_id else ""))
-			home.name = "PanelHome"
-			_secondary(home)
+		close.tooltip_text = ("返回 " + ServiceNavigation.label(parent_page, "上级页面")) if not parent_page.is_empty() and page != "settings" else ("返回空间站机库" if state != null and state.player().has_docked_station_id else "返回航行视图")
 	var subheading: Label = _text_to(layout, description, 13)
 	subheading.add_theme_color_override("font_color", UISkin.MUTED)
 	subheading.max_lines_visible = 2
@@ -778,8 +802,7 @@ func _station() -> void:
 	body.add_theme_constant_override("separation", 3)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	service_scroll.add_child(body)
-	for record: Dictionary in _service_pages(true):
-		_service_button(body, str(record.id), "hangar")
+	_service_grouped_rows(body, true, "hangar")
 	var context_divider: HSeparator = HSeparator.new()
 	body.add_child(context_divider)
 	var overview_button: Button = _command(body, "观察舰船", "hangar_focus")
@@ -791,7 +814,9 @@ func _station() -> void:
 	var price: int = int(gameplay.get("economy").call("quote_repair"))
 	var repair: Button = _command(body, "维修补给 · %d 信用点" % price, "repair", state.ship().ship_instance_id)
 	repair.name = "StationRepair"
-	repair.icon = ServiceNavigation.icon("fitting")
+	# Deliberately iconless. It used to borrow the fitting mark, which reads as
+	# "install into a slot" and means something else; the label already carries
+	# both the action and its price, so a wrong glyph is worse than none.
 	repair.tooltip_text = "维修补给 · %d 信用点\n需结构部件 × %d" % [price, int(needs.get("structural_units", 0))]
 	repair.disabled = state.player().credit < price
 	_service_button_style(repair, false)
@@ -809,8 +834,9 @@ func _station() -> void:
 	station_ship_name = _text_to(details, _ship_name(state.ship().ship_def_id), 22)
 	station_ship_name.add_theme_color_override("font_color", UISkin.ICE)
 	station_ship_status = _text_to(details, "", 14)
-	var funds: Label = _text_to(details, "%d 信用点" % state.player().credit, 19)
-	funds.add_theme_color_override("font_color", UISkin.AMBER)
+	var funds: Label = _text_to(details, "%d 信用点" % state.player().credit, UISkin.SIZE_SECTION)
+	UISkin.apply_text_style(funds, "section")
+	funds.add_theme_color_override("font_color", UISkin.TEXT)
 	station_departure = _frame(station_layer, "StationDeparture")
 	station_departure.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	station_departure.offset_left = 22
@@ -1410,7 +1436,9 @@ func _campaign_summary() -> void:
 			if _mission_completed(str(node.mission_id)): done += 1
 			elif next_id.is_empty(): next_id = str(node.mission_id)
 		summary.append("%s %d/%d" % ["新手教学" if kind == "tutorial" else "主线剧情", done, nodes.size()])
-	_text_to(body, "航路重建进度 · " + "   /   ".join(summary), 16).add_theme_color_override("font_color", UISkin.AMBER)
+	var progress_line: Label = _text_to(body, "航路重建进度 · " + "   /   ".join(summary), UISkin.SIZE_SECTION)
+	UISkin.apply_text_style(progress_line, "section")
+	progress_line.add_theme_color_override("font_color", UISkin.TEXT)
 	if next_id.is_empty(): _text("主线航路已全部重建，可继续接取地区合同、研究与自由探索。", 13); return
 	var next_def: Dictionary = _one("mission_defs", "mission_id", next_id)
 	var missing: String = str(service.call("missing_prerequisite", next_id))
@@ -2429,8 +2457,9 @@ func _card(title: String) -> VBoxContainer:
 	var card: VBoxContainer = VBoxContainer.new()
 	card.add_theme_constant_override("separation", UISkin.GAP)
 	frame.add_child(card)
-	var heading: Label = _text_to(card, title, 18)
-	heading.add_theme_color_override("font_color", UISkin.ICE)
+	var heading: Label = _text_to(card, title, UISkin.SIZE_SECTION)
+	UISkin.apply_text_style(heading, "section")
+	heading.add_theme_color_override("font_color", UISkin.TEXT)
 	return card
 
 func _box(fill: Color, border: Color) -> StyleBoxFlat:
@@ -2597,7 +2626,7 @@ func _update_navigation() -> void:
 	interaction_button.tooltip_text = str(interaction_candidate.title) + " · " + str(interaction_candidate.reason)
 	interaction_label.text = str(interaction_candidate.title) + "\n" + ("接口就绪 · " + XJSpaceUnits.distance(float(interaction_candidate.distance_m)) if interaction_candidate.ready else _friendly(str(interaction_candidate.reason)))
 	interaction_label.tooltip_text = interaction_label.text
-	interaction_label.add_theme_color_override("font_color", UISkin.ICE if interaction_candidate.ready else UISkin.AMBER)
+	interaction_label.add_theme_color_override("font_color", UISkin.ICE if interaction_candidate.ready else UISkin.WARN)
 
 func _update_hud_visibility() -> void:
 	var show_hud: bool = state != null and state.ship() != null and state.ship().status == Types.ShipStatus.FLYING and not panel.visible and not station_layer.visible and not menu_open
@@ -2680,7 +2709,10 @@ func _responsive() -> void:
 		navigation_frame.offset_left = left_edge
 		navigation_frame.offset_right = left_edge + left_width
 		navigation_frame.offset_top = flight_content_top
-		navigation_frame.offset_bottom = flight_content_top + (50 if compact else 76)
+		# Collapsed to nothing: this frame no longer draws, it only keeps its place in
+		# the pointer-capture and visibility lists. Its contents moved into the one
+		# objective card below.
+		navigation_frame.offset_bottom = flight_content_top
 		navigation_frame.add_theme_stylebox_override("panel", UISkin.hud_panel(5 if compact else 10))
 		navigation_status.max_lines_visible = 1 if compact else 2
 		navigation_status.add_theme_font_size_override("font_size", 10 if compact else 12)
@@ -2688,8 +2720,9 @@ func _responsive() -> void:
 	if is_instance_valid(hud_left):
 		var frame: PanelContainer = hud_left.get_parent()
 		frame.offset_left = left_edge
-		frame.offset_top = navigation_frame.offset_bottom + 14.0
-		frame.offset_bottom = frame.offset_top + ((70 if work_box.visible else 68) if compact else 166)
+		frame.offset_top = flight_content_top
+		# The card now carries the navigation line too, hence the extra height.
+		frame.offset_bottom = frame.offset_top + ((104 if work_box.visible else 102) if compact else 200)
 		frame.offset_right = left_edge + left_width
 		frame.add_theme_stylebox_override("panel", UISkin.hud_panel(5 if compact else 10))
 		hud_left.add_theme_constant_override("separation", 3 if compact else 8)
@@ -2847,12 +2880,14 @@ func _reflow_flight_left() -> void:
 	if not is_instance_valid(root) or not is_instance_valid(hud_left) or not is_instance_valid(navigation_hud): return
 	var compact: bool = root.size.x < 950
 	var frame: PanelContainer = hud_left.get_parent()
-	var base_height: float = (70.0 if work_box.visible else 68.0) if compact else 166.0
+	var base_height: float = (104.0 if work_box.visible else 102.0) if compact else 200.0
 	# Work and objective text can grow after telemetry changes. Reserve their
 	# real container minimum before placing the radar, without rebuilding nodes.
 	var frame_bottom: float = frame.offset_top + maxf(base_height, frame.get_combined_minimum_size().y)
 	if absf(frame.offset_bottom - frame_bottom) > 0.5: frame.offset_bottom = frame_bottom
-	if radar_expanded: frame_bottom = navigation_frame.offset_bottom + 8.0
+	# The navigation line now lives inside this card, so the card's own bottom is
+	# the limit an expanded radar may reach down to.
+	if radar_expanded: frame_bottom = frame.offset_bottom + 8.0
 	var radar_height: float = minf(140.0 if compact else 246.0, maxf(66.0, flight_content_bottom - frame_bottom - 8.0))
 	var radar_frame: PanelContainer = navigation_hud.radar_frame
 	radar_frame.offset_top = flight_content_bottom - radar_height - root.size.y
@@ -3159,6 +3194,9 @@ func _bar(parent: Node, color: Color, height: float = 7.0) -> ProgressBar:
 	return bar
 
 func _module_heading(parent: Node, title: String, subtitle: String = "") -> void:
+	# Section headings carry hierarchy through weight, not through the accent
+	# colour: amber means "selected" and "primary action" only, so a heading that
+	# glowed amber competed with the buttons it was labelling.
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	parent.add_child(row)
@@ -3168,10 +3206,12 @@ func _module_heading(parent: Node, title: String, subtitle: String = "") -> void
 	mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(mark)
-	var line: Label = _text_to(row, title, 14)
-	line.add_theme_color_override("font_color", UISkin.ICE)
+	var line: Label = _text_to(row, title, UISkin.SIZE_SECTION)
+	UISkin.apply_text_style(line, "section")
+	line.add_theme_color_override("font_color", UISkin.TEXT)
 	if not subtitle.is_empty():
-		var caption: Label = _text_to(parent, subtitle, 11)
+		var caption: Label = _text_to(parent, subtitle, UISkin.SIZE_NOTE)
+		UISkin.apply_text_style(caption, "note")
 		caption.add_theme_color_override("font_color", UISkin.MUTED)
 
 func _build_instrument() -> void:
@@ -3198,7 +3238,7 @@ func _build_instrument() -> void:
 		var label: Label = _text_to(defense, name_value, 13)
 		label.custom_minimum_size.x = 0
 		label.mouse_filter = Control.MOUSE_FILTER_PASS
-		var bar: ProgressBar = _bar(defense, [UISkin.ICE, UISkin.AMBER, Color("a6b2be")][index], 5)
+		var bar: ProgressBar = _bar(defense, UISkin.LAYER_SERIES[index], 5)
 		condition_bars.append({"label": label, "bar": bar, "name": name_value})
 	dial = UISkin.Dial.new()
 	dial.name = "SpeedDial"
@@ -3221,7 +3261,8 @@ func _build_instrument() -> void:
 	energy_bar = _bar(resources, UISkin.ICE, 5)
 	heat_label = _text_to(resources, "热量", 13)
 	heat_label.custom_minimum_size.x = 0
-	heat_bar = _bar(resources, UISkin.AMBER, 5)
+	# Heat is the one gauge that escalates: it warns before it locks the ship down.
+	heat_bar = _bar(resources, UISkin.WARN, 5)
 	cargo_label = _text_to(resources, "载荷", 12)
 	cargo_label.custom_minimum_size.x = 0
 	cargo_label.add_theme_color_override("font_color", UISkin.MUTED)
@@ -3254,7 +3295,10 @@ func _build_navigation() -> void:
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.autowrap_mode = TextServer.AUTOWRAP_OFF
 		button.add_theme_font_size_override("font_size", 12)
-		button.icon = ServiceNavigation.texture(ServiceNavigation.OBSERVE_ICON) if key == "show_ship" else ServiceNavigation.icon("ships" if key in ["drones","hire"] else key)
+		# One mark per entry. Previously 无人机 and 僚舰 both drew as 舰队与借船 and
+		# 舰船 drew as an eye, so three of the seven rail buttons lied about what
+		# they opened.
+		button.icon = ServiceNavigation.texture(ServiceNavigation.OBSERVE_ICON) if key == "show_ship" else ServiceNavigation.icon(key)
 		button.expand_icon = true
 		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
@@ -3271,7 +3315,7 @@ func _build_navigation() -> void:
 		_update_hud_visibility()
 		_responsive())
 	radar_button.name = "FlightRadarToggle"
-	radar_button.icon = ServiceNavigation.icon("research")
+	radar_button.icon = ServiceNavigation.icon("radar")
 	radar_button.expand_icon = true
 	radar_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	radar_button.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
@@ -3376,7 +3420,7 @@ func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 		condition_bars[index].bar.value = values[index]
 		# Exact exhausted/destroyed layers, not new gameplay warning thresholds.
 		var exposed: bool = index > 0 and values[0] <= 0.0 and (index == 1 or values[1] <= 0.0)
-		var tone: Color = UISkin.DANGER if values[index] <= 0.0 or (index == 2 and exposed) else UISkin.AMBER if exposed else UISkin.TEXT
+		var tone: Color = UISkin.DANGER if values[index] <= 0.0 or (index == 2 and exposed) else UISkin.WARN if exposed else UISkin.TEXT
 		condition_bars[index].label.add_theme_color_override("font_color", tone)
 	dial.speed = _display_speed()
 	dial.ratios = Vector3(values[0] / maxf(maximums[0], 1.0), values[1] / maxf(maximums[1], 1.0), values[2] / maxf(maximums[2], 1.0))
@@ -3385,13 +3429,16 @@ func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 	energy_label.text = "电容 %.0f%%" % (ship.energy / maxf(float(metrics.energy_max), 1.0) * 100)
 	energy_bar.max_value = maxf(float(metrics.energy_max), 1.0)
 	energy_bar.value = ship.energy
-	energy_label.add_theme_color_override("font_color", UISkin.AMBER if ship.energy <= 0.0 else UISkin.TEXT)
+	energy_label.add_theme_color_override("font_color", UISkin.WARN if ship.energy <= 0.0 else UISkin.TEXT)
 	var heat_ratio: float = ship.heat / maxf(float(metrics.heat_max), 1.0)
 	var heat_warning: bool = heat_ratio >= float(catalog.rule("overheat_warning_ratio"))
 	heat_label.text = ("锁定 " if ship.overheated else "预警 " if heat_warning else "热量 ") + "%.0f%%" % (heat_ratio * 100)
-	heat_label.add_theme_color_override("font_color", UISkin.DANGER if ship.overheated else UISkin.AMBER if heat_warning else UISkin.TEXT)
+	heat_label.add_theme_color_override("font_color", UISkin.DANGER if ship.overheated else UISkin.WARN if heat_warning else UISkin.TEXT)
 	heat_label.tooltip_text = ("过热锁定 · " if ship.overheated else "热量预警 · " if heat_warning else "") + "热量 %.0f / %.0f HU" % [ship.heat, float(metrics.heat_max)]
-	heat_bar.add_theme_stylebox_override("fill", UISkin.flat(UISkin.DANGER if ship.overheated else UISkin.AMBER, Color.TRANSPARENT, 0))
+	# Three distinct states, three distinct visuals: normal heat stays neutral and
+	# only the database-driven warning ratio turns the meter amber-orange.
+	var heat_fill: Color = UISkin.DANGER if ship.overheated else UISkin.WARN if heat_warning else UISkin.ICE
+	heat_bar.add_theme_stylebox_override("fill", UISkin.flat(heat_fill, Color.TRANSPARENT, 0))
 	heat_bar.max_value = maxf(float(metrics.heat_max), 1.0)
 	heat_bar.value = ship.heat
 	cargo_label.tooltip_text = "货 %.0f/%.0f L · 矿 %.0f/%.0f L" % [float(metrics.cargo_used_l), float(metrics.cargo_capacity_l), float(metrics.mineral_used_l), float(metrics.mineral_capacity_l)]
@@ -3408,7 +3455,8 @@ func update_camera_status() -> void:
 	instrument_title.text = _ship_name(ship.ship_def_id) + "  /  " + view + " · V" + (" · 过热警报" if ship.overheated else "")
 	var earned_title: String=gameplay.scenarios.title() if gameplay!=null else ""
 	if not earned_title.is_empty():instrument_title.text+=" · "+earned_title
-	instrument_title.modulate = UISkin.AMBER if ship.overheated else Color.WHITE
+	# Overheat locks the weapons: that is a real failure, not a caution.
+	instrument_title.modulate = UISkin.DANGER if ship.overheated else Color.WHITE
 	instrument_title.tooltip_text = "V 循环切换跟随、舰首、战术视角。舰首视角从船头观察，不显示外部舰体；点击上方‘显示舰船’回到跟随视角。"
 	compact_speed_label.text = "%s · %s" % [XJSpaceUnits.speed(_display_speed()), ["跟随", "舰首隐藏", "战术"][int(camera.mode)]]
 	compact_speed_label.tooltip_text = instrument_title.text + "\n" + instrument_title.tooltip_text + "\n" + cargo_label.tooltip_text
@@ -3439,7 +3487,9 @@ func _service_label(id: String) -> String:
 	return ServiceNavigation.label(id)
 
 func _service_icon(id: String) -> Texture2D:
-	return ServiceNavigation.icon("fitting" if id == "drones" else id)
+	# Drones and fitting used to share one mark; the registry now owns a distinct
+	# icon for every entry, including the flight-only ones.
+	return ServiceNavigation.icon(id)
 
 func _parent_page() -> String:
 	if page == "drones" and state != null and not state.player().has_docked_station_id: return ""
@@ -3452,6 +3502,48 @@ func _action_bar(parent: Node, name_hint: String) -> HFlowContainer:
 	bar.add_theme_constant_override("v_separation", UISkin.GAP)
 	parent.add_child(bar)
 	return bar
+
+## Draws the shared service list grouped by routine of use. Both surfaces use it
+## so the caption order can never differ between the hangar panel and a workbench
+## sidebar. Anything not named by a group lands in a trailing "其他" caption.
+func _service_grouped_rows(parent: Node, docked: bool, surface: String) -> void:
+	var records: Array[Dictionary] = _service_pages(docked)
+	var by_id: Dictionary = {}
+	var placed: Dictionary = {}
+	for record: Dictionary in records:
+		by_id[str(record.id)] = record
+	for id: String in ServiceNavigation.LEADING_IDS:
+		if not by_id.has(id): continue
+		placed[id] = true
+		_service_button(parent, id, surface)
+	for group: Dictionary in ServiceNavigation.GROUPS:
+		var members: Array[String] = []
+		for id: String in group.ids:
+			if by_id.has(id) and not placed.has(id):
+				members.append(id)
+		if members.is_empty(): continue
+		_service_group_caption(parent, str(group.title))
+		for id: String in members:
+			placed[id] = true
+			_service_button(parent, id, surface)
+	var leftovers: Array[String] = []
+	for record: Dictionary in records:
+		if not placed.has(str(record.id)): leftovers.append(str(record.id))
+	if not leftovers.is_empty():
+		_service_group_caption(parent, "其他")
+		for id: String in leftovers:
+			_service_button(parent, id, surface)
+
+func _service_group_caption(parent: Node, title: String) -> void:
+	# An 11 px caption with a little air above, not the full section-heading
+	# treatment: five headings with marker bars would add the noise this removes.
+	var spacer := Control.new()
+	spacer.custom_minimum_size.y = 6
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(spacer)
+	var caption: Label = _text_to(parent, title, UISkin.SIZE_NOTE)
+	UISkin.apply_text_style(caption, "note")
+	caption.add_theme_color_override("font_color", UISkin.MUTED)
 
 func _service_button(parent: Node, destination: String, surface: String) -> Button:
 	var button: Button = _button(parent, _service_label(destination), show_page.bind(destination))

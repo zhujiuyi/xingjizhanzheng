@@ -1,8 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <g fill="none" stroke="#b8c6ce" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="2.3"/>
-    <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(45 12 12)"/>
-    <ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(-45 12 12)"/>
-    <path d="M12 2v3M12 19v3"/>
+  <!-- 舰载徽记语言 v1 · 原创矢量。科技分支：一节点分叉到两个端点。与星图的环形节点区分。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 4.5V11"/>
+    <path d="M11 11L5 16.5"/>
+    <path d="M11 11L17 16.5"/>
+    <circle cx="11" cy="4" r="2"/>
+    <path d="M4 19.5H7.5"/>
+    <path d="M14.5 19.5H18"/>
   </g>
 </svg>

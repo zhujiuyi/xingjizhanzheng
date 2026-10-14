@@ -1,8 +1,18 @@
 class_name XJUITheme
 extends RefCounted
 ## Presentation tokens only; gameplay values remain in the catalog.
+##
+## Colour semantics are deliberate, not decorative:
+##   AMBER  one meaning - current/selected, and the single primary action on a screen.
+##   WARN   blocked, short of materials, exposure, low reserve, a negative figure.
+##   GAIN   income, repair, friendly. Always paired with a shape or a word.
+##   DANGER irreversible action, hostile, real failure.
+## An earlier revision let AMBER carry all seven of those at once, which is why the
+## interface read as noise: one accent cannot mean everything.
 const ICE: Color = Color("86b8ca")
 const AMBER: Color = Color("c6a76d")
+const WARN: Color = Color("d98a3c")
+const GAIN: Color = Color("74b39a")
 const DANGER: Color = Color("db827b")
 const TEXT: Color = Color("dce2e5")
 const MUTED: Color = Color("9ba7af")
@@ -11,11 +21,57 @@ const SURFACE: Color = Color("171d23")
 const BORDER: Color = Color("39444d")
 const GAP: int = 8
 const SECTION_GAP: int = 16
+
+## Shield / armour / structure are one instrument family, so they share a cold
+## grey-blue ramp instead of borrowing the accent colour. Using AMBER for the
+## armour layer was one of the ways the accent lost its meaning.
+const LAYER_SERIES: Array[Color] = [ICE, Color("a6b2be"), Color("6f7d88")]
+
+## Type scale. Six steps, one of them for Latin/digit data. Hierarchy is carried
+## by weight; the size steps only jump where the change must be obvious. The set
+## previously used 13 sizes between 9 and 22 px, with 13 and 14 both heavy - a
+## one-pixel difference that no reader can see but that made every screen uneven.
+const SIZE_DISPLAY: int = 28
+const SIZE_PAGE: int = 20
+const SIZE_SECTION: int = 15
+const SIZE_BODY: int = 13
+const SIZE_DATA: int = 13
+const SIZE_NOTE: int = 11
+const TEXT_ROLES: Dictionary = {
+	"display": {"size": 28, "medium": true},
+	"page": {"size": 20, "medium": true},
+	"section": {"size": 15, "medium": true},
+	# A heading inside a table or a compact HUD panel: same weight as "section",
+	# no extra size, because the surrounding rows already set the rhythm.
+	"subhead": {"size": 13, "medium": true},
+	"body": {"size": 13, "medium": false},
+	"data": {"size": 13, "medium": false},
+	"note": {"size": 11, "medium": false},
+}
+
 static var FONT: FontFile = preload("res://assets/interface_v3/NotoSansCJKsc-Regular.otf")
+static var FONT_MEDIUM: FontFile = preload("res://assets/interface_v3/NotoSansCJKsc-Medium.otf")
 
 static func font() -> FontFile:
 	FONT.allow_system_fallback = false
 	return FONT
+
+static func font_medium() -> FontFile:
+	FONT_MEDIUM.allow_system_fallback = false
+	return FONT_MEDIUM
+
+## Applies one of TEXT_ROLES to a label. Panels should not hand-write font sizes:
+## that is how the previous thirteen-step scale accumulated.
+static func apply_text_style(label: Label, role: String = "body") -> void:
+	var spec: Dictionary = TEXT_ROLES.get(role, TEXT_ROLES.body)
+	label.add_theme_font_size_override("font_size", int(spec.size))
+	if bool(spec.medium):
+		label.add_theme_font_override("font", font_medium())
+	else:
+		label.remove_theme_font_override("font")
+
+static func text_size(role: String) -> int:
+	return int(TEXT_ROLES.get(role, TEXT_ROLES.body).size)
 
 static func flat(fill: Color, border: Color, inset: int = 8) -> StyleBoxFlat:
 	var result := StyleBoxFlat.new()
@@ -111,7 +167,7 @@ static func glyph(kind: String, color: Color = ICE) -> Texture2D:
 static func create() -> Theme:
 	var result := Theme.new()
 	result.default_font = font()
-	result.default_font_size = 15
+	result.default_font_size = SIZE_BODY
 	result.set_color("font_color", "Label", TEXT)
 	for type: String in ["HBoxContainer", "VBoxContainer"]: result.set_constant("separation", type, GAP)
 	for type: String in ["GridContainer", "HFlowContainer", "VFlowContainer"]:
@@ -215,7 +271,7 @@ class Dial extends Control:
 		for index: int in range(3):
 			var r: float = radius - index * 7.0
 			draw_arc(center, r, PI * 0.85, PI * 2.15, 60, XJUITheme.BORDER, 3.0, true)
-			draw_arc(center, r, PI * 0.85, PI * (0.85 + 1.3 * clampf(ratios[index], 0, 1)), 60, [XJUITheme.ICE, XJUITheme.AMBER, XJUITheme.TEXT][index], 3.0, true)
+			draw_arc(center, r, PI * 0.85, PI * (0.85 + 1.3 * clampf(ratios[index], 0, 1)), 60, XJUITheme.LAYER_SERIES[index], 3.0, true)
 		var face: Font = get_theme_default_font()
 		var small: bool = size.x < 90
 		var speed_text: PackedStringArray = XJSpaceUnits.speed(speed).split(" ")
