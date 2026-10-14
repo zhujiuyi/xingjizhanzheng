@@ -2,7 +2,7 @@
 
 ## 航行加载响应
 
-`py jiaoben/tests/startup_navigation_run.py [--executable <v0.33.1 EXE>]` 使用真实标题按钮、共享审计锁、fresh UUID 库与严格双日志，验证新建/继续/保存返回标题的响应以及加载后持续运行。可传 `--profile-copy <jiaoben/tmp 内已关闭的副本>`，先继续原世界再新建；不得传个人原件。旧 v0.33.0 反例另加 `--legacy-v61`，只在 tmp 暂存适配脚本。原始报告在 logs，截图/副本在 tmp，边界与验收见 [71](../doc/71-航行加载响应与旧档性能修复.md)。
+`py jiaoben/tests/startup_navigation_run.py [--executable <v0.33.1 EXE>]` 使用真实标题按钮、共享审计锁、fresh UUID 库与严格双日志，验证新建/继续/保存返回标题的响应以及加载后持续运行。可传 `--profile-copy <jiaoben/tmp 内已关闭的副本>`，先继续原世界再新建；加 `--profile-new-first` 单独验证未先升级的旧档直接新建。不得传个人原件。旧 v0.33.0 反例另加 `--legacy-v61`，只在 tmp 暂存适配脚本。失败/安全停止入口为 `py jiaoben/tests/loading_failure_run.py [--executable <v0.33.1 EXE>]`，固定两条预期错误各一次，其余诊断严格拒绝。原始报告在 logs，截图/副本在 tmp，边界与验收见 [71](../doc/71-航行加载响应与旧档性能修复.md)。
 
 ## 全界面UI审查
 

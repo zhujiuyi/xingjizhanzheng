@@ -23,6 +23,7 @@ var last_heartbeat_us: int = 0
 var max_frame_ms: float = 1000.0
 var finishing: bool = false
 var profile_copy: bool = false
+var profile_new_first: bool = false
 var seed_sha256: String = ""
 var seed_world_id: String = ""
 @onready var root: Window = get_tree().root
@@ -197,6 +198,14 @@ func load_from_button(action: String) -> bool:
 		if Time.get_ticks_usec() - int(row.started_us) > 1500000: check(row.get("elapsed_label_values", {}).size() > 1, action + " updates the actual elapsed label during long loading")
 	return true
 
+func verify_seed_world_retained(event: String) -> void:
+	if not profile_copy: return
+	if not check(not host.busy and not host.store.busy, "seed-world preservation query runs only after loading has completed"): return
+	var rows: Array = host.store._records("SELECT world_id FROM world WHERE world_id=?", [seed_world_id])
+	var retained: bool = rows.size() == 1
+	check(retained, "original seed world remains in the working test archive " + event)
+	observations.append({"event": event, "seed_world_id": seed_world_id, "seed_world_retained": retained, "active_world_id": host.state.world_id})
+
 func run() -> void:
 	directory = OS.get_environment(ENV_PREFIX + "_DIRECTORY").replace("\\", "/")
 	var script: String = str(get_script().resource_path).replace("\\", "/")
@@ -215,6 +224,9 @@ func run() -> void:
 		if not check(DirAccess.copy_absolute(seed, directory.path_join("progress.db")) == OK and FileAccess.get_sha256(directory.path_join("progress.db")) == seed_sha256, "only the scoped seed is copied to the fresh diagnostic progress database"):
 			await finish(); return
 		profile_copy = true
+	profile_new_first = OS.get_environment(ENV_PREFIX + "_PROFILE_NEW_FIRST") == "1"
+	if not check(not profile_new_first or profile_copy, "direct-New mode requires a verified closed profile-copy seed"):
+		await finish(); return
 	var budget: String = OS.get_environment("XJ_STARTUP_NAVIGATION_MAX_FRAME_MS")
 	if budget.is_valid_float() and float(budget) > 0.0: max_frame_ms = float(budget)
 	root.mode = Window.MODE_WINDOWED; root.size = Vector2i(1440, 900)
@@ -226,18 +238,24 @@ func run() -> void:
 	host.ui.requested.connect(func(action: String, target: String, quantity: int, extra: String): requests.append({"action": action, "target": target, "quantity": quantity, "extra": extra, "ticks_us": Time.get_ticks_usec()}))
 	check(host.state == null and host.ui.page == "title" and host.is_processing() and host.is_physics_processing(), "normal title has no loaded state and production callbacks remain enabled")
 	await frames(8); await capture("title-fresh")
-	if not await load_from_button("continue" if profile_copy else "new_world"):
+	var continue_first: bool = profile_copy and not profile_new_first
+	if not await load_from_button("continue" if continue_first else "new_world"):
 		await finish(); return
 	var world_id: String = host.state.world_id
-	if profile_copy: check(world_id == seed_world_id, "first real Continue resumes the original closed-copy world before any New action")
-	if not await observe_running("continued_world_running" if profile_copy else "new_world_running"):
+	if continue_first: check(world_id == seed_world_id, "first real Continue resumes the original closed-copy world before any New action")
+	if profile_new_first:
+		check(world_id != seed_world_id, "direct New on the old archive creates a world distinct from the original resume pointer")
+		verify_seed_world_retained("after_direct_new")
+	if not await observe_running("continued_world_running" if continue_first else "new_world_running"):
 		await finish(); return
 	if not await return_to_title():
 		await finish(); return
-	if not await load_from_button("new_world" if profile_copy else "continue"):
+	if not await load_from_button("new_world" if continue_first else "continue"):
 		await finish(); return
-	check(host.state.world_id != world_id if profile_copy else host.state.world_id == world_id, "New creates a distinct voyage" if profile_copy else "real Continue resumes the same saved voyage")
-	await observe_running("new_world_running" if profile_copy else "continued_world_running")
+	check(host.state.world_id != world_id if continue_first else host.state.world_id == world_id, "New creates a distinct voyage" if continue_first else "real Continue resumes the same saved voyage")
+	await observe_running("new_world_running" if continue_first else "continued_world_running")
+	verify_seed_world_retained("after_complete_startup_sequence")
+	observations.append({"event": "actual_startup_order", "profile_new_first": profile_new_first, "first_action": "continue" if continue_first else "new_world", "last_action": "new_world" if continue_first else "continue", "first_loaded_world_id": world_id, "final_world_id": host.state.world_id, "seed_world_id": seed_world_id})
 	await finish()
 
 func finish() -> void:
@@ -255,7 +273,7 @@ func finish() -> void:
 	await frames(6)
 	RenderingServer.frame_post_draw.disconnect(_rendered)
 	if profile_copy: check(FileAccess.get_sha256(directory.path_join("seed.db")) == seed_sha256, "closed seed bytes remain unchanged after all normal startup/save operations")
-	var result: Dictionary = {"result": "PASS" if failures.is_empty() else "FAIL", "checks": checks, "failures": failures.size(), "failure_labels": failures, "directory": directory, "native": DisplayServer.get_name() != "headless", "packed_runtime": not OS.has_feature("editor"), "profile_copy": profile_copy, "seed_sha256": seed_sha256, "seed_resume_world_id": seed_world_id, "responsiveness_budget_ms": max_frame_ms, "phases": phase_stats, "observations": observations, "requests": requests, "screenshots": screenshots, "scope": "fresh independent database or scoped verified closed-copy seed; real title new and continue pointer dispatch (closed-copy Continue precedes New), pause-save-return; normal Main render/physics for five seconds and 120 frames per loaded phase; no personal database opened, no growth/render/simulation fixtures, no FPS certification"}
+	var result: Dictionary = {"result": "PASS" if failures.is_empty() else "FAIL", "checks": checks, "failures": failures.size(), "failure_labels": failures, "directory": directory, "native": DisplayServer.get_name() != "headless", "packed_runtime": not OS.has_feature("editor"), "profile_copy": profile_copy, "profile_new_first": profile_new_first, "seed_sha256": seed_sha256, "seed_resume_world_id": seed_world_id, "responsiveness_budget_ms": max_frame_ms, "phases": phase_stats, "observations": observations, "requests": requests, "screenshots": screenshots, "scope": "fresh independent database or scoped verified closed-copy seed; actual button order recorded (closed-copy defaults Continue then New; direct-New option creates New before any old-world Continue), pause-save-return; normal Main render/physics for five seconds and 120 frames per loaded phase; no personal database opened, no growth/render/simulation fixtures, no FPS certification"}
 	var file: FileAccess = FileAccess.open(directory.path_join("result.json"), FileAccess.WRITE)
 	if file != null: file.store_string(JSON.stringify(result, "\t") + "\n"); file.close()
 	print("STARTUP_NAVIGATION_V62_RESULT ", result.result, " checks=", checks, " failures=", failures.size())

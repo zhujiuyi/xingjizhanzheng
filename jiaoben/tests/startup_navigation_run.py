@@ -120,6 +120,7 @@ def run(args):
     output.parent.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy(); env.pop("XJ_TEST_DATABASE", None)
     env[prefix + "_SCRIPT"] = script.as_posix(); env[prefix + "_DIRECTORY"] = directory.as_posix()
+    env[prefix + "_PROFILE_NEW_FIRST"] = "1" if args.profile_new_first else "0"
     env.pop(prefix + "_PROFILE_SEED_SHA256", None)
     if profile_origin:
         env[prefix + "_PROFILE_SEED_SHA256"] = profile_origin["sha256"]
@@ -141,6 +142,7 @@ def run(args):
               "directory": str(directory), "stdout": str(output), "engine_log": str(engine_log),
               "source_sha256": initial_sources, "timeout_s": args.timeout, "max_frame_budget_ms": args.max_frame_ms,
               "profile_origin": profile_origin,
+              "profile_new_first": args.profile_new_first,
               "pck_sha256": sha(binary.with_suffix(".pck")) if args.executable else None}
     print(f"START {stem}", flush=True)
     started = time.monotonic()
@@ -176,8 +178,9 @@ def run(args):
     assert not profile_origin or (record["profile_origin_unchanged"] and record["profile_seed_unchanged"]), "Closed-copy input or immutable scoped seed was modified"
     assert re.search(r"^STARTUP_NAVIGATION_V62_RESULT PASS checks=\d+ failures=0", stdout, re.M), "Complete successful endpoint missing"
     assert result.is_file() and record["summary"]["result"] == "PASS" and not re.search(r"^FAIL(?:\s|$)", stdout, re.M)
-    expected_actions = ["continue", "return_title", "new_world"] if profile_origin else ["new_world", "return_title", "continue"]
+    expected_actions = ["continue", "return_title", "new_world"] if profile_origin and not args.profile_new_first else ["new_world", "return_title", "continue"]
     assert [row["action"] for row in record["summary"]["requests"]] == expected_actions, "Actual GUI request sequence differs"
+    assert record["summary"].get("profile_new_first") is args.profile_new_first, "Diagnostic direct-New option differs from the runner contract"
     assert {"title-fresh.png", "title-saved.png", "new_world_running.png", "continued_world_running.png"}.issubset({Path(row["path"]).name for row in record["captures"]}), "Native fresh/saved title and both loaded scenes required"
     print(f"STARTUP_NAVIGATION_ACCEPTANCE PASS {report}", flush=True)
 
@@ -188,9 +191,12 @@ def main():
     parser.add_argument("--executable", type=Path)
     parser.add_argument("--legacy-v61", action="store_true", help="Temporary staged script using the old client's existing fixed v61 endpoint")
     parser.add_argument("--profile-copy", type=Path, help="Already-closed SQLite copy under this workspace's jiaoben/tmp; Continue is tested before New")
+    parser.add_argument("--profile-new-first", action="store_true", help="With --profile-copy, test direct New before any old-world Continue, then return to title and resume the new world")
     parser.add_argument("--timeout", type=float, default=180.0, help="External process wall-clock bound in seconds")
     parser.add_argument("--max-frame-ms", type=float, default=1000.0, help="Declared UI responsiveness budget, including click-to-completion synchronous loading frames")
     args = parser.parse_args()
+    if args.profile_new_first and not args.profile_copy:
+        parser.error("--profile-new-first requires --profile-copy")
     if args.timeout <= 0 or args.max_frame_ms <= 0:
         parser.error("Timeout and frame budget must be positive")
     import msvcrt
