@@ -50,6 +50,8 @@ S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增S
 
 用户已要求阶段验收后只保留代码、文档及最新一个正式客户端；测试源码与维护中的生成器保留，生成的临时数据库、截图、日志、候选包、旧包与缓存清理。交付摘要与原始验证身份保存在文档和最终构建manifest；历史原始路径不保证存在，后续重放应重新生成所需临时输入。`code/data/catalog_*_v*.db`是运行时旧存档升级桥接库，导航/跃迁数据库也有正式消费者，不能按文件名或版本号清除。
 
+2026-10-14的v0.33交付后清理已完成：删除3470个生成/中间文件，逻辑大小4.926 GiB；tmp/logs仅留`.gitkeep`，Godot/Python缓存已移除，正式包仅留`0.33.0-d64e8897-20261014-174717`。最新正式包内的聚合验收及`cleanup-verification.json`保留，源码/母版/维护脚本/升级数据库和个人存档校验一致；不要将下文历史临时路径视为仍然存在的输入。
+
 2026-10-12清理6432个忽略文件、31826797209字节（约29.6 GiB）；当前tmp约708 MiB。完整盘点、删除清单和保留文件SHA256核对在`logs/cleanup-20261012-{inventory,plan,deletion,verification}.json`，摘要见[交付记录](../doc/26-开发阶段与交付记录.md)。本次未改游戏逻辑，不重复运行游戏验收。
 
 S24/S27/S28联合批次：`verify_combat_v18.py --only scenarios`检查三类挑战、货物/封锁/结果及99组恢复；`--native --only scenarios-world`使用真实Main、焦点/指针、物理武器、护航与移动远修、HUD和JSON3导出，实际包加`--executable`。`prepare_scenarios_upgrade_v39.py --legacy-executable <已验证v0.29 EXE>`仅经旧包固定fitting入口创建关闭的format23测试库；传`XJ_SCENARIOS_LEGACY_DATABASE`运行`--only scenarios-upgrade`，核027/内容分支失败回滚、原87组和旧手动档。全部使用fresh UUID和共用审计锁；不得用通用`--script`启动导出EXE。SQL及旧定义字节保护在`tests/test_scenarios.py`，当前边界见[65](../doc/65-配装挑战航路封锁与行为记录.md)。
