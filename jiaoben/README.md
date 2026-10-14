@@ -6,15 +6,15 @@
 
 ## 全界面UI审查
 
-源码原生检查：`py jiaoben/tests/ui_quality_audit_run.py --label before` 或 `--label after --strict-layout`。工具持有共享运行锁，使用fresh UUID测试库，覆盖28个独立页面/四种尺寸与缩放/声明的子视图、真实控件交互、UI源文件前后摘要与严格双日志；不使用个人存档。实际Windows 0.34.0.0可加`--executable <EXE>`，仅固定v61入口，拒绝向旧EXE传新参数或使用通用`--script`。信用点/解锁/有限库存为明示展示夹具，购船/招募/配装/保存/出港调用真实入口；不能将其作为自然成长或全战斗运行态验收。报告在logs、截图及控件JSON在tmp/ui-quality-audit。`--headless`仅检查结构，不能替代原生图。问题与实际证据见[68](../doc/68-全界面工业风审查与整改.md)。
+源码原生检查：`py jiaoben/tests/ui_quality_audit_run.py --label before` 或 `--label after --strict-layout`。工具持有共享运行锁，使用fresh UUID测试库，覆盖28个独立页面/四种尺寸与缩放/声明的子视图、真实控件交互、UI源文件前后摘要与严格双日志；不使用个人存档。实际Windows 0.35.0.0可加`--executable <EXE>`，仅固定v61入口，拒绝向旧EXE传新参数或使用通用`--script`。信用点/解锁/有限库存为明示展示夹具，购船/招募/配装/保存/出港调用真实入口；不能将其作为自然成长或全战斗运行态验收。报告在logs、截图及控件JSON在tmp/ui-quality-audit。`--headless`仅检查结构，不能替代原生图。问题与实际证据见[68](../doc/68-全界面工业风审查与整改.md)。
 
-交互专项：`py jiaoben/tests/ui_interaction_consistency_run.py [--executable <0.34.0.0 EXE>]`。使用同样的锁和fresh UUID，验证未提交/失焦数量、真实资格、旧配装报价、内部SpinBox编辑器焦点、上下文返回和旧页面/旧世界回调。不能把有资金视为有库存；所有禁用判断与业务服务的实际资格比较。
+交互专项：`py jiaoben/tests/ui_interaction_consistency_run.py [--executable <0.35.0.0 EXE>]`。使用同样的锁和fresh UUID，验证未提交/失焦数量、真实资格、旧配装报价、内部SpinBox编辑器焦点、上下文返回和旧页面/旧世界回调。不能把有资金视为有库存；所有禁用判断与业务服务的实际资格比较。
 
 材质、特效与新舰造型：`py jiaoben/tests/render_quality_audit_run.py --label after --baseline <已接受before报告>`，实际包另加`--executable <0.33.0.0 EXE> --source-reference <已接受source-after报告>`。before须在改动前的源码保存；after验证真实资源、几何/锚点、画质切换、FX像素可见性与寿命/暂停/预算、全状态/RNG及严格双日志。模型作者流程为Blender运行`art/build_ships_v4.py`，原生`art/preview_ships_v4.gd`生成逐舰三角度与缩略图，`art/bake_hangar_reflection.gd`仅捕捉静态机库；生成资源后更新两个新表现包manifest及ship_v4 manifest。所有引擎操作串行持锁；图像或manifest存在不能代替实际验收。范围与结果见[69](../doc/69-交互一致性与材质表现优化.md)、[70](../doc/70-舰船造型重建.md)。
 
 ## 信息分层与场景化入口
 
-`py jiaoben/tests/ui_information_v63_run.py [--executable <0.34.0.0 EXE>]` 使用固定v63入口、共享锁、fresh UUID测试库和严格双日志，核验当前舰无人机权限/实际装配、站内与飞行命令分离、摘要列表与旧隐藏回调、研究分类及真实投入、成长推荐推进、回收包一次领取、文明分区和合同详情。1280×720/200%货舱领取使用实际640×360逻辑画布。18种目录权限、三艘真实切换/装配舰、资金/进度/容器边界为明示测试夹具，不能替代自然成长或全部战斗验证。源码与实际包分开运行，报告在logs，截图和测试库在tmp/ui-information-v63；整改记录与28页覆盖映射见[72](../doc/72-界面信息分层与场景化入口整改.md)。
+`py jiaoben/tests/ui_information_v63_run.py [--executable <0.35.0.0 EXE>]` 使用固定v63入口、共享锁、fresh UUID测试库和严格双日志，核验当前舰无人机权限/实际装配、站内与飞行命令分离、摘要列表与旧隐藏回调、研究分类及真实投入、成长推荐推进、回收包一次领取、文明分区和合同详情。1280×720/200%货舱领取使用实际640×360逻辑画布。18种目录权限、三艘真实切换/装配舰、资金/进度/容器边界为明示测试夹具，不能替代自然成长或全部战斗验证。源码与实际包分开运行，报告在logs，截图和测试库在tmp/ui-information-v63；整改记录与28页覆盖映射见[72](../doc/72-界面信息分层与场景化入口整改.md)。
 
 ## 既有专项入口
 

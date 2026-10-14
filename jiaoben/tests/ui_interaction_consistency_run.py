@@ -1,7 +1,7 @@
 """Run real UI interaction checks against source or the fixed Windows PCK endpoint.
 
 py jiaoben/tests/ui_interaction_consistency_run.py
-py jiaoben/tests/ui_interaction_consistency_run.py --executable <0.34.0.0.exe>
+py jiaoben/tests/ui_interaction_consistency_run.py --executable <0.35.0.0.exe>
 Each run owns a fresh UUID database, the shared engine lock and strict dual logs.
 Release mode never receives --script or --path.
 """
@@ -95,7 +95,7 @@ def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, default=Path("D:/DevTools/Godot/4.7.2/Godot_v4.7.2-stable_win64.exe"))
-    parser.add_argument("--executable", type=Path, help="Actual Windows 0.34.0.0 PCK client; fixed v61 flag only")
+    parser.add_argument("--executable", type=Path, help="Actual Windows 0.35.0.0 PCK client; fixed v61 flag only")
     parser.add_argument("--headless", action="store_true", help="Structure/dispatch only; no native-window acceptance")
     args = parser.parse_args()
     import msvcrt
