@@ -2967,8 +2967,14 @@ func _responsive() -> void:
 		# Collapsed to nothing: this frame no longer draws, it only keeps its place in
 		# the pointer-capture and visibility lists. Its contents moved into the one
 		# objective card below.
+		#
+		# An empty stylebox, not just a zero-height offset. A PanelContainer is clamped
+		# to its stylebox content margins, so hud_panel left the collapsed frame 20 px
+		# tall sitting exactly over the top of that card: same material so it did not
+		# read as a second box, but it did put a 20 px band of the task card inside the
+		# HUD's pointer-capture region.
 		navigation_frame.offset_bottom = flight_content_top
-		navigation_frame.add_theme_stylebox_override("panel", UISkin.hud_panel(5 if compact else 10))
+		navigation_frame.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 		navigation_status.max_lines_visible = 1 if compact else 2
 		navigation_status.add_theme_font_size_override("font_size", 10 if compact else 12)
 		navigation_stop_button.custom_minimum_size.y = 20

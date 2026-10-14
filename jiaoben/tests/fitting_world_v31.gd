@@ -125,7 +125,9 @@ func flight_layout_checks() -> void:
 		var center: Rect2=Rect2(ui.root.size*0.5-Vector2(40,30),Vector2(80,60))
 		var label: String="%dx%d-%d" % [layout.size.x,layout.size.y,int(layout.scale*100)]
 		check(ui.root.size.is_equal_approx(Vector2(layout.size)/layout.scale),"actual logical viewport matches the declared pixel size and scale "+label)
-		observations.append({"kind":"layout","case":label,"logical_width":ui.root.size.x,"logical_height":ui.root.size.y})
+		# The four rects the separation check below compares, recorded even when it
+		# passes: "they overlap" is not actionable without knowing by how much.
+		observations.append({"kind":"layout","case":label,"logical_width":ui.root.size.x,"logical_height":ui.root.size.y,"navigation_frame":str(ui.navigation_frame.get_global_rect()),"objective_card":str(ui.hud_left.get_parent().get_global_rect()),"target_panel":str(ui.target_panel.get_global_rect()),"flight_dock":str(ui.flight_dock.get_global_rect())})
 		var panels: Array[Control]=[ui.flight_header,ui.navigation,ui.navigation_frame,ui.hud_left.get_parent(),ui.target_panel,ui.flight_dock]
 		for panel: Control in panels:
 			check(panel.is_visible_in_tree() and bounds.encloses(panel.get_global_rect()) and not panel.get_global_rect().intersects(center),"clean HUD panel is bounded and preserves the ship "+panel.name+" "+label)
