@@ -163,11 +163,23 @@ func menu_ids(docked: bool) -> Array[String]:
 		expected.append_array(FLIGHT_IDS)
 		if not host.gameplay.fitting_analysis.supported(): expected.erase("fitting")
 		if DroneAvailability.capable(host.gameplay) and not DroneAvailability.equipped(host.gameplay).is_empty(): expected.append("drones")
-	var actual: Array[String] = []
-	for record: Dictionary in host.ui._service_pages(docked): actual.append(str(record.id))
-	check(actual == expected, "live service menu matches the independent docked or flight contract")
-	observations.append({"kind": "context-menu", "docked": docked, "expected": expected, "actual": actual})
-	return actual
+	var live: Array[String] = []
+	for record: Dictionary in host.ui._service_pages(docked): live.append(str(record.id))
+	check(live == expected, "live service menu matches the independent docked or flight contract")
+	# Rendering groups the list by routine of use, so the drawn order is the
+	# registry's grouping applied to the live set. Order still comes from a
+	# registry constant, not from reading the UI back.
+	var drawn: Array[String] = []
+	for id: String in Navigation.LEADING_IDS:
+		if live.has(id): drawn.append(id)
+	for group: Dictionary in Navigation.GROUPS:
+		for id: String in group.ids:
+			if live.has(id): drawn.append(id)
+	for id: String in live:
+		if not drawn.has(id): drawn.append(id)
+	check(drawn.size() == live.size(), "grouping neither drops nor duplicates a live service")
+	observations.append({"kind": "context-menu", "docked": docked, "expected": expected, "actual": live, "drawn": drawn})
+	return drawn
 
 func menu_label(id: String) -> String:
 	if id == "drones": return "无人机整备" if host.state.player().has_docked_station_id else "无人机控制"
@@ -186,27 +198,12 @@ func identity(buttons: Array[Button], expected: Array[String], label: String) ->
 		valid = valid and expected.has(id) and button.text == menu_label(id) and button.icon == menu_icon(id) and button.icon != null
 	check(valid, "canonical labels and matching functional icons " + label)
 
-func panel_identity(id: String, expected: Array[String]) -> void:
+func panel_identity(id: String) -> void:
+	# A page shows one service. The service list lives on the station hub and is
+	# validated there once, instead of being repeated on every page.
 	var heading: Label = host.ui.panel.find_child("PageHeading", true, false)
 	var icon: TextureRect = host.ui.panel.find_child("PageHeadingIcon", true, false)
 	check(heading != null and heading.text == menu_label(id) and icon != null and icon.texture == menu_icon(id), "actual page heading matches menu " + id)
-	identity(rows(host.ui.sidebar, "sidebar"), expected, "sidebar/" + id)
-	var selector: OptionButton = host.ui.panel.find_child("PageSelector", true, false)
-	var valid: bool = selector != null and selector.item_count == expected.size()
-	var options: Array[String] = []
-	if selector != null:
-		for index: int in range(selector.item_count):
-			var key_id: String = str(selector.get_item_metadata(index))
-			options.append(key_id)
-			valid = valid and expected.has(key_id) and selector.get_item_text(index) == menu_label(key_id) and selector.get_item_icon(index) == menu_icon(key_id)
-		valid = valid and options == expected
-		if expected.has(id):
-			valid = valid and selector.selected >= 0 and selector.selected < selector.item_count
-			if selector.selected >= 0 and selector.selected < selector.item_count:
-				valid = valid and str(selector.get_item_metadata(selector.selected)) == id
-		else:
-			valid = valid and selector.selected == -1 and selector.text == menu_label(id) and not options.has(id)
-	check(valid, "actual dropdown label icon order selection agrees " + id)
 
 func geometry(button: Button, label: String, kind: String = "row") -> void:
 	var font: Font = button.get_theme_font("font")
@@ -325,55 +322,15 @@ func layout_matrix() -> void:
 			await capture("hangar-" + label)
 			await click(row(host.ui.station_services, "hangar", "pause"), "last scrollable row " + label)
 			check(host.ui.page == "pause", "last row reaches actual system page " + label)
-			panel_identity("pause", expected)
-
-func dropdown_navigation() -> void:
-	root.size = Vector2i(1280, 720)
-	root.content_scale_factor = 2.0
-	await show("missions")
-	await frames(6)
-	var selector: OptionButton = host.ui.panel.find_child("PageSelector", true, false)
-	if not check(selector != null and selector.is_visible_in_tree(), "compact screen exposes actual page dropdown"): return
-	if not await click(selector, "open compact page dropdown"): return
-	var popup: PopupMenu = selector.get_popup()
-	if not check(popup.visible, "real click opens native dropdown popup"): return
-	var index: int = -1
-	for item: int in range(selector.item_count):
-		if str(selector.get_item_metadata(item)) == "warehouse": index = item; break
-	if not check(index >= 0, "current compact dropdown contains the warehouse service"): await key(KEY_ESCAPE, popup); return
-	var trace: Array[Dictionary] = []
-	trace.append({"step": -1, "focused_index": popup.get_focused_item(), "popup_focus": popup.has_focus(), "root_focus": root.has_focus(), "visible": popup.visible})
-	for step: int in range(popup.item_count + 1):
-		if popup.get_focused_item() == index: break
-		await key(KEY_DOWN, popup)
-		var focused_index: int = popup.get_focused_item()
-		trace.append({"step": step, "focused_index": focused_index, "focused_id": str(selector.get_item_metadata(focused_index)) if focused_index >= 0 and focused_index < selector.item_count else "", "popup_focus": popup.has_focus(), "root_focus": root.has_focus(), "visible": popup.visible})
-	var observation: Dictionary = {"kind": "dropdown-keyboard", "window_id": popup.get_window_id(), "root_window_id": root.get_window_id(), "embedded": popup.is_embedded(), "requested_index": index, "trace": trace}
-	observations.append(observation)
-	print("SERVICE_NAVIGATION_V22_DROPDOWN " + JSON.stringify(observation))
-	if not check(popup.get_focused_item() == index and str(selector.get_item_metadata(index)) == "warehouse", "actual dropdown keyboard reaches warehouse item"): await key(KEY_ESCAPE, popup); return
-	await key(KEY_ENTER, popup)
-	await frames(4)
-	check(host.ui.page == "warehouse", "actual dropdown keyboard selection reaches production page")
-	panel_identity("warehouse", menu_ids(true))
-
-func only_industry_active() -> bool:
-	var active: Array[String] = []
-	var valid: bool = true
-	for button: Button in rows(host.ui.sidebar, "sidebar"):
-		var id: String = str(button.get_meta("service_page_id", ""))
-		var font_color: Color = button.get_theme_color("font_color")
-		var icon_color: Color = button.get_theme_color("icon_normal_color")
-		if font_color == UISkin.AMBER: active.append(id)
-		valid = valid and font_color == (UISkin.AMBER if id == "industry" else UISkin.TEXT) and icon_color == (UISkin.AMBER if id == "industry" else UISkin.TEXT)
-		for color_key: String in ["font_hover_color", "font_pressed_color", "font_focus_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color"]:
-			valid = valid and button.get_theme_color(color_key) == (UISkin.AMBER if id == "industry" else UISkin.TEXT)
-	return valid and active == ["industry"]
+			panel_identity("pause")
 
 func industry_focus_regression() -> void:
-	var industry: Button = row(host.ui.sidebar, "sidebar", "industry")
-	var station: Button = row(host.ui.sidebar, "sidebar", "station")
-	if not check(industry != null and station != null and industry.is_visible_in_tree() and station.is_visible_in_tree(), "initial industry exposes current and station navigation controls"): return
+	# The persistent service column is gone, so the page's own controls are the only
+	# navigation inside it. What still has to hold: the page opens focused on its own
+	# body, its return control is reachable and returns to the hub, and keyboard focus
+	# keeps a thin neutral outline instead of imitating selection.
+	var back: Button = host.ui.panel.find_child("PanelClose", true, false) as Button
+	if not check(back != null and back.is_visible_in_tree(), "industry page exposes its single return control"): return
 	var enabled_body: int = 0
 	for node: Node in descendants(host.ui.body):
 		if node is Button and node.is_visible_in_tree() and not node.disabled and node.focus_mode != Control.FOCUS_NONE: enabled_body += 1
@@ -382,12 +339,9 @@ func industry_focus_regression() -> void:
 		if quote.action == "manufacture" and not quote.button.disabled: enabled_manufacture += 1
 	check(enabled_manufacture == 0, "fresh industry still cannot manufacture without its actual prerequisites")
 	var initial_focus: Control = root.gui_get_focus_owner()
-	check(initial_focus != station and (initial_focus == industry if enabled_body == 0 else host.ui.body.is_ancestor_of(initial_focus)), "industry focuses an available body function or its own page without selecting station")
-	check(only_industry_active(), "current industry alone has selected amber text and symbol")
-	var normal: StyleBoxFlat = industry.get_theme_stylebox("normal") as StyleBoxFlat
-	var focus: StyleBoxFlat = station.get_theme_stylebox("focus") as StyleBoxFlat
-	var current_focus: StyleBoxFlat = industry.get_theme_stylebox("focus") as StyleBoxFlat
-	var thin: bool = focus != null and current_focus != null and not focus.draw_center and focus.bg_color.a <= 0.001 and focus.border_color != UISkin.AMBER and focus.border_color == current_focus.border_color
+	check(initial_focus != back or enabled_body == 0, "industry focuses an available body function rather than the way out")
+	var focus: StyleBoxFlat = back.get_theme_stylebox("focus") as StyleBoxFlat
+	var thin: bool = focus != null and not focus.draw_center and focus.bg_color.a <= 0.001 and focus.border_color != UISkin.AMBER
 	if focus != null:
 		for side: Side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]: thin = thin and focus.get_border_width(side) == 1
 	check(thin, "keyboard focus is a separate thin neutral outline without selected fill")
@@ -396,27 +350,24 @@ func industry_focus_regression() -> void:
 	var count: int = events.size()
 	var reached: bool = false
 	for step: int in range(menu_ids(true).size() + 8):
+		if root.gui_get_focus_owner() == back: reached = true; break
 		await key(KEY_TAB, null, true)
-		if root.gui_get_focus_owner() == station: reached = true; break
-	check(reached and complete(station), "real reverse Tab reaches fully visible station while industry stays open")
-	check(host.ui.page == "industry" and only_industry_active(), "station keyboard focus does not create a second active page")
-	var center: Vector2 = station.get_global_rect().get_center()
+	check(reached and complete(back), "real reverse Tab reaches the fully visible return control")
+	check(host.ui.page == "industry", "keyboard focus does not navigate away on its own")
+	var center: Vector2 = back.get_global_rect().get_center()
 	host.get_viewport().warp_mouse(center)
 	var motion := InputEventMouseMotion.new()
 	motion.position = center; motion.global_position = center
 	host.get_viewport().push_input(motion, true)
 	await frames(3)
 	var hovered: Control = host.get_viewport().gui_get_hovered_control()
-	check(hovered != null and (hovered == station or station.is_ancestor_of(hovered)), "actual pointer hovers inactive station row")
-	var hover: StyleBoxFlat = station.get_theme_stylebox("hover") as StyleBoxFlat
-	var pressed: StyleBoxFlat = station.get_theme_stylebox("pressed") as StyleBoxFlat
-	check(normal != null and hover != null and pressed != null and hover.bg_color != normal.bg_color and pressed.bg_color != normal.bg_color and only_industry_active(), "inactive hover and pressed feedback cannot imitate selected industry fill")
-	observations.append({"kind": "industry-focus", "page": host.ui.page, "default_focus": "industry", "tab_focus": str(root.gui_get_focus_owner().get_path()) if root.gui_get_focus_owner() != null else "", "body_eligible_buttons": enabled_body, "only_industry_active": only_industry_active(), "focus_border": str(focus.border_color) if focus != null else "missing", "pointer_hover": str(hovered.get_path()) if hovered != null else "none"})
+	check(hovered != null and (hovered == back or back.is_ancestor_of(hovered)), "actual pointer hovers the return control")
+	observations.append({"kind": "industry-focus", "page": host.ui.page, "default_focus": "industry", "tab_focus": str(root.gui_get_focus_owner().get_path()) if root.gui_get_focus_owner() != null else "", "body_eligible_buttons": enabled_body, "focus_border": str(focus.border_color) if focus != null else "missing", "pointer_hover": str(hovered.get_path()) if hovered != null else "none"})
 	check(authority() == before and events.size() == count, "industry Tab and hover leave economy typed state SQL endpoints and preferences unchanged")
 	if reached:
 		await key(KEY_ENTER)
 		await settle()
-		check(host.ui.page == "station" and host.ui.station_layer.visible and not host.ui.panel.visible, "real focused station Enter returns to hangar")
+		check(host.ui.page == "station" and host.ui.station_layer.visible and not host.ui.panel.visible, "real focused return control reaches hangar")
 		check(authority() == before and events.size() == count, "keyboard station navigation changes no economy save pointers or requested business actions")
 
 func navigation_and_observation() -> void:
@@ -431,17 +382,14 @@ func navigation_and_observation() -> void:
 		await frames(3)
 		await click(row(host.ui.station_services, "hangar", id), "hangar destination " + id)
 		check(host.ui.page == id, "real hangar row reaches declared page " + id)
-		if id != "station": panel_identity(id, expected)
+		if id != "station": panel_identity(id)
 		if id == "industry": await industry_focus_regression()
 		if id in ["missions", "market"]: await capture("service-" + id)
 	await show("missions")
 	await frames(4)
-	await click(row(host.ui.sidebar, "sidebar", "industry"), "sidebar industry")
-	check(host.ui.page == "industry", "real sidebar reaches matching industry page")
-	await dropdown_navigation()
 	await show("salvage")
-	check(host.ui.page == "warehouse" and row(host.ui.sidebar, "sidebar", "salvage") == null, "legacy salvage route reaches the real warehouse without a redundant menu entry")
-	panel_identity("warehouse", expected)
+	check(host.ui.page == "warehouse" and row(host.ui.station_services, "hangar", "salvage") == null, "legacy salvage route reaches the real warehouse without a redundant menu entry")
+	panel_identity("warehouse")
 	check(authority() == before and events.is_empty(), "page navigation leaves all typed state SQL endpoints and preferences unchanged")
 	root.size = Vector2i(1440, 900)
 	root.content_scale_factor = 1.0
@@ -474,14 +422,19 @@ func guarded_departure() -> void:
 	var count: int = events.size()
 	await show("missions")
 	await frames(4)
-	panel_identity("missions", expected)
+	panel_identity("missions")
+	# In flight the rail is the only service navigation; the workbench carries no
+	# list of its own any more.
+	var rail: Array[String] = []
+	for key: String in host.ui.toolbar_buttons:
+		if host.ui.toolbar_buttons[key].is_visible_in_tree(): rail.append(key)
 	for id: String in ["station", "warehouse", "market", "industry", "research", "salvage"]:
-		check(row(host.ui.sidebar, "sidebar", id) == null, "flight navigation omits unavailable station service " + id)
-	check(not DroneAvailability.capable(host.gameplay) and DroneAvailability.equipped(host.gameplay).is_empty() and row(host.ui.sidebar, "sidebar", "drones") == null and not host.ui.toolbar_buttons.drones.is_visible_in_tree(), "fresh unsupported un-equipped hull has no drone control navigation or HUD shortcut")
+		check(not rail.has(id), "flight rail omits unavailable station service " + id)
+	check(not DroneAvailability.capable(host.gameplay) and DroneAvailability.equipped(host.gameplay).is_empty() and not rail.has("drones") and not host.ui.toolbar_buttons.drones.is_visible_in_tree(), "fresh unsupported un-equipped hull has no drone control navigation or HUD shortcut")
 	# Removed menu rows are tested through their still-guarded legacy route.
 	await show("market")
 	check(host.ui.page == "market" and not host.ui.station_layer.visible, "flight service row respects hidden hangar state")
-	panel_identity("market", expected)
+	panel_identity("market")
 	var reason: bool = false
 	var business_actions: int = 0
 	for node: Node in descendants(host.ui.body):
@@ -491,9 +444,10 @@ func guarded_departure() -> void:
 	check(authority() == before and events.size() == count, "guarded menu access cannot mutate flight state permissions or SQL save endpoints")
 	await capture("flight-market-docking-guard")
 	await show("missions")
-	if await click(row(host.ui.sidebar, "sidebar", "fitting"), "real flight fitting navigation"):
+	await show("pause")
+	if await click(host.ui.body.find_child("PauseFittingAnalysis", true, false) as Button, "real flight fitting analysis navigation"):
 		check(host.ui.page == "fitting_analysis" and host.ui.body.find_children("BusinessQuantity_*", "SpinBox", true, false).is_empty(), "flight fitting navigation reaches analysis without installation or transaction editors")
-		panel_identity("fitting", expected)
+		panel_identity("fitting")
 		check(host.ui.body.find_child("FittingCalculate", true, false) != null, "actual read-only fitting analysis controls remain accessible in flight")
 	await show("drones")
 	check(host.ui.page.is_empty() and not host.ui.panel.visible, "direct unsupported drone route also returns to actual flight")

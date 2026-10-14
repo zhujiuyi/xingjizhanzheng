@@ -59,8 +59,10 @@ func run() -> void:
 		var map_button: Button = host.ui.body.find_child("SourceMap_" + suffix, true, false)
 		await reveal(map_button)
 		check(Rect2(Vector2.ZERO, host.ui.root.size).encloses(map_button.get_global_rect()), "source operation reachable at " + str(size))
-		var selector: OptionButton = host.ui.panel.find_child("PageSelector", true, false)
-		check(str(selector.get_item_metadata(selector.selected)) == "map", "source detail retains star-chart navigation context " + str(size))
+		# The origin is carried by the single return control now: it names where it
+		# goes. The label shortens on narrow headers, the tooltip always spells it out.
+		var close: Button = host.ui.panel.find_child("PanelClose", true, false) as Button
+		check(close != null and close.tooltip_text.contains("星域航路") and (close.text.contains("星域航路") or close.text == "←"), "source detail keeps its star-chart origin as the return destination " + str(size))
 		await capture("sources-" + str(size.x))
 	root.size = Vector2i(1440, 900); root.content_scale_factor = 1.0
 	await host._command("undock", "", 1, ""); await settle()

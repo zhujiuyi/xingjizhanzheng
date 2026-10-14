@@ -143,10 +143,18 @@
       "source": "Project-authored static SVG geometry; no third-party artwork."
     },
     {
+      "asset_id": "flight_repair_icon",
+      "resource_path": "res://assets/interface_v3/services/repair.svg",
+      "sha256": "07bc9cbe0400a5d588448bf03ceb6fd6f7a06cc3a3829e1aaa0636dbd2c81add",
+      "size_bytes": 548,
+      "role": "flight_rail_icon",
+      "source": "Project-authored static SVG geometry; no third-party artwork."
+    },
+    {
       "asset_id": "service_navigation_registry",
       "resource_path": "res://runtime/ui/service_navigation.gd",
-      "sha256": "38d439de41ec1f0e5abda8c239d06ed79e1250c1e98661d7205698297fdb0aae",
-      "size_bytes": 3882,
+      "sha256": "dd93b02099b2237e7a8180876c1c237a2209e0576c127a2bb5c791375dee2249",
+      "size_bytes": 3942,
       "role": "shared_order_captions_and_icons",
       "source": "Project-authored presentation registry; no gameplay or persistent state."
     }

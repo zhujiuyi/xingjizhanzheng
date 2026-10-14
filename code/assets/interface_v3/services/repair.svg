@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!-- 舰载徽记语言 v1 · 原创矢量。循环箭头：维修与补给。扳手已从配装释放，但循环箭头不与任何图标撞车。 -->
+  <!-- 描边与光学区由 jiaoben/build_insignia_icons.py 统一生成，勿手改本文件。 -->
+  <g fill="none" stroke="#b8c6ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16.5 8.4A6.5 6.5 0 1 0 17.4 12.2"/>
+    <path d="M14.2 5.4L17.1 8.3L13.9 10.6"/>
+  </g>
+</svg>

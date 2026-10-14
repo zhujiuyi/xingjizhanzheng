@@ -39,6 +39,7 @@ const EXTRA_ICONS: Dictionary = {
 	"drones": "res://assets/interface_v3/services/drones.svg",
 	"hire": "res://assets/interface_v3/services/hire.svg",
 	"radar": "res://assets/interface_v3/services/radar.svg",
+	"repair": "res://assets/interface_v3/services/repair.svg",
 }
 static var textures: Dictionary = {}
 

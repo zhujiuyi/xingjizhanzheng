@@ -121,8 +121,12 @@ func focus_and_return_case() -> void:
 	print("UI_INTERACTION_FOCUS_AFTER ",JSON.stringify({"owner":str(current_focus.get_path()) if current_focus!=null else "","row":row_id,"current_key":host.ui._focus_key(current_focus,host.ui.body) if current_focus!=null else "","saved_key":saved_view.key,"generation":host.ui.business_generation,"restored":restored}))
 	check(restored,"market refresh restores exact row quantity editor focus")
 	await show_interaction("fitting_analysis")
-	check(host.ui.panel.find_child("PanelHome",true,false)!=null,"subpage preserves explicit home exit")
-	await actual_click(host.ui.panel.find_child("PanelClose",true,false) as Button,"return analysis to parent")
+	# One return control, and it names its destination. The sidebar used to add a
+	# second way out ("返回机库") beside "返回上级", which reads as a choice the
+	# player does not have; the service column is gone and so is that button.
+	var close: Button=host.ui.panel.find_child("PanelClose",true,false) as Button
+	check(close!=null and close.is_visible_in_tree() and close.text.begins_with("← ") and host.ui.panel.find_child("PanelHome",true,false)==null,"subpage keeps exactly one return control and it names its destination")
+	await actual_click(close,"return analysis to parent")
 	check(host.ui.page=="fitting","analysis returns to fitting parent")
 	await show_interaction("industry");host.ui.open_sources("material_structural_stock");await frames(10)
 	await actual_click(host.ui.panel.find_child("PanelClose",true,false) as Button,"return sources to real origin")

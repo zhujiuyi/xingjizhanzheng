@@ -124,7 +124,6 @@ var station_departure: PanelContainer
 var station_ship_name: Label
 var station_ship_status: Label
 var station_status: Label
-var sidebar: VBoxContainer
 var card_grid: GridContainer
 var title_show_slots: bool = false
 var return_page: String = ""
@@ -655,40 +654,10 @@ func _build_panel(title: String, description: String) -> void:
 	var shell: HBoxContainer = HBoxContainer.new()
 	shell.add_theme_constant_override("separation", UISkin.SECTION_GAP)
 	panel.add_child(shell)
-	sidebar = VBoxContainer.new()
-	sidebar.name = "ServiceSidebar"
-	sidebar.visible = root.size.x >= 950 and state != null and page not in ["title", "settings"]
-	sidebar.custom_minimum_size.x = 190
-	sidebar.add_theme_constant_override("separation", 8)
-	shell.add_child(sidebar)
-	if state != null and page not in ["title", "settings"]:
-		_module_heading(sidebar, "服务导航")
-		var service_scroll: ScrollContainer = ScrollContainer.new()
-		service_scroll.name = "ServiceSidebarScroll"
-		service_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		service_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		service_scroll.follow_focus = true
-		sidebar.add_child(service_scroll)
-		var service_rows: VBoxContainer = VBoxContainer.new()
-		service_rows.name = "ServiceSidebarRows"
-		service_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		service_rows.add_theme_constant_override("separation", 4)
-		service_scroll.add_child(service_rows)
-		_service_grouped_rows(service_rows, state.player().has_docked_station_id, "sidebar")
-		var divider: HSeparator = HSeparator.new()
-		sidebar.add_child(divider)
-		# The scene switch lives with the location, not beside "back". Two adjacent
-		# buttons that both leave the page read as a choice the player does not have.
-		var home: Button = _button(sidebar, "返回机库" if state.player().has_docked_station_id else "返回航行", func(): show_page("station" if state.player().has_docked_station_id else ""))
-		home.name = "PanelHome"
-		home.tooltip_text = "离开当前服务，回到" + ("空间站机库" if state.player().has_docked_station_id else "航行视图") + "。"
-		_wide_button(home)
-		_secondary(home)
-		var location: Label = _text_to(sidebar, _station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), UISkin.SIZE_NOTE)
-		UISkin.apply_text_style(location, "note")
-		location.add_theme_color_override("font_color", UISkin.MUTED)
-	else: sidebar.hide()
-	if sidebar.visible: sidebar.visible = not _service_sidebar_compact()
+	# No persistent service column. One page is one task: the station menu is the
+	# hub you pick a service from, and the single "back" control returns to it. The
+	# service list used to sit here on every page, costing about 250 px of width and
+	# duplicating a choice the player had already made.
 	var layout: VBoxContainer = VBoxContainer.new()
 	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	layout.add_theme_constant_override("separation", UISkin.SECTION_GAP)
@@ -712,43 +681,16 @@ func _build_panel(title: String, description: String) -> void:
 	heading.custom_minimum_size.x = 90
 	heading.max_lines_visible = 2
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if state != null and page not in ["title", "settings"]:
-		var selector: OptionButton = OptionButton.new()
-		selector.name = "PageSelector"
-		selector.custom_minimum_size = Vector2(164, 32)
-		selector.add_theme_font_size_override("font_size", 12)
-		selector.add_theme_constant_override("icon_max_width", 20)
-		for record: Dictionary in _service_pages(state.player().has_docked_station_id):
-			selector.add_icon_item(_service_icon(str(record.id)), str(record.label))
-			selector.set_item_metadata(selector.item_count - 1, str(record.id))
-		var selected_service: int = -1
-		for index: int in range(selector.item_count):
-			if selector.get_item_metadata(index) == _service_context_page(): selected_service = index
-		selector.select(selected_service)
-		if selected_service < 0: selector.text = _service_label(_service_context_page())
-		var selector_context: Dictionary=UIInteraction.context(self)
-		selector.item_selected.connect(func(index: int):
-			if UIInteraction.current(self,selector_context,selector):show_page(str(selector.get_item_metadata(index))))
-		selector.tooltip_text = "切换服务 · " + _service_label(_service_context_page())
-		selector.visible = _service_sidebar_compact()
-		header.add_child(selector)
 	if page != "title":
-		var parent_page: String = _parent_page()
-		# One return control, named for where it actually goes. The old header could
-		# show two adjacent back buttons with different destinations ("返回上级" and
-		# "返回机库"), which reads as a choice when it is not one. The scene switch
-		# now lives with the location in the sidebar.
-		var close_label: String = "← 返回机库" if state != null and state.player().has_docked_station_id else "← 返回航行"
-		if page == "settings":
-			close_label = "← 返回"
-		elif not parent_page.is_empty():
-			close_label = "← " + ServiceNavigation.label(parent_page, "上级页面")
-		var close: Button = _button(header, close_label, _back)
+		# One return control, named for where it actually goes. It is now the page's
+		# only navigation: the service column is gone, so this is how a player gets
+		# back to the station hub or to flight.
+		var close: Button = _button(header, _close_label(), _back)
 		close.name = "PanelClose"
 		close.custom_minimum_size.x = 132
 		close.size_flags_horizontal = Control.SIZE_SHRINK_END
 		_secondary(close)
-		close.tooltip_text = ("返回 " + ServiceNavigation.label(parent_page, "上级页面")) if not parent_page.is_empty() and page != "settings" else ("返回空间站机库" if state != null and state.player().has_docked_station_id else "返回航行视图")
+		close.tooltip_text = _close_label(false, true)
 	var subheading: Label = _text_to(layout, description, 13)
 	subheading.add_theme_color_override("font_color", UISkin.MUTED)
 	subheading.max_lines_visible = 2
@@ -814,9 +756,10 @@ func _station() -> void:
 	var price: int = int(gameplay.get("economy").call("quote_repair"))
 	var repair: Button = _command(body, "维修补给 · %d 信用点" % price, "repair", state.ship().ship_instance_id)
 	repair.name = "StationRepair"
-	# Deliberately iconless. It used to borrow the fitting mark, which reads as
-	# "install into a slot" and means something else; the label already carries
-	# both the action and its price, so a wrong glyph is worse than none.
+	# Its own mark. It used to borrow the fitting icon, which reads as "install into
+	# a slot" and means something else; a circular restore arrow says repair and
+	# resupply without colliding with any other icon in the set.
+	repair.icon = ServiceNavigation.icon("repair")
 	repair.tooltip_text = "维修补给 · %d 信用点\n需结构部件 × %d" % [price, int(needs.get("structural_units", 0))]
 	repair.disabled = state.player().credit < price
 	_service_button_style(repair, false)
@@ -2646,27 +2589,16 @@ func _update_hud_visibility() -> void:
 	if is_instance_valid(station_layer): station_layer.visible = page == "station" and state != null
 	_responsive_title()
 
-func _service_sidebar_compact() -> bool:
-	if root.size.x < 950 or root.size.y < 560: return true
-	if not is_instance_valid(sidebar): return false
-	var top: float = 22.0
-	if is_instance_valid(operation_bar) and operation_bar.visible:
-		top = maxf(top, operation_bar.position.y + operation_bar.size.y + 8.0)
-	# Wide high-DPI windows can be logically short. Keep the complete page
-	# inside the viewport and use its existing selector when navigation cannot fit.
-	return root.size.y - top - 52.0 < sidebar.get_combined_minimum_size().y
-
 func _responsive() -> void:
 	if not is_instance_valid(root): return
 	_resize_map_canvas()
 	var compact: bool = root.size.x < 950
-	# Hide tall navigation before resizing; its previous minimum otherwise
-	# clamps the panel and leaves stale offsets after a page/scale change.
-	if is_instance_valid(sidebar): sidebar.visible = state != null and page not in ["title", "settings"] and not _service_sidebar_compact()
 	var safe: float = 8.0 if compact else 16.0
 	var rail_width: float = 40.0 if compact else 48.0
 	var left_edge: float = safe + rail_width + 12.0
-	var sidebar_width: float = 210.0 if compact else 290.0
+	# Width of the flight overview column, not a sidebar: it is what the
+	# target list is sized to on the right edge.
+	var overview_width: float = 210.0 if compact else 290.0
 	var left_width: float = 174.0 if compact else 252.0
 	var header_height: float = 26.0 if compact else 34.0
 	var dock_height: float = 108.0 if compact else 132.0
@@ -2782,7 +2714,7 @@ func _responsive() -> void:
 		controls.hide()
 	if is_instance_valid(target_panel):
 		var overview_height: float = minf(430.0,flight_content_bottom-flight_content_top)
-		target_panel.offset_left = -safe-sidebar_width
+		target_panel.offset_left = -safe-overview_width
 		target_panel.offset_right = -safe
 		target_panel.offset_top = flight_content_top
 		target_panel.offset_bottom = flight_content_top+overview_height
@@ -2790,7 +2722,7 @@ func _responsive() -> void:
 	# Limit notification width to the free center lane. Different feedback owns
 	# a second small line; only an exact duplicate of the active operation hides.
 	var center_left: float = left_edge + left_width + 10.0
-	var center_right: float = root.size.x - safe - sidebar_width - 10.0
+	var center_right: float = root.size.x - safe - overview_width - 10.0
 	var center_width: float = maxf(100.0, center_right - center_left)
 	var notification_top: float = flight_content_top
 	if panel != null and (panel.visible or station_layer.visible):
@@ -2838,23 +2770,16 @@ func _responsive() -> void:
 		panel.offset_bottom = -52
 		if page == "title": _responsive_title()
 	if is_instance_valid(panel):
-		var selector: OptionButton = panel.find_child("PageSelector", true, false)
-		if selector != null: selector.visible = _service_sidebar_compact()
 		var heading: Label = panel.find_child("PageHeading", true, false)
-		if heading != null and page != "title": heading.add_theme_font_size_override("font_size", 19 if compact else 25)
-		var home: Button=panel.find_child("PanelHome",true,false) as Button
-		var close: Button=panel.find_child("PanelClose",true,false) as Button
-		if home!=null and close!=null:
-			var short_header: bool=root.size.x<700
-			close.text="上级" if short_header else "返回上级"
-			close.custom_minimum_size.x=56 if short_header else 96
-			home.text=("机库" if state.player().has_docked_station_id else "航行") if short_header else ("返回机库" if state.player().has_docked_station_id else "返回航行")
-			home.custom_minimum_size.x=56 if short_header else 120
-			home.tooltip_text="返回机库" if state.player().has_docked_station_id else "返回航行"
-		if is_instance_valid(sidebar):
-			for service_button: Button in sidebar.find_children("Service*", "Button", true, false):
-				if service_button.has_meta("service_page_id"):
-					_service_button_style(service_button, str(service_button.get_meta("service_page_id")) == _service_context_page())
+		if heading != null and page != "title":
+			# Re-apply the scale rather than a literal: this used to hard-set 25 and
+			# silently overrode the page size the theme defines.
+			UISkin.apply_text_style(heading, "page")
+		var close: Button = panel.find_child("PanelClose", true, false) as Button
+		if close != null:
+			var short_header: bool = root.size.x < 700
+			close.text = _close_label(short_header)
+			close.custom_minimum_size.x = 44 if short_header else 132
 	if is_instance_valid(panel):
 		for grid: Node in panel.find_children("ModuleCards*", "GridContainer", true, false):
 			grid.columns = 2 if root.size.x >= 1200 and page != "title" else 1
@@ -3495,6 +3420,21 @@ func _parent_page() -> String:
 	if page == "drones" and state != null and not state.player().has_docked_station_id: return ""
 	return UIInteraction.parent_page(page, sources_return_page)
 
+## The label of the single return control, short form where the header cannot
+## spare the width. Returns the destination name so the control says where it goes
+## instead of the generic "back".
+func _close_label(short: bool = false, tooltip: bool = false) -> String:
+	var parent_page: String = _parent_page()
+	var destination: String = ""
+	if page != "settings" and not parent_page.is_empty():
+		destination = ServiceNavigation.label(parent_page, "上级页面")
+	elif state != null and state.player().has_docked_station_id:
+		destination = "空间站机库"
+	else:
+		destination = "航行视图"
+	if short: return "←"
+	return "返回 " + destination if tooltip else "← 返回" if page == "settings" else "← " + destination
+
 func _action_bar(parent: Node, name_hint: String) -> HFlowContainer:
 	var bar := HFlowContainer.new()
 	bar.name = name_hint
@@ -3743,9 +3683,9 @@ func _focus_page() -> void:
 		default[0].grab_focus()
 		return
 	# A page whose business actions are all disabled still focuses its own
-	# navigation row, rather than the first unrelated row in the sidebar.
+	# navigation row on the hub, rather than the first unrelated row.
 	for entry: Control in entries:
-		if str(entry.get_meta("service_surface", "")) == "sidebar" and str(entry.get_meta("service_page_id", "")) == page:
+		if str(entry.get_meta("service_surface", "")) == "hangar" and str(entry.get_meta("service_page_id", "")) == page:
 			entry.grab_focus()
 			return
 	if not entries.is_empty(): entries[0].grab_focus()

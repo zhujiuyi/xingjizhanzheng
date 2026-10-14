@@ -82,11 +82,11 @@ def manifest_bytes() -> bytes:
     )
     if len(records) != 12 or len({record[0] for record in records}) != 12 or len(observe) != 1:
         raise ValueError("Registry must define twelve unique pages and one ship observation icon")
-    if len(extras) != 3 or len({extra[0] for extra in extras}) != 3:
-        raise ValueError("Registry must define three unique flight-rail marks outside the service list")
+    if len(extras) != 4 or len({extra[0] for extra in extras}) != 4:
+        raise ValueError("Registry must define four unique marks outside the service list")
     paths = [record[2] for record in records] + observe + [extra[1] for extra in extras]
-    if len(set(paths)) != 16 or set(paths) != {"res://" + path.relative_to(CODE).as_posix() for path in ICON_DIR.glob("*.svg")}:
-        raise ValueError("Registry references must match the exact set of sixteen service SVGs")
+    if len(set(paths)) != 17 or set(paths) != {"res://" + path.relative_to(CODE).as_posix() for path in ICON_DIR.glob("*.svg")}:
+        raise ValueError("Registry references must match the exact set of seventeen service SVGs")
     resources = []
     for index, resource_path in enumerate(paths):
         path = CODE / resource_path.removeprefix("res://")
@@ -136,7 +136,7 @@ def build(check: bool = False, report: Path | None = None) -> dict:
     if changed and not check:
         MANIFEST.parent.mkdir(parents=True, exist_ok=True)
         MANIFEST.write_bytes(expected)
-    result = {"status": "PASS", "asset_version": "service-navigation-v3", "resources": 17, "svg_icons": 16,
+    result = {"status": "PASS", "asset_version": "service-navigation-v3", "resources": 18, "svg_icons": 17,
               "manifest_changed": changed, "manifest_sha256": digest(expected),
               "registry_sha256": digest(REGISTRY.read_bytes()), "utf8_lf": True, "svg_static_xml_24x24": True,
               "verification_scope": "Static source validation; Godot import/render and actual-PCK verification are separate."}
