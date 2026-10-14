@@ -176,6 +176,54 @@ func settle_writer(message: String) -> void:
 	check(not host.busy, "real fixture transaction closes " + message)
 	await frames(4)
 
+## The flight dock must survive a full battleship loadout. The largest hull fits 17
+## modules; at the old fixed 80 px tile that was 1424 px of tiles inside a 656 px
+## dock, which put a horizontal scroll bar into the flight HUD. Checking only the
+## test fixture would never reach that case, so compare the live tile width against
+## the worst slot count in the catalog.
+func _check_equipment_row_fit(name: String) -> void:
+	var bar: Control = host.ui.equipment_bar
+	if not is_instance_valid(bar): return
+	var row: HFlowContainer = bar.find_child("EquipmentRow", true, false) as HFlowContainer
+	if row == null or row.get_child_count() == 0:
+		check(false, "flight dock exposes the equipment row " + name)
+		return
+	var unit: float = 0.0
+	var tile_height: float = 0.0
+	var visible_tiles: int = 0
+	for child: Node in row.get_children():
+		var tile: Control = child as Control
+		if tile == null or not tile.is_visible_in_tree(): continue
+		visible_tiles += 1
+		tile_height = maxf(tile_height, tile.get_combined_minimum_size().y)
+		if str(tile.name).begins_with("Module_"): unit = maxf(unit, tile.get_combined_minimum_size().x)
+	if unit <= 0.0:
+		# No module fitted: fall back to the widest tile the row currently shows.
+		for child: Node in row.get_children():
+			var tile: Control = child as Control
+			if tile != null and tile.is_visible_in_tree(): unit = maxf(unit, tile.get_combined_minimum_size().x)
+	if unit <= 0.0 or tile_height <= 0.0: return
+	var gap: float = float(row.get_theme_constant("h_separation"))
+	var totals: Dictionary = {}
+	for definition: Dictionary in host.store.catalog.rows("ship_slot_defs"):
+		var ship_id: String = str(definition.get("ship_id", ""))
+		totals[ship_id] = int(totals.get(ship_id, 0)) + 1
+	var worst_slots: int = 0
+	for ship_id: String in totals: worst_slots = maxi(worst_slots, int(totals[ship_id]))
+	check(worst_slots >= visible_tiles, "catalog reports at least as many slots as the fixture shows " + name)
+	# The row is a flow, so wrapping keeps its width demand at one tile. What must
+	# still fit is the wrapped height, for the fixture and for the largest hull.
+	check(row.get_combined_minimum_size().x <= row.size.x + 1.0, "equipment row columns fit the dock width (%.0f px in %.0f px) " % [row.get_combined_minimum_size().x, row.size.x] + name)
+	var per_line: float = floor((row.size.x + gap) / (unit + gap))
+	if per_line < 1.0:
+		check(false, "equipment dock is narrower than a single tile (%.0f px tile in %.0f px) " % [unit, row.size.x] + name)
+		return
+	for case: Dictionary in [{"label": "current", "slots": visible_tiles}, {"label": "largest hull", "slots": worst_slots}]:
+		var slots: int = int(case.slots)
+		var lines: float = ceil(float(slots) / per_line)
+		var needed: float = lines * tile_height + maxf(0.0, lines - 1.0) * gap
+		check(needed <= row.size.y + 1.0, "equipment row wraps %s loadout %d slots into %.0f line(s) needing %.0f px in %.0f px " % [str(case.label), slots, lines, needed, row.size.y] + name)
+
 func _count_buttons(node: Node) -> int:
 	var total: int = 0
 	if node is Button: total += 1
@@ -485,6 +533,7 @@ func inspect(name: String, expected: String) -> void:
 		if ui.page_scroll.is_visible_in_tree(): important.append(ui.page_scroll)
 	for control: Control in important:
 		if control.is_visible_in_tree() and not bounds.grow(1.0).encloses(control.get_global_rect()): local_findings.append({"kind": "critical_frame_outside_viewport", "path": str(control.get_path()), "rect": rectangle(control.get_global_rect())})
+	if expected.is_empty(): _check_equipment_row_fit(name)
 	for finding: Dictionary in local_findings:
 		finding["case"] = name
 		findings.append(finding)

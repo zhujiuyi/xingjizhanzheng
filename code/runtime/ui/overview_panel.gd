@@ -366,19 +366,28 @@ func _reflow_list() -> void:
 
 func _sync_column_headers() -> void:
 	if not is_instance_valid(sort_header_inset) or not is_instance_valid(target_list) or target_list.size.x <= 0.0: return
-	# The list gives its scrollbar a gutter. Match it in the fixed column header.
+	# Only the scrollbar gutter needs matching here. The row cells hang off the row
+	# button's full rect with their own ROW_INSET, so the button's content margin
+	# does not move them; adding it to the header would push the captions 8 px off
+	# the columns they label. An audit check compares both rects within 1 px.
 	var gutter: int = maxi(0, roundi(target_scroll.size.x - target_list.size.x))
 	if sort_header_inset.get_theme_constant("margin_right") != ROW_INSET + gutter:
 		sort_header_inset.add_theme_constant_override("margin_right", ROW_INSET + gutter)
 
 func _style_sort_header(button: Button, active: bool) -> void:
-	UISkin.apply_button(button, "default", true, active)
+	# Column captions, not buttons: flat until hovered, so the three of them read as
+	# one header row instead of a bar of controls competing with the filter chips
+	# directly above. Sorting still toggles on click, and the active column keeps
+	# the accent so the current sort is visible without reading the arrow.
+	UISkin.apply_toolbar_button(button, active)
 	# Column captions align with the readout glyphs, without button text padding.
 	for state: String in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		var surface: StyleBox = button.get_theme_stylebox(state).duplicate() as StyleBox
 		surface.content_margin_left = 0
 		surface.content_margin_right = 0
 		button.add_theme_stylebox_override(state, surface)
+	button.add_theme_color_override("font_color", UISkin.AMBER if active else UISkin.MUTED)
+	button.add_theme_color_override("font_hover_color", UISkin.AMBER if active else UISkin.TEXT)
 
 func _refresh_rows() -> void:
 	if target_list == null: return
@@ -459,7 +468,12 @@ func _refresh_rows() -> void:
 	count_label.text = "%d 目标" % visible_rows.size()
 	for key: String in filter_buttons: UISkin.apply_button(filter_buttons[key], "default", true, key == filter_mode)
 	for key: String in sort_buttons:
-		sort_buttons[key].text = {"distance": "距离", "name": "名称", "type": "类型"}[key] + (" +" if sort_ascending else " −") if sort_key == key else {"distance": "距离", "name": "名称", "type": "类型"}[key]
+		# Every caption carries a one-character indicator, so switching the active
+		# column never changes a caption's width. The old form appended " +"/" −" to
+		# the active column only, which made this right-aligned column's label jump
+		# sideways on every sort and left the three captions looking unrelated.
+		var marker: String = ("↑" if sort_ascending else "↓") if sort_key == key else "·"
+		sort_buttons[key].text = "%s %s" % [{"distance": "距离", "name": "名称", "type": "类型"}[key], marker]
 		_style_sort_header(sort_buttons[key], key == sort_key)
 
 func _target_gui_input(event: InputEvent, id: String, button: Button) -> void:

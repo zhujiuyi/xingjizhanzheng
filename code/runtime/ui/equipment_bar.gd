@@ -13,8 +13,7 @@ var module_progress: Dictionary = {}
 var engine_button: Button
 var summary_label: Label
 var header: HBoxContainer
-var row: HBoxContainer
-var scroll: ScrollContainer
+var row: HFlowContainer
 var slot_records: Array[Dictionary] = []
 var slot_buttons: Dictionary = {}
 var empty_slot_buttons: Dictionary = {}
@@ -25,6 +24,50 @@ var _compact: bool = false
 var _combat_options: Dictionary = {"fire": false, "orbit": false, "seek": false}
 var _combat_message: String = "手动战斗"
 var _combat_blocked: bool = false
+
+## Cooldown traced around a slot's own frame. A battleship fits 17 modules; at the
+## old 80 px tile that is 1424 px of tiles inside a 656 px dock, which put a
+## horizontal scroll bar in the flight HUD whenever a full loadout cycled. The
+## tiles are now flexible and the countdown is the frame itself, so nothing has to
+## scroll and the "循环就绪" caption has somewhere better to live.
+class SlotRing extends Control:
+	var value: float = 0.0
+	var max_value: float = 1.0
+	var tint: Color = XJUITheme.ICE
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	func ratio() -> float:
+		return clampf(value / maxf(max_value, 0.001), 0.0, 1.0)
+
+	func _draw() -> void:
+		var amount: float = ratio()
+		if amount <= 0.0: return
+		var inset: float = 1.5
+		var rect := Rect2(Vector2(inset, inset), size - Vector2(inset, inset) * 2.0)
+		if rect.size.x <= 4.0 or rect.size.y <= 4.0: return
+		var points: PackedVector2Array = _perimeter(rect)
+		var traced: int = clampi(int(ceil(amount * float(points.size() - 1))) + 1, 2, points.size())
+		draw_polyline(points.slice(0, traced), tint, 2.0, true)
+
+	func _perimeter(rect: Rect2) -> PackedVector2Array:
+		var corners: Array[Vector2] = [
+			Vector2(rect.position.x, rect.position.y),
+			Vector2(rect.end.x, rect.position.y),
+			Vector2(rect.end.x, rect.end.y),
+			Vector2(rect.position.x, rect.end.y),
+		]
+		var per_side: int = 8
+		var points := PackedVector2Array()
+		for index: int in 4:
+			var from: Vector2 = corners[index]
+			var to: Vector2 = corners[(index + 1) % 4]
+			for step: int in per_side:
+				points.append(from.lerp(to, float(step) / float(per_side)))
+		points.append(corners[0])
+		return points
 
 func _ready() -> void:
 	name = "EquipmentCycles"
@@ -39,15 +82,16 @@ func _ready() -> void:
 	summary_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	layout.add_child(header)
 	_build_combat_options(layout)
-	scroll = ScrollContainer.new()
-	scroll.name = "EquipmentScroll"
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	layout.add_child(scroll)
-	row = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	scroll.add_child(row)
+	# A plain flow, not a scroll container: the row must always fit the dock, so the
+	# tiles share the width instead of overflowing it. 17 modules at the worst case
+	# is what sets the minimum below.
+	row = HFlowContainer.new()
+	row.name = "EquipmentRow"
+	row.add_theme_constant_override("h_separation", 3)
+	row.add_theme_constant_override("v_separation", 2)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(row)
 	engine_button = Button.new()
 	engine_button.name = "EngineCycle"
 	engine_button.text = "增推"
@@ -94,23 +138,26 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 			icon.texture = Portraits.texture("item", str(record.module_id))
 			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon.custom_minimum_size = Vector2(20,20)
+			icon.custom_minimum_size = Vector2(16,16)
 			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			labels.add_child(icon)
-			var title: Label = _header_label(labels, "", 10, UISkin.TEXT)
-			var status: Label = _header_label(labels, "", 10, UISkin.MUTED)
+			var title: Label = _header_label(labels, "", 9, UISkin.TEXT)
 			var cost: Label = _header_label(labels, "", 9, UISkin.MUTED)
+			# Pinned to the bottom edge instead of stacked in the column: the status
+			# line used to make every tile a line taller, which is what pushed a full
+			# battleship loadout past the dock at the smallest supported size.
+			var status: Label = _header_label(button, "", 9, UISkin.MUTED)
+			status.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+			status.offset_left = 4; status.offset_right = -4
+			status.offset_top = -14; status.offset_bottom = -1
+			status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			status.clip_text = true
+			status.max_lines_visible = 1
 			module_labels[id] = {"title": title, "status": status, "cost": cost}
-			var progress: ProgressBar = ProgressBar.new()
-			progress.name = "ActualCycle"
-			progress.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-			progress.offset_left = 3; progress.offset_right = -3
-			progress.offset_top = -3; progress.offset_bottom = -1
-			progress.show_percentage = false
-			progress.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			progress.add_theme_stylebox_override("fill", UISkin.flat(UISkin.ICE, UISkin.ICE, 0))
-			button.add_child(progress)
-			module_progress[id] = progress
+			var ring: SlotRing = SlotRing.new()
+			ring.name = "ActualCycle"
+			button.add_child(ring)
+			module_progress[id] = ring
 			module_buttons[id] = button
 		button.disabled = busy
 		var slot_snapshot: Dictionary = record.duplicate()
@@ -121,19 +168,27 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 		slot_buttons[str(record.get("slot_id", id))] = button
 		button.set_pressed_no_signal(bool(record.get("enabled", false)))
 		UISkin.apply_button(button, "filter", true, bool(record.get("enabled", false)))
+		_tighten_slot_surface(button)
 		button.tooltip_text = "%s\n%s槽 %d · %s\n循环 %.1f s · 电容 %.0f · 热量 %.0f\n耐久 %.0f · 点击%s设备" % [str(record.title), str(record.get("slot_title", "")), int(record.get("slot_index", 0)) + 1, str(record.get("state_label", "")), float(record.get("cycle_s", 0.0)), float(record.get("energy_eu", 0.0)), float(record.get("heat_hu", 0.0)), float(record.get("durability", 0.0)), "关闭" if bool(record.get("enabled", false)) else "启用"]
 		var labels: Dictionary = module_labels[id]
-		labels.title.text = "%s%d · %s" % [str(record.get("slot_short", "")), int(record.get("slot_index", 0)) + 1, str(record.title)]
-		labels.status.text = str(record.get("state_label", ""))
+		labels.title.text = "%s%d" % [str(record.get("slot_short", "")), int(record.get("slot_index", 0)) + 1]
+		# Only the states a frame cannot express get words. Ready is the absence of
+		# a ring; a running cycle, a lock or a shortage still needs to be readable.
+		labels.status.text = _short_status(record)
 		labels.cost.text = "电容 %.0f · 热量 %.0f" % [float(record.get("energy_eu", 0.0)), float(record.get("heat_hu", 0.0))]
 		labels.cost.hide()
 		# Enabled but not ready: cycling, i.e. momentarily blocked, not selected.
 		labels.status.add_theme_color_override("font_color", UISkin.WARN if not bool(record.get("ready", false)) and bool(record.get("enabled", false)) else UISkin.TEXT if bool(record.get("enabled", false)) else UISkin.MUTED)
-		button.custom_minimum_size = Vector2(68,58) if _compact else Vector2(80,62)
-		var progress: ProgressBar = module_progress[id]
-		progress.max_value = maxf(float(record.get("cycle_s", 0.0)), 0.001)
-		progress.value = float(record.get("cooldown_remaining_s", 0.0))
-		progress.visible = float(record.get("cooldown_remaining_s", 0.0)) > 0.0
+		button.custom_minimum_size = Vector2(30, 34 if _compact else 44)
+		button.size_flags_horizontal = Control.SIZE_FILL
+		var ring: SlotRing = module_progress[id]
+		# Same two values the old bar carried: database cycle length and the real
+		# remaining seconds, so the frame traces an authoritative countdown.
+		ring.max_value = maxf(float(record.get("cycle_s", 0.0)), 0.001)
+		ring.value = float(record.get("cooldown_remaining_s", 0.0))
+		ring.visible = float(record.get("cooldown_remaining_s", 0.0)) > 0.0
+		ring.tint = UISkin.WARN if ring.visible else UISkin.ICE
+		ring.queue_redraw()
 		row.move_child(button, ids.size())
 	for id: String in module_buttons.keys():
 		if id not in ids:
@@ -168,7 +223,8 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 		placeholder.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 		if slot_id == summary_id:
 			placeholder.text = "空槽 ×%d" % empty_records.size()
-			placeholder.custom_minimum_size = Vector2(68,58) if _compact else Vector2(80,62)
+			placeholder.custom_minimum_size = Vector2(0, 34 if _compact else 44)
+			placeholder.size_flags_horizontal = Control.SIZE_FILL
 			placeholder.tooltip_text = "%d 个空槽 · %s\n停靠空间站后前往配装页面安装兼容设备。" % [empty_records.size(), " / ".join(empty_titles)]
 		else:
 			placeholder.text = ""
@@ -188,6 +244,29 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 	engine_button.disabled = busy or not bool(resources.get("engine_ready", false))
 	engine_button.tooltip_text = str(resources.get("engine_reason", "需要已启用且可支付循环消耗的增推设备。"))
 
+## A full battleship loadout wraps the row to two lines at the smallest supported
+## size, so the vertical padding is trimmed to buy that second line real room
+## instead of relying on a one-pixel margin.
+func _tighten_slot_surface(button: Button) -> void:
+	for state: String in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var surface: StyleBoxFlat = button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
+		if surface == null: continue
+		surface.content_margin_top = 2
+		surface.content_margin_bottom = 2
+		button.add_theme_stylebox_override(state, surface)
+
+## The tile has room for about three characters, so the long state phrases become
+## short tags. Nothing is dropped: the full phrase stays in the tooltip, and the
+## states that matter are the ones that get the ink.
+func _short_status(record: Dictionary) -> String:
+	match str(record.get("state_label", "")):
+		"设备损坏": return "损坏"
+		"过热锁定": return "锁定"
+		"电容不足": return "缺电"
+		"热量受限": return "受限"
+		"已启用", "循环就绪", "持续启用", "已关闭": return ""
+		_: return str(record.get("state_label", ""))
+
 func responsive(compact: bool) -> void:
 	_compact = compact
 	if header == null: return
@@ -201,9 +280,12 @@ func responsive(compact: bool) -> void:
 	engine_button.custom_minimum_size = Vector2(54, 36 if compact else 28)
 	for labels: Dictionary in module_labels.values():
 		labels.title.add_theme_font_size_override("font_size", 10)
-		labels.status.add_theme_font_size_override("font_size", 9 if compact else 10)
+		labels.status.add_theme_font_size_override("font_size", 9)
 		labels.cost.hide()
-	for button: Variant in slot_buttons.values(): button.custom_minimum_size = Vector2(68,58) if compact else Vector2(80,62)
+	# Flexible, not fixed: 17 tiles share the dock width instead of overflowing it.
+	for button: Variant in slot_buttons.values():
+		button.custom_minimum_size = Vector2(30, 34 if compact else 44)
+		button.size_flags_horizontal = Control.SIZE_FILL
 
 func _build_combat_options(parent: VBoxContainer) -> void:
 	combat_options_row = HBoxContainer.new()
