@@ -120,14 +120,25 @@ func focus_and_return_case() -> void:
 			restored=current_focus==current_quote.amount.get_line_edit()
 	print("UI_INTERACTION_FOCUS_AFTER ",JSON.stringify({"owner":str(current_focus.get_path()) if current_focus!=null else "","row":row_id,"current_key":host.ui._focus_key(current_focus,host.ui.body) if current_focus!=null else "","saved_key":saved_view.key,"generation":host.ui.business_generation,"restored":restored}))
 	check(restored,"market refresh restores exact row quantity editor focus")
+	# One return control, and it returns to where the player came from: the label
+	# and the action come from the same trail. The sidebar used to add a second way
+	# out ("返回机库") beside "返回上级", and the destination was a fixed parent
+	# table, so opening this from pause returned to fitting instead of to pause.
+	await show_interaction("fitting")
 	await show_interaction("fitting_analysis")
-	# One return control, and it names its destination. The sidebar used to add a
-	# second way out ("返回机库") beside "返回上级", which reads as a choice the
-	# player does not have; the service column is gone and so is that button.
 	var close: Button=host.ui.panel.find_child("PanelClose",true,false) as Button
-	check(close!=null and close.is_visible_in_tree() and close.text.begins_with("← ") and host.ui.panel.find_child("PanelHome",true,false)==null,"subpage keeps exactly one return control and it names its destination")
-	await actual_click(close,"return analysis to parent")
-	check(host.ui.page=="fitting","analysis returns to fitting parent")
+	check(close!=null and close.is_visible_in_tree() and close.text=="← 舰船配装" and host.ui.panel.find_child("PanelHome",true,false)==null,"subpage keeps exactly one return control and it names where it came from")
+	await actual_click(close,"return analysis to its origin")
+	check(host.ui.page=="fitting","analysis returns to the page it was opened from")
+	await show_interaction("pause")
+	await host._command("nav_stop", "", 1, "")
+	await frames(4)
+	await actual_click(host.ui.body.find_child("PauseFittingAnalysis",true,false) as Button,"open analysis from pause")
+	await frames(10)
+	var from_pause: Button=host.ui.panel.find_child("PanelClose",true,false) as Button
+	check(from_pause!=null and from_pause.text=="← 暂停与存读档","analysis opened from pause names pause as its destination")
+	await actual_click(from_pause,"return analysis to pause")
+	check(host.ui.page=="pause","analysis returns to pause rather than to a fixed parent page")
 	await show_interaction("industry");host.ui.open_sources("material_structural_stock");await frames(10)
 	await actual_click(host.ui.panel.find_child("PanelClose",true,false) as Button,"return sources to real origin")
 	check(host.ui.page=="industry","source back resolves the actual origin service")

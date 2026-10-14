@@ -162,6 +162,14 @@ var info_selected: Dictionary = {}
 var industry_tab: String = "manufacture"
 var fitting_show_all: bool = false
 
+## The trail of pages the player actually walked. Back pops it, so the same page
+## returns somewhere different depending on how it was reached. Deep links and the
+## first entry have no trail and fall back to the declared hierarchy.
+var page_stack: Array[String] = []
+## True while unwinding, so going back does not push the page it is leaving.
+var history_suspended: bool = false
+const PAGE_STACK_LIMIT: int = 24
+
 func set_operation_status(kind: String, message: String, waiting: bool = false, blocks_flight: bool = false) -> void:
 	operation_kind = kind
 	operation_message = _friendly(message)
@@ -395,6 +403,7 @@ func bind(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted, world: X
 	_refresh_targets()
 
 func show_title(save_slots: Array[Dictionary]) -> void:
+	page_stack.clear()
 	business_quantities.clear()
 	business_quantity_identity = ""
 	slots = save_slots
@@ -434,6 +443,12 @@ func show_page(next_page: String) -> void:
 	if next_page == "drones" and state != null and not DroneAvailability.capable(gameplay):
 		notify("当前舰船不支持无人机。")
 		next_page = "fitting" if state.player().has_docked_station_id else ""
+	# Remember where the player came from. The return control promises "back to
+	# where I was", which a fixed parent table cannot deliver: the same page is
+	# reached from several places and has to go back to the one actually used.
+	if not history_suspended and next_page != page:
+		page_stack.append(page)
+		if page_stack.size() > PAGE_STACK_LIMIT: page_stack.pop_front()
 	last_page_focus={}
 	requested_page_focus={}
 	if not business_preserve_view:
@@ -463,7 +478,7 @@ func show_page(next_page: String) -> void:
 		_station()
 		_responsive()
 		return
-	_build_panel("配装挑战" if next_page=="trials" else "航路封锁" if next_page=="blockades" else "边疆工程" if next_page=="projects" else "远征航线" if next_page=="expeditions" else "航行战报" if next_page=="reports" else "雇佣僚舰" if next_page=="hire" else "边疆战役与治理" if next_page=="frontier" else "承运合同" if next_page=="consignments" else "配装分析" if next_page=="fitting_analysis" else "舰船角色" if next_page=="ship_roles" else "战术行动" if next_page == "operations" else ("无人机整备" if state.player().has_docked_station_id else "无人机控制") if next_page == "drones" else "星域事件" if next_page == "exploration" else "物资来源" if next_page == "sources" else ServiceNavigation.label(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
+	_build_panel(_page_title(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
 	if next_page in ["warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
 		if next_page=="ships" and gameplay.fitting_analysis.supported():_button(body,"舰船定位",show_page.bind("ship_roles")).name="ShipRolesEntry"
 		if next_page=="ships" and gameplay.hired.supported():_button(body,"雇佣僚舰",show_page.bind("hire")).name="HireFleetEntry"
@@ -3423,11 +3438,33 @@ func _parent_page() -> String:
 ## The label of the single return control, short form where the header cannot
 ## spare the width. Returns the destination name so the control says where it goes
 ## instead of the generic "back".
+## Every page's own name, services and sub-pages alike. The return control names its
+## destination, so it needs the same names the pages print; these used to live in one
+## long conditional inside show_page, and the sub-pages were absent from the service
+## registry, so a "back to 战术行动" read "back to 上级页面" instead.
+const PAGE_TITLES: Dictionary = {
+	"trials": "配装挑战", "blockades": "航路封锁", "projects": "边疆工程",
+	"expeditions": "远征航线", "reports": "航行战报", "hire": "雇佣僚舰",
+	"frontier": "边疆战役与治理", "consignments": "承运合同",
+	"fitting_analysis": "配装分析", "ship_roles": "舰船角色",
+	"operations": "战术行动", "exploration": "星域事件", "sources": "物资来源",
+	"settings": "设置",
+}
+
+func _page_title(id: String) -> String:
+	if id == "drones":
+		return "无人机整备" if state != null and state.player().has_docked_station_id else "无人机控制"
+	var title: String = str(PAGE_TITLES.get(id, ""))
+	return title if not title.is_empty() else ServiceNavigation.label(id, "上级页面")
+
 ## Where the single return control goes. One function serves both the label and the
 ## action. They used to be derived separately and drifted: the settings page was
 ## labelled a bare "返回" while actually returning to the page it was opened from,
 ## and every other page mixed page names with scene names without saying which.
 func _back_destination() -> String:
+	if not page_stack.is_empty(): return page_stack.back()
+	# No trail: a deep link, or the first page of a session. Fall back to the
+	# declared hierarchy so those routes still have a sensible way out.
 	if state == null: return "title"
 	if page == "settings" and not return_page.is_empty(): return return_page
 	var parent_page: String = _parent_page()
@@ -3441,7 +3478,7 @@ func _destination_label(destination: String) -> String:
 	if destination == "title": return "主菜单"
 	if destination == "station": return "空间站机库"
 	if destination.is_empty(): return "航行视图"
-	return ServiceNavigation.label(destination, "上级页面")
+	return _page_title(destination)
 
 func _close_label(short: bool = false, tooltip: bool = false) -> String:
 	if short: return "←"
@@ -3527,7 +3564,11 @@ func _secondary(button: Button) -> void:
 	UISkin.apply_button(button, "secondary")
 
 func _back() -> void:
-	show_page(_back_destination())
+	var destination: String = _back_destination()
+	if not page_stack.is_empty(): page_stack.pop_back()
+	history_suspended = true
+	show_page(destination)
+	history_suspended = false
 
 func _responsive_title() -> void:
 	if page != "title" or not is_instance_valid(panel): return
