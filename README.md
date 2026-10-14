@@ -17,4 +17,4 @@
 
 工程采用Godot4、GDScript和SQLite。`code/`为正式源码与资源，`doc/`为文档，`jiaoben/`为维护中的测试与构建源码；开发入口见[环境说明](doc/02-开发环境.md)。数值和存档以数据库为权威来源，历史兼容库属于正式资源。
 
-源码推送至[私人仓库](https://github.com/zhujiuyi/xingjizhanzheng)。当前正式客户端为v0.32；历史交付身份保留在文档和Git记录中。中间产物清理被自动审批阻止，等待明确确认，详情见交付记录最后章节。
+源码推送至[私人仓库](https://github.com/zhujiuyi/xingjizhanzheng)。仅保留最终v0.32客户端。工作区及本项目Codex工作树的中间产物已清理，Codex工作树已归档移除；历史验证身份保留在文档和最终构建manifest，详情见交付记录。
