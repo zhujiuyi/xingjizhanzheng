@@ -3,6 +3,7 @@ extends SceneTree
 ## Synthetic UI contacts are removed before any database capture.
 const Main = preload("res://runtime/main.gd")
 const T = preload("res://contracts/contract_types.gd")
+const XJSpaceCoordinates = preload("res://runtime/space_coordinates.gd")
 const D = preload("res://contracts/contract_dtos.gd")
 var host: Main
 var checks: int = 0
@@ -70,7 +71,9 @@ func position() -> Vector3:
 
 func place_far() -> void:
 	var target: Node3D = host.world.targets[station_id].node
-	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, target.global_position + Vector3(14500, 6200, 22400))
+	# ~181 km. The old 27 km offset sat inside the catalog's 150 km minimum warp
+	# distance, so every warp check below it was refused with a correct reason.
+	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, target.global_position + Vector3(144000, 60000, 222000))
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
 	host.camera.bind(host.world.flight, host.store.catalog, T.CameraMode.FOLLOW)
@@ -150,7 +153,7 @@ func eligibility_checks() -> void:
 		if str(row.sector_id) != host.state.current_sector(): foreign_station = str(row.station_id); break
 	check(not foreign_station.is_empty() and not context(foreign_station).get("ready", true), "a station in another sector cannot masquerade as local navigation")
 	var station: Dictionary = context(station_id)
-	check(float(station.get("distance_m", 0.0)) > float(host.store.catalog.rule("target_marker_detection_range_m")) and station.get("warp_ready", false), "catalog-known current-sector station stays warp-selectable beyond local sensor range")
+	check(float(station.get("distance_m", 0.0)) > float(host.store.catalog.rule("target_marker_detection_range_m")) and station.get("warp_ready", false), "catalog-known current-sector station stays warp-selectable beyond local sensor range got distance=" + str(station.get("distance_m")) + " ready=" + str(station.get("warp_ready")) + " reason='" + str(station.get("warp_reason")) + "' site='" + str(XJSpaceCoordinates.site_for_entity(host.state, "station", station_id)) + "' current='" + str(XJSpaceCoordinates.current_site(host.state)) + "'")
 	host.gameplay.combat_remaining_s = float(host.store.catalog.rule("combat_exit_delay_s"))
 	check(not context(station_id).get("warp_ready", true) and not str(context(station_id).get("warp_reason", context(station_id).get("reason", ""))).is_empty(), "combat blocks local warp with an actionable refusal")
 	check(context(station_id).get("approach_ready", false) and context(station_id).get("orbit_ready", false), "combat retains tactical approach and orbit controls")
@@ -167,7 +170,7 @@ func eligibility_checks() -> void:
 		check(not context(station_id).get("warp_ready", true), "paid non-engine device cycle blocks warp without silently discarding work")
 		paid.active_remaining_s = 0.0
 		paid.cycle_paid = false
-	check(context(station_id).get("warp_ready", false) and not navigation().call("active"), "clearing real blockers restores ready state without starting navigation")
+	check(context(station_id).get("warp_ready", false) and not navigation().call("active"), "clearing real blockers restores ready state without starting navigation got ready=" + str(context(station_id).get("warp_ready")) + " reason='" + str(context(station_id).get("warp_reason")) + "' site='" + str(host.state.find("spatial_state", "entity_id", station_id)) + "'")
 
 func source_failure_check() -> void:
 	var original: Transform3D = pose()
@@ -179,7 +182,7 @@ func source_failure_check() -> void:
 	await wait_writer()
 	check(not navigation().call("active") and pose().is_equal_approx(original) and host.world.flight.velocity.is_zero_approx(), "real SQLite CAS source-save refusal cannot move or arm warp")
 	check(snapshots() == count, "failed warp source capture publishes no new snapshot or slot")
-	check(host.store.last_error.contains("STALE"), "source refusal comes from durable session CAS validation")
+	check(host.store.last_error.contains("STALE"), "source refusal comes from durable session CAS validation got '" + host.store.last_error + "'")
 
 func npc_sensor_checks() -> void:
 	# Read-only navigation/overview fixture, removed before any new snapshot.
@@ -197,7 +200,11 @@ func npc_sensor_checks() -> void:
 	npc.behavior_phase = T.NpcPhase.PATROL
 	var point: Vector3 = position() + Vector3(100, 120, -550)
 	npc.pos_x = point.x; npc.pos_y = point.y; npc.pos_z = point.z
+	# A real spawn is always assigned to a site; world.sync_entities filters by
+	# site, so a synthetic row without one is projected nowhere.
+	XJSpaceCoordinates.assign(host.state, "npc", npc.npc_instance_id, XJSpaceCoordinates.current_site(host.state))
 	if not check(host.state.add("npc_state", npc) and host.world.sync_entities(), "temporary NPC uses actual catalog archetype and production state-to-body projection"): return
+	if host.world.npcs.has(npc.npc_instance_id): host.world.npcs[npc.npc_instance_id].global_position = point
 	var id: String = npc.npc_instance_id
 	check(not context(id).warp_ready and context(id).approach_ready and context(id).orbit_ready, "visible live hostile permits tactical navigation while forbidding warp to a moving NPC")
 	point = position() + Vector3(float(host.store.catalog.rule("target_marker_detection_range_m")) + 1.0, 0, 0)
@@ -207,6 +214,7 @@ func npc_sensor_checks() -> void:
 	host.ui._refresh_targets()
 	check(not context(id).ready and not host.ui.target_buttons.has(id) and host.ui.target_id.is_empty(), "NPC beyond the real sensor cap disappears from overview and cannot stay a tactical destination")
 	host.state.remove("npc_state", npc)
+	XJSpaceCoordinates.remove(host.state, "npc", id)
 	host.world.npcs[id].queue_free()
 	host.world.npcs.erase(id)
 	host.world.targets.erase(id)
@@ -227,7 +235,11 @@ func spawn_readonly_npc(point: Vector3, id: String) -> D.NpcStateDto:
 	npc.hull = float(definition.hull_max)
 	npc.behavior_phase = T.NpcPhase.PATROL
 	npc.pos_x = point.x; npc.pos_y = point.y; npc.pos_z = point.z
+	XJSpaceCoordinates.assign(host.state, "npc", id, XJSpaceCoordinates.current_site(host.state))
 	if not host.state.add("npc_state", npc) or not host.world.sync_entities(): return null
+	# Place the body explicitly, the same way place_far() does for the ship: the
+	# stored position and the world's own transform are not the same frame.
+	if host.world.npcs.has(id): host.world.npcs[id].global_position = point
 	return npc
 
 func remove_readonly_npc(npc: D.NpcStateDto) -> void:
@@ -237,6 +249,7 @@ func remove_readonly_npc(npc: D.NpcStateDto) -> void:
 	host.pending_damage.clear()
 	host.auto_fire_target = ""
 	host.state.remove("npc_state", npc)
+	XJSpaceCoordinates.remove(host.state, "npc", id)
 	if host.world.npcs.has(id): host.world.npcs[id].queue_free(); host.world.npcs.erase(id)
 	host.world.targets.erase(id)
 	if host.ui.target_id == id: host.ui.target_id = ""
@@ -336,17 +349,17 @@ func tactical_fire_navigation_checks() -> void:
 	var id: String = npc.npc_instance_id
 	var count: int = snapshots()
 	await host._command("combat_toggle", id, 1, "")
-	check(host.auto_fire_target == id and host.navigation_context(id).combat_active, "explicit Main combat action starts auto-fire only for a qualified live enemy")
+	check(host.auto_fire_target == id and host.navigation_context(id).combat_active, "explicit Main combat action starts auto-fire only for a qualified live enemy got target=" + host.auto_fire_target + " expected=" + id + " combat=" + str(host.navigation_context(id).combat_active) + " npcs=" + str(host.world.npcs.keys()))
 	await host._command("nav_approach", id, 1, "")
 	check(navigation().call("active") and navigation().get("mode") == "approach" and host.auto_fire_target == id, "starting tactical approach retains explicitly armed auto-fire identity")
 	await step()
 	check(host.auto_fire_target == id and navigation().get("mode") == "approach", "actual approach physics tick retains the requested auto-fire target")
 	await host._command("nav_orbit", id, 1, "")
-	check(navigation().call("active") and navigation().get("mode") == "orbit" and host.auto_fire_target == id, "switching to tactical orbit does not disarm explicit auto-fire")
+	check(navigation().call("active") and navigation().get("mode") == "orbit" and host.auto_fire_target == id, "switching to tactical orbit does not disarm explicit auto-fire got active=" + str(navigation().call("active")) + " mode=" + str(navigation().get("mode")) + " phase=" + str(navigation().get("phase")) + " fire=" + host.auto_fire_target + " orbit_ready=" + str(host.navigation_context(id).get("orbit_ready")) + " reason='" + str(host.navigation_context(id).get("orbit_reason")) + "' npc_dist=" + str(host.world.flight.global_position.distance_to((host.world.targets[id].node as Node3D).global_position)) + " sensor=" + str(host.gameplay.ship_roles.detection_range()) + " spawn_dist=" + str(host.auto_fire_target) + "'")
 	await step()
-	check(host.auto_fire_target == id and navigation().get("mode") == "orbit", "actual orbit physics tick retains explicit auto-fire target")
+	check(host.auto_fire_target == id and navigation().get("mode") == "orbit", "actual orbit physics tick retains explicit auto-fire target got fire=" + host.auto_fire_target + " mode=" + str(navigation().get("mode")) + " phase=" + str(navigation().get("phase")))
 	await host._command("combat_toggle", id, 1, "")
-	check(host.auto_fire_target.is_empty() and navigation().call("active"), "explicit stop-fire action disarms fire while keeping tactical navigation")
+	check(host.auto_fire_target.is_empty() and navigation().call("active"), "explicit stop-fire action disarms fire while keeping tactical navigation got fire=" + host.auto_fire_target + " active=" + str(navigation().call("active")) + " mode=" + str(navigation().get("mode")))
 	await remove_readonly_npc(npc)
 	await host._command("nav_stop", "", 1, "")
 	host.gameplay.combat_remaining_s = 0.0
@@ -358,7 +371,7 @@ func charge_and_cancel_checks() -> void:
 	var count: int = snapshots()
 	await host._command("nav_warp", station_id, 1, "")
 	await wait_writer()
-	check(navigation().call("warp_active") and str(navigation().get("phase")) == "warmup", "Main starts warp only after durable source capture and enters visible warmup")
+	check(navigation().call("warp_active") and str(navigation().get("phase")) == "warmup", "Main starts warp only after durable source capture and enters visible warmup got active=" + str(navigation().call("warp_active")) + " phase=" + str(navigation().get("phase")) + " store='" + host.store.last_error + "'")
 	check(snapshots() == count + 1 and pose().is_equal_approx(original), "warmup has exactly one committed source snapshot and no teleport")
 	var tick: int = host.state.snapshot.meta.simulation_tick
 	host.ui.show_page("pause")
@@ -641,7 +654,7 @@ func ui_checks() -> void:
 			check(overview.is_visible_in_tree() and equipment.is_visible_in_tree() and viewport.encloses(overview.get_global_rect()) and viewport.encloses(equipment.get_global_rect()), "overview and equipment panel fit %s at %.0f%%" % [window_size, scale * 100])
 			check(not overview.get_global_rect().intersects(equipment.get_global_rect()) and not equipment.get_global_rect().intersects(host.ui.instrument.get_global_rect()) and not equipment.get_global_rect().intersects(host.ui.navigation_hud.radar_frame.get_global_rect()), "equipment/overview avoid radar and flight readout %s at %.0f%%" % [window_size, scale * 100])
 			check(not overview.get_global_rect().intersects(host.ui.instrument.get_global_rect()) and viewport.encloses(host.ui.navigation.get_global_rect()), "selected actions and flight navigation keep independent bounds %s at %.0f%%" % [window_size, scale * 100])
-			check(overview.get("filter_buttons").all.is_visible_in_tree() and overview.get("sort_buttons").distance.is_visible_in_tree() and overview.get("action_buttons").nav_warp.is_visible_in_tree(), "overview filters, sorting and selected operations remain present %s at %.0f%%" % [window_size, scale * 100])
+			check(overview.get("filter_buttons").all.is_visible_in_tree() and overview.get("sort_buttons").distance.is_visible_in_tree() and overview.get("action_buttons").nav_warp.is_visible_in_tree(), "overview filters, sorting and selected operations remain present %s at %.0f%% got filters=%s sorting=%s actions=%s selected='%s' warp_ready=%s reason='%s'" % [window_size, scale * 100, str(overview.get("filter_buttons").all.is_visible_in_tree()), str(overview.get("sort_buttons").distance.is_visible_in_tree()), str(overview.get("action_buttons").nav_warp.is_visible_in_tree()), str(host.ui.target_id), str(host.navigation_context(station_id).get("warp_ready")), str(host.navigation_context(station_id).get("warp_reason"))])
 			if host.ui.root.size.x < 950.0:
 				var long_rows: Array[Dictionary] = overview.get("entry_rows").duplicate(true)
 				for row: Dictionary in long_rows:
