@@ -81,27 +81,26 @@ func hover_page(ui: Node) -> void:
 			if count == 3: break
 
 func _run() -> void:
-	# First hover previously called get_meta with a null default, emitting an error.
+	# Theme feedback must remain safe across first hover and page replacement.
 	var standalone: Node = UI.new()
 	root.add_child(standalone)
 	await process_frame
 	var first: Button = find_button(standalone.body, "建立新远征")
-	check(first != null and not first.has_meta("hover_tween"), "fresh title button starts without hover metadata")
+	check(first != null and not first.has_meta("hover_tween"), "fresh title button needs no animation metadata")
 	if first == null: await finish(standalone); return
 	first.mouse_entered.emit()
-	var prior: Tween = first.get_meta("hover_tween")
+	var normal_surface: StyleBoxFlat = first.get_theme_stylebox("normal") as StyleBoxFlat
+	var hover_surface: StyleBoxFlat = first.get_theme_stylebox("hover") as StyleBoxFlat
 	first.mouse_exited.emit()
-	check(first.has_meta("hover_tween") and prior != first.get_meta("hover_tween"), "first hover and repeated hover replace animation safely")
+	check(normal_surface != null and hover_surface != null and normal_surface.bg_color != hover_surface.bg_color and normal_surface.get_minimum_size() == hover_surface.get_minimum_size() and first.modulate == Color.WHITE, "normal and hover theme states retain distinct color stable metrics and neutral text modulation")
+	first.grab_focus()
+	check(root.gui_get_focus_owner() == first, "old title control holds keyboard focus before page replacement")
 	var stale_button: Variant = first
 	standalone.show_page("settings")
-	standalone._button_feedback(stale_button, true)
+	if is_instance_valid(stale_button): stale_button.mouse_entered.emit()
 	await process_frame
 	check(not is_instance_valid(stale_button), "replaced page destroys old hovered button")
-	standalone._button_feedback(stale_button, true)
-	var detached := Button.new()
-	standalone._button_feedback(detached, true)
-	check(not detached.has_meta("hover_tween"), "detached control does not attempt to create a scene tween")
-	detached.free()
+	check(standalone.page == "settings" and (root.gui_get_focus_owner() == null or standalone.panel.is_ancestor_of(root.gui_get_focus_owner())), "page replacement releases old focus or transfers it into the current page")
 	standalone.queue_free()
 	await process_frame
 

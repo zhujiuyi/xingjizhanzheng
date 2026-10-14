@@ -40,9 +40,14 @@ static func run(host: Node, output_dir: String) -> bool:
 		var padding: Vector2 = continue_button.get_theme_stylebox("normal").get_minimum_size()
 		var text_width: float = continue_button.get_theme_font("font").get_string_size(continue_button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, continue_button.get_theme_font_size("font_size")).x
 		_check(evidence, text_width <= continue_button.size.x - padding.x + 1.0, "existing-slot continue label fits one line")
-		continue_button.mouse_entered.emit()
-		continue_button.mouse_exited.emit()
-		_check(evidence, continue_button.has_meta("hover_tween"), "first hover creates feedback without missing metadata")
+		var normal_surface: StyleBoxFlat = continue_button.get_theme_stylebox("normal") as StyleBoxFlat
+		var hover_surface: StyleBoxFlat = continue_button.get_theme_stylebox("hover") as StyleBoxFlat
+		var pointer := InputEventMouseMotion.new()
+		pointer.position = continue_button.get_global_rect().get_center()
+		pointer.global_position = pointer.position
+		host.get_viewport().push_input(pointer, true)
+		await host.get_tree().process_frame
+		_check(evidence, normal_surface != null and hover_surface != null and normal_surface.bg_color != hover_surface.bg_color and normal_surface.get_minimum_size() == hover_surface.get_minimum_size() and continue_button.modulate == Color.WHITE and (DisplayServer.get_name() == "headless" or continue_button.get_draw_mode() == Button.DRAW_HOVER), "real first hover has distinct stable theme feedback without brightness animation")
 	await _capture(host, output_dir, "title")
 	# Resume through the production endpoint. A direct page switch from title
 	# leaves menu_open true and would freeze the hangar camera in this fixture.
