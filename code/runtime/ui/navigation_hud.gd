@@ -30,6 +30,7 @@ class Radar extends Control:
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
+		if not is_instance_valid(host) or not host._world_ready():return
 		var center := size * Vector2(0.5, 0.47)
 		var radius := minf(size.x * 0.42, size.y * 0.39)
 		draw_circle(center, radius, Color(UISkin.SURFACE, 0.76))
@@ -67,6 +68,7 @@ class Radar extends Control:
 			draw_string(face, Vector2(0, 12), "舰首 ↑", HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, UISkin.MUTED)
 			draw_string(face, Vector2(0, size.y - 9), "局部回波 / 边缘航向", HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, UISkin.MUTED)
 	func _gui_input(event: InputEvent) -> void:
+		if not is_instance_valid(host) or not host._world_ready():return
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			var closest: String = ""
 			var best: float = 14.0
@@ -145,13 +147,20 @@ func configure(sector: Node3D, camera_rig: Node3D, catalog: RefCounted) -> void:
 	world = sector
 	rig = camera_rig
 	sensor_limit = float(catalog.rule("target_marker_detection_range_m"))
-	if world.gameplay!=null:sensor_limit=world.gameplay.ship_roles.detection_range()
+	if _world_ready() and world.get("gameplay")!=null:sensor_limit=world.gameplay.ship_roles.detection_range()
 	refresh()
+
+func _world_ready() -> bool:
+	if not is_instance_valid(world) or world.is_queued_for_deletion() or not world.is_inside_tree() or not is_instance_valid(world.flight):return false
+	# Legacy presentation fixtures may have no business lifecycle API. Real
+	# Sector worlds explicitly reject services that Main has already disposed.
+	return bool(world.call("navigation_queries_ready")) if world.has_method("navigation_queries_ready") else true
 
 func radius_m() -> float:
 	return minf(scales[clampi(scale_index, 0, scales.size() - 1)], sensor_limit) if not scales.is_empty() else sensor_limit
 
 func _render_ship_transform() -> Transform3D:
+	if not _world_ready():return Transform3D.IDENTITY
 	# Reuse the pose that the camera sampled for this render frame. Eligibility,
 	# distances and all gameplay keep using the current physics transforms.
 	if is_instance_valid(rig) and rig.has_method("render_ship_transform"):
@@ -159,15 +168,18 @@ func _render_ship_transform() -> Transform3D:
 	return world.flight.get_global_transform_interpolated()
 
 func _target_distance(id: String, node: Node3D) -> float:
+	if not _world_ready():return INF
 	if world.has_method("target_distance"): return float(world.call("target_distance", id))
 	# Legacy presentation-only fixtures have no strategic coordinates.
 	return world.flight.global_position.distance_to(node.global_position)
 
 func _target_is_local(id: String) -> bool:
+	if not _world_ready():return false
 	if world.has_method("target_is_render_local"): return bool(world.call("target_is_render_local", id))
 	return bool(world.call("target_is_local", id)) if world.has_method("target_is_local") else true
 
 func _target_direction(id: String, node: Node3D) -> Vector3:
+	if not _world_ready():return Vector3.ZERO
 	return world.call("target_direction", id) if world.has_method("target_direction") else world.flight.global_position.direction_to(node.global_position)
 
 func _render_target_position(node: Node3D, id: String = "") -> Vector3:
@@ -179,8 +191,12 @@ func _render_target_position(node: Node3D, id: String = "") -> Vector3:
 
 func refresh() -> void:
 	contacts.clear()
-	if not is_instance_valid(world) or not is_instance_valid(world.flight): return
-	sensor_limit=world.gameplay.ship_roles.detection_range()
+	if not _world_ready():
+		if is_instance_valid(selection_frame):selection_frame.hide()
+		if is_instance_valid(target_caption):target_caption.hide()
+		if is_instance_valid(radar):radar.queue_redraw()
+		queue_redraw();return
+	if world.get("gameplay")!=null:sensor_limit=world.gameplay.ship_roles.detection_range()
 	var render_ship: Transform3D = _render_ship_transform()
 	for target: Dictionary in world.targets.values():
 		var node: Variant = target.get("node")
@@ -233,7 +249,7 @@ func contact_color(kind: String) -> Color:
 	return UISkin.ICE
 
 func target_geometry() -> Dictionary:
-	if not is_instance_valid(world) or not is_instance_valid(rig) or not is_instance_valid(rig.camera) or not world.targets.has(selected_id): return {}
+	if not _world_ready() or not is_instance_valid(rig) or not is_instance_valid(rig.camera) or not world.targets.has(selected_id): return {}
 	var entry: Dictionary = world.targets[selected_id]
 	var node: Variant = entry.get("node")
 	if not is_instance_valid(node) or not node is Node3D or not is_instance_valid(world.flight): return {}
@@ -272,8 +288,9 @@ func _process(_delta: float) -> void:
 	update_annotations()
 
 func update_annotations() -> void:
-	if not is_visible_in_tree():
+	if not is_visible_in_tree() or not _world_ready():
 		if is_instance_valid(target_caption): target_caption.hide()
+		if is_instance_valid(selection_frame):selection_frame.hide()
 		return
 	_update_selection()
 	var geometry := target_geometry()
@@ -291,7 +308,7 @@ func update_annotations() -> void:
 
 func marker_geometry() -> Array[Dictionary]:
 	var markers: Array[Dictionary] = []
-	if not is_instance_valid(world) or not is_instance_valid(world.flight) or not is_instance_valid(rig) or not is_instance_valid(rig.camera): return markers
+	if not _world_ready() or not is_instance_valid(rig) or not is_instance_valid(rig.camera): return markers
 	for entry: Dictionary in world.targets.values():
 		if str(entry.id) == selected_id: continue
 		var node: Variant = entry.get("node")
@@ -322,7 +339,7 @@ func caption_rect(title: String, finish: Vector2) -> Rect2:
 	return Rect2()
 
 func _draw() -> void:
-	if not is_visible_in_tree(): return
+	if not is_visible_in_tree() or not _world_ready(): return
 	for marker: Dictionary in marker_geometry():
 		if bool(marker.bearing): draw_polyline(PackedVector2Array([marker.point + Vector2(0, -6), marker.point + Vector2(5, 4), marker.point + Vector2(-5, 4), marker.point + Vector2(0, -6)]), marker.color, 1.0, true)
 		else: draw_arc(marker.point, 8, 0, TAU, 24, marker.color, 1.2, true)

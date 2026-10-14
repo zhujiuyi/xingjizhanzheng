@@ -10,6 +10,9 @@ static var _initialized:bool=false
 static func asset_path(kind:String,id:String)->String:
 	_initialize()
 	var canonical:String=_canonical_kind(kind)
+	if canonical=="ship":
+		var current: String="res://assets/ship_v4/portraits/"+id+".png"
+		if ResourceLoader.exists(current):return current
 	var key:String=canonical+":"+id
 	if _paths.has(key):return str(_paths[key])
 	if canonical == "ship":

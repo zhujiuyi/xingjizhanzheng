@@ -3,6 +3,7 @@ extends RefCounted
 const T = preload("res://contracts/contract_types.gd")
 const Portraits = preload("res://runtime/ui/item_portraits.gd")
 const UISkin = preload("res://runtime/ui_theme.gd")
+const Interaction = preload("res://runtime/ui/ui_interaction.gd")
 var u: Node
 var war_status: Label
 var join_button: Button
@@ -94,13 +95,10 @@ func build(ui: Node) -> void:
 		var button: Button = _command(row, "捐献", "donate_civilization", donation.donation_id, amount)
 		button.name = "CivilizationDonate_" + str(donation.donation_id)
 		var update: Callable = func(_value: float = 1.0):
-			var raw: String = amount.get_line_edit().text.strip_edges()
-			var quantity: int = int(raw) if raw.is_valid_int() else 0
+			var quantity: int = Interaction.integer_input(amount)
 			var reason: String = civ.donation_reason(str(donation.donation_id), quantity)
 			button.disabled = not reason.is_empty(); button.tooltip_text = reason
-		amount.value_changed.connect(update)
-		amount.get_line_edit().text_changed.connect(func(_text: String): update.call())
-		amount.get_line_edit().focus_exited.connect(func(): update.call_deferred())
+		Interaction.watch_integer(amount,update)
 		update.call()
 	u._text("爵位与权限", 18)
 	for rank: Dictionary in u.catalog.rows("civilization_rank_defs"):
@@ -190,8 +188,7 @@ func _command(parent: Node, title: String, action: String, target: String, amoun
 	var callback: Callable = func():
 		if u.state != state or u.catalog != catalog or u.business_generation != generation or state.epoch != epoch or u.page != "civilizations" or u.gameplay.station() != station: return
 		if amount != null:
-			var raw: String = amount.get_line_edit().text.strip_edges()
-			if not raw.is_valid_int() or int(raw) < 1 or int(raw) > int(amount.max_value): u.notify("请输入合法的整数批数。", true); return
+			if Interaction.integer_input(amount)<=0: u.notify("请输入范围内的整数批数。", true); return
 			amount.apply()
 		u.requested.emit(action, target, int(amount.value) if amount != null else 1, extra)
 	var button: Button = u._button(parent, title, callback)

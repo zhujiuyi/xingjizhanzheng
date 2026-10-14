@@ -1,8 +1,9 @@
-"""Serial source UI audit with fresh test-owned SQLite and strict dual logs.
+"""Serial UI audit with fresh test-owned SQLite and strict dual logs.
 
 Run from the repository root: py jiaoben/tests/ui_quality_audit_run.py --label before
 Use --label after --strict-layout for the corrected critical viewport boundaries.
-This runner never launches an exported client or touches user:// databases.
+Source uses a thin launcher; release 0.33.0.0 uses only its fixed diagnostic flag.
+Neither route opens a personal save database.
 """
 from pathlib import Path
 import argparse
@@ -11,6 +12,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 import uuid
 
@@ -29,10 +31,30 @@ def ui_source_snapshot():
     return {path.relative_to(ROOT).as_posix(): sha(path) for path in files}
 
 
+def inspect_release_binary(executable):
+    sys.path.insert(0, str(ROOT / "jiaoben"))
+    from build_client import inspect_windows_binary_version
+    result = inspect_windows_binary_version(executable, "0.33.0.0")
+    if result.get("result") != "PASS":
+        raise RuntimeError("Release diagnostics require verified Windows file/product version 0.33.0.0")
+    return result
+
+
+def write_source_launcher(directory, script):
+    launcher = directory / "launcher.gd"
+    launcher.write_text("extends SceneTree\nfunc _initialize() -> void:\n\tcall_deferred(\"_start\")\n"
+                        "func _start() -> void:\n"
+                        f"\tvar source := load({json.dumps(script.as_posix(), ensure_ascii=False)}) as Script\n"
+                        "\tif source == null or not source.can_instantiate():\n\t\tquit(1)\n\t\treturn\n"
+                        "\troot.add_child(source.new())\n", encoding="utf-8", newline="\n")
+    return launcher
+
+
 def run(args):
-    binary = args.engine.resolve()
+    binary = (args.executable or args.engine).resolve()
     if not binary.is_file():
-        raise RuntimeError(f"Source Godot engine does not exist: {binary}")
+        raise RuntimeError(f"Diagnostic executable does not exist: {binary}")
+    release_identity = inspect_release_binary(binary) if args.executable else None
     run_id = str(uuid.uuid4())
     directory = ROOT / "jiaoben/tmp/ui-quality-audit" / run_id
     directory.mkdir(parents=True, exist_ok=False)
@@ -48,20 +70,25 @@ def run(args):
     # Fixed source entry plus scoped DB is the only supported launch contract.
     env.pop("XJ_TEST_DATABASE", None)
     env["XJ_UI_QUALITY_AUDIT_DIRECTORY"] = directory.as_posix()
+    env["XJ_UI_QUALITY_AUDIT_SCRIPT"] = script.as_posix()
     env["XJ_UI_QUALITY_AUDIT_LABEL"] = args.label
     env["XJ_UI_QUALITY_AUDIT_STRICT_LAYOUT"] = "1" if args.strict_layout else "0"
-    command = [str(binary), "--audio-driver", "WASAPI", "--path", (ROOT / "code").as_posix(),
-               "--script", script.as_posix(), "--log-file", engine_log.as_posix()]
-    if args.headless:
-        command.append("--headless")
-    record = {"label": args.label, "mode": "source-headless" if args.headless else "source-native",
+    command = [str(binary), "--audio-driver", "WASAPI"] + (["--headless"] if args.headless else [])
+    if args.executable:
+        command += ["--log-file", engine_log.as_posix(), "--", "--xj-verify-ui-quality-v61"]
+    else:
+        launcher = write_source_launcher(directory, script)
+        command += ["--path", (ROOT / "code").as_posix(), "--script", launcher.as_posix(), "--log-file", engine_log.as_posix()]
+    record = {"label": args.label, "mode": ("release-" if args.executable else "source-") + ("headless" if args.headless else "native"),
               "engine": str(binary), "engine_sha256": sha(binary), "script": str(script),
               "script_sha256": script_sha, "directory": str(directory), "stdout": str(output),
               "ui_source_sha256": ui_source_sha,
               "engine_log": str(engine_log), "source_revision": subprocess.check_output(
                   ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "source_dirty": bool(subprocess.check_output(["git", "status", "--porcelain", "--", "code"], cwd=ROOT)),
-              "catalog_sha256": sha(ROOT / "code/data/catalog.db"), "strict_layout": args.strict_layout}
+              "catalog_sha256": sha(ROOT / "code/data/catalog.db"), "strict_layout": args.strict_layout,
+              "release_identity": release_identity, "command": command,
+              "pck_sha256": sha(binary.with_suffix(".pck")) if args.executable and binary.with_suffix(".pck").is_file() else None}
     started = time.monotonic()
     print(f"START {stem}", flush=True)
     with output.open("wb") as stream:
@@ -116,6 +143,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--label", choices=("before", "after"), required=True)
     parser.add_argument("--engine", type=Path, default=Path("D:/DevTools/Godot/4.7.2/Godot_v4.7.2-stable_win64.exe"))
+    parser.add_argument("--executable", type=Path, help="Actual Windows 0.33.0.0 client; fixed v61 diagnostic only")
     parser.add_argument("--headless", action="store_true", help="Structure only; no screenshot acceptance")
     parser.add_argument("--strict-layout", action="store_true", help="Fail critical frame viewport overflow")
     args = parser.parse_args()

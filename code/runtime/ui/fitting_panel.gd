@@ -11,6 +11,8 @@ var slot: OptionButton
 var results: VBoxContainer
 var apply_button: Button
 var last_quote: Dictionary={}
+var comparison_signature: String=""
+var comparison_note: Label
 func setup(ui: Node) -> void:
 	u=ui;context={"state":u.state,"epoch":u.state.epoch,"session":u.state.session_id,"station":u.state.player().docked_station_id,"ship":u.state.ship().ship_instance_id,"generation":u.business_generation}
 	add_theme_constant_override("separation",UISkin.GAP)
@@ -52,22 +54,39 @@ func setup(ui: Node) -> void:
 		if _current():u.show_page("ship_roles")).name="FittingRoles"
 	u._button(links,"火控研究",func():
 		if _current():u.show_page("research")).name="FittingSpecializations"
+	comparison_note=u._text_to(self,"",13);comparison_note.name="FittingComparisonStatus";comparison_note.add_theme_color_override("font_color",UISkin.AMBER);comparison_note.hide()
 	results=VBoxContainer.new();results.name="FittingResults";add_child(results)
+	for picker: OptionButton in [candidate,slot,target,layer]:picker.item_selected.connect(func(_index: int):_invalidate())
+	distance.value_changed.connect(func(_value: float):_invalidate())
+	distance.get_line_edit().text_changed.connect(func(_text: String):_invalidate())
 	_calculate()
 func _current() -> bool:
 	return is_inside_tree() and is_instance_valid(u) and u.page=="fitting_analysis" and u.state==context.state and u.state.epoch==context.epoch and u.state.session_id==context.session and u.state.ship().ship_instance_id==context.ship and u.state.player().docked_station_id==context.station and u.business_generation==context.generation
 func _clear() -> void:
 	for child: Node in results.get_children():results.remove_child(child);child.queue_free()
+
+func _input_signature() -> String:
+	return JSON.stringify([str(candidate.get_selected_metadata()),str(slot.get_selected_metadata()),str(target.get_selected_metadata()),layer.selected,float(distance.get_line_edit().text) if distance.get_line_edit().text.is_valid_float() else null])
+
+func _invalidate() -> void:
+	last_quote={};comparison_signature=""
+	if is_instance_valid(apply_button):apply_button.disabled=true;apply_button.tooltip_text="计算条件已改变，请重新比较。"
+	if is_instance_valid(comparison_note):comparison_note.text="计算条件已改变，请重新比较。";comparison_note.show()
 func _calculate() -> void:
 	if not _current():return
-	_clear();last_quote={};apply_button.disabled=true
+	var raw: String=distance.get_line_edit().text.strip_edges()
+	if not raw.is_valid_float() or not is_finite(float(raw)) or float(raw)<distance.min_value or float(raw)>distance.max_value:
+		_invalidate();comparison_note.text="请输入范围内的射击距离。";return
+	distance.apply()
+	_clear();last_quote={};apply_button.disabled=true;comparison_note.hide()
 	var item: String=str(candidate.get_selected_metadata());var archetype: String=str(target.get_selected_metadata());var target_layer: String=["shield","armor","hull"][layer.selected]
 	if item.is_empty():
 		_summary(u.gameplay.fitting_analysis.report(distance.value,archetype,target_layer),{});return
 	var quote: Dictionary=u.gameplay.fitting_analysis.quote(item,str(slot.get_selected_metadata()),distance.value,archetype,target_layer)
 	_summary(quote.current,quote.preview if quote.ok else {})
 	if not quote.ok:u._text_to(results,"无法替换 · "+str(quote.reason),14);return
-	last_quote=quote;apply_button.disabled=quote.old_item_id==item
+	last_quote=quote;comparison_signature=_input_signature();apply_button.disabled=quote.old_item_id==item
+	apply_button.tooltip_text="该设备已安装在所选槽位。" if apply_button.disabled else "应用当前比较中的设备与槽位；提交时再次检查资格。"
 func _summary(before: Dictionary,after: Dictionary) -> void:
 	if not before.get("ok",false):u._text_to(results,str(before.get("reason","分析不可用")),14);return
 	var caption: Label=u._text_to(results,"%s · %s · 满电就绪起算" % [XJSpaceUnits.distance(before.distance_m),target.get_item_text(target.selected)],13)
@@ -153,4 +172,5 @@ func _render(title: String,report: Dictionary) -> void:
 func _time(value: float) -> String:return "稳定" if value<0.0 else "%.1f秒受限" % value
 func _apply() -> void:
 	if not _current() or last_quote.is_empty():return
+	if comparison_signature!=_input_signature():_invalidate();return
 	u.requested.emit("replace_fit",str(last_quote.item_id),1,str(last_quote.slot_ref)+"|"+str(last_quote.old_item_id))

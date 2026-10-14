@@ -27,6 +27,7 @@ func _signature() -> String:
 		parts.append(row.item_instance_id + ":" + str(row.revision) + ":" + str(row.stock_units) + ":" + row.command_kind + ":" + str(equipment.enabled if equipment != null else false))
 	return "|".join(parts)
 func _build() -> void:
+	var view: Dictionary=u.capture_local_view(self)
 	build_generation+=1;var built: int=build_generation
 	cards.clear(); signature = _signature()
 	if not u.gameplay.drone_control.supported(): u._text_to(self, "当前旧规则世界沿用原无人机出击方式。", 15); return
@@ -78,7 +79,7 @@ func _build() -> void:
 				launch.name="AuxiliaryLaunch_"+item_id+("_self" if destination==u.state.ship().ship_instance_id else "_target");launches.append({"button":launch,"target":destination,"token":expected})
 		cards.append({"row":row,"item":item,"label":label,"button":replenish,"missing":missing,"revision":revision,"maximum":count,"launches":launches})
 	if cards.is_empty():u._text_to(cards_root,"尚无可访问机库。攻击机库装在武器槽，维修/侦察机库装在获准舰种的作业槽。",15)
-	_update()
+	_update();u.finish_local_rebuild(self,view)
 func _update() -> void:
 	if not _current(): return
 	for kind: String in order_buttons:

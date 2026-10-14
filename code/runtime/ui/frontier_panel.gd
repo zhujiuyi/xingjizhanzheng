@@ -1,5 +1,6 @@
 extends VBoxContainer
 const T = preload("res://contracts/contract_types.gd")
+const Interaction=preload("res://runtime/ui/ui_interaction.gd")
 var u: Node
 var selected: String=""
 var status: Label
@@ -20,6 +21,7 @@ func setup(ui: Node,id: String) -> void:
 	var nav: HFlowContainer=HFlowContainer.new();add_child(nav)
 	_button(nav,"定位","frontier_map",selected,null,service.expected_token(selected)).name="FrontierLocate"
 	var travel: Button=_button(nav,"前往目标","frontier_navigate",selected,null,service.expected_token(selected));travel.name="FrontierNavigate";travel.disabled=u.state.ship().status!=T.ShipStatus.FLYING
+	Interaction.action_state(travel,"请先出港；可用定位查看目标。" if travel.disabled else "")
 	if row!=null:_campaign(service,row)
 	else:_governance(service)
 	_token=service.expected_token(selected)
@@ -53,7 +55,14 @@ func _governance(service: RefCounted) -> void:
 	var amount: SpinBox=SpinBox.new();amount.name="FrontierSupplyQuantity";amount.min_value=1;amount.max_value=service.balance.reserve_max_units;amount.step=1;amount.value=maxi(1,mini(int(service.balance.crisis_supply_base_units),int(service.balance.reserve_max_units)-row.reserve_units));amount.custom_minimum_size=Vector2(88,32);quantities.add_child(amount)
 	for pair: Array in [["supply","当地交付"],["dispatch","核心站发运"]]:
 		var button: Button=_button(quantities,pair[1],"frontier_action",selected,amount,pair[0]+":"+service.expected_token(selected));button.name="Frontier_"+str(pair[0])
-		var reason: String=service.action_reason(selected,pair[0]);button.disabled=not reason.is_empty();button.tooltip_text=reason
+		var quantity_action: String=pair[0]
+		var update_quantity: Callable=func():
+			if not is_instance_valid(button) or not is_instance_valid(amount):return
+			var quantity_value: int=Interaction.integer_input(amount)
+			var reason: String=service.action_reason(selected,quantity_action)
+			if reason.is_empty():reason="请输入范围内的整数份数。" if quantity_value<=0 else service.quantity_reason(selected,quantity_action,quantity_value)
+			Interaction.action_state(button,reason)
+		Interaction.watch_integer(amount,update_quantity);update_quantity.call()
 	u._text_to(self,"核心站运输 · %d信用点 / %.0f秒 · 普通结构料" % [service.balance.dispatch_fee_credit,service.balance.dispatch_s],13)
 	for order: RefCounted in u.state.rows("frontier_supply_order_state"):
 		if order.sector_id==selected and order.phase=="inflight":u._text_to(self,"在途 %d份 · %.0f秒" % [order.units,order.remaining_s],13)
@@ -67,9 +76,12 @@ func _button(parent: Node,title: String,action: String,target: String,amount: Sp
 		if amount_ref!=null:
 			var spin: SpinBox=amount_ref.get_ref() as SpinBox
 			if not is_instance_valid(spin):return
-			var raw: String=spin.get_line_edit().text.strip_edges()
-			if not raw.is_valid_int() or int(raw)<1 or int(raw)>int(spin.max_value):ui.notify("请输入合法整数份数。",true);return
-			quantity=int(raw)
+			quantity=Interaction.integer_input(spin)
+			if quantity<=0:ui.notify("请输入范围内的整数份数。",true);return
+			var reason: String=ui.gameplay.frontier.action_reason(id,extra.get_slice(":",0))
+			if reason.is_empty():reason=ui.gameplay.frontier.quantity_reason(id,extra.get_slice(":",0),quantity)
+			if not reason.is_empty():ui.notify(reason,true);return
+			spin.apply()
 		ui.requested.emit(action,target,quantity,extra)
 	return u._button(parent,title,callback)
 func _process(delta: float) -> void:

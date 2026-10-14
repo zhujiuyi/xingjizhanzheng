@@ -2,6 +2,7 @@ extends VBoxContainer
 ## Live job and regional needs board. Timers update without replacing focused controls.
 const D = preload("res://contracts/contract_dtos.gd")
 const UISkin = preload("res://runtime/ui_theme.gd")
+const Interaction = preload("res://runtime/ui/ui_interaction.gd")
 var u: Node
 var mode: String = ""
 var rows: Array[Dictionary] = []
@@ -33,6 +34,7 @@ func _signature() -> String:
 	return "|".join(ids)
 
 func _build() -> void:
+	var view: Dictionary=u.capture_local_view(self)
 	for child: Node in get_children(): remove_child(child); child.queue_free()
 	rows.clear(); signature = _signature()
 	if mode == "jobs":
@@ -77,10 +79,9 @@ func _build() -> void:
 			var source_item: String = row.item_id
 			u._button(actions, "物资来源", func():
 				if _current(): u.open_sources(source_item))
-			amount.value_changed.connect(func(_value: float): _update())
-			amount.get_line_edit().text_changed.connect(func(_text: String): _update())
+			Interaction.watch_integer(amount,_update)
 		if rows.is_empty(): _label(self, "本站暂无工业材料需求。")
-	_update()
+	_update();u.finish_local_rebuild(self,view)
 
 func _process(delta: float) -> void:
 	if not _current(): return
@@ -97,8 +98,8 @@ func _update() -> void:
 			var job: D.IndustryJobStateDto = row.job
 			var local: bool = job.station_id == u.state.player().docked_station_id
 			row.label.text = "%s · 剩余 %.0f 秒 · 已付服务费 %d 信用点%s" % [str({"queued": "等待开工", "running": "生产中", "ready": "成品待领"}.get(job.status, job.status)), ceil(job.remaining_s), job.paid_credit, "" if local else " · 需回原站"]
-			row.claim.disabled = not local or job.status != "ready"
-			row.cancel.disabled = not local or job.status not in ["queued", "running"]
+			Interaction.action_state(row.claim,"需回原站领取成品。" if not local else "订单尚未完成。" if job.status!="ready" else "")
+			Interaction.action_state(row.cancel,"需回原站取消订单。" if not local else "当前订单阶段不能取消。" if job.status not in ["queued","running"] else "","等待开工退还材料与服务费；已开工按 %d%% 返还材料，服务费不退。" % int(u.gameplay.industry.balance.running_refund_bp/100))
 		else:
 			var def: Dictionary = row.demand
 			var state: D.StationDemandStateDto = def.state
@@ -106,8 +107,12 @@ func _update() -> void:
 			row.label.text = "%s · 缺额 %d · 本站持有 %d · 每单位 %d 信用点\n%s %.0f 秒%s" % ["征集中" if state.status == "active" else "补给整理中", state.remaining_units, stock, int(def.unit_reward_credit), "本轮剩余" if state.status == "active" else "下一轮开放", ceil(state.phase_remaining_s), " · 工业优惠剩余 %.0f 秒" % ceil(state.benefit_remaining_s) if state.benefit_remaining_s > 0 else ""]
 			var reason: String = u._service_reason("warehouse")
 			var quantity: int = u._business_row_quantity({"amount": row.amount})
-			row.deliver.disabled = not reason.is_empty() or state.status != "active" or state.phase_remaining_s <= 0.0 or quantity <= 0 or quantity > mini(stock, state.remaining_units)
-			row.deliver.tooltip_text = reason if not reason.is_empty() else "请输入合法的整数数量" if quantity <= 0 else "交付实收 %d 信用点；本轮完成声望 +%d。" % [quantity * int(def.unit_reward_credit), int(def.reward_reputation)]
+			if reason.is_empty():
+				if state.status!="active" or state.phase_remaining_s<=0.0:reason="本轮征集已结束，等待下一轮开放。"
+				elif quantity<=0:reason="请输入范围内的整数数量。"
+				elif quantity>state.remaining_units:reason="所选数量超过本轮实际缺额。"
+				elif quantity>stock:reason="本站仓库普通自有材料不足。"
+			Interaction.action_state(row.deliver,reason,"交付实收 %d 信用点；本轮完成声望 +%d。" % [quantity*int(def.unit_reward_credit),int(def.reward_reputation)] if reason.is_empty() else "")
 
 func _current() -> bool:
 	if is_queued_for_deletion() or not is_inside_tree() or not is_instance_valid(u) or u.state == null or u.gameplay == null or u.page != "industry": return false

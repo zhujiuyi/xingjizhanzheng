@@ -5,7 +5,7 @@ extends Node3D
 signal hit(target_id: String, raw_damage: Vector3, point: Vector3, owner_id: String)
 signal impact(point: Vector3, color: Color)
 signal surface_impact(point: Vector3, color: Color, normal: Vector3)
-const Effects = preload("res://runtime/visuals/visual_effects.gd")
+const Effects = preload("res://runtime/rendering/realistic_effects.gd")
 const Types = preload("res://contracts/contract_types.gd")
 const D = preload("res://contracts/contract_dtos.gd")
 class Projectile extends RefCounted:

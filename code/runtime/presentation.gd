@@ -4,12 +4,15 @@ extends Node3D
 const Types = preload("res://contracts/contract_types.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
 const Factory = preload("res://runtime/visuals/visual_factory.gd")
-const Effects = preload("res://runtime/visuals/visual_effects.gd")
+const Effects = preload("res://runtime/rendering/realistic_effects.gd")
 var world: XJSector
 var gameplay: RefCounted
 var catalog: XJCatalog
 var config: Dictionary = {}
-var intensity: float = 1.0
+var intensity: float = 1.0:
+	set(value):
+		intensity = clampf(value, 0.0, 1.0)
+		if is_inside_tree(): _refresh_effect_strength()
 var effects: Array[Node3D] = []
 var voices: Array[Node] = []
 var loops: Dictionary = {}
@@ -18,6 +21,11 @@ var gates: Array[Node3D] = []
 var effects_paused: bool = false
 
 func _exit_tree() -> void:
+	# Gates are attached to their physical frame, but this presenter owns them.
+	_prune_nodes(gates)
+	for gate: Node3D in gates:
+		if is_instance_valid(gate) and not gate.is_queued_for_deletion(): gate.queue_free()
+	gates.clear()
 	_prune_nodes(voices)
 	for voice: Node in voices:
 		if is_instance_valid(voice):
@@ -39,10 +47,26 @@ func setup(sector: XJSector, business: RefCounted, definitions: XJCatalog, effec
 			AudioServer.set_bus_name(AudioServer.bus_count - 1, bus)
 		AudioServer.set_bus_volume_db(AudioServer.get_bus_index(bus), float(config["audio_" + bus.to_lower() + "_db"]))
 	for target: Dictionary in world.targets.values():
-		if target.kind == "gate" and intensity > 0.0:
+		if target.kind == "gate":
 			var gate := Effects.wormhole(float(target.node.get_meta("aperture_radius_m", 64.0)), Color("4edcf2"), config)
 			target.node.add_child(gate)
 			gates.append(gate)
+			_apply_effect_strength(gate)
+
+func _refresh_effect_strength() -> void:
+	_prune_nodes(gates)
+	_prune_nodes(effects)
+	for node: Node3D in gates + effects: _apply_effect_strength(node)
+
+func _apply_effect_strength(node: Node3D) -> void:
+	node.visible = intensity > 0.0
+	_strength_materials(node)
+
+func _strength_materials(node: Node) -> void:
+	if node is GeometryInstance3D:
+		var surface: Material = node.material_override
+		if surface is ShaderMaterial: surface.set_shader_parameter("effect_strength", intensity)
+	for child: Node in node.get_children(): _strength_materials(child)
 
 func set_paused(stopped: bool) -> void:
 	effects_paused = stopped
@@ -188,6 +212,7 @@ func _add(node: Node3D) -> void:
 		node.free()
 		return
 	add_child(node)
+	_apply_effect_strength(node)
 	_pause_particles(node, effects_paused)
 	effects.append(node)
 

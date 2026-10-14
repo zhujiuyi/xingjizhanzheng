@@ -1,0 +1,1332 @@
+{
+  "shuttle_swift": {
+    "triangles": 16996,
+    "surfaces": 9,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Courier_pressure_body_001",
+        "attachment_m": [
+          -1.4901161193847656e-08,
+          0.5616166591644287,
+          -5.319965839385986
+        ],
+        "surface_m": [
+          -1.4901161193847656e-08,
+          0.6322659254074097,
+          -5.333846569061279
+        ],
+        "muzzle_m": [
+          0.0,
+          1.0,
+          -8.0
+        ]
+      }
+    },
+    "faction": "council",
+    "geometry_source": "assets/models/geometry.json",
+    "collision_box_m": [
+      10.0,
+      6.0,
+      18.0
+    ],
+    "glb_sha256": "bbdb9967e6790eb925444a156c7db04b53a60f6c6659ba81afddb59dd9573452"
+  },
+  "miner_anvil": {
+    "triangles": 28788,
+    "surfaces": 9,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Excavator_arm_002",
+        "attachment_m": [
+          -10.245933532714844,
+          0.3949556052684784,
+          -15.237770080566406
+        ],
+        "surface_m": [
+          -10.007658004760742,
+          0.3949556052684784,
+          -15.266490936279297
+        ],
+        "muzzle_m": [
+          0.0,
+          5.0,
+          -25.0
+        ]
+      }
+    },
+    "faction": "forge",
+    "geometry_source": "assets/models/geometry.json",
+    "collision_box_m": [
+      36.0,
+      20.0,
+      56.0
+    ],
+    "glb_sha256": "75f126b894c1985ee8cb060df438b2676d281f28933511dea3088faddfa7f167"
+  },
+  "cruiser_horizon": {
+    "triangles": 43260,
+    "surfaces": 8,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Manta_command_core_001",
+        "attachment_m": [
+          -3.7480390071868896,
+          2.2444159984588623,
+          -27.03636932373047
+        ],
+        "surface_m": [
+          -3.9513797760009766,
+          2.586829662322998,
+          -27.125078201293945
+        ],
+        "muzzle_m": [
+          -14.4,
+          7.48,
+          -44.85
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Manta_command_core_001",
+        "attachment_m": [
+          0.0,
+          3.1850898265838623,
+          -27.338624954223633
+        ],
+        "surface_m": [
+          0.0,
+          3.58424711227417,
+          -27.42310905456543
+        ],
+        "muzzle_m": [
+          0.0,
+          7.48,
+          -44.85
+        ]
+      },
+      "weapon_2": {
+        "structural_mesh": "Manta_command_core_001",
+        "attachment_m": [
+          3.812774419784546,
+          2.2543082237243652,
+          -27.043630599975586
+        ],
+        "surface_m": [
+          4.009079933166504,
+          2.6007297039031982,
+          -27.132627487182617
+        ],
+        "muzzle_m": [
+          14.4,
+          7.48,
+          -44.85
+        ]
+      }
+    },
+    "faction": "council",
+    "geometry_source": "assets/models/geometry.json",
+    "collision_box_m": [
+      60.0,
+      34.0,
+      115.0
+    ],
+    "glb_sha256": "0bb391e4ffd5b94e15e86ac24d1719a703b9841256c49bcd2ffaedf9922a05cd"
+  },
+  "frigate_lantern": {
+    "triangles": 30276,
+    "surfaces": 8,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Survey_main_cowl_001",
+        "attachment_m": [
+          1.4901161193847656e-08,
+          0.2800000309944153,
+          -6.9039998054504395
+        ],
+        "surface_m": [
+          1.4901161193847656e-08,
+          0.2800000309944153,
+          -7.0
+        ],
+        "muzzle_m": [
+          0.0,
+          1.0,
+          -13.0
+        ]
+      }
+    },
+    "faction": "council",
+    "geometry_source": "assets/models/geometry.json",
+    "collision_box_m": [
+      14.0,
+      8.0,
+      28.0
+    ],
+    "glb_sha256": "f832960d8c1f4aef323ceb848c0570af997747f99ea7747e60dcd1c9e6ff3b1d"
+  },
+  "frigate_kestrel": {
+    "triangles": 30664,
+    "surfaces": 8,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Raider_spine_001",
+        "attachment_m": [
+          -5.960464477539063e-08,
+          -0.8413691520690918,
+          -3.0385632514953613
+        ],
+        "surface_m": [
+          -5.960464477539063e-08,
+          -0.9492558836936951,
+          -3.0435080528259277
+        ],
+        "muzzle_m": [
+          -6.0,
+          1.0,
+          -12.0
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Raider_spine_001",
+        "attachment_m": [
+          -5.960464477539063e-08,
+          -0.8413691520690918,
+          -3.0385632514953613
+        ],
+        "surface_m": [
+          -5.960464477539063e-08,
+          -0.9492558836936951,
+          -3.0435080528259277
+        ],
+        "muzzle_m": [
+          6.0,
+          1.0,
+          -12.0
+        ]
+      }
+    },
+    "faction": "roaming",
+    "geometry_source": "assets/models/geometry.json",
+    "collision_box_m": [
+      18.0,
+      9.0,
+      30.0
+    ],
+    "glb_sha256": "f20b25e0ed8418f60cd1178a3648d0f19213eb5dd8bf5c96ee5a5bacbeb4668c"
+  },
+  "destroyer_raptor": {
+    "triangles": 37676,
+    "surfaces": 8,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Fore_outrigger_gun_deck_076",
+        "attachment_m": [
+          -5.949787616729736,
+          2.3399999141693115,
+          -16.841997146606445
+        ],
+        "surface_m": [
+          -5.733803749084473,
+          2.3399999141693115,
+          -16.839351654052734
+        ],
+        "muzzle_m": [
+          -7.2,
+          3.96,
+          -27.3
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Artillery_lower_keel_001",
+        "attachment_m": [
+          -5.960464477539063e-08,
+          -1.8607325553894043,
+          -16.469940185546875
+        ],
+        "surface_m": [
+          -5.960464477539063e-08,
+          -1.6453962326049805,
+          -16.486860275268555
+        ],
+        "muzzle_m": [
+          0.0,
+          3.96,
+          -27.3
+        ]
+      },
+      "weapon_2": {
+        "structural_mesh": "Fore_outrigger_gun_deck_127",
+        "attachment_m": [
+          5.9497880935668945,
+          2.3399956226348877,
+          -16.841962814331055
+        ],
+        "surface_m": [
+          5.733804225921631,
+          2.3399956226348877,
+          -16.839317321777344
+        ],
+        "muzzle_m": [
+          7.2,
+          3.96,
+          -27.3
+        ]
+      }
+    },
+    "faction": "forge",
+    "geometry_source": "assets/models/geometry.json",
+    "collision_box_m": [
+      30.0,
+      18.0,
+      70.0
+    ],
+    "glb_sha256": "88f9024a65e0afe171f637a69540af46a104892f7911eba289fca92d32612796"
+  },
+  "battleship_bastion": {
+    "triangles": 37964,
+    "surfaces": 8,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Split_battleship_prow_002",
+        "attachment_m": [
+          -16.52017593383789,
+          5.636669635772705,
+          -52.66946792602539
+        ],
+        "surface_m": [
+          -15.949999809265137,
+          6.168356418609619,
+          -52.69413757324219
+        ],
+        "muzzle_m": [
+          -33.0,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Fortress_reactor_keel_001",
+        "attachment_m": [
+          -6.599822521209717,
+          1.6435025930404663,
+          -51.41997528076172
+        ],
+        "surface_m": [
+          -6.599822521209717,
+          2.4087982177734375,
+          -51.570716857910156
+        ],
+        "muzzle_m": [
+          -19.8,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_2": {
+        "structural_mesh": "Fortress_reactor_keel_001",
+        "attachment_m": [
+          -2.309999704360962,
+          1.6360419988632202,
+          -51.457855224609375
+        ],
+        "surface_m": [
+          -2.309999704360962,
+          2.4013376235961914,
+          -51.60859680175781
+        ],
+        "muzzle_m": [
+          -6.6,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_3": {
+        "structural_mesh": "Fortress_reactor_keel_001",
+        "attachment_m": [
+          2.31000018119812,
+          1.6360424757003784,
+          -51.45785140991211
+        ],
+        "surface_m": [
+          2.31000018119812,
+          2.4013381004333496,
+          -51.60859298706055
+        ],
+        "muzzle_m": [
+          6.6,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_4": {
+        "structural_mesh": "Fortress_reactor_keel_001",
+        "attachment_m": [
+          6.599822521209717,
+          1.6435025930404663,
+          -51.41997528076172
+        ],
+        "surface_m": [
+          6.599822521209717,
+          2.4087982177734375,
+          -51.570716857910156
+        ],
+        "muzzle_m": [
+          19.8,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_5": {
+        "structural_mesh": "Split_battleship_prow_059",
+        "attachment_m": [
+          16.471620559692383,
+          5.589056015014648,
+          -52.667259216308594
+        ],
+        "surface_m": [
+          15.949999809265137,
+          6.168356418609619,
+          -52.69413757324219
+        ],
+        "muzzle_m": [
+          33.0,
+          14.3,
+          -85.8
+        ]
+      }
+    },
+    "faction": "forge",
+    "geometry_source": "assets/models/geometry.json",
+    "collision_box_m": [
+      110.0,
+      65.0,
+      220.0
+    ],
+    "glb_sha256": "9bd32e895eff16ba8eafba41b64bcbcff6917fd4494dcd1d4df43e442cc70e4a"
+  },
+  "transport_caravan": {
+    "triangles": 32856,
+    "surfaces": 8,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Longitudinal_freight_keel_001",
+        "attachment_m": [
+          1.4901161193847656e-07,
+          2.334172248840332,
+          -34.77306365966797
+        ],
+        "surface_m": [
+          1.4901161193847656e-07,
+          2.910158395767212,
+          -34.777034759521484
+        ],
+        "muzzle_m": [
+          0.0,
+          10.56,
+          -56.55
+        ]
+      }
+    },
+    "faction": "roaming",
+    "geometry_source": "assets/models/geometry.json",
+    "collision_box_m": [
+      75.0,
+      48.0,
+      145.0
+    ],
+    "glb_sha256": "05f392e1f8e5080bd6ca0d6eef35b30379685e5188977ccaaaaf3e26f95d90be"
+  },
+  "support_weaver": {
+    "triangles": 38712,
+    "surfaces": 8,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Forward_control_nodule_151",
+        "attachment_m": [
+          -3.5764105319976807,
+          5.379415512084961,
+          -21.737234115600586
+        ],
+        "surface_m": [
+          -3.6721365451812744,
+          5.058338165283203,
+          -21.711902618408203
+        ],
+        "muzzle_m": [
+          -11.7,
+          6.16,
+          -35.1
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Forward_control_nodule_151",
+        "attachment_m": [
+          3.6149001121520996,
+          5.391386032104492,
+          -21.748416900634766
+        ],
+        "surface_m": [
+          3.7034339904785156,
+          5.068417549133301,
+          -21.72104835510254
+        ],
+        "muzzle_m": [
+          11.7,
+          6.16,
+          -35.1
+        ]
+      }
+    },
+    "faction": "council",
+    "geometry_source": "assets/models/geometry.json",
+    "collision_box_m": [
+      65.0,
+      28.0,
+      90.0
+    ],
+    "glb_sha256": "cf8de63f5f509cb165a787d6b0fc43f5d2f11ca936ab67dc20f3daab89eac3dd"
+  },
+  "enemy_silent": {
+    "triangles": 30024,
+    "surfaces": 7,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Relic_outer_talon_001",
+        "attachment_m": [
+          -6.638903617858887,
+          -0.024240389466285706,
+          -10.930668830871582
+        ],
+        "surface_m": [
+          -6.4724907875061035,
+          0.10450088977813721,
+          -10.815202713012695
+        ],
+        "muzzle_m": [
+          -5.04,
+          4.4,
+          -11.7
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Relic_outer_talon_047",
+        "attachment_m": [
+          6.648352146148682,
+          0.10450088977813721,
+          -10.978520393371582
+        ],
+        "surface_m": [
+          6.4724907875061035,
+          0.10450088977813721,
+          -10.815202713012695
+        ],
+        "muzzle_m": [
+          5.04,
+          4.4,
+          -11.7
+        ]
+      }
+    },
+    "faction": "silent",
+    "geometry_source": "assets/models/geometry.json",
+    "collision_box_m": [
+      28.0,
+      20.0,
+      30.0
+    ],
+    "glb_sha256": "fc8bede9442dc9dd3e9edb0f3719ba7ff3919040f7ad2821f84dc7b0c85f5391"
+  },
+  "battleship_council_aegis": {
+    "triangles": 35824,
+    "surfaces": 9,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Aegis_single_oval_shield_hull_001",
+        "attachment_m": [
+          -11.549999237060547,
+          14.811598777770996,
+          -53.705711364746094
+        ],
+        "surface_m": [
+          -11.549999237060547,
+          15.58381175994873,
+          -53.81565475463867
+        ],
+        "muzzle_m": [
+          -33.0,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Aegis_flush_upper_armor_tier_039",
+        "attachment_m": [
+          -6.118259429931641,
+          15.122333526611328,
+          -52.02000045776367
+        ],
+        "surface_m": [
+          -6.118259429931641,
+          15.122333526611328,
+          -52.79999923706055
+        ],
+        "muzzle_m": [
+          -19.8,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_2": {
+        "structural_mesh": "Aegis_flush_upper_armor_tier_039",
+        "attachment_m": [
+          -2.309999704360962,
+          14.787500381469727,
+          -52.02000045776367
+        ],
+        "surface_m": [
+          -2.309999704360962,
+          14.787500381469727,
+          -52.79999923706055
+        ],
+        "muzzle_m": [
+          -6.6,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_3": {
+        "structural_mesh": "Aegis_flush_upper_armor_tier_039",
+        "attachment_m": [
+          2.309999942779541,
+          14.787500381469727,
+          -52.02000045776367
+        ],
+        "surface_m": [
+          2.309999942779541,
+          14.787500381469727,
+          -52.79999923706055
+        ],
+        "muzzle_m": [
+          6.6,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_4": {
+        "structural_mesh": "Aegis_flush_upper_armor_tier_039",
+        "attachment_m": [
+          6.118259429931641,
+          15.122333526611328,
+          -52.02000045776367
+        ],
+        "surface_m": [
+          6.118259429931641,
+          15.122333526611328,
+          -52.79999923706055
+        ],
+        "muzzle_m": [
+          19.8,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_5": {
+        "structural_mesh": "Aegis_single_oval_shield_hull_001",
+        "attachment_m": [
+          11.550000190734863,
+          14.811598777770996,
+          -53.705711364746094
+        ],
+        "surface_m": [
+          11.550000190734863,
+          15.58381175994873,
+          -53.81565475463867
+        ],
+        "muzzle_m": [
+          33.0,
+          14.3,
+          -85.8
+        ]
+      }
+    },
+    "faction": "council",
+    "geometry_source": "assets/civilization_v1/geometry.json",
+    "collision_box_m": [
+      110.0,
+      65.0,
+      220.0
+    ],
+    "glb_sha256": "8ce5bf592830634b4f15533b5b769a016eb8470192b4fbd487650346e8ce539c"
+  },
+  "battleship_forge_ironwall": {
+    "triangles": 49500,
+    "surfaces": 9,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Ironwall_hammerhead_bow_038",
+        "attachment_m": [
+          -11.55000114440918,
+          10.766241073608398,
+          -52.759742736816406
+        ],
+        "surface_m": [
+          -11.55000114440918,
+          11.546123504638672,
+          -52.74618911743164
+        ],
+        "muzzle_m": [
+          -33.0,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Ironwall_hammerhead_bow_038",
+        "attachment_m": [
+          -6.929996490478516,
+          10.766241073608398,
+          -52.75974655151367
+        ],
+        "surface_m": [
+          -6.929996490478516,
+          11.546123504638672,
+          -52.746192932128906
+        ],
+        "muzzle_m": [
+          -19.8,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_2": {
+        "structural_mesh": "Ironwall_hammerhead_bow_038",
+        "attachment_m": [
+          -2.310009002685547,
+          10.766241073608398,
+          -52.75974655151367
+        ],
+        "surface_m": [
+          -2.310009002685547,
+          11.546123504638672,
+          -52.746192932128906
+        ],
+        "muzzle_m": [
+          -6.6,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_3": {
+        "structural_mesh": "Ironwall_hammerhead_bow_038",
+        "attachment_m": [
+          2.30999755859375,
+          10.766241073608398,
+          -52.759742736816406
+        ],
+        "surface_m": [
+          2.30999755859375,
+          11.546123504638672,
+          -52.74618911743164
+        ],
+        "muzzle_m": [
+          6.6,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_4": {
+        "structural_mesh": "Ironwall_hammerhead_bow_038",
+        "attachment_m": [
+          6.929998397827148,
+          10.766241073608398,
+          -52.75974655151367
+        ],
+        "surface_m": [
+          6.929998397827148,
+          11.546123504638672,
+          -52.746192932128906
+        ],
+        "muzzle_m": [
+          19.8,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_5": {
+        "structural_mesh": "Ironwall_hammerhead_bow_038",
+        "attachment_m": [
+          11.550003051757812,
+          10.766241073608398,
+          -52.75974655151367
+        ],
+        "surface_m": [
+          11.550003051757812,
+          11.546123504638672,
+          -52.746192932128906
+        ],
+        "muzzle_m": [
+          33.0,
+          14.3,
+          -85.8
+        ]
+      }
+    },
+    "faction": "forge",
+    "geometry_source": "assets/civilization_v1/geometry.json",
+    "collision_box_m": [
+      110.0,
+      65.0,
+      220.0
+    ],
+    "glb_sha256": "1d56901d3d099b7ac99dc6a8bd4b90d0c4217cb89ef26b23d8fb65b3339bb414"
+  },
+  "battleship_roaming_tempest": {
+    "triangles": 39768,
+    "surfaces": 8,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Tempest_compact_forward_pressure_head_011",
+        "attachment_m": [
+          -11.55000114440918,
+          2.6117122173309326,
+          -52.92321014404297
+        ],
+        "surface_m": [
+          -11.55000114440918,
+          3.391538619995117,
+          -52.90675354003906
+        ],
+        "muzzle_m": [
+          -33.0,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Tempest_compact_forward_pressure_head_011",
+        "attachment_m": [
+          -6.9300007820129395,
+          2.6117122173309326,
+          -52.92321014404297
+        ],
+        "surface_m": [
+          -6.9300007820129395,
+          3.391538619995117,
+          -52.90675354003906
+        ],
+        "muzzle_m": [
+          -19.8,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_2": {
+        "structural_mesh": "Tempest_compact_forward_pressure_head_011",
+        "attachment_m": [
+          -4.885838031768799,
+          2.6131093502044678,
+          -52.989418029785156
+        ],
+        "surface_m": [
+          -4.885838031768799,
+          3.3929357528686523,
+          -52.97296142578125
+        ],
+        "muzzle_m": [
+          -6.6,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_3": {
+        "structural_mesh": "Tempest_compact_forward_pressure_head_011",
+        "attachment_m": [
+          -3.3882293701171875,
+          1.2176319360733032,
+          -53.09204864501953
+        ],
+        "surface_m": [
+          -2.9057517051696777,
+          1.8300074338912964,
+          -53.06732177734375
+        ],
+        "muzzle_m": [
+          6.6,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_4": {
+        "structural_mesh": "Tempest_compact_forward_pressure_head_011",
+        "attachment_m": [
+          -3.278730630874634,
+          1.5159465074539185,
+          -53.24946975708008
+        ],
+        "surface_m": [
+          -2.499227523803711,
+          1.5159465074539185,
+          -53.22163009643555
+        ],
+        "muzzle_m": [
+          19.8,
+          14.3,
+          -85.8
+        ]
+      },
+      "weapon_5": {
+        "structural_mesh": "Tempest_compact_forward_pressure_head_011",
+        "attachment_m": [
+          -3.272845983505249,
+          1.5179634094238281,
+          -53.41423797607422
+        ],
+        "surface_m": [
+          -2.493342876434326,
+          1.5179634094238281,
+          -53.38639831542969
+        ],
+        "muzzle_m": [
+          33.0,
+          14.3,
+          -85.8
+        ]
+      }
+    },
+    "faction": "roaming",
+    "geometry_source": "assets/civilization_v1/geometry.json",
+    "collision_box_m": [
+      110.0,
+      65.0,
+      220.0
+    ],
+    "glb_sha256": "6665fbfe93d5bcf3cf6a965b193c520f1177a829c82846e69a60ed844d4910c1"
+  },
+  "cruiser_council_sentinel": {
+    "triangles": 40192,
+    "surfaces": 9,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Sentinel_swept_mantle_038",
+        "attachment_m": [
+          -7.530600070953369,
+          2.2923078536987305,
+          -27.238962173461914
+        ],
+        "surface_m": [
+          -7.330723762512207,
+          2.645030975341797,
+          -27.2847843170166
+        ],
+        "muzzle_m": [
+          -14.4,
+          7.48,
+          -44.85
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Sentinel_lower_pressure_keel_001",
+        "attachment_m": [
+          2.7567148208618164e-07,
+          -2.569532632827759,
+          -27.385190963745117
+        ],
+        "surface_m": [
+          2.7567148208618164e-07,
+          -2.1617252826690674,
+          -27.397724151611328
+        ],
+        "muzzle_m": [
+          0.0,
+          7.48,
+          -44.85
+        ]
+      },
+      "weapon_2": {
+        "structural_mesh": "Sentinel_swept_mantle_085",
+        "attachment_m": [
+          7.737841606140137,
+          2.645030975341797,
+          -27.257970809936523
+        ],
+        "surface_m": [
+          7.330723762512207,
+          2.645030975341797,
+          -27.2847843170166
+        ],
+        "muzzle_m": [
+          14.4,
+          7.48,
+          -44.85
+        ]
+      }
+    },
+    "faction": "council",
+    "geometry_source": "assets/civilization_v1/geometry.json",
+    "collision_box_m": [
+      60.0,
+      34.0,
+      115.0
+    ],
+    "glb_sha256": "6a96a8e48a8eb2792ec25be40c5fec47ee0a6eb928f4047b5d32c2f681103225"
+  },
+  "cruiser_forge_citadel": {
+    "triangles": 31484,
+    "surfaces": 9,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Citadel_overlapping_upper_armor_039",
+        "attachment_m": [
+          -5.039999485015869,
+          7.735000133514404,
+          -26.04199981689453
+        ],
+        "surface_m": [
+          -5.039999485015869,
+          7.735000133514404,
+          -26.450000762939453
+        ],
+        "muzzle_m": [
+          -14.4,
+          7.48,
+          -44.85
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Citadel_overlapping_upper_armor_039",
+        "attachment_m": [
+          -0.0943073034286499,
+          8.138615608215332,
+          -26.498802185058594
+        ],
+        "surface_m": [
+          -0.05999999865889549,
+          7.735000133514404,
+          -26.450000762939453
+        ],
+        "muzzle_m": [
+          0.0,
+          7.48,
+          -44.85
+        ]
+      },
+      "weapon_2": {
+        "structural_mesh": "Citadel_overlapping_upper_armor_039",
+        "attachment_m": [
+          2.065692663192749,
+          8.32221508026123,
+          -26.498802185058594
+        ],
+        "surface_m": [
+          2.0999999046325684,
+          7.918600082397461,
+          -26.450000762939453
+        ],
+        "muzzle_m": [
+          14.4,
+          7.48,
+          -44.85
+        ]
+      }
+    },
+    "faction": "forge",
+    "geometry_source": "assets/civilization_v1/geometry.json",
+    "collision_box_m": [
+      60.0,
+      34.0,
+      115.0
+    ],
+    "glb_sha256": "603f3e49554e4dd9b4fae2b8523c7a008a0d2595dc29147019e1036ad0a1bbb5"
+  },
+  "cruiser_roaming_kite": {
+    "triangles": 30864,
+    "surfaces": 9,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Kite_short_starboard_keel_001",
+        "attachment_m": [
+          3.664588212966919,
+          1.378455400466919,
+          -25.898727416992188
+        ],
+        "surface_m": [
+          3.261949062347412,
+          1.378455400466919,
+          -25.964649200439453
+        ],
+        "muzzle_m": [
+          -14.4,
+          7.48,
+          -44.85
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Kite_short_starboard_keel_001",
+        "attachment_m": [
+          3.7416980266571045,
+          1.3329969644546509,
+          -26.323097229003906
+        ],
+        "surface_m": [
+          3.344597339630127,
+          1.3329969644546509,
+          -26.416772842407227
+        ],
+        "muzzle_m": [
+          0.0,
+          7.48,
+          -44.85
+        ]
+      },
+      "weapon_2": {
+        "structural_mesh": "Kite_short_starboard_keel_001",
+        "attachment_m": [
+          6.233724117279053,
+          2.366511583328247,
+          -27.100521087646484
+        ],
+        "surface_m": [
+          6.033064842224121,
+          2.711693286895752,
+          -27.184480667114258
+        ],
+        "muzzle_m": [
+          14.4,
+          7.48,
+          -44.85
+        ]
+      }
+    },
+    "faction": "roaming",
+    "geometry_source": "assets/civilization_v1/geometry.json",
+    "collision_box_m": [
+      60.0,
+      34.0,
+      115.0
+    ],
+    "glb_sha256": "ba425434e94a8975f7b8a7341b382d7b6dd737ecf323cacd5cb7ade856daa786"
+  },
+  "destroyer_forge_hammer": {
+    "triangles": 31476,
+    "surfaces": 9,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Hammer_vertical_pressure_wedge_001",
+        "attachment_m": [
+          -2.4941835403442383,
+          2.3400001525878906,
+          -16.79885482788086
+        ],
+        "surface_m": [
+          -2.7099716663360596,
+          2.3400001525878906,
+          -16.808422088623047
+        ],
+        "muzzle_m": [
+          -7.2,
+          3.96,
+          -27.3
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Hammer_vertical_pressure_wedge_001",
+        "attachment_m": [
+          2.4892396926879883,
+          2.3399994373321533,
+          -16.910358428955078
+        ],
+        "surface_m": [
+          2.7050278186798096,
+          2.3399994373321533,
+          -16.919925689697266
+        ],
+        "muzzle_m": [
+          0.0,
+          3.96,
+          -27.3
+        ]
+      },
+      "weapon_2": {
+        "structural_mesh": "Hammer_vertical_pressure_wedge_001",
+        "attachment_m": [
+          2.494183301925659,
+          2.3399996757507324,
+          -16.79885482788086
+        ],
+        "surface_m": [
+          2.7099714279174805,
+          2.3399996757507324,
+          -16.808422088623047
+        ],
+        "muzzle_m": [
+          7.2,
+          3.96,
+          -27.3
+        ]
+      }
+    },
+    "faction": "forge",
+    "geometry_source": "assets/civilization_v1/geometry.json",
+    "collision_box_m": [
+      30.0,
+      18.0,
+      70.0
+    ],
+    "glb_sha256": "e6b83c012659a43d94fd3ae0b6e3c07a9023993f9f2b54fee94903b18207dab6"
+  },
+  "destroyer_roaming_spear": {
+    "triangles": 29734,
+    "surfaces": 9,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Spear_offset_long_pressure_hull_001",
+        "attachment_m": [
+          -3.275407552719116,
+          1.1043814420700073,
+          -16.672943115234375
+        ],
+        "surface_m": [
+          -3.1631720066070557,
+          1.2879648208618164,
+          -16.69182014465332
+        ],
+        "muzzle_m": [
+          -7.2,
+          3.96,
+          -27.3
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Spear_offset_long_pressure_hull_001",
+        "attachment_m": [
+          -2.0813522338867188,
+          0.5102643966674805,
+          -16.524545669555664
+        ],
+        "surface_m": [
+          -1.8662350177764893,
+          0.5102643966674805,
+          -16.54405403137207
+        ],
+        "muzzle_m": [
+          0.0,
+          3.96,
+          -27.3
+        ]
+      },
+      "weapon_2": {
+        "structural_mesh": "Spear_offset_long_pressure_hull_001",
+        "attachment_m": [
+          -2.060842275619507,
+          0.5209810733795166,
+          -16.298383712768555
+        ],
+        "surface_m": [
+          -1.8457250595092773,
+          0.5209810733795166,
+          -16.31789207458496
+        ],
+        "muzzle_m": [
+          7.2,
+          3.96,
+          -27.3
+        ]
+      }
+    },
+    "faction": "roaming",
+    "geometry_source": "assets/civilization_v1/geometry.json",
+    "collision_box_m": [
+      30.0,
+      18.0,
+      70.0
+    ],
+    "glb_sha256": "1c27d5c362c6d8146513f6eb48dee78bd88e2ede9e0e423b52e61eff5d988b1e"
+  },
+  "support_council_choir": {
+    "triangles": 35896,
+    "surfaces": 9,
+    "design": "ship-v4",
+    "axis": "Y_up_negative_Z_front",
+    "mount_connections": {
+      "weapon_0": {
+        "structural_mesh": "Choir_long_fork_shell_001",
+        "attachment_m": [
+          -17.549999237060547,
+          -1.6723626852035522,
+          -25.235477447509766
+        ],
+        "surface_m": [
+          -17.549999237060547,
+          -2.0083072185516357,
+          -25.2415828704834
+        ],
+        "muzzle_m": [
+          -11.7,
+          6.16,
+          -35.1
+        ]
+      },
+      "weapon_1": {
+        "structural_mesh": "Choir_long_fork_shell_048",
+        "attachment_m": [
+          17.549999237060547,
+          -1.6723626852035522,
+          -25.235477447509766
+        ],
+        "surface_m": [
+          17.549999237060547,
+          -2.0083072185516357,
+          -25.2415828704834
+        ],
+        "muzzle_m": [
+          11.7,
+          6.16,
+          -35.1
+        ]
+      }
+    },
+    "faction": "council",
+    "geometry_source": "assets/civilization_v1/geometry.json",
+    "collision_box_m": [
+      65.0,
+      28.0,
+      90.0
+    ],
+    "glb_sha256": "304f02feae21ef1b4afb54660f13f198e04ca4fa4c4c998b8f0735afd1230ab0"
+  }
+}

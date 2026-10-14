@@ -1,13 +1,16 @@
 extends VBoxContainer
 const T = preload("res://contracts/contract_types.gd")
 const UISkin = preload("res://runtime/ui_theme.gd")
+const Interaction = preload("res://runtime/ui/ui_interaction.gd")
 var u: CanvasLayer
 var context_state: RefCounted
 var context_epoch: int
+var context_generation: int
 var summaries: Array[Dictionary] = []
 var signature: String = ""
 func setup(ui: CanvasLayer) -> void:
 	u = ui; context_state = u.state; context_epoch = u.state.epoch
+	context_generation=u.business_generation
 	add_theme_constant_override("separation", UISkin.SECTION_GAP)
 	u._text_to(self, "战术行动 · 拆除与封锁突破", 20)
 	u._text_to(self, "在对应签发站接取，出港后抵达起点开始。无需清场；实际到达撤离点后返回签发站交付。暂停与退出不推进计时。", 14).add_theme_color_override("font_color", UISkin.MUTED)
@@ -24,8 +27,10 @@ func setup(ui: CanvasLayer) -> void:
 		var id: String = spec.operation_id; var gen: String = str(row.generation)
 		u._button(controls,"星图定位",func():
 			if _current(): u.requested.emit("operation_map",id,1,gen)).name = "OperationMap_"+id
-		u._button(controls,"前往当前目标",func():
-			if _current(): u.requested.emit("operation_nav",id,1,gen)).name = "OperationNavigate_"+id
+		var travel: Button=u._button(controls,"前往当前目标",func():
+			if _current(): u.requested.emit("operation_nav",id,1,gen))
+		travel.name = "OperationNavigate_"+id
+		Interaction.action_state(travel,"请先出港；可用星图定位查看目标。" if u.state.ship().status!=T.ShipStatus.FLYING else str(u.gameplay.operations.guidance(id).get("route_reason","")))
 		var actions: Array = ["accept"] if row.phase in ["available","claimed","failed","withdrawn"] else ["start","withdraw"] if row.phase == "accepted" else ["exit","jettison","withdraw"] if row.phase == "active" and spec.operation_kind == "breakthrough" else ["exit","withdraw"] if row.phase == "active" else ["claim"]
 		var buttons: Array[Dictionary] = []
 		for action: String in actions:
@@ -37,7 +42,7 @@ func setup(ui: CanvasLayer) -> void:
 			buttons.append({"button":button,"action":verb})
 		summaries.append({"id":id,"text":text,"buttons":buttons})
 	signature = _signature(); _update()
-func _current() -> bool: return is_instance_valid(u) and u.page == "operations" and u.state == context_state and u.state.epoch == context_epoch
+func _current() -> bool: return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(u) and u.page == "operations" and u.state == context_state and u.state.epoch == context_epoch and u.business_generation==context_generation and u.body.is_ancestor_of(self)
 func _signature() -> String:
 	var result: String = ""
 	for row: RefCounted in u.state.rows("operation_state"): result += "%s:%s:%d;" % [row.operation_id,row.phase,row.generation]
@@ -45,7 +50,7 @@ func _signature() -> String:
 func _process(_delta: float) -> void:
 	if not _current(): return
 	if signature != _signature():
-		set_process(false); u.show_page.call_deferred("operations"); return
+		set_process(false); u.refresh_page.call_deferred(); return
 	_update()
 func _update() -> void:
 	for entry: Dictionary in summaries:
@@ -53,4 +58,4 @@ func _update() -> void:
 		entry.text.text = u.gameplay.operations.status_text(entry.id) + (" · 整备 %.0f 秒" % row.cooldown_remaining_s if row.cooldown_remaining_s > 0.0 else "")
 		for record: Dictionary in entry.buttons:
 			var reason: String = u.gameplay.operations.action_reason(entry.id,record.action)
-			record.button.disabled = not reason.is_empty(); record.button.tooltip_text = reason
+			Interaction.action_state(record.button,reason,"立即抛弃一批在途货物，该批不再计入送达成果。" if record.action=="jettison" else "撤回本次行动，未完成成果按原规则结算。" if record.action=="withdraw" else "")

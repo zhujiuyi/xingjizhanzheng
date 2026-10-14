@@ -1,0 +1,33 @@
+{
+  "format_version": 1,
+  "asset_version": "effects-v1",
+  "scope": "Presentation-only adapter, local material response and visual meshes. No gameplay balance, collision, hardpoints, database or legacy asset identity changes.",
+  "source_document": "doc/69-交互一致性与材质表现优化.md",
+  "resources": [
+    {
+      "path": "res://runtime/rendering/realistic_effects.gd",
+      "sha256": "0e9290609391709b786c27886f804520cec09846954ae71ddcd1bdc42579ef4e",
+      "size_bytes": 5924
+    },
+    {
+      "path": "res://assets/effects_v1/energy.gdshader",
+      "sha256": "cf4c4e247d43c74dde19dd0c0b8a3e0fe8b6adbb57c93ce8671add4c95ebee7a",
+      "size_bytes": 938
+    },
+    {
+      "path": "res://assets/effects_v1/particle.gdshader",
+      "sha256": "34ffc0741fdbc6522abc2d2c74531adcb48137fba0bfc060a8e8818c7051a06e",
+      "size_bytes": 1353
+    },
+    {
+      "path": "res://assets/effects_v1/shield_contact.gdshader",
+      "sha256": "c647219b0432369404518fa13b4a6cbfcceb5ec6793d459f3219889d44650e02",
+      "size_bytes": 1095
+    },
+    {
+      "path": "res://assets/effects_v1/aperture.gdshader",
+      "sha256": "571c1e923ed3481be924a9a168f1594805261a36dbb3cf1dbbad94f7bab5bf67",
+      "size_bytes": 935
+    }
+  ]
+}

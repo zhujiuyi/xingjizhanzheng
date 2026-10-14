@@ -1,4 +1,4 @@
-extends SceneTree
+extends Node
 ## Source-only presentation audit. Every database is fresh and test-owned.
 ## Credit, unlocks and local inventory are declared UI fixtures, not progression.
 const Main = preload("res://runtime/main.gd")
@@ -20,6 +20,19 @@ var auxiliary_items: Dictionary = {}
 var paid_fixture: Array[String] = []
 var interaction_checks: int = 0
 var caption_samples: Dictionary = {"drone_recall": 0, "research": 0, "growth_grant": 0}
+var root: Window:
+	get:return get_tree().root
+var process_frame: Signal:
+	get:return get_tree().process_frame
+
+func create_timer(seconds: float) -> SceneTreeTimer:
+	return get_tree().create_timer(seconds)
+
+func quit(exit_code: int=0) -> void:
+	get_tree().quit(exit_code)
+
+func _ready() -> void:
+	_initialize()
 var boundary_observations: Array[Dictionary] = []
 
 func label_fits(readout: Label) -> bool:
@@ -268,6 +281,7 @@ func instrument_boundaries() -> void:
 	paid_fixture.append("temporary shield/armor/heat/overheated DTO display boundaries restored before screenshots")
 
 func _initialize() -> void:
+	get_tree().set_meta("xj_ui_quality_v61_diagnostic",true)
 	create_timer(540.0).timeout.connect(func(): check(false, "bounded UI audit watchdog"); finish())
 	_run.call_deferred()
 
@@ -499,11 +513,20 @@ func after_variants(suffix: String) -> void:
 	await probe_states(secondary, "secondary new-world/settings with release suppressed")
 	host.ui.menu_open = false
 
+func fresh_external_directory(filename: String,prefix: String) -> bool:
+	# The executable's res:// is its PCK. Scope derives from this fixed external
+	# test Node, exactly as the production diagnostic dispatcher validates it.
+	var source: Script=get_script() as Script
+	var script_path: String=source.resource_path.replace("\\","/")
+	var expected_root: String=script_path.get_base_dir().get_base_dir().path_join("tmp/"+prefix)
+	var uuid: RegEx=RegEx.new()
+	uuid.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+	return script_path.is_absolute_path() and not script_path.contains("..") and script_path.ends_with("/jiaoben/tests/"+filename) and FileAccess.file_exists(script_path) and directory.is_absolute_path() and not directory.contains("..") and directory.get_base_dir()==expected_root and uuid.search(directory.get_file())!=null and not FileAccess.file_exists(directory.path_join("progress.db"))
+
 func _run() -> void:
 	directory = OS.get_environment("XJ_UI_QUALITY_AUDIT_DIRECTORY").replace("\\", "/")
 	label = OS.get_environment("XJ_UI_QUALITY_AUDIT_LABEL")
-	var expected_root: String = ProjectSettings.globalize_path("res://../jiaoben/tmp/ui-quality-audit/").simplify_path().trim_suffix("/")
-	if not check(directory.is_absolute_path() and directory.simplify_path().begins_with(expected_root + "/") and not directory.contains("..") and not FileAccess.file_exists(directory.path_join("progress.db")), "fresh scoped test-owned database required"):
+	if not check(fresh_external_directory("ui_quality_audit.gd","ui-quality-audit"), "fresh scoped test-owned database required"):
 		await finish(); return
 	root.mode = Window.MODE_WINDOWED
 	root.size = Vector2i(1440, 900)

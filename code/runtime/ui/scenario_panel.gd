@@ -2,6 +2,7 @@ extends VBoxContainer
 const T=preload("res://contracts/contract_types.gd")
 const Status=preload("res://runtime/resource_status.gd")
 const UISkin=preload("res://runtime/ui_theme.gd")
+const Interaction=preload("res://runtime/ui/ui_interaction.gd")
 var u: Node
 var kind: String
 var context: Dictionary
@@ -36,8 +37,9 @@ func route(parent: Node,node: int=-1) -> void:
 		if current() and selected==captured:u.requested.emit("scenario_map",target,1,expected))
 	var go: Button=u._button(parent,"前往目标",func():
 		if current() and selected==captured:u.requested.emit("scenario_navigate",target,1,expected))
-	go.disabled=u.state.ship().status!=T.ShipStatus.FLYING
+	Interaction.action_state(go,"请先出港；可用星图定位查看目标。" if u.state.ship().status!=T.ShipStatus.FLYING else "")
 func build() -> void:
+	var view: Dictionary=u.capture_local_view(self)
 	for child: Node in get_children():remove_child(child);child.queue_free()
 	if not service().supported():u._text_to(self,"当前旧规则世界尚未开放战术场景。",15);return
 	var defs: Array=u.catalog.rows("trial_defs" if kind=="trial" else "blockade_defs")
@@ -81,10 +83,13 @@ func build() -> void:
 		b.name="ScenarioAction_"+action
 		var blocked: String=service().trial_reason(selected,action) if kind=="trial" else service().blockade_reason(selected,action)
 		b.disabled=not blocked.is_empty();b.tooltip_text=blocked
+		if action=="withdraw":UISkin.apply_button(b,"danger");Interaction.action_state(b,blocked,"撤回当前行动；本轮未结算目标停止继续，已支付费用按原规则处理。")
 	if kind=="blockade" and row.phase=="active":
 		var controls: HFlowContainer=HFlowContainer.new();add_child(controls)
 		var exit_button: Button=button(controls,"从出口脱离","blockade_action","exit|"+str(row.generation));exit_button.name="BlockadeExit";exit_button.disabled=not service().blockade_reason(selected,"exit").is_empty()
+		Interaction.action_state(exit_button,service().blockade_reason(selected,"exit"))
 		var drop: Button=button(controls,"抛弃一批货物","blockade_action","jettison|"+str(row.generation));drop.name="BlockadeJettison";drop.disabled=row.cargo_units<=0
+		UISkin.apply_button(drop,"danger");Interaction.action_state(drop,service().blockade_reason(selected,"jettison"),"立即抛弃一批在途货物；本批不再计入送达成果。")
 		for node: Dictionary in u.catalog.rows("blockade_node_defs"):
 			if node.blockade_id!=selected:continue
 			var index: int=int(node.node_index);var progress: RefCounted=service()._node(selected,index)
@@ -93,17 +98,20 @@ func build() -> void:
 			if node.node_kind=="survey":
 				var scan: Button=button(tools,"付费调查节点","blockade_action","survey|"+str(row.generation)+"|"+str(index));scan.name="BlockadeSurvey_"+str(index)
 				scan.tooltip_text=service().blockade_reason(selected,"survey",index);scan.disabled=not scan.tooltip_text.is_empty()
-	awards();signature=stamp();refresh()
+	awards();signature=stamp();refresh();u.finish_local_rebuild(self,view)
 func awards() -> void:
 	if u.state.rows("tactical_award_state").is_empty():return
 	u._text_to(self,"已取得称号",16)
 	var tools: HFlowContainer=HFlowContainer.new();add_child(tools)
-	u._button(tools,"隐藏称号",func():
+	var hidden: bool=not u.state.rows("tactical_award_state").any(func(award: RefCounted):return award.selected)
+	var hide_award: Button=u._button(tools,"隐藏称号"+(" · 当前" if hidden else ""),func():
 		if current():u.requested.emit("select_tactical_award","",1,""))
+	hide_award.name="TacticalAwardHidden";hide_award.toggle_mode=true;hide_award.set_pressed_no_signal(hidden);UISkin.apply_button(hide_award,"filter",true,hidden)
 	for award: RefCounted in u.state.rows("tactical_award_state"):
 		var id: String=award.award_id
-		u._button(tools,u.catalog.one("tactical_award_defs","award_id",id).display_name,func():
+		var choice: Button=u._button(tools,u.catalog.one("tactical_award_defs","award_id",id).display_name+(" · 当前" if award.selected else ""),func():
 			if current():u.requested.emit("select_tactical_award",id,1,""))
+		choice.name="TacticalAward_"+id;choice.toggle_mode=true;choice.set_pressed_no_signal(award.selected);UISkin.apply_button(choice,"filter",true,award.selected)
 func refresh() -> void:
 	if not is_instance_valid(status_label):return
 	var row: RefCounted=service().instance(kind,selected)

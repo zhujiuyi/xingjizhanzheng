@@ -1,5 +1,7 @@
 class_name XJExplorationView
 extends RefCounted
+const Materials = preload("res://runtime/rendering/surface_materials.gd")
+const Meshes = preload("res://runtime/rendering/surface_meshes.gd")
 var world: Node3D
 var fields: Dictionary = {}
 
@@ -60,9 +62,9 @@ func sync() -> void:
 		var shape: CollisionShape3D = CollisionShape3D.new()
 		var collider: SphereShape3D = SphereShape3D.new(); collider.radius = float(obstacle.radius_m); shape.shape = collider; body.add_child(shape)
 		var surface: MeshInstance3D = MeshInstance3D.new()
-		var mesh: SphereMesh = SphereMesh.new(); mesh.radius = collider.radius; mesh.height = collider.radius * 2; mesh.radial_segments = 12; mesh.rings = 6; surface.mesh = mesh
+		var mesh: SphereMesh = SphereMesh.new(); mesh.radius = collider.radius; mesh.height = collider.radius * 2; mesh.radial_segments = 12; mesh.rings = 6; surface.mesh = Meshes.irregular_debris(mesh)
 		var material: StandardMaterial3D = StandardMaterial3D.new(); material.albedo_color = Color(0.2, 0.24, 0.26); material.roughness = 0.92
-		surface.material_override = material; body.add_child(surface)
+		surface.material_override = Materials.material(material, "debris", "rock"); body.add_child(surface)
 		world.add_child(body); body.position = world.anchor_position(obstacle.anchor_id)
 		world._target(id, "碎片遮挡 · %d 米" % int(obstacle.radius_m), "scenery", body, obstacle.anchor_id)
 	for node: Dictionary in world.catalog.rows("exploration_resource_defs"):
@@ -76,5 +78,6 @@ func sync() -> void:
 		var resource: Dictionary = world.catalog.one("resource_node_defs", "node_id", node.node_id)
 		var item: Dictionary = world.catalog.one("item_defs", "item_id", resource.item_id)
 		var body: StaticBody3D = world.factory.static_body("ore", node.node_id, str(resource.item_id))
+		XJSurfaceStyle.apply_object(body, "ore")
 		body.collision_layer = 65; body.collision_mask = 2; world.add_child(body); body.position = world.anchor_position(location.anchor_id)
 		world._target(node.node_id, "临时矿脉 · " + str(item.display_name), "resource", body, location.anchor_id)

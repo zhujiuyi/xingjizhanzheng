@@ -5,6 +5,7 @@ signal target_selected(id: String)
 const Types = preload("res://contracts/contract_types.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
 const UISkin = preload("res://runtime/ui_theme.gd")
+const UIInteraction = preload("res://runtime/ui/ui_interaction.gd")
 const NavigationHUD = preload("res://runtime/ui/navigation_hud.gd")
 const OverviewPanel = preload("res://runtime/ui/overview_panel.gd")
 const EquipmentBar = preload("res://runtime/ui/equipment_bar.gd")
@@ -128,6 +129,7 @@ var return_page: String = ""
 var ui_motion: Tween
 var telemetry_signature: String = ""
 var last_page_focus: Dictionary = {}
+var requested_page_focus: Dictionary = {}
 var operation_kind: String = ""
 var operation_message: String = ""
 var operation_waiting: bool = false
@@ -404,6 +406,8 @@ func show_title(save_slots: Array[Dictionary]) -> void:
 	_focus_page.call_deferred()
 
 func show_page(next_page: String) -> void:
+	last_page_focus={}
+	requested_page_focus={}
 	if not business_preserve_view:
 		business_quantities.clear()
 		business_quantity_identity = ""
@@ -566,6 +570,7 @@ func keyboard_blocked() -> bool:
 
 func refresh_page() -> void:
 	if not page.is_empty() and page != "settings" and page != "title":
+		var focus_view: Dictionary = capture_local_view(body)
 		var previous_scroll: int = page_scroll.scroll_vertical if is_instance_valid(page_scroll) else 0
 		var business_scroll: int = business_list_view.horizontal_scroll.scroll_horizontal if page in ["market", "industry"] and is_instance_valid(business_list_view) else 0
 		if page in ["market", "industry"]:
@@ -573,9 +578,14 @@ func refresh_page() -> void:
 			business_preserve_view = true
 		var warehouse_view: Dictionary = warehouse_panel.snapshot_view() if page == "warehouse" and is_instance_valid(warehouse_panel) else {}
 		show_page(page)
+		if not str(focus_view.get("key","")).is_empty():
+			last_page_focus=focus_view.duplicate()
+			last_page_focus.context=focus_view.context.duplicate()
+			last_page_focus.context.generation=business_generation
 		if is_instance_valid(page_scroll): page_scroll.set_deferred("scroll_vertical", previous_scroll)
 		if page in ["market", "industry"] and is_instance_valid(business_list_view): business_list_view.horizontal_scroll.set_deferred("scroll_horizontal", business_scroll)
 		if not warehouse_view.is_empty() and is_instance_valid(warehouse_panel): warehouse_panel.restore_view(warehouse_view)
+		elif not focus_view.is_empty(): _restore_local_view.call_deferred(weakref(body), focus_view)
 
 func select_next() -> void:
 	if sector == null:
@@ -675,16 +685,24 @@ func _build_panel(title: String, description: String) -> void:
 			selector.set_item_metadata(selector.item_count - 1, str(record.id))
 		for index: int in range(selector.item_count):
 			if selector.get_item_metadata(index) == _service_context_page(): selector.select(index)
-		selector.item_selected.connect(func(index: int): show_page(str(selector.get_item_metadata(index))))
+		var selector_context: Dictionary=UIInteraction.context(self)
+		selector.item_selected.connect(func(index: int):
+			if UIInteraction.current(self,selector_context,selector):show_page(str(selector.get_item_metadata(index))))
 		selector.tooltip_text = "切换服务 · " + ServiceNavigation.label(_service_context_page())
 		selector.visible = _service_sidebar_compact()
 		header.add_child(selector)
 	if page != "title":
-		var close: Button = _button(header, "返回" if page == "settings" else "返回机库" if state != null and state.player().has_docked_station_id else "返回航行", _back)
+		var parent_page: String = UIInteraction.parent_page(page, sources_return_page)
+		var close: Button = _button(header, "返回" if page == "settings" else "返回上级" if not parent_page.is_empty() else "返回机库" if state != null and state.player().has_docked_station_id else "返回航行", _back)
 		close.name = "PanelClose"
 		close.custom_minimum_size.x = 96
 		close.size_flags_horizontal = Control.SIZE_SHRINK_END
 		_secondary(close)
+		if not parent_page.is_empty():
+			close.tooltip_text = "返回 " + ServiceNavigation.label(parent_page, "上级页面")
+			var home: Button = _button(header, "返回机库" if state.player().has_docked_station_id else "返回航行", func(): show_page("station" if state.player().has_docked_station_id else ""))
+			home.name = "PanelHome"
+			_secondary(home)
 	var subheading: Label = _text_to(layout, description, 13)
 	subheading.add_theme_color_override("font_color", UISkin.MUTED)
 	subheading.max_lines_visible = 2
@@ -695,6 +713,9 @@ func _build_panel(title: String, description: String) -> void:
 	page_scroll.name = "PageScroll"
 	page_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	page_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# Page controls already reveal through their focus_entered handler. Native
+	# follow_focus would apply the same scroll delta before queued layout settles.
+	page_scroll.follow_focus = false
 	layout.add_child(page_scroll)
 	body = VBoxContainer.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1192,7 +1213,9 @@ func _missions() -> void:
 			if current.status != "ready": _mission_row_primary(locate)
 			_mission_action(entry.actions, "前往任务目标", "mission_travel", str(definition.mission_id))
 			if gameplay.situational.supported(): _equipment_guide_button(entry.actions,entry.row,_mission_guidance(current))
-			_secondary(_command(entry.actions, "放弃任务", "abandon_mission", current.mission_instance_id))
+			var abandon: Button=_command(entry.actions, "放弃任务", "abandon_mission", current.mission_instance_id)
+			UISkin.apply_button(abandon,"danger",true)
+			abandon.tooltip_text="放弃当前任务；已有成果及借船依原任务规则清理，未领取奖励不发放。"
 		else:
 			var accept: Button = _command(entry.actions, "接取任务" if current == null else "重新接取", "accept_mission", str(definition.mission_id))
 			accept.disabled = not reason.is_empty()
@@ -1209,7 +1232,7 @@ func _missions() -> void:
 			entry.row.set_meta("mission_focused", true)
 			entry.name.add_theme_color_override("font_color", UISkin.AMBER)
 	_update_live_missions()
-	if focused_action != null: _focus_mission_action.call_deferred(focused_action)
+	if focused_action != null: _focus_mission_action.call_deferred(weakref(focused_action))
 
 func _equipment_guide_button(parent: Node, witness_node: Control, info: Dictionary) -> void:
 	var note: Dictionary=gameplay.situational.mission_equipment(info)
@@ -1307,8 +1330,9 @@ func show_mission(mission_id: String) -> void:
 	mission_page = floori(float(index) / 6.0)
 	show_page("missions")
 
-func _focus_mission_action(button: Button) -> void:
-	if not is_instance_valid(button) or not button.is_inside_tree() or not button.is_visible_in_tree() or page != "missions": return
+func _focus_mission_action(reference: WeakRef) -> void:
+	var button: Button=reference.get_ref() as Button
+	if not is_instance_valid(button) or not button.is_inside_tree() or not button.is_visible_in_tree() or page != "missions" or not body.is_ancestor_of(button): return
 	button.grab_focus()
 	if is_instance_valid(page_scroll) and page_scroll.is_ancestor_of(button): page_scroll.ensure_control_visible(button)
 
@@ -1473,8 +1497,11 @@ func _map() -> void:
 	map_details.name = "SelectedSectorDetails"
 	map_details.add_theme_constant_override("separation", 8)
 	body.add_child(map_details)
-	chart.connect("sector_selected", _map_sector_selected)
-	chart.connect("navigation_changed", _update_map_route_action)
+	var chart_context: Dictionary=UIInteraction.context(self)
+	chart.connect("sector_selected",func(id: String):
+		if UIInteraction.current(self,chart_context,chart):_map_sector_selected(id))
+	chart.connect("navigation_changed",func():
+		if UIInteraction.current(self,chart_context,chart):_update_map_route_action())
 	if not map_view_state.is_empty(): chart.call("restore_view", map_view_state)
 	_map_sector_selected(str(chart.get("selected_sector")))
 	_resize_map_canvas()
@@ -1659,13 +1686,16 @@ func _settings() -> void:
 		var value_label: Label = _text_to(body, _setting_text(title, current, field))
 		var slider: HSlider = HSlider.new()
 		slider.name = "Preference_" + field
+		if field == "vfx_intensity": slider.tooltip_text = "实时调整命中、爆炸、采矿光束、虫洞和跃迁等附加反馈；0关闭这些效果，保留可读的战斗实体与声音。"
 		slider.min_value = minf(0.0002, current) if field == "mouse_sensitivity" else 0.0
 		slider.max_value = maxf(0.008, current) if field == "mouse_sensitivity" else 1.0
 		slider.step = 0.0001 if field == "mouse_sensitivity" else 0.01
 		slider.custom_minimum_size.y = 36
 		slider.value = current # 先赋实际值，再绑定事件；打开页面不写回数据库。
 		body.add_child(slider)
+		var slider_context: Dictionary=UIInteraction.context(self)
 		slider.value_changed.connect(func(value: float):
+			if not UIInteraction.current(self,slider_context,slider):return
 			value_label.text = _setting_text(title, value, field)
 			requested.emit("preference", field, 1, str(value)))
 	_text("观察灵敏度调整左键拖动镜头；普通鼠标移动不控制舰船。主音量为 0 时静音。")
@@ -2145,10 +2175,7 @@ func _business_context_valid(row: Dictionary) -> bool:
 func _business_row_quantity(row: Dictionary) -> int:
 	if row.has("fixed"): return int(row.fixed)
 	if not is_instance_valid(row.get("amount")): return 0
-	var text: String = row.amount.get_line_edit().text.strip_edges()
-	if not text.is_valid_int(): return 0
-	var quantity: int = int(text)
-	return quantity if quantity >= 1 and quantity <= int(row.amount.max_value) else 0
+	return UIInteraction.integer_input(row.amount)
 
 func _business_submit(row: Dictionary) -> void:
 	# An old row must never commit text or emit against a new page/session.
@@ -2342,8 +2369,16 @@ func _button(parent: Node, title: String, callback: Callable) -> Button:
 	button.autowrap_mode = TextServer.AUTOWRAP_OFF
 	button.custom_minimum_size = Vector2(120, 36)
 	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	button.pressed.connect(callback)
 	parent.add_child(button)
+	# Permanent HUD controls intentionally resolve the current world at activation.
+	if (is_instance_valid(panel) and (parent == panel or panel.is_ancestor_of(parent))) or (is_instance_valid(station_layer) and (parent == station_layer or station_layer.is_ancestor_of(parent))):
+		var token: Dictionary = UIInteraction.context(self)
+		var witness: WeakRef = weakref(button)
+		button.pressed.connect(func():
+			var current_button: Control = witness.get_ref() as Control
+			if is_instance_valid(current_button) and UIInteraction.current(self, token, current_button): callback.call())
+	else:
+		button.pressed.connect(callback)
 	return button
 
 func _wide_button(button: Button) -> Button:
@@ -2756,6 +2791,15 @@ func _responsive() -> void:
 		if selector != null: selector.visible = _service_sidebar_compact()
 		var heading: Label = panel.find_child("PageHeading", true, false)
 		if heading != null and page != "title": heading.add_theme_font_size_override("font_size", 19 if compact else 25)
+		var home: Button=panel.find_child("PanelHome",true,false) as Button
+		var close: Button=panel.find_child("PanelClose",true,false) as Button
+		if home!=null and close!=null:
+			var short_header: bool=root.size.x<700
+			close.text="上级" if short_header else "返回上级"
+			close.custom_minimum_size.x=56 if short_header else 96
+			home.text=("机库" if state.player().has_docked_station_id else "航行") if short_header else ("返回机库" if state.player().has_docked_station_id else "返回航行")
+			home.custom_minimum_size.x=56 if short_header else 120
+			home.tooltip_text="返回机库" if state.player().has_docked_station_id else "返回航行"
 		if is_instance_valid(sidebar):
 			for service_button: Button in sidebar.find_children("Service*", "Button", true, false):
 				if service_button.has_meta("service_page_id"):
@@ -3387,7 +3431,8 @@ func _secondary(button: Button) -> void:
 	UISkin.apply_button(button, "secondary")
 
 func _back() -> void:
-	var destination: String = return_page if page == "settings" and not return_page.is_empty() else "title" if state == null else "station" if state.player().has_docked_station_id else ""
+	var parent_page: String = UIInteraction.parent_page(page, sources_return_page)
+	var destination: String = return_page if page == "settings" and not return_page.is_empty() else "title" if state == null else parent_page if not parent_page.is_empty() else "station" if state.player().has_docked_station_id else ""
 	show_page(destination)
 
 func _responsive_title() -> void:
@@ -3409,10 +3454,88 @@ func _animate_panel() -> void:
 	ui_motion = create_tween()
 	ui_motion.tween_property(panel, "modulate:a", 1.0, 0.14).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
+func _focus_key(control: Control, scope: Node) -> String:
+	if control is LineEdit and control.get_parent() is SpinBox: control = control.get_parent() as SpinBox
+	var ancestor: Node = control
+	while ancestor != null and ancestor != scope:
+		if ancestor.has_meta("row_id") and (ancestor.has_meta("business_row") or ancestor.has_meta("warehouse_row")):
+			var role: String = "amount" if control is SpinBox else str(control.get_meta("action", "")) + ":" + str(control.get_meta("target", "")) + ":" + str(control.get_meta("extra", ""))
+			if control is Button and role == "::": role = control.text
+			return "row:" + str(ancestor.get_meta("row_id")) + ":" + role
+		ancestor = ancestor.get_parent()
+	var control_name: String = str(control.name)
+	if not control_name.begins_with("@") and control_name not in ["Button", "SpinBox", "LineEdit", "OptionButton"]: return "name:" + control_name
+	if control is Button:return "caption:" + control.get_class() + ":" + control.text
+	return ""
+
+func capture_local_view(scope: Node) -> Dictionary:
+	if not is_instance_valid(scope): return {}
+	var focus: Control = root.get_viewport().gui_get_focus_owner()
+	var owned: bool = is_instance_valid(focus) and (scope == focus or scope.is_ancestor_of(focus))
+	var quantities: Dictionary={}
+	for control: Control in _focus_controls(scope):
+		var spin: SpinBox=control as SpinBox
+		if control is LineEdit:spin=control.get_parent() as SpinBox
+		if spin==null or spin.name=="FittingDistance":continue
+		var key: String=_focus_key(spin,scope)
+		if not key.is_empty():quantities[key]={"value":spin.value,"text":spin.get_line_edit().text}
+	return {"context": UIInteraction.context(self), "key": _focus_key(focus, scope) if owned else "", "editor": owned and focus is LineEdit and focus.get_parent() is SpinBox, "quantities": quantities, "vertical": page_scroll.scroll_vertical if is_instance_valid(page_scroll) else 0, "horizontal": page_scroll.scroll_horizontal if is_instance_valid(page_scroll) else 0}
+
+func finish_local_rebuild(scope: Node, view: Dictionary) -> void:
+	_restore_local_view.call_deferred(weakref(scope), view)
+
+func _restore_local_view(reference: WeakRef, view: Dictionary) -> void:
+	var scope: Control=reference.get_ref() as Control
+	if not is_instance_valid(scope) or view.is_empty(): return
+	var token: Dictionary = view.context.duplicate()
+	token.generation = business_generation
+	if not UIInteraction.current(self, token, scope): return
+	var restored_quantities: Dictionary={}
+	for control: Control in _focus_controls(scope):
+		var spin: SpinBox=control as SpinBox
+		if control is LineEdit:spin=control.get_parent() as SpinBox
+		if spin==null:continue
+		var quantity_key: String=_focus_key(spin,scope)
+		if restored_quantities.has(quantity_key) or not view.get("quantities",{}).has(quantity_key):continue
+		restored_quantities[quantity_key]=true
+		var saved: Dictionary=view.quantities[quantity_key]
+		spin.value=clampf(float(saved.value),spin.min_value,spin.max_value)
+		var raw: String=str(saved.text)
+		if raw.is_valid_int() and int(raw)>int(spin.max_value):raw=str(int(spin.max_value))
+		spin.get_line_edit().text=raw
+		spin.get_line_edit().text_changed.emit(raw)
+	_link_page_focus()
+	var key: String = str(view.key)
+	if not key.is_empty() and not _restore_semantic_focus(scope,view):_focus_page()
+	if is_instance_valid(page_scroll):
+		page_scroll.set_deferred("scroll_vertical", int(view.vertical))
+		page_scroll.set_deferred("scroll_horizontal", int(view.horizontal))
+
+func _restore_semantic_focus(scope: Node, view: Dictionary) -> bool:
+	for control: Control in _focus_controls(scope):
+		if _focus_key(control,scope)!=str(view.key):continue
+		var destination: Control=control
+		if bool(view.editor):
+			var spin: SpinBox=control as SpinBox
+			if control is LineEdit:spin=control.get_parent() as SpinBox
+			if spin!=null:destination=spin.get_line_edit()
+		destination.grab_focus()
+		if destination.has_focus():return true
+	return false
+
+func request_page_focus(control_name: String) -> void:
+	requested_page_focus = {"name": control_name, "context": UIInteraction.context(self)}
+	_focus_page.call_deferred()
+
 func _focus_controls(node: Node) -> Array[Control]:
 	var result: Array[Control] = []
 	for child: Node in node.get_children():
 		if child is Control and child.is_visible_in_tree() and child.focus_mode != Control.FOCUS_NONE and not (child is BaseButton and child.disabled): result.append(child)
+		# SpinBox itself has FOCUS_NONE; its actual editor is an internal child,
+		# excluded by get_children(). Include that public editor explicitly.
+		if child is SpinBox:
+			var editor: LineEdit=child.get_line_edit()
+			if editor.is_visible_in_tree() and editor.focus_mode!=Control.FOCUS_NONE and not result.has(editor):result.append(editor)
 		result.append_array(_focus_controls(child))
 	return result
 
@@ -3423,10 +3546,8 @@ func _reveal_page_control(control: Control) -> void:
 		if ancestor is ScrollContainer: ancestor.ensure_control_visible(control)
 		ancestor = ancestor.get_parent()
 
-func _focus_page() -> void:
-	if not is_instance_valid(body) or page.is_empty():
-		root.get_viewport().gui_release_focus()
-		return
+func _link_page_focus() -> Array[Control]:
+	if not is_instance_valid(body) or page.is_empty(): return []
 	var entries: Array[Control] = _focus_controls(station_layer if page == "station" else panel)
 	if is_instance_valid(operation_bar) and operation_bar.visible:
 		entries.append_array(_focus_controls(operation_bar))
@@ -3440,10 +3561,24 @@ func _focus_page() -> void:
 		entries[index].focus_previous = entries[(index - 1 + entries.size()) % entries.size()].get_path()
 		entries[index].focus_neighbor_bottom = entries[index].focus_next
 		entries[index].focus_neighbor_top = entries[index].focus_previous
+	return entries
+
+func _focus_page() -> void:
+	if not is_instance_valid(body) or page.is_empty():
+		root.get_viewport().gui_release_focus()
+		return
+	var entries: Array[Control] = _link_page_focus()
+	if not requested_page_focus.is_empty() and UIInteraction.current(self, requested_page_focus.context):
+		var requested_control: Control = body.find_child(str(requested_page_focus.name), true, false) as Control
+		if is_instance_valid(requested_control) and requested_control.is_visible_in_tree() and not (requested_control is BaseButton and requested_control.disabled):
+			requested_control.grab_focus()
+			_reveal_page_control(requested_control)
+			return
+	if not last_page_focus.is_empty() and UIInteraction.current(self,last_page_focus.context,body) and _restore_semantic_focus(body,last_page_focus):return
 	if page == "missions" and not mission_focus_id.is_empty():
 		for entry: Control in entries:
 			if entry is Button and not entry.disabled and str(entry.get_meta("target", "")) == mission_focus_id and str(entry.get_meta("action", "")) in ["mission_locate", "mission_station"]:
-				_focus_mission_action(entry)
+				_focus_mission_action(weakref(entry))
 				return
 	var default: Array[Control] = _focus_controls(body)
 	if page == "civilizations":

@@ -40,3 +40,9 @@ archive = "blender-4.5.14-macos-arm64.dmg"
 archive_sha256 = "65134d9b07b20e2fa8d3c9e44f6f44ffb5c9774dd521b95f50387310241ca170"
 source = "https://download.blender.org/release/Blender4.5/"
 license = "GPL-3.0-or-later"
+
+[blender.windows]
+archive = "blender-4.5.14-windows-x64.zip"
+archive_sha256 = "b9533d2397ac1984db4466fb23a7a4649391cca93f6e84209f9bcc60d071c8b9"
+build_hash = "62c1db4208e8"
+verified_date = "2026-10-14"

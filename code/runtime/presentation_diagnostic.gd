@@ -22,11 +22,13 @@ static func run(host: Node, output_dir: String) -> bool:
 		host.get_viewport().warp_mouse(Vector2(700, 400))
 		await host.get_tree().process_frame
 	await host._command("new_world", "发布包表现检查", 1, "")
-	var industrial_world: bool = host.state != null and host.world != null and is_instance_valid(host.world.flight) and str(host.world.flight.visual.get_meta("visual_asset_version", "")) == "ship-v3-industrial"
-	if industrial_world:
+	var current_world: bool = host.state != null and host.world != null and is_instance_valid(host.world.flight) and str(host.world.flight.visual.get_meta("visual_asset_version", "")) == "ship-v4"
+	if current_world:
+		var model: Node3D = host.world.flight.visual.get_node_or_null("Model") as Node3D
+		current_world = is_instance_valid(model) and str(model.get_meta("visual_asset_version", "")) == "ship-v4" and str(model.get_meta("ship_def_id", "")) == host.state.ship().ship_def_id
 		var packed_station: Node3D = host.world.targets.get("station_anchor_port", {}).get("node")
-		industrial_world = is_instance_valid(packed_station) and str(packed_station.get_node("VisualRoot").get_meta("station_visual_version", "")) == "station-v3"
-	_check(evidence, industrial_world, "actual packed client creates isolated world with industrial ship and station")
+		current_world = current_world and is_instance_valid(packed_station) and str(packed_station.get_node("VisualRoot").get_meta("station_visual_version", "")) == "station-v3"
+	_check(evidence, current_world, "actual client creates isolated world with the current v4 hull and retained station")
 	if host.state == null: return _finish(evidence)
 	_check(evidence, host.ui.root.theme.default_font == XJUITheme.font(), "packed UI uses bundled Chinese font")
 	_check(evidence, not XJUITheme.font().allow_system_fallback and XJUITheme.font().has_char("舰".unicode_at(0)), "packed font covers Chinese without system fallback")

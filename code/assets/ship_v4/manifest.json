@@ -1,0 +1,423 @@
+{
+  "format_version": 1,
+  "asset_version": "ship-v4-original",
+  "scope": "Nineteen original replacement ship visuals: eighteen catalog ships and the Silent enemy. Original wrapper collision, gameplay identities, hardpoints, engine and camera anchors are unchanged.",
+  "source_document": "doc/70-舰船造型重建.md",
+  "runtime_adapter": "res://runtime/rendering/ship_v4_factory.gd",
+  "authoring": {
+    "tool": "Blender 4.5.14 LTS 62c1db4208e8",
+    "source_script": "jiaoben/art/build_ships_v4.py",
+    "origin": "Project-authored meshes. No EVE game model or texture is shipped.",
+    "references": [
+      {
+        "url": "https://www.eveonline.com/news/view/iconic-ships-reimagined-the-minmatar-rupture",
+        "use": "Composition, structural negative space, functional hierarchy and crew scale."
+      }
+    ]
+  },
+  "geometry_contracts": [
+    "res://assets/models/geometry.json",
+    "res://assets/civilization_v1/geometry.json"
+  ],
+  "material_adapter": "res://runtime/rendering/surface_materials.gd",
+  "resources": [
+    {
+      "resource_path": "res://assets/ship_v4/battleship_bastion.glb",
+      "sha256": "9bd32e895eff16ba8eafba41b64bcbcff6917fd4494dcd1d4df43e442cc70e4a",
+      "size_bytes": 1853540,
+      "triangles": 37964,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "battleship_bastion"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/battleship_council_aegis.glb",
+      "sha256": "8ce5bf592830634b4f15533b5b769a016eb8470192b4fbd487650346e8ce539c",
+      "size_bytes": 1542284,
+      "triangles": 35824,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "battleship_council_aegis"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/battleship_forge_ironwall.glb",
+      "sha256": "1d56901d3d099b7ac99dc6a8bd4b90d0c4217cb89ef26b23d8fb65b3339bb414",
+      "size_bytes": 2411608,
+      "triangles": 49500,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "battleship_forge_ironwall"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/battleship_roaming_tempest.glb",
+      "sha256": "6665fbfe93d5bcf3cf6a965b193c520f1177a829c82846e69a60ed844d4910c1",
+      "size_bytes": 1776488,
+      "triangles": 39768,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "battleship_roaming_tempest"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/cruiser_council_sentinel.glb",
+      "sha256": "6a96a8e48a8eb2792ec25be40c5fec47ee0a6eb928f4047b5d32c2f681103225",
+      "size_bytes": 1801176,
+      "triangles": 40192,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "cruiser_council_sentinel"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/cruiser_forge_citadel.glb",
+      "sha256": "603f3e49554e4dd9b4fae2b8523c7a008a0d2595dc29147019e1036ad0a1bbb5",
+      "size_bytes": 1533892,
+      "triangles": 31484,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "cruiser_forge_citadel"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/cruiser_horizon.glb",
+      "sha256": "0bb391e4ffd5b94e15e86ac24d1719a703b9841256c49bcd2ffaedf9922a05cd",
+      "size_bytes": 2023096,
+      "triangles": 43260,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "cruiser_horizon"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/cruiser_roaming_kite.glb",
+      "sha256": "ba425434e94a8975f7b8a7341b382d7b6dd737ecf323cacd5cb7ade856daa786",
+      "size_bytes": 1374972,
+      "triangles": 30864,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "cruiser_roaming_kite"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/destroyer_forge_hammer.glb",
+      "sha256": "e6b83c012659a43d94fd3ae0b6e3c07a9023993f9f2b54fee94903b18207dab6",
+      "size_bytes": 1529404,
+      "triangles": 31476,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "destroyer_forge_hammer"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/destroyer_raptor.glb",
+      "sha256": "88f9024a65e0afe171f637a69540af46a104892f7911eba289fca92d32612796",
+      "size_bytes": 1908444,
+      "triangles": 37676,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "destroyer_raptor"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/destroyer_roaming_spear.glb",
+      "sha256": "1c27d5c362c6d8146513f6eb48dee78bd88e2ede9e0e423b52e61eff5d988b1e",
+      "size_bytes": 1315972,
+      "triangles": 29734,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "destroyer_roaming_spear"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/enemy_silent.glb",
+      "sha256": "fc8bede9442dc9dd3e9edb0f3719ba7ff3919040f7ad2821f84dc7b0c85f5391",
+      "size_bytes": 1231452,
+      "triangles": 30024,
+      "mesh_surfaces": 7,
+      "materials": 7,
+      "ship_def_id": "enemy_silent"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/frigate_kestrel.glb",
+      "sha256": "f20b25e0ed8418f60cd1178a3648d0f19213eb5dd8bf5c96ee5a5bacbeb4668c",
+      "size_bytes": 1478896,
+      "triangles": 30664,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "frigate_kestrel"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/frigate_lantern.glb",
+      "sha256": "f832960d8c1f4aef323ceb848c0570af997747f99ea7747e60dcd1c9e6ff3b1d",
+      "size_bytes": 1358792,
+      "triangles": 30276,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "frigate_lantern"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/miner_anvil.glb",
+      "sha256": "75f126b894c1985ee8cb060df438b2676d281f28933511dea3088faddfa7f167",
+      "size_bytes": 1355704,
+      "triangles": 28788,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "miner_anvil"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/shuttle_swift.glb",
+      "sha256": "bbdb9967e6790eb925444a156c7db04b53a60f6c6659ba81afddb59dd9573452",
+      "size_bytes": 791584,
+      "triangles": 16996,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "shuttle_swift"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/support_council_choir.glb",
+      "sha256": "304f02feae21ef1b4afb54660f13f198e04ca4fa4c4c998b8f0735afd1230ab0",
+      "size_bytes": 1506560,
+      "triangles": 35896,
+      "mesh_surfaces": 9,
+      "materials": 9,
+      "ship_def_id": "support_council_choir"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/support_weaver.glb",
+      "sha256": "cf8de63f5f509cb165a787d6b0fc43f5d2f11ca936ab67dc20f3daab89eac3dd",
+      "size_bytes": 1685964,
+      "triangles": 38712,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "support_weaver"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/transport_caravan.glb",
+      "sha256": "05f392e1f8e5080bd6ca0d6eef35b30379685e5188977ccaaaaf3e26f95d90be",
+      "size_bytes": 1239276,
+      "triangles": 32856,
+      "mesh_surfaces": 8,
+      "materials": 8,
+      "ship_def_id": "transport_caravan"
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/battleship_bastion.png",
+      "sha256": "e44001378caf5ef9a524e2fb2b7ce90461075c4117ccdf38d7745e8f6f42dd48",
+      "size_bytes": 24806
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/battleship_council_aegis.png",
+      "sha256": "43b375e454d0d2fa6f1945c3471b085bf09935b95d2e540e9a45e335a97eab7f",
+      "size_bytes": 22707
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/battleship_forge_ironwall.png",
+      "sha256": "d5fdc6b1f34462289f6d1f56b1f17a29de99c00ae9dee0493a8da90ca6d17fff",
+      "size_bytes": 26325
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/battleship_roaming_tempest.png",
+      "sha256": "8dc69809617a7ef8c8c8b055ec0666d6216a6b66675e56bbd96ba17847dbdd27",
+      "size_bytes": 23658
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/cruiser_council_sentinel.png",
+      "sha256": "a8816f57027d0383ffabf8de73b3625d8f78bca1c568a7007574337784c69020",
+      "size_bytes": 24763
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/cruiser_forge_citadel.png",
+      "sha256": "995037f038fe0f00d2223bc4c2a61a0b0a7ac395fa577a6af4bc3b72592f0f3e",
+      "size_bytes": 20735
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/cruiser_horizon.png",
+      "sha256": "87329d92ef16aeed5aabc010e3ef89d0705545e392001a67e8a2d14fc2e91cb7",
+      "size_bytes": 24710
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/cruiser_roaming_kite.png",
+      "sha256": "4ed77782538da087693a81f25d52cdc1c20fbc6f93cd4cb975c4ded59138da58",
+      "size_bytes": 22676
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/destroyer_forge_hammer.png",
+      "sha256": "0240c197d801dbfd2461d8479803bf198fae6f46f380d05c3781cc419403fe72",
+      "size_bytes": 17413
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/destroyer_raptor.png",
+      "sha256": "88f99773e5caa66c3a145e8bc94cce02a023630595eee998b761aca40b2dd04a",
+      "size_bytes": 19849
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/destroyer_roaming_spear.png",
+      "sha256": "991a84edcdd8709581ee69accebca86433889658b3901796d8a9089700ebbb14",
+      "size_bytes": 18072
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/enemy_silent.png",
+      "sha256": "919f1b04bb51867fddba0479bfcf20fcfb1c5bcfce734190f3ede16ea4543d67",
+      "size_bytes": 26750
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/frigate_kestrel.png",
+      "sha256": "f9dfe559d9a6b355f162be5b07cce206528f9164177e18ba82b062b6eefb68a9",
+      "size_bytes": 21692
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/frigate_lantern.png",
+      "sha256": "864e306beddc407a7efb584f838944d55fa24184035b29b9792d47b0a431cfaf",
+      "size_bytes": 23083
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/miner_anvil.png",
+      "sha256": "a5d5376863b56b72b5a16031e7c30e9c980194c4fe87fc4b0690393513923214",
+      "size_bytes": 24713
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/shuttle_swift.png",
+      "sha256": "a848902c19b3bdae7bd11bcf2bd4c54bf74ea65d48dbc584d453bb34da01e403",
+      "size_bytes": 23253
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/support_council_choir.png",
+      "sha256": "e6eedb087fe1abfb8c0b963f5dbcbb2b1b59bcd8c79cc16c2ef7d738163600af",
+      "size_bytes": 27256
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/support_weaver.png",
+      "sha256": "c4caa70071aca60bcbe3ae6b55a421cbff096b5a50581eae92a0af2b32fad571",
+      "size_bytes": 27586
+    },
+    {
+      "resource_path": "res://assets/ship_v4/portraits/transport_caravan.png",
+      "sha256": "a407b3fd5dc0f150ba438bfdb47654f54a28b65912e52eb861ad5d102da3f3dc",
+      "size_bytes": 36951
+    },
+    {
+      "resource_path": "res://runtime/rendering/ship_v4_factory.gd",
+      "sha256": "a2ebe7695ac68c70979a964c50fd1798f04a78134908ccc2ac5811b44f50a0c6",
+      "size_bytes": 4700
+    },
+    {
+      "resource_path": "res://runtime/rendering/ship_v4_hangar.gd",
+      "sha256": "cdb119d3e3cc8c569100f719fbc265a548bbb3e75fed6abdac279ec0b059cd42",
+      "size_bytes": 936
+    }
+  ],
+  "source_assets": [
+    {
+      "path": "code/assets/ship_v4/source/battleship_bastion.blend",
+      "sha256": "97c139cc19540fb747e010827b3ae7f5e6a0c92c48dfe64d7a7b0e2e68015125",
+      "size_bytes": 2730934
+    },
+    {
+      "path": "code/assets/ship_v4/source/battleship_council_aegis.blend",
+      "sha256": "bf70bcab78fff62f88eda7c250061fc2141e0938e35a505346f525a0176c83bb",
+      "size_bytes": 2688690
+    },
+    {
+      "path": "code/assets/ship_v4/source/battleship_forge_ironwall.blend",
+      "sha256": "d277e65a553df74bf323eaed91a5d72979f73baff8e88c52938ca42c039e5b13",
+      "size_bytes": 3415137
+    },
+    {
+      "path": "code/assets/ship_v4/source/battleship_roaming_tempest.blend",
+      "sha256": "3376a6548fc77b1235bf9fe3c19fab514aa7aa9ef69522605ab383c396975535",
+      "size_bytes": 2857894
+    },
+    {
+      "path": "code/assets/ship_v4/source/cruiser_council_sentinel.blend",
+      "sha256": "883b92c89156cc77bc077835092120c752f913479eac66abf1228980d13ea4a5",
+      "size_bytes": 2942318
+    },
+    {
+      "path": "code/assets/ship_v4/source/cruiser_forge_citadel.blend",
+      "sha256": "6c3f721f3f817e12ce1958f08c03cfeffbd51d21152f71da21976b45a36145d1",
+      "size_bytes": 2449655
+    },
+    {
+      "path": "code/assets/ship_v4/source/cruiser_horizon.blend",
+      "sha256": "61c9b9b9882519a56d8865fd621eac53f76507abd0d2bb8e09c9795809c7fac8",
+      "size_bytes": 3013644
+    },
+    {
+      "path": "code/assets/ship_v4/source/cruiser_roaming_kite.blend",
+      "sha256": "fc3cb4f53cb9c61f3d2d941f7614732880691c58cd3dbaf7630e961e7d54ece0",
+      "size_bytes": 2387896
+    },
+    {
+      "path": "code/assets/ship_v4/source/destroyer_forge_hammer.blend",
+      "sha256": "bdfff19c4bf34f1f0a57be5d5f4c876b70af383cebbc3d594a57d831627e03a0",
+      "size_bytes": 2408580
+    },
+    {
+      "path": "code/assets/ship_v4/source/destroyer_raptor.blend",
+      "sha256": "d6e2b27e8846cff968af9fdfb1133e764c162cabed54e34df73b577d03b6bd0e",
+      "size_bytes": 2721622
+    },
+    {
+      "path": "code/assets/ship_v4/source/destroyer_roaming_spear.blend",
+      "sha256": "734d5b82d69f97de89e853c16d7eb97523f8148d2ac8a1929792ed11caf21154",
+      "size_bytes": 2318160
+    },
+    {
+      "path": "code/assets/ship_v4/source/enemy_silent.blend",
+      "sha256": "fe594730878f99e5b27e418be6f51aa5e389a37f60560e0bc832b0f9401d92aa",
+      "size_bytes": 2257790
+    },
+    {
+      "path": "code/assets/ship_v4/source/frigate_kestrel.blend",
+      "sha256": "13e9b96894d0332d1f20e82a6c43154c846b35ec9329851bc77bd8b8342f6fa1",
+      "size_bytes": 2336366
+    },
+    {
+      "path": "code/assets/ship_v4/source/frigate_lantern.blend",
+      "sha256": "25d2f509d9a9de6d372bcecaf4f50c4ebef545d027784580037b6cf49990c539",
+      "size_bytes": 2277940
+    },
+    {
+      "path": "code/assets/ship_v4/source/miner_anvil.blend",
+      "sha256": "e0de1697bd442c13dcdb067b38e1844a4ba590829337ffbceb4bc1f44e744d6c",
+      "size_bytes": 2245949
+    },
+    {
+      "path": "code/assets/ship_v4/source/shuttle_swift.blend",
+      "sha256": "fcf6668b412f57d86c4a85cd2dd54e5de908ab537bf3f984d0d9819b669ea831",
+      "size_bytes": 1579233
+    },
+    {
+      "path": "code/assets/ship_v4/source/support_council_choir.blend",
+      "sha256": "0199be03f14dce0b90b772c37c0f4c6acf8eb65a4b0ada9dd46b943b0d29b2ad",
+      "size_bytes": 2677143
+    },
+    {
+      "path": "code/assets/ship_v4/source/support_weaver.blend",
+      "sha256": "7cfd138dd71c8811c9c8d6b747b946a1843ffb60174537d28eabeca7f987bd3a",
+      "size_bytes": 2754688
+    },
+    {
+      "path": "code/assets/ship_v4/source/transport_caravan.blend",
+      "sha256": "5721bc7a9bab1e91e9cf164dec776c1f8d8a7460ca6e0cf0f07379c8c0eb2c46",
+      "size_bytes": 2463996
+    },
+    {
+      "path": "jiaoben/art/build_ships_v4.py",
+      "sha256": "de9360b094130ef65071c16d8d41dbaca6d9c29bef49b9a2df03824370c725a3",
+      "size_bytes": 2183
+    },
+    {
+      "path": "jiaoben/art/ship_v4_geometry.py",
+      "sha256": "b95c74b9544d6c3d9d17177d58de92dbaf846705a8156c951ee4c6aa176a6b08",
+      "size_bytes": 16468
+    },
+    {
+      "path": "jiaoben/art/ship_v4_common.py",
+      "sha256": "56f6ee8bf160849fb34958fa80a598e245877f7c37cf01d07c6b88b4cf245da7",
+      "size_bytes": 11421
+    },
+    {
+      "path": "jiaoben/art/ship_v4_civilizations.py",
+      "sha256": "fbc658f5913e377013cb69274bfeef90f553c4c479cf3a35d524bb59946a2c47",
+      "size_bytes": 16833
+    }
+  ],
+  "validation": {
+    "status": "Build identities only. Actual native and release acceptance is recorded separately after execution.",
+    "maximum_triangles_per_hull": 65000,
+    "maximum_material_surfaces_per_hull": 10
+  }
+}

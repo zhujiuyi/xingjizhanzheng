@@ -53,6 +53,9 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-ui-consistency-v61","file":"ui_interaction_consistency.gd","prefix":"ui-interaction","env":"XJ_UI_CONSISTENCY_V61","meta":"xj_ui_consistency_v61_diagnostic"},
+		{"flag":"--xj-verify-ui-quality-v61","file":"ui_quality_audit.gd","prefix":"ui-quality-audit","env":"XJ_UI_QUALITY_AUDIT","meta":"xj_ui_quality_v61_diagnostic"},
+		{"flag":"--xj-verify-render-quality-v61","file":"render_quality_audit.gd","prefix":"render-quality-audit","env":"XJ_RENDER_QUALITY_AUDIT","meta":"xj_render_quality_v61_diagnostic"},
 		{"flag":"--xj-verify-natural-campaign-v58","file":"natural_campaign_v58.gd","prefix":"natural-campaign-v58","env":"XJ_NATURAL_CAMPAIGN_V58","meta":"xj_natural_campaign_v58_diagnostic"},
 		{"flag":"--xj-verify-natural-hull-v57","file":"natural_hull_v57.gd","prefix":"natural-hull-v57","env":"XJ_NATURAL_HULL_V57","meta":"xj_natural_hull_v57_diagnostic"},
 		{"flag":"--xj-verify-natural-war-v56","file":"natural_war_v56.gd","prefix":"natural-war-v56","env":"XJ_NATURAL_WAR_V56","meta":"xj_natural_war_v56_diagnostic"},
@@ -191,10 +194,11 @@ func _ready() -> void:
 	_apply_preferences()
 	# Prepare every presentation dependency before publishing a new/load world.
 	# It is a hidden exhibition; gameplay state and catalog balance are untouched.
-	hangar = preload("res://runtime/civilization_hangar.gd").new()
+	hangar = preload("res://runtime/rendering/ship_v4_hangar.gd").new()
 	hangar.name = "StationExhibition"
 	hangar.configure("shuttle_swift", store.catalog)
 	add_child(hangar)
+	hangar.set_visual_quality(str(preferences.get("quality_mode", "high")))
 	hangar.hide()
 	hangar.process_mode = Node.PROCESS_MODE_DISABLED
 	if hangar.get_camera() == null:
@@ -1196,12 +1200,7 @@ func _growth_open(stage_id: String,selection: String) -> void:
 	if page=="civilizations":
 		var focus_name: String="CommanderRegister" if selected.activity_kind=="honor_register" else "CommanderCertify" if selected.activity_kind=="honor" else "CivilizationJoin" if stage.criterion_kind=="membership" else "CivilizationWar_"+str(stage.reference_id) if selected.activity_kind=="war" else ""
 		if not focus_name.is_empty():
-			var control: Control=ui.find_child(focus_name,true,false) as Control
-			if is_instance_valid(control):
-				control.grab_focus();var parent: Node=control.get_parent()
-				while parent!=null:
-					if parent is ScrollContainer:parent.ensure_control_visible(control);break
-					parent=parent.get_parent()
+			ui.request_page_focus(focus_name)
 
 func _frontier_navigation(action: String,id: String,expected: String) -> void:
 	if state==null or gameplay==null or busy or travel.active():return
@@ -1831,6 +1830,7 @@ func _apply_preferences() -> void:
 	if preferences.has("master_volume"):
 		AudioServer.set_bus_volume_db(0, linear_to_db(float(preferences.master_volume)))
 	var quality: String = str(preferences.get("quality_mode", "high"))
+	if is_instance_valid(hangar) and hangar.has_method("set_visual_quality"): hangar.set_visual_quality(quality)
 	if world != null: world.apply_visual_quality(quality)
 	if world != null and world.tactical_view != null: world.tactical_view.intensity = float(preferences.get("vfx_intensity", 1.0))
 	RenderingServer.viewport_set_msaa_3d(get_viewport().get_viewport_rid(), RenderingServer.VIEWPORT_MSAA_2X if quality == "high" else RenderingServer.VIEWPORT_MSAA_DISABLED)

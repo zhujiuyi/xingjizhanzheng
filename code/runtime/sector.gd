@@ -3,7 +3,7 @@ extends Node3D
 ## Scene is a projection of typed state; no node is persisted.
 const Types = preload("res://contracts/contract_types.gd")
 const Dtos = preload("res://contracts/contract_dtos.gd")
-const Factory = preload("res://runtime/visuals/civilization_visual_factory.gd")
+const Factory = preload("res://runtime/rendering/ship_v4_factory.gd")
 const StationVisual = preload("res://runtime/visuals/station_visual_adapter.gd")
 const Celestials = preload("res://runtime/celestial_backdrop.gd")
 const Space = preload("res://runtime/space_coordinates.gd")
@@ -39,6 +39,7 @@ var _departure_distance_m: float = 0.0
 var _departure_parameters: Dictionary = {}
 
 func _process(_delta: float) -> void:
+	if not navigation_queries_ready():return
 	update_starlight()
 	Celestials.update(self)
 
@@ -91,6 +92,7 @@ func build(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted) -> bool
 				if body != null: body.free()
 				last_error = "空间站表现资源不可用：" + str(station.station_id)
 				return false
+			XJSurfaceStyle.apply_object(body, "station")
 			body.collision_layer = 65
 			body.collision_mask = 2
 			add_child(body)
@@ -99,6 +101,7 @@ func build(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted) -> bool
 	for endpoint in catalog.rows("gate_endpoint_defs"):
 		if endpoint.origin_sector_id == state.current_sector():
 			var visual: StaticBody3D = Factory.static_body("gate", endpoint.endpoint_id)
+			XJSurfaceStyle.apply_object(visual, "gate")
 			visual.collision_layer = 65
 			visual.collision_mask = 2
 			add_child(visual)
@@ -114,6 +117,7 @@ func build(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted) -> bool
 		var resource: Dictionary = catalog.one("resource_node_defs", "node_id", location.node_id)
 		var item: Dictionary = catalog.one("item_defs", "item_id", resource.item_id)
 		var body: StaticBody3D = Factory.static_body("ore", location.node_id, str(resource.item_id))
+		XJSurfaceStyle.apply_object(body, "ore")
 		body.collision_layer = 65
 		body.collision_mask = 2
 		add_child(body)
@@ -242,6 +246,7 @@ func sync_entities() -> bool:
 			continue
 		if Space.supported(catalog) and Space.site_for_entity(state, "wreck", container.container_id) != Space.current_site(state): continue
 		var wreck := _visual("wreck")
+		XJSurfaceStyle.apply_object(wreck, "wreck")
 		add_child(wreck)
 		wreck.position = Vector3(container.pos_x, container.pos_y, container.pos_z)
 		_target(container.container_id, "可回收残骸", "wreck", wreck, "")
@@ -419,6 +424,7 @@ func anchor_position(id: String) -> Vector3:
 	return Vector3(float(anchor.get("x_m", 0.0)), float(anchor.get("y_m", 0.0)), float(anchor.get("z_m", 0.0)))
 
 func contact_visible(entry: Dictionary, distance: float) -> bool:
+	if not navigation_queries_ready():return false
 	# A durable source site is retained throughout strategic travel for safe
 	# cancellation. It must not remain a local radar echo during that transit.
 	if departure_active and target_is_local(str(entry.get("id", ""))) and not bool(entry.get("navigation_only", false)): return false
@@ -467,7 +473,7 @@ func _target(id: String, title: String, kind: String, node: Node3D, anchor_id: S
 	apply_target_site(id)
 
 func target_site(id: String) -> String:
-	if not targets.has(id): return ""
+	if not navigation_queries_ready() or not targets.has(id): return ""
 	var entry: Dictionary = targets[id]
 	if entry.get("auxiliary_record",false):return str(entry.site_id)
 	if entry.kind in ["npc", "wreck"]: return Space.site_for_entity(state, str(entry.kind), id)
@@ -490,7 +496,13 @@ func expire_auxiliary_markers() -> void:
 		var ttl: float=float(catalog.one("auxiliary_drone_defs","module_id",targets[id].module_id).observation_ttl_s)
 		if not state.rows("auxiliary_intel_state").has(targets[id].record) or targets[id].site_id!=Space.current_site(state) or age_s>=ttl:_remove_target(id)
 
+func navigation_queries_ready() -> bool:
+	# A removed/queued world can survive until the frame ends while Main has
+	# already disposed its business services. Staged live worlds need no tree.
+	return not is_queued_for_deletion() and state!=null and catalog!=null and is_instance_valid(gameplay) and gameplay.state==state and gameplay.catalog==catalog and gameplay.march!=null
+
 func target_is_local(id: String) -> bool:
+	if not navigation_queries_ready() or not targets.has(id):return false
 	if gameplay.march.hidden(id):return false
 	return not Space.supported(catalog) or (not target_site(id).is_empty() and target_site(id) == Space.current_site(state))
 
@@ -500,30 +512,34 @@ func target_is_render_local(id: String) -> bool:
 	return not departure_active and target_is_local(id)
 
 func strategic_components(encoded_position: Vector3) -> Dictionary:
+	if not navigation_queries_ready():return {}
 	return strategic_render_position if not strategic_render_position.is_empty() else Space.global_components(catalog, Space.current_site(state), encoded_position)
 
 func target_components(id: String) -> Dictionary:
-	if not targets.has(id): return {}
+	if not navigation_queries_ready() or not targets.has(id): return {}
 	if bool(targets[id].get("navigation_only", false)) and Space.supported(catalog):
 		var celestial: Dictionary = catalog.one("celestial_defs", "celestial_id", id)
 		if not celestial.is_empty(): return {"x": float(celestial.x_m), "y": float(celestial.y_m), "z": float(celestial.z_m)}
-	var node: Node3D = targets[id].node
+	var node: Variant = targets[id].get("node")
+	if not is_instance_valid(node) or not node is Node3D or node.is_queued_for_deletion():return {}
 	return Space.global_components(catalog, target_site(id), node.global_position)
 
 func target_distance(id: String) -> float:
-	if not targets.has(id) or not is_instance_valid(flight): return INF
-	var node: Node3D = targets[id].node
+	if not navigation_queries_ready() or not targets.has(id) or not is_instance_valid(flight): return INF
+	var node: Variant = targets[id].get("node")
+	if not is_instance_valid(node) or not node is Node3D or node.is_queued_for_deletion():return INF
 	if not Space.supported(catalog) or (target_is_local(id) and strategic_render_position.is_empty()): return flight.global_position.distance_to(node.global_position)
 	return Space.scalar_distance(strategic_components(flight.global_position), target_components(id))
 
 func target_direction(id: String) -> Vector3:
-	if not targets.has(id) or not is_instance_valid(flight): return Vector3.ZERO
-	var node: Node3D = targets[id].node
+	if not navigation_queries_ready() or not targets.has(id) or not is_instance_valid(flight): return Vector3.ZERO
+	var node: Variant = targets[id].get("node")
+	if not is_instance_valid(node) or not node is Node3D or node.is_queued_for_deletion():return Vector3.ZERO
 	if not Space.supported(catalog) or (target_is_local(id) and strategic_render_position.is_empty()): return flight.global_position.direction_to(node.global_position)
 	return Space.scalar_direction(strategic_components(flight.global_position), target_components(id))
 
 func apply_target_site(id: String) -> void:
-	if not Space.supported(catalog) or not targets.has(id): return
+	if not navigation_queries_ready() or not Space.supported(catalog) or not targets.has(id): return
 	var entry: Dictionary = targets[id]
 	if bool(entry.get("navigation_only", false)): return
 	var node: Node3D = entry.node

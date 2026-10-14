@@ -1,6 +1,7 @@
 extends RefCounted
 const T=preload("res://contracts/contract_types.gd")
 const UISkin=preload("res://runtime/ui_theme.gd")
+const Interaction=preload("res://runtime/ui/ui_interaction.gd")
 var u: Node
 var faction: String=""
 var selected_stage: Dictionary={}
@@ -55,7 +56,7 @@ func _add_action(parent: Node,action: String,weak_choices: WeakRef,state: RefCou
 		u.requested.emit(action,str(selected_stage.stage_id),1,str(paths[live.selected].activity_index))
 	var title: String={"growth_map":"定位途径","growth_navigate":"前往","growth_open":"打开服务"}[action]
 	var button: Button=u._button(parent,title,callback);button.name="Growth_"+action
-	if action=="growth_navigate":button.disabled=u.state.ship().status!=T.ShipStatus.FLYING
+	if action=="growth_navigate":Interaction.action_state(button,"请先出港；可用定位途径查看目标。" if u.state.ship().status!=T.ShipStatus.FLYING else "")
 
 func tick() -> void:
 	if not is_instance_valid(values):return

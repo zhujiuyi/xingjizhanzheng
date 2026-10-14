@@ -627,6 +627,9 @@ func layout_checks() -> void:
 				var target: SpinBox = amount_for("ore_ferrosilicate" if page == "market" else "recipe_structural")
 				if target != null:
 					host.get_viewport().gui_release_focus(); target.get_line_edit().grab_focus(); await frames(4)
+					if not visible_control(target):
+						print("ROW_QUANTITY_V17_BUSINESS_FOCUS " + JSON.stringify({"page":page,"layout":suffix,"row_id":target.get_meta("row_id",""),"rect":str(target.get_global_rect()),"line_rect":str(target.get_line_edit().get_global_rect()),"owner":str(host.get_viewport().gui_get_focus_owner()),"keyboard_blocked":host.ui.keyboard_blocked()}))
+						for scroll: ScrollContainer in scroll_ancestors(target):print("ROW_QUANTITY_V17_BUSINESS_FOCUS_SCROLL " + JSON.stringify({"name":str(scroll.name),"rect":str(scroll.get_global_rect()),"x":scroll.scroll_horizontal,"y":scroll.scroll_vertical,"follow_focus":scroll.follow_focus}))
 					check(visible_control(target) and host.ui.keyboard_blocked(), "real row focus reveals quantity with horizontal scroll and blocks ship input " + page + " " + suffix)
 					host.get_viewport().gui_release_focus()
 			if (layout.size == Vector2i(1440, 900) and float(layout.scale) == 1.0) or (layout.size == Vector2i(1280, 720) and float(layout.scale) == 2.0):

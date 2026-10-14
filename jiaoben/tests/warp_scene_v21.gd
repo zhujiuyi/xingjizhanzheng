@@ -367,6 +367,9 @@ func pixel_pair(label: String, require_blur: bool) -> void:
 	var blurred_energy: float = 0.0
 	var hull_max: float = 0.0
 	var hull_samples: int = 0
+	var hull_worst: Dictionary = {}
+	var dense_hull_max: float = 0.0
+	var dense_hull_samples: int = 0
 	var aabb_background_samples: int = 0
 	var aabb_background_changed: int = 0
 	var aabb_background_sharp_energy: float = 0.0
@@ -386,7 +389,16 @@ func pixel_pair(label: String, require_blur: bool) -> void:
 				coverage = Vector2.ONE
 			if coverage.x >= 0.995:
 				hull_samples += 1
+				if hull_mask != null and difference > hull_max:
+					hull_worst = mask_sample_evidence(hull_mask, point, sharp.get_size())
+					hull_worst["pixel"] = [x, y]
+					hull_worst["difference"] = difference
 				hull_max = maxf(hull_max, difference)
+				if hull_mask != null:
+					var dense: Dictionary = mask_sample_evidence(hull_mask, point, sharp.get_size())
+					if float(dense.dense_minimum) >= 0.995:
+						dense_hull_samples += 1
+						dense_hull_max = maxf(dense_hull_max, difference)
 			if coverage.y > 0.01: continue
 			var covered: bool = false
 			for panel: Rect2i in panels:
@@ -418,6 +430,22 @@ func pixel_pair(label: String, require_blur: bool) -> void:
 	record["hud_glyph_mask"] = "actual-main-label-colour-and-coverage-background-witness-no-auxiliary-font-renderer"
 	record["hull_mask_active"] = mask_active
 	record["hull_mask_image_size"] = [hull_mask.get_width(), hull_mask.get_height()] if hull_mask != null else []
+	# The native fdf08c3c evidence showed narrow holes at skipped +/-1 texels:
+	# nine sparse probes were white while the shader's bilinear core was partial.
+	# Keep the same erosion radius and pixel tolerance, checking every texel.
+	record["hull_sampling"] = "complete-5x5-two-mask-texel-erosion-coverage-0.995-pixel-tolerance-2/255"
+	record["hull_worst_interior_sample"] = hull_worst
+	record["hull_dense_diagnostic"] = {"samples": dense_hull_samples, "maximum_difference": dense_hull_max, "method": "all 25 texels of the same two-texel erosion, no skipped adjacent texels"}
+	if mask_active:
+		var mask_camera: Camera3D = fx.get("_mask_camera") as Camera3D
+		if is_instance_valid(mask_camera):
+			record["hull_projection_diagnostic"] = {"actual_camera": projection_values(host.camera.camera.get_camera_projection()), "mask_camera": projection_values(mask_camera.get_camera_projection()), "actual_viewport_aspect": visible_size.x / visible_size.y, "mask_texture_aspect": float(hull_mask.get_width()) / float(hull_mask.get_height()) if hull_mask != null else 0.0}
+	if hull_mask != null and hull_max > 2.0 / 255.0:
+		var mask_directory: String = directory.path_join("hull-mask-debug")
+		DirAccess.make_dir_recursive_absolute(mask_directory)
+		var mask_path: String = mask_directory.path_join(label + ".png")
+		check(hull_mask.save_png(mask_path) == OK, "failed hull mask evidence saved: " + label)
+		record["failed_hull_mask"] = mask_path
 	record["aabb_background_samples"] = aabb_background_samples
 	record["aabb_background_changed"] = aabb_background_changed
 	record["aabb_background_sharp_energy"] = aabb_background_sharp_energy
@@ -445,18 +473,47 @@ func pixel_pair(label: String, require_blur: bool) -> void:
 
 func mask_coverage_range(mask: Image, point: Vector2i, client_size: Vector2i) -> Vector2:
 	# Normalized UVs match the production shader's half-resolution sampler.
-	# Erode two mask texels to measure opaque interior rather than edge filtering.
+	# Erode two mask texels using the COMPLETE neighborhood. Skipping +/-1
+	# mistook narrow holes/anti-aliased boundaries for fully opaque interior.
 	var uv := (Vector2(point) + Vector2(0.5, 0.5)) / Vector2(client_size)
 	var center := Vector2i(Vector2(mask.get_size()) * uv)
 	var lowest: float = 1.0
 	var highest: float = 0.0
-	for y: int in [-2, 0, 2]:
-		for x: int in [-2, 0, 2]:
+	for y: int in range(-2, 3):
+		for x: int in range(-2, 3):
 			var coordinate := Vector2i(clampi(center.x + x, 0, mask.get_width() - 1), clampi(center.y + y, 0, mask.get_height() - 1))
 			var value: float = mask.get_pixelv(coordinate).r
 			lowest = minf(lowest, value)
 			highest = maxf(highest, value)
 	return Vector2(lowest, highest)
+
+func mask_sample_evidence(mask: Image, point: Vector2i, client_size: Vector2i) -> Dictionary:
+	var uv: Vector2 = (Vector2(point) + Vector2(0.5, 0.5)) / Vector2(client_size)
+	var center: Vector2i = Vector2i(Vector2(mask.get_size()) * uv)
+	var values: Array[float] = []
+	var minimum: float = 1.0
+	for y: int in range(-2, 3):
+		for x: int in range(-2, 3):
+			var coordinate := Vector2i(clampi(center.x + x, 0, mask.get_width() - 1), clampi(center.y + y, 0, mask.get_height() - 1))
+			var value: float = mask.get_pixelv(coordinate).r
+			values.append(value); minimum = minf(minimum, value)
+	# Standard normalized linear sampling addresses texel centers at index+.5.
+	var texel: Vector2 = Vector2(mask.get_size()) * uv - Vector2(0.5, 0.5)
+	var origin := Vector2i(floori(texel.x), floori(texel.y))
+	var weight: Vector2 = texel - Vector2(origin)
+	var bilinear: float = 0.0
+	for y: int in range(2):
+		for x: int in range(2):
+			var coordinate := Vector2i(clampi(origin.x + x, 0, mask.get_width() - 1), clampi(origin.y + y, 0, mask.get_height() - 1))
+			bilinear += mask.get_pixelv(coordinate).r * (weight.x if x == 1 else 1.0 - weight.x) * (weight.y if y == 1 else 1.0 - weight.y)
+	return {"mask_center": [center.x, center.y], "dense_minimum": minimum, "dense_5x5_row_major": values, "shader_bilinear_coverage": bilinear, "client_uv": [uv.x, uv.y]}
+
+func projection_values(value: Projection) -> Array[float]:
+	var result: Array[float] = []
+	for index: int in range(4):
+		var column: Vector4 = value[index]
+		result.append_array([column.x, column.y, column.z, column.w])
+	return result
 
 func transform_values(transform: Transform2D) -> Array:
 	return [transform.x.x, transform.x.y, transform.y.x, transform.y.y, transform.origin.x, transform.origin.y]

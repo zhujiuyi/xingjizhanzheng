@@ -18,6 +18,7 @@ func _current() -> bool:
 	return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(u) and u.state != null and u.page == "exploration" and u.body.is_ancestor_of(self) and u.state == context.state and u.state.session_id == context.session and u.state.epoch == context.epoch and u.business_generation == context.generation
 
 func _build() -> void:
+	var view: Dictionary=u.capture_local_view(self)
 	for child: Node in get_children(): remove_child(child); child.queue_free()
 	buttons.clear()
 	var service: RefCounted = u.gameplay.exploration
@@ -90,7 +91,7 @@ func _build() -> void:
 	u._text_to(self, "当前探索证据 %d。研究在“科技与设施”消耗证据和信用点，扫描、环境防护与临时矿业均有独立作用。" % int(progress.insight_available), 13)
 	u._button(self, "查看探索研究", func():
 		if _current(): u.show_page("research"))
-	_update()
+	_update();u.finish_local_rebuild(self,view)
 
 func _signature(row: RefCounted) -> String:
 	return "%s:%d:%s:%s:%d:%s" % [row.event_id, row.generation, row.phase, row.operation_kind, row.evidence_units, row.stabilized]

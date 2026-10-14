@@ -34,9 +34,10 @@ func _update() -> void:
 	for record: RefCounted in visible:ids.append(record.owner_ship_id+":"+record.target_kind+":"+record.target_id)
 	var wanted: String=JSON.stringify(ids)
 	if wanted==signature:_refresh_readouts();return
+	var view: Dictionary=u.capture_local_view(self)
 	signature=wanted;build+=1;var built: int=build;readouts.clear()
 	for child: Node in body.get_children():body.remove_child(child);child.queue_free()
-	if records.is_empty():u._text_to(body,"侦察无人机会记录自身传感器范围内的目标。",13);return
+	if records.is_empty():u._text_to(body,"侦察无人机会记录自身传感器范围内的目标。",13);u.finish_local_rebuild(self,view);return
 	var paging:=HFlowContainer.new();body.add_child(paging)
 	for pair: Array in [["上一页",-1],["下一页",1]]:
 		var direction: int=pair[1];var button: Button=u._button(paging,pair[0],_change_page(direction,built))
@@ -48,7 +49,7 @@ func _update() -> void:
 		var marker: Button=u._button(line,"定位上次位置",_locate(record,built))
 		marker.name="AuxiliaryLocate_"+record.target_id.validate_node_name();readouts.append({"record":record,"label":label,"marker":marker})
 		UISkin.apply_button(marker,"secondary")
-	_refresh_readouts()
+	_refresh_readouts();u.finish_local_rebuild(self,view)
 func _refresh_readouts() -> void:
 	var service: RefCounted=u.gameplay.auxiliary_drones
 	for readout: Dictionary in readouts:

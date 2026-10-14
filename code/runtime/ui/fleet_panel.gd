@@ -3,6 +3,7 @@ extends VBoxContainer
 const T=preload("res://contracts/contract_types.gd")
 const Services=preload("res://runtime/ui/service_navigation.gd")
 const UISkin=preload("res://runtime/ui_theme.gd")
+const Interaction=preload("res://runtime/ui/ui_interaction.gd")
 var u: Node
 var section: String
 var _signature: String=""
@@ -95,6 +96,7 @@ func _action(parent: Node,title: String,id: String,kind: String,ship_id: String=
 		if not is_instance_valid(ui) or ui.state!=original or ui.catalog!=definitions or original.epoch!=epoch or ui.business_generation!=generation or ui.page!="ships" or ui.fleet_section!=original_section:return
 		ui.requested.emit("crew_action" if original_section=="crew" else "owned_fleet_action",id,1,extra)
 	var button: Button=u._button(parent,title,callback);button.name=("Crew_" if section=="crew" else "Owned_")+kind+"_"+id
+	if kind=="dismiss":UISkin.apply_button(button,"danger")
 	actions.append({"button":button,"id":id,"kind":kind,"ship":ship_id,"focus":focus,"generation":target_generation})
 
 func _current_signature() -> String:
@@ -123,7 +125,7 @@ func _update() -> void:
 			value.label.text="%s%s · 操舰员 %s\n盾 %.0f%% · 甲 %.0f%% · 结构 %.0f%% · 电容 %.0f / %.0f" % [phase,location,str(u.gameplay.crew.profile(pilot.profile_id).display_name) if pilot!=null else "未就绪",100.0*ship.shield/maxf(1.0,float(metrics.shield_max)),100.0*ship.armor/maxf(1.0,float(metrics.armor_max)),100.0*ship.hull/maxf(1.0,float(metrics.hull_max)),ship.energy,float(metrics.energy_max)]
 	for value: Dictionary in actions:
 		var reason: String=u.gameplay.crew.reason(value.id,value.kind,value.ship) if section=="crew" else (u.gameplay.owned_fleet.deploy_reason(value.id) if value.kind=="deploy" else u.gameplay.owned_fleet.order_reason(value.id,value.kind,value.focus,value.generation))
-		value.button.disabled=not reason.is_empty();value.button.tooltip_text=reason
+		Interaction.action_state(value.button,reason,"解雇当前船员并解除指派；重新招募需按原规则付费。" if value.kind=="dismiss" else "")
 
 func _process(delta: float) -> void:
 	_elapsed+=delta

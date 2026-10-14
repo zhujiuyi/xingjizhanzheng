@@ -2,6 +2,7 @@ extends VBoxContainer
 const T=preload("res://contracts/contract_types.gd")
 const ResourceStatus=preload("res://runtime/resource_status.gd")
 const UISkin=preload("res://runtime/ui_theme.gd")
+const Interaction=preload("res://runtime/ui/ui_interaction.gd")
 var u: Node
 var mode: String
 var context: Dictionary
@@ -24,13 +25,14 @@ func _signature() -> String:
 	var latest: RefCounted=u.gameplay.telemetry.latest()
 	return "%d:%s:%s" % [u.state.rows("flight_record_state").size(),latest.sequence if latest!=null else 0,latest.phase if latest!=null else ""]
 func _build() -> void:
+	var view: Dictionary=u.capture_local_view(self)
 	for child: Node in get_children():remove_child(child);child.queue_free()
 	live_labels.clear()
 	if not u.gameplay.projects.supported():u._text_to(self,"当前旧规则世界尚未开启主题行动。",15);return
 	if mode=="projects":_projects()
 	elif mode=="expeditions":_expeditions()
 	else:_reports()
-	signature=_signature();_update()
+	signature=_signature();_update();u.finish_local_rebuild(self,view)
 func _request(parent: Node,title: String,action: String,target: String,extra: String,quantity: int=1) -> Button:
 	var button: Button=u._button(parent,title,func():
 		if _current():u.requested.emit(action,target,quantity,extra))
@@ -38,8 +40,7 @@ func _request(parent: Node,title: String,action: String,target: String,extra: St
 func _nav(parent: Node,kind: String,id: String,token: String) -> void:
 	_request(parent,"星图定位","campaign_map",kind+":"+id,token)
 	var go: Button=_request(parent,"前往当前目标","campaign_navigate",kind+":"+id,token)
-	go.disabled=u.state.ship().status!=T.ShipStatus.FLYING
-	go.tooltip_text="出港后沿实际AU航程与航门前往；跨门仍按F确认。"
+	Interaction.action_state(go,"请先出港；可用星图定位查看目标。" if u.state.ship().status!=T.ShipStatus.FLYING else "","沿实际AU航程与航门前往；跨门仍按F确认。")
 func _projects() -> void:
 	var service: RefCounted=u.gameplay.projects
 	var choices: HFlowContainer=HFlowContainer.new();add_child(choices)
@@ -70,17 +71,26 @@ func _projects() -> void:
 		u._text_to(self,"%s · %d/%d · 集货站：%s" % [u._item_name(item_id),delivered.delivered_units,input.required_units,u._station_name(input.delivery_station_id)],14)
 		var controls: HFlowContainer=HFlowContainer.new();add_child(controls)
 		var spin: SpinBox=SpinBox.new();spin.min_value=1;spin.max_value=maxi(1,remaining);spin.step=1;spin.value=mini(10,maxi(1,remaining));spin.custom_minimum_size=Vector2(100,36);controls.add_child(spin)
-		var witness: WeakRef=weakref(spin)
-		var deliver: Button=u._button(controls,"交付本站物资",func():
-			var current: Variant=witness.get_ref()
-			if _current() and is_instance_valid(current) and current.is_inside_tree():u.requested.emit("construction_action",id,int(current.value),"deliver|"+item_id+"|"+token))
-		deliver.name="ProjectDeliver_"+item_id;deliver.disabled=remaining<=0 or not service.reason(id,"deliver",1,item_id).is_empty()
-		deliver.tooltip_text=service.reason(id,"deliver",1,item_id)
+		spin.name="ProjectQuantity_"+item_id
+		var deliver: Button=u._button(controls,"交付本站物资",_deliver_project.bind(id,item_id,spin,token))
+		deliver.name="ProjectDeliver_"+item_id
+		var update_quantity: Callable=func():
+			if not _current() or not is_instance_valid(deliver):return
+			var amount: int=Interaction.integer_input(spin)
+			Interaction.action_state(deliver,"请输入范围内的整数数量。" if amount<=0 else service.reason(id,"deliver",amount,item_id))
+		Interaction.watch_integer(spin,update_quantity);update_quantity.call()
 		u._button(controls,"物资来源",func():
 			if _current():u.open_sources(item_id))
 		_request(controls,"定位集货站","campaign_map","station:"+str(input.delivery_station_id),"")
 	var begin: Button=_request(self,"支付并开始本阶段","construction_action",id,"start||"+token)
 	begin.name="ProjectStart";begin.disabled=not service.reason(id,"start").is_empty();begin.tooltip_text=service.reason(id,"start")
+
+func _deliver_project(id: String,item_id: String,spin: SpinBox,token: String) -> void:
+	if not _current() or not is_instance_valid(spin) or not spin.is_inside_tree() or not is_ancestor_of(spin):return
+	var amount: int=Interaction.integer_input(spin)
+	var reason: String="请输入范围内的整数数量。" if amount<=0 else u.gameplay.projects.reason(id,"deliver",amount,item_id)
+	if not reason.is_empty():u.notify(reason,true);return
+	spin.apply();u.requested.emit("construction_action",id,amount,"deliver|"+item_id+"|"+token)
 func _expeditions() -> void:
 	var service: RefCounted=u.gameplay.expeditions
 	var director: RefCounted=service.director()
@@ -109,6 +119,7 @@ func _expeditions() -> void:
 		if _current():u.open_exploration(current.event_id)).name="ExpeditionEvent"
 	var end: Button=_request(actions,"结束并撤回","expedition_action",run.run_id,"withdraw||"+token)
 	end.name="ExpeditionWithdraw";end.disabled=not service.reason(run.run_id,"withdraw").is_empty();end.tooltip_text=service.reason(run.run_id,"withdraw")
+	UISkin.apply_button(end,"danger");Interaction.action_state(end,service.reason(run.run_id,"withdraw"),"结束本轮远征；已结算段落保留，未结算目标停止继续。")
 	if run.phase=="checkpoint":
 		u._text_to(self,"已结算段落保留。选择下一段，或在此结束本轮。",14)
 		for choice: Dictionary in service.options(run.route_id,run.stage_index+1):

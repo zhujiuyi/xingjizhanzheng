@@ -1,0 +1,53 @@
+{
+  "format_version": 1,
+  "asset_version": "materials-v1",
+  "scope": "Presentation-only adapter, local material response and visual meshes. No gameplay balance, collision, hardpoints, database or legacy asset identity changes.",
+  "source_document": "doc/69-交互一致性与材质表现优化.md",
+  "resources": [
+    {
+      "path": "res://runtime/surface_style.gd",
+      "sha256": "f8fa1f2bb8e3da8cebff7b7f1aa241880a76adac29bd97f38e0c35e697d6a68b",
+      "size_bytes": 381
+    },
+    {
+      "path": "res://runtime/rendering/surface_materials.gd",
+      "sha256": "e7d55acd7bad2964bed5b42c0951402712d6899c4a5a875ab42176eed9e5bb76",
+      "size_bytes": 10418
+    },
+    {
+      "path": "res://runtime/rendering/surface_meshes.gd",
+      "sha256": "8a827ee10f82feadb2dad5bf5310ae2e5e982a9a1c63eda0ae2e32c9173c849c",
+      "size_bytes": 8392
+    },
+    {
+      "path": "res://runtime/rendering/material_hangar.gd",
+      "sha256": "7f22a11fe078391a8853f10fbc75582d47f128852586441a35a33cf675446b39",
+      "size_bytes": 4324
+    },
+    {
+      "path": "res://assets/materials_v1/surface.gdshader",
+      "sha256": "fcad5e8579cc96fbe4270bbc888cba032cbe3bc488d66851ef9dfc0e8d0e2ebb",
+      "size_bytes": 4787
+    },
+    {
+      "path": "res://assets/materials_v1/micro_surface.png",
+      "sha256": "8bd137687144e53dfcfc5b0b0dde94f96c81f5ac7472502ef7d8bbb0855b5ded",
+      "size_bytes": 182600
+    },
+    {
+      "path": "res://assets/materials_v1/rock_strata.png",
+      "sha256": "af1b8ddf0f72452b3a9176a3c6275fb52645f3d85c5eac78f78ce44151296dff",
+      "size_bytes": 194561
+    },
+    {
+      "path": "res://assets/materials_v1/hangar_reflection.gdshader",
+      "sha256": "42026bd4d02f1baa2c9b1e9bc789d8f6c4ecdb78a68a7cf88fed11f668dcda95",
+      "size_bytes": 325
+    },
+    {
+      "path": "res://assets/materials_v1/hangar_reflection.res",
+      "sha256": "8d7e911319a02fa5a56753ad196588fc86de2a596bfa47acf6a5d303c2dfaef2",
+      "size_bytes": 1574304
+    }
+  ]
+}

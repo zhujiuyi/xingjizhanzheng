@@ -3,6 +3,7 @@ extends HBoxContainer
 ## Warehouse presentation only. Eligibility and capacities come from Inventory.
 signal transfer_requested(kind: String, id: String, quantity: int, destination: String)
 const UISkin = preload("res://runtime/ui_theme.gd")
+const Interaction = preload("res://runtime/ui/ui_interaction.gd")
 var refs: Dictionary = {"ship_rows": [], "station_rows": [], "rows_by_id": {}}
 var _quote: Callable
 var _quantity_limit: int = 1
@@ -287,22 +288,24 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	row.amount = amount
 	row.button = button
 	row.amount_heading = amount_heading
-	amount.value_changed.connect(func(_value: float): _update_quote(row))
+	Interaction.watch_integer(amount, _update_quote.bind(row))
 	button.pressed.connect(func():
 		# Commit a typed value even if the player has not pressed Enter first.
+		var quantity_value: int = Interaction.integer_input(amount)
+		if quantity_value <= 0: _update_quote(row); return
 		amount.apply()
 		_update_quote(row)
-		if not button.disabled: transfer_requested.emit(str(data.kind), str(data.id), int(amount.value), str(data.destination)))
+		if not button.disabled: transfer_requested.emit(str(data.kind), str(data.id), quantity_value, str(data.destination)))
 	_update_quote(row)
 	return row
 
 func _update_quote(row: Dictionary) -> void:
 	if not is_instance_valid(row.button) or not _quote.is_valid(): return
-	var result: Dictionary = _quote.call(str(row.kind), str(row.id), int(row.amount.value), str(row.destination))
-	row.button.disabled = not bool(result.get("ok", false))
+	var quantity_value: int = Interaction.integer_input(row.amount)
+	var result: Dictionary = _quote.call(str(row.kind), str(row.id), quantity_value, str(row.destination)) if quantity_value > 0 else {"ok": false, "reason": "请输入范围内的整数数量"}
 	var reason: String = str(result.get("reason", ""))
 	row.status.text = str(row.policy) + (" · " + reason if not reason.is_empty() else "")
-	row.button.tooltip_text = reason if not reason.is_empty() else "将本行的 %d %s转入%s。" % [int(row.amount.value), str(row.unit), "当前舰船货舱" if bool(row.current_station) else "当前空间站仓库"]
+	Interaction.action_state(row.button, reason, "将本行的 %d %s转入%s。" % [quantity_value, str(row.unit), "当前舰船货舱" if bool(row.current_station) else "当前空间站仓库"] if quantity_value > 0 else "")
 	_refresh_tooltip(row)
 
 func _refresh_tooltip(row: Dictionary) -> void:
@@ -319,10 +322,11 @@ func _reveal_local_control(control: Control) -> void:
 	# The SpinBox owns its arrows outside the embedded LineEdit's rectangle.
 	# Focus on the editor must reveal the whole quantity control on both axes.
 	var target: Control = control.get_parent() as SpinBox if control is LineEdit and control.get_parent() is SpinBox else control
-	_reveal_local_control_after_layout.call_deferred(target)
+	_reveal_local_control_after_layout.call_deferred(weakref(target))
 
-func _reveal_local_control_after_layout(control: Control) -> void:
-	if not is_instance_valid(control) or not is_inside_tree() or is_queued_for_deletion(): return
+func _reveal_local_control_after_layout(reference: WeakRef) -> void:
+	var control: Control=reference.get_ref() as Control
+	if not is_instance_valid(control) or not is_inside_tree() or is_queued_for_deletion() or not is_ancestor_of(control): return
 	var ancestor: Node = control.get_parent()
 	while ancestor != null and ancestor != self:
 		if ancestor is ScrollContainer:

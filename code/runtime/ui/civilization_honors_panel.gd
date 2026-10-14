@@ -1,5 +1,7 @@
 extends RefCounted
 const UISkin=preload("res://runtime/ui_theme.gd")
+const Interaction=preload("res://runtime/ui/ui_interaction.gd")
+const T=preload("res://contracts/contract_types.gd")
 var u: Node
 var faction: String=""
 var title: Label
@@ -51,6 +53,7 @@ func build(ui: Node,id: String,owner: RefCounted) -> void:
 			var button: Button=u._button(controls,"前往" if navigate else "定位",callback)
 			button.name=("CommanderNavigate_" if navigate else "CommanderLocate_")+str(task.task_kind)
 			button.tooltip_text="完整调查/救援/拆除结算计入考核；承运按实际送达批数累计。登记前已结算、失败和退回不计。"
+			if navigate:Interaction.action_state(button,"请先出港；可用定位查看目标。" if u.state.ship().status!=T.ShipStatus.FLYING else "",button.tooltip_text)
 		if u.gameplay.growth.supported():_add_grant(controls,task)
 	tick()
 

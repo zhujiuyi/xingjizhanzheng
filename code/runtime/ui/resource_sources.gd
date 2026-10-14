@@ -36,7 +36,7 @@ func setup(ui: Node) -> void:
 	u._button(toolbar, "刷新当前航路", func():
 		if _current(): u.show_page("sources"))
 	u._button(toolbar, "返回", func():
-		if _current(): u.show_page(u.sources_return_page if u.state.player().has_docked_station_id or u.sources_return_page == "map" else ""))
+		if _current(): u._back())
 	u._text_to(self, "公开来源按当前船体与航门状态规划；未知区域不显示精确矿量或库存。前往只导航到下一跳/本地地点，过门按 F 确认；抵达后自行交易、采集或交战。", 13).add_theme_color_override("font_color", UISkin.MUTED)
 	var types: HFlowContainer = HFlowContainer.new(); add_child(types)
 	for kind: String in ["全部", "采矿", "组件回收", "采购", "加工制造", "战斗打捞"]:
