@@ -888,7 +888,7 @@ func finish() -> void:
 	if finishing: return
 	finishing = true
 	await release_host()
-	var summary: Dictionary = {"result":"PASS" if failures.is_empty() else "FAIL", "checks":checks, "failures":failures.size(), "failure_labels":failures, "captures":captures, "directory":directory, "packed_runtime":OS.has_feature("standalone"), "observations":observations, "fixture_scope":"fresh SQLite; actual inter-site warps; explicit legal local picking/tactical poses; transient catalog NPCs and UI-only sorting rows removed before saves; no personal data"}
+	var summary: Dictionary = {"result":"PASS" if failures.is_empty() else "FAIL", "checks":checks, "failures":failures.size(), "failure_labels":failures, "captures":captures, "directory":directory, "packed_runtime":OS.has_feature("template") and not OS.has_feature("editor"), "observations":observations, "fixture_scope":"fresh SQLite; actual inter-site warps; explicit legal local picking/tactical poses; transient catalog NPCs and UI-only sorting rows removed before saves; no personal data"}
 	var report := FileAccess.open(directory.path_join("result.json"), FileAccess.WRITE)
 	if report != null: report.store_string(JSON.stringify(summary)); report.close()
 	else: get_tree().quit(2); return
