@@ -61,7 +61,7 @@ S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增S
 
 ## 临时产物保留与清理
 
-2026-10-15 v0.36已正式交付，当前临时清理受阻：对白名单内失败部分归档的单次PowerShell删除被自动审批以`blocked by policy`拒绝，无更具体理由；未绕过，tmp/logs/cache及旧0.35保留。新正式包使用短路径`verification/ui-completion-final/`保存必要证据，失败部分归档不进入正式包。该目录`cleanup-verification.json`与`verification/cleanup-blocked.json`记录0删除及保全；下文v0.35清理完成仅是上一阶段事实。
+2026-10-15 v0.36清理已完成：用户明确要求重试后，重新核对客户端/ZIP/存档/运行锁及路径，实际删除217目标/4149文件/5.626 GiB，E盘实增5.633 GiB。tmp/logs仅`.gitkeep`，Godot/Python缓存、临时库/截图/日志/候选包与旧0.35已移除，code/dist仅留`0.36.0-819b5e3e-20261015-191038`。正式客户端与必要原始失败/源码/历史/字体证据保留，最终667绑定通过；个人128文件内容/大小/修改时间、源码/配置/资源/桥接库一致。当前记录见该正式目录`cleanup-verification.json`、`verification/cleanup/plan.json`和`deletion.json`；`verification/cleanup-blocked.json`仅是前次未执行的历史。没有再次启动引擎。下文旧原始路径不保证存在，按保留映射查记录，重放须新建独立测试输入。
 
 
 2026-10-15 v0.35交付后的清理已完成：删除378目标/8672文件/6.902 GiB，E盘可用空间实增6.918 GiB。tmp/logs仅留`.gitkeep`，Godot/Python缓存、一次性脚本和旧v0.34客户端已删除；正式目录仅保留`0.35.0-bcb330c2-20261015-064648`。当前正式263图及必要源码/字体/图标/已知失败记录保留，映射见[记录索引](../code/dist/0.35.0-bcb330c2-20261015-064648/verification/retained-records.json)。源码、正式资源、维护脚本与个人数据128文件校验一致，完整证据见[清理验证](../code/dist/0.35.0-bcb330c2-20261015-064648/cleanup-verification.json)；下列旧临时路径属于历史记录，运行时须重新生成输入。
