@@ -23,7 +23,7 @@ Windows仓储与交易使用 `py jiaoben/verify_combat_v18.py --native --only wa
 
 遗留界面专项：`py jiaoben/tests/ui_completion_v64_run.py`仅运行本轮七组（相关功能菜单、研究空态、累计指标、折叠、HUD键盘、距离、四尺寸交易）。可加`--executable <已核验且包含固定v64入口的Windows EXE>`；runner校验二进制身份与`--xj-verify-ui-completion-v64`，拒绝向旧包传通用脚本。源码与实际PCK分开运行，共用审计锁、fresh UUID私有库、严格双日志及源码/测试摘要。脚本600秒看门狗、外层660秒有界等待；`--headless`仅作结构/分发检查，不能替代原生窗口。
 
-v64覆盖1440×900、1024×648、1920×1080、1280×720@200%（实际640×360逻辑画布），记录完整关键控件、真实菜单/按来路返回、F6模式下实际导航/停止与战斗开关、模式外原Tab切目标，以及数量2的实际购买/扣款。7字段展示与入籍边界为明示临时夹具，真实交易前恢复；报告裁剪通过原telemetry服务的零时长生命周期边界验证，不作为正常航行证据。最大17槽只把真实目录槽位/模块数据显示于生产EquipmentBar，四尺寸逐磁贴测矩形、标签、完整tooltip与环数值，然后恢复原资源；不创建权威设备、不保存假装配，不声称合法满装。报告在`logs/ui-completion-v64-*`，截图/私有库在`tmp/ui-completion-v64/<UUID>/`。当前最终重复与实际包结果仍待主整合者填写，方案、已实施范围与已证实的适用回归见[75](../doc/75-遗留交互与回归整改计划审核.md)。
+v64覆盖1440×900、1024×648、1920×1080、1280×720@200%（实际640×360逻辑画布），记录完整关键控件、真实菜单/按来路返回、F6模式下实际导航/停止与战斗开关、模式外原Tab切目标，以及数量2的实际购买/扣款。7字段展示与入籍边界为明示临时夹具，真实交易前恢复；报告裁剪通过原telemetry服务的零时长生命周期边界验证，不作为正常航行证据。最大17槽只把真实目录槽位/模块数据显示于生产EquipmentBar，四尺寸逐磁贴测矩形、标签、完整tooltip与环数值，然后恢复原资源；不创建权威设备、不保存假装配，不声称合法满装。报告在`logs/ui-completion-v64-*`，截图/私有库在`tmp/ui-completion-v64/<UUID>/`。最终实际Windows包14组16842项/304图及正式目录Store6项通过；源码/反例/实际证据分别归档，完整范围见[75](../doc/75-遗留交互与回归整改计划审核.md)。
 
 正常成长续段来源统一使用`prepare_natural_checkpoint.py --report <logs中的已通过报告> --case natural-research|natural-rescue`。输出只读核对后的来源凭据和路径文件。`--only natural-rescue`读取`XJ_NATURAL_RESEARCH_ORIGIN`，运行实际战斗、修复护送、交付与整备款；源库不写入。此组尚待运行，不能因脚本存在就视为通过。
 
@@ -60,6 +60,9 @@ S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增S
 完整回归与旧档链：`py -m unittest discover -s jiaoben/tests`当前363项通过；`build_fleet_assets.py`生成两种静态图标与八个正式模块/配方映射。`prepare_legacy_chain_index_v44.py`校验保留的实际旧PCK测试库和来源摘要，输出`XJ_LEGACY_CHAIN_INDEX`所用索引；`verify_combat_v18.py --only legacy-chain`通过固定v44入口验证七个历史格式16/17/18/19/20/21/23，107项通过。汇总`logs/v44-regression-checkpoint.json`。更早旧档、新档自然成长和最终EXE/PCK仍待验证；禁止使用个人库补充测试样本。
 
 ## 临时产物保留与清理
+
+2026-10-15 v0.36已正式交付，当前临时清理受阻：对白名单内失败部分归档的单次PowerShell删除被自动审批以`blocked by policy`拒绝，无更具体理由；未绕过，tmp/logs/cache及旧0.35保留。新正式包使用短路径`verification/ui-completion-final/`保存必要证据，失败部分归档不进入正式包。该目录`cleanup-verification.json`与`verification/cleanup-blocked.json`记录0删除及保全；下文v0.35清理完成仅是上一阶段事实。
+
 
 2026-10-15 v0.35交付后的清理已完成：删除378目标/8672文件/6.902 GiB，E盘可用空间实增6.918 GiB。tmp/logs仅留`.gitkeep`，Godot/Python缓存、一次性脚本和旧v0.34客户端已删除；正式目录仅保留`0.35.0-bcb330c2-20261015-064648`。当前正式263图及必要源码/字体/图标/已知失败记录保留，映射见[记录索引](../code/dist/0.35.0-bcb330c2-20261015-064648/verification/retained-records.json)。源码、正式资源、维护脚本与个人数据128文件校验一致，完整证据见[清理验证](../code/dist/0.35.0-bcb330c2-20261015-064648/cleanup-verification.json)；下列旧临时路径属于历史记录，运行时须重新生成输入。
 
