@@ -579,31 +579,49 @@ func tooltip_checks() -> void:
 	root.gui_release_focus(); root.grab_focus()
 	await frames(6)
 	await reveal(witness)
-	var deadline: int = Time.get_ticks_msec() + 2500
-	var stable_since: int = Time.get_ticks_msec()
+	var deadline: int = Time.get_ticks_msec() + 10000
+	var tooltip_wait_ms: int = maxi(100, ceili((float(ProjectSettings.get_setting("gui/timers/tooltip_delay_sec", 0.5)) + 0.25) * 1000.0))
+	var stable_since: int = 0
 	var stable: int = 0
+	var received_stable: bool = false
+	var hover_resets: int = 0
 	var previous: Rect2 = witness.get_global_rect()
+	var expected_text: String = witness.tooltip_text
+	var label: Label = null
+	var popup: Window = null
 	while Time.get_ticks_msec() < deadline:
-		var point: Vector2 = witness.get_global_rect().get_center()
-		if stable == 0 or not witness.get_global_rect().has_point(witness.get_global_mouse_position()): host.get_viewport().warp_mouse(point)
-		var event := InputEventMouseMotion.new()
-		event.position = point; event.global_position = point; event.button_mask = 0; event.window_id = root.get_window_id()
-		host.get_viewport().push_input(event, true); Input.flush_buffered_events(); await frames(1)
 		var hover: Control = host.get_viewport().gui_get_hovered_control()
 		var matching: bool = is_instance_valid(hover) and (hover == witness or witness.is_ancestor_of(hover))
-		stable = stable + 1 if matching and root.has_focus() and visible(witness) and witness.get_global_rect().is_equal_approx(previous) and witness.get_global_rect().has_point(witness.get_global_mouse_position()) else 0
-		if stable == 0: stable_since = Time.get_ticks_msec()
-		previous = witness.get_global_rect()
-		if stable >= 3 and Time.get_ticks_msec() - stable_since >= 100: break
-	check(stable >= 3 and Time.get_ticks_msec() - stable_since >= 100, "real restricted control receives stable native pointer before tooltip delay")
-	var expected_text: String = witness.tooltip_text
-	# Stop injecting motion during the actual native tooltip timer.
-	await get_tree().create_timer(float(ProjectSettings.get_setting("gui/timers/tooltip_delay_sec", 0.5)) + 0.25).timeout
-	await frames(4)
-	var label: Label = tooltip_label(root, expected_text)
-	var popup: Window = label.get_window() if label != null else null
+		var rect: Rect2 = witness.get_global_rect()
+		var hovering: bool = matching and root.has_focus() and visible(witness) and rect.is_equal_approx(previous) and rect.has_point(witness.get_global_mouse_position())
+		if hovering:
+			if stable == 0: stable_since = Time.get_ticks_msec()
+			stable += 1
+			var stable_ms: int = Time.get_ticks_msec() - stable_since
+			if stable >= 3 and stable_ms >= 100: received_stable = true
+			# Observe only after one continuous real hover window. Injecting
+			# motion here would restart Godot's native tooltip timer.
+			if stable >= 3 and stable_ms >= tooltip_wait_ms:
+				label = tooltip_label(root, expected_text)
+				popup = label.get_window() if label != null else null
+				if label != null and popup is PopupPanel and popup.visible and popup.get_script() == null and str(popup.name).begins_with("@PopupPanel@"):
+					break
+		else:
+			if stable > 0:
+				hover_resets += 1
+				print("WAREHOUSE_TRANSFER_V16_TOOLTIP_HOVER_RESET " + JSON.stringify({"target_rect": rect_values(rect), "hover": str(hover.get_path()) if is_instance_valid(hover) and hover.is_inside_tree() else "", "mouse": [witness.get_global_mouse_position().x, witness.get_global_mouse_position().y], "focus": root.has_focus(), "stable_ms": Time.get_ticks_msec() - stable_since}))
+			stable = 0; stable_since = 0; label = null; popup = null
+			if not root.has_focus(): root.grab_focus()
+			var point: Vector2 = rect.get_center()
+			host.get_viewport().warp_mouse(point)
+			var event := InputEventMouseMotion.new()
+			event.position = point; event.global_position = point; event.button_mask = 0; event.window_id = root.get_window_id()
+			host.get_viewport().push_input(event, true); Input.flush_buffered_events()
+		previous = rect
+		await frames(1)
+	check(received_stable, "real restricted control receives stable native pointer before tooltip delay")
 	var actual_hover: Control = host.get_viewport().gui_get_hovered_control()
-	print("WAREHOUSE_TRANSFER_V16_TOOLTIP " + JSON.stringify({"target": str(witness.get_path()), "target_rect": rect_values(witness.get_global_rect()), "expected_text": expected_text, "current_text": witness.tooltip_text, "hover": str(actual_hover.get_path()) if is_instance_valid(actual_hover) and actual_hover.is_inside_tree() else "", "mouse": [witness.get_global_mouse_position().x, witness.get_global_mouse_position().y], "focus": root.has_focus(), "page_vertical": host.ui.page_scroll.scroll_vertical, "label": label != null, "popup": str(popup.name) if popup != null else ""}))
+	print("WAREHOUSE_TRANSFER_V16_TOOLTIP " + JSON.stringify({"target": str(witness.get_path()), "target_rect": rect_values(witness.get_global_rect()), "expected_text": expected_text, "current_text": witness.tooltip_text, "hover": str(actual_hover.get_path()) if is_instance_valid(actual_hover) and actual_hover.is_inside_tree() else "", "mouse": [witness.get_global_mouse_position().x, witness.get_global_mouse_position().y], "focus": root.has_focus(), "page_vertical": host.ui.page_scroll.scroll_vertical, "stable_ms": Time.get_ticks_msec() - stable_since if stable > 0 else 0, "required_stable_ms": tooltip_wait_ms, "hover_resets": hover_resets, "label": label != null, "popup": str(popup.name) if popup != null else ""}))
 	check(label != null and popup is PopupPanel and popup.visible and popup.get_script() == null and str(popup.name).begins_with("@PopupPanel@"), "real pointer hover opens builtin restriction tooltip")
 	if label != null and popup != null:
 		check(popup.size.x <= root.size.x and popup.size.y <= root.size.y and Rect2(Vector2.ZERO, Vector2(popup.size)).encloses(label.get_global_rect()), "restriction tooltip fits native window and popup")

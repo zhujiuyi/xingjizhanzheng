@@ -806,6 +806,9 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		ui.notify("正在等待稳定保存后离开；取消保存请求后可继续操作。")
 		if action == "set_combat_option": _sync_combat_automation()
 		return
+	# Native focus qualifies new player intents. An already accepted itinerary
+	# continues through the internal navigation path after a committed transit.
+	if action in ["nav_warp", "nav_approach", "nav_orbit", "nav_dock", "nav_stop", "combat_engage"] and not _hud_command_allowed(): return
 	match action:
 		"scenario_map","scenario_navigate":_scenario_navigation(action,target,extra)
 		"campaign_map","campaign_navigate":
@@ -1640,7 +1643,7 @@ func navigation_context(target_id: String) -> Dictionary:
 	return result
 
 func _navigation_command(mode: String, target_id: String, retain_combat_options: bool = false) -> bool:
-	if local_navigation == null or not _hud_command_allowed(): return false
+	if state == null or local_navigation == null or busy or _exit_save_pending() or ui.command_input_blocked(): return false
 	if travel != null and travel.active():
 		ui.notify("请等待虫洞传送结束。", true)
 		return false

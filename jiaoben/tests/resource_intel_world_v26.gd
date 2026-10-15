@@ -1,5 +1,79 @@
 extends "civilization_world_v24.gd"
 ## Real window entry, source navigation and readonly UI. Supplies/unlocks are explicit fixtures.
+var source_focus_sink: Window
+var background_focus_observations: Array[Dictionary] = []
+
+func source_focus_observation(stage: String) -> Dictionary:
+	var sink_valid: bool = is_instance_valid(source_focus_sink)
+	return {"stage":stage, "tick_ms":Time.get_ticks_msec(), "root_focus":root.has_focus(), "root_window_id":root.get_window_id(), "sink_focus":source_focus_sink.has_focus() if sink_valid else false, "sink_window_id":source_focus_sink.get_window_id() if sink_valid else -1, "sink_native":not source_focus_sink.is_embedded() if sink_valid else false, "sector":host.state.current_sector() if is_instance_valid(host) and host.state != null else "", "page":host.ui.page if is_instance_valid(host) and host.ui != null else "", "navigation_phase":host.local_navigation.phase if is_instance_valid(host) and host.local_navigation != null else "", "navigation_target":host.local_navigation.target_id if is_instance_valid(host) and host.local_navigation != null else ""}
+
+func acquire_background_focus_fixture() -> bool:
+	# Official Window.force_native must be set while hidden. A separate native
+	# window creates OS focus loss, rather than merely moving Control focus.
+	source_focus_sink = Window.new()
+	source_focus_sink.hide()
+	source_focus_sink.force_native = true
+	source_focus_sink.transient = false
+	source_focus_sink.exclusive = false
+	source_focus_sink.title = "Source navigation native focus fixture"
+	source_focus_sink.size = Vector2i(360, 100)
+	source_focus_sink.position = root.position + Vector2i(24, 24)
+	var caption := Label.new()
+	caption.text = "Background navigation focus boundary\nTest-owned window; no player input"
+	caption.position = Vector2(12, 12)
+	source_focus_sink.add_child(caption)
+	root.add_child(source_focus_sink)
+	source_focus_sink.show()
+	source_focus_sink.grab_focus()
+	var deadline: int = Time.get_ticks_msec() + 10000
+	var stable: int = 0
+	while stable < 3 and Time.get_ticks_msec() < deadline and not finishing:
+		await frames(1)
+		if finishing: return false
+		stable = stable + 1 if source_focus_sink.has_focus() and not root.has_focus() else 0
+	if finishing: return false
+	var observation: Dictionary = source_focus_observation("background_focus_acquired")
+	observation["stable_frames"] = stable
+	background_focus_observations.append(observation)
+	print("SOURCE_BACKGROUND_FOCUS ", JSON.stringify(observation))
+	return check(source_focus_sink.force_native and not source_focus_sink.is_embedded() and source_focus_sink.get_window_id() != root.get_window_id() and source_focus_sink.has_focus() and not root.has_focus() and stable == 3, "declared independent native window really removes main-window focus")
+
+func release_background_focus_fixture() -> void:
+	if not is_instance_valid(source_focus_sink): return
+	source_focus_sink.hide()
+	source_focus_sink.queue_free()
+	source_focus_sink = null
+	await frames(3)
+	root.grab_focus()
+	var deadline: int = Time.get_ticks_msec() + 10000
+	var stable: int = 0
+	while stable < 3 and Time.get_ticks_msec() < deadline:
+		await frames(1)
+		stable = stable + 1 if root.has_focus() else 0
+	background_focus_observations.append(source_focus_observation("background_fixture_released"))
+	check(root.has_focus() and stable == 3, "native focus fixture is destroyed and main window regains stable focus")
+
+func reject_unfocused_explicit_navigation(target_id: String, accepted_goal: Dictionary) -> void:
+	var context: Dictionary = host.navigation_context(target_id)
+	if not check(source_writer_idle() and not host._exit_save_pending() and host.state.ship().status == T.ShipStatus.FLYING and not host.travel.active() and not host.local_navigation.active() and not host.local_navigation.warp_active() and host.ui.page.is_empty() and not host.ui.command_input_blocked() and not root.has_focus() and source_focus_sink.has_focus() and bool(context.get("approach_ready", false)), "unfocused explicit-navigation negative uses idle writer and actually qualified destination"): return
+	var actions: Array[String] = ["nav_approach"]
+	if bool(context.get("orbit_ready", false)): actions.append("nav_orbit")
+	for action: String in actions:
+		var pose: Transform3D = host.world.flight.global_transform
+		var velocity: Vector3 = host.world.flight.velocity
+		var generation: int = host.navigation_generation
+		var phase: String = host.local_navigation.phase
+		var mode: String = host.local_navigation.mode
+		var previous_target: String = host.local_navigation.target_id
+		await host._command(action, target_id, 1, "")
+		await frames(2)
+		var unchanged: bool = not root.has_focus() and source_focus_sink.has_focus() and host.navigation_generation == generation and host.local_navigation.phase == phase and host.local_navigation.mode == mode and host.local_navigation.target_id == previous_target and host.world.flight.global_transform.is_equal_approx(pose) and host.world.flight.velocity.is_equal_approx(velocity) and host.source_goal == accepted_goal
+		var observation: Dictionary = source_focus_observation("unfocused_explicit_command")
+		observation.merge({"action":action, "eligible":bool(context.get(action.trim_prefix("nav_") + "_ready", false)), "unchanged":unchanged, "goal_preserved":host.source_goal == accepted_goal, "generation_before":generation, "generation_after":host.navigation_generation})
+		background_focus_observations.append(observation)
+		print("SOURCE_BACKGROUND_EXPLICIT ", JSON.stringify(observation))
+		check(unchanged, "unfocused explicit " + action + " cannot replace pose phase or the accepted source goal")
+
 func source_writer_idle() -> bool:
 	return is_instance_valid(host) and not host.busy and host.loading_job == null and (host.ui == null or not host.ui.loading_suspended)
 
@@ -130,24 +204,71 @@ func run() -> void:
 		if host.local_navigation.warp_active() and not host.gameplay.situational.spatial_active:observation_boundary_seen=true
 	check(not host.local_navigation.active() and host.ui.target_id == info.waypoint_id, "real navigation reaches the selected transit gate")
 	await settle()
+	# A long autonomous transit can outlive the runner's initial activation.
+	# Obtain actual native focus before injecting the one deliberate F press;
+	# retain Main's production focus guard and every gate eligibility check.
+	if DisplayServer.get_name() != "headless":
+		var focus_before: bool = root.has_focus()
+		root.grab_focus()
+		var focus_deadline: int = Time.get_ticks_msec() + 10000
+		var focus_frames: int = 0
+		while focus_frames < 3 and Time.get_ticks_msec() < focus_deadline:
+			await frames(1)
+			focus_frames = focus_frames + 1 if root.has_focus() else 0
+		print("SOURCE_NATIVE_FOCUS ", JSON.stringify({"before":focus_before, "after":root.has_focus(), "stable_frames":focus_frames}))
+		if not check(root.has_focus() and focus_frames == 3, "actual native source window has stable focus before deliberate gate input"): await finish(); return
 	host.get_viewport().warp_mouse(root.get_visible_rect().get_center())
 	var gate_context: Dictionary = host.interaction_context()
 	print("SOURCE_INPUT_CONTEXT ",JSON.stringify({"focus":root.has_focus(),"busy":host.busy,"loading_job":host.loading_job!=null,"loading_suspended":host.ui.loading_suspended,"page":host.ui.page,"keyboard_blocked":host.ui.keyboard_blocked(),"travel":host.travel.active(),"warp":host.local_navigation.warp_active(),"interaction":gate_context}))
 	if not check(source_writer_idle() and host.deferred_save.is_empty() and host._keyboard_control_allowed() and bool(gate_context.get("ready",false)) and str(gate_context.get("target_id","")) == str(info.waypoint_id), "single actual F input is sent only after committed arrival and real gate eligibility"):
 		await finish(); return
 	await key(KEY_F)
+	var accepted_goal: Dictionary = host.source_goal.duplicate(true)
+	var crossing: XJTravel = host.travel
+	if not check(crossing.active() and accepted_goal.get("key", "") == key_name, "single actual F starts the accepted gate transfer before focus-boundary fixture"):
+		await finish(); return
+	var background: Dictionary = {"committed":false, "commit_background":false, "generation_at_commit":-1, "continuation_started":false, "focus_held":true}
+	crossing.changed.connect(func(phase: int, _message: String):
+		if phase != T.TravelPhase.COMMITTED: return
+		background.committed = true
+		background.commit_background = not root.has_focus() and is_instance_valid(source_focus_sink) and source_focus_sink.has_focus()
+		background.generation_at_commit = host.navigation_generation
+		var observed: Dictionary = source_focus_observation("actual_gate_committed")
+		observed["accepted_goal_preserved"] = host.source_goal == accepted_goal
+		background_focus_observations.append(observed)
+		print("SOURCE_BACKGROUND_COMMIT ", JSON.stringify(observed)))
+	if not await acquire_background_focus_fixture(): await finish(); return
 	deadline = Time.get_ticks_msec() + 50000
 	var location: Dictionary = host.store.catalog.one("resource_node_locations", "node_id", node.node_id)
-	while Time.get_ticks_msec() < deadline:
+	while Time.get_ticks_msec() < deadline and not finishing:
+		background.focus_held = bool(background.focus_held) and not root.has_focus() and source_focus_sink.has_focus()
+		if bool(background.committed) and host.state.current_sector() == node.sector_id and host.local_navigation.active() and host.navigation_generation > int(background.generation_at_commit):
+			var continuation: Dictionary = host.gameplay.resource_intel.guidance(key_name, "ore_ferrosilicate")
+			if host.local_navigation.target_id == str(continuation.get("waypoint_id", "")): background.continuation_started = true
 		if host.state.current_sector() == node.sector_id and host.gameplay.same_anchor_site(host.state.ship(), host.store.catalog.one("anchor_defs", "anchor_id", location.anchor_id)) and not host.local_navigation.active(): break
 		await frames(2)
+		if finishing: return
 		if (host.local_navigation.warp_active() or host.travel.active()) and not host.gameplay.situational.spatial_active:observation_boundary_seen=true
+	if finishing: return
 	await settle()
 	host.set_process(false); host.set_physics_process(false)
+	var arrival_observation: Dictionary = source_focus_observation("background_source_arrival")
+	arrival_observation.merge(background)
+	arrival_observation["accepted_goal_preserved"] = host.source_goal == accepted_goal
+	background_focus_observations.append(arrival_observation)
+	print("SOURCE_BACKGROUND_ARRIVAL ", JSON.stringify(arrival_observation))
+	check(bool(background.committed) and bool(background.commit_background), "actual gate commit occurs while the main native window is unfocused")
+	check(bool(background.focus_held) and not root.has_focus() and source_focus_sink.has_focus(), "source continuation remains a real native-background boundary")
+	check(bool(background.continuation_started) and host.source_goal == accepted_goal, "accepted source goal automatically starts its post-gate segment without a focus-dependent retry")
 	check(host.state.current_sector() == node.sector_id, "actual F input crosses the planned star-system gate")
 	check(host.gameplay.same_anchor_site(host.state.ship(), host.store.catalog.one("anchor_defs", "anchor_id", location.anchor_id)), "actual warp arrives in source's declared AU site")
 	check(observation_boundary_seen,"actual strategic navigation suspends local resource observation")
 	check(host.state.find("resource_state", "node_id", node.node_id).remaining_units == amount and host.gameplay.work.mining_target.is_empty(), "source arrival neither fabricates nor auto-mines goods")
+	# Only after observing the independent continuation do explicit command probes
+	# run. Never restore source_goal to disguise a rejected/cleared continuation.
+	var destination: Dictionary = host.gameplay.resource_intel.guidance(key_name, "ore_ferrosilicate")
+	await reject_unfocused_explicit_navigation(str(destination.get("waypoint_id", "")), accepted_goal)
+	await release_background_focus_fixture()
 	await capture("sources-arrived")
 	await show("sources")
 	var old_panel: Node = host.ui.body.find_child("SourceItem", true, false).get_parent().get_parent()
@@ -163,10 +284,12 @@ func run() -> void:
 func finish() -> void:
 	if finishing: return
 	finishing = true
+	# All early exits and the watchdog share this native-window cleanup path.
+	await release_background_focus_fixture()
 	if is_instance_valid(host): host.queue_free()
 	host = null
 	await frames(5); await get_tree().create_timer(0.25).timeout
-	var summary: Dictionary = {"result": "PASS" if failures.is_empty() else "FAIL", "checks": checks, "failures": failures.size(), "failure_labels": failures, "captures": captures, "directory": directory}
+	var summary: Dictionary = {"result": "PASS" if failures.is_empty() else "FAIL", "checks": checks, "failures": failures.size(), "failure_labels": failures, "captures": captures, "directory": directory, "background_focus_observations":background_focus_observations, "focus_fixture":"test-owned force_native Window after actual F; no direct source continuation or controller start; explicit commands probed only after the background arrival observation"}
 	print("RESOURCE_INTEL_WORLD_V26_FINAL_JSON ", JSON.stringify(summary))
 	print("RESOURCE_INTEL_WORLD_V26_RESULT ", summary.result, " checks=", checks, " failures=", failures.size())
 	get_tree().quit(0 if failures.is_empty() else 1)

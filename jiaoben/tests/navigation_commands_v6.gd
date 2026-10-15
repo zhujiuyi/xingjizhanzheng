@@ -29,7 +29,11 @@ func _ready() -> void:
 func check(value: bool, label: String) -> bool:
 	checks += 1
 	print(("PASS " if value else "FAIL ") + label)
-	if not value: failures.append(label)
+	if not value:
+		failures.append(label)
+		var boundary: Dictionary = _input_boundary("assertion_failure", label)
+		observations.append(boundary)
+		print("NAVIGATION_INPUT_BOUNDARY ", JSON.stringify(boundary))
 	return value
 
 func frames(count: int = 2) -> void:
@@ -46,6 +50,55 @@ func wait_writer() -> void:
 func _writer_idle() -> bool:
 	return is_instance_valid(host) and not host.busy and host.loading_job == null and (host.ui == null or not host.ui.loading_suspended)
 
+func _input_boundary(action: String, target: String = "") -> Dictionary:
+	var focus: Control = root.gui_get_focus_owner()
+	var pressed: Array[String] = []
+	for key: String in ["forward", "back", "left", "right", "up", "down", "yaw_left", "yaw_right", "pitch_up", "pitch_down", "roll_left", "roll_right", "brake", "boost", "fire"]:
+		if InputMap.has_action(key) and Input.is_action_pressed(key): pressed.append(key)
+	var result: Dictionary = {"case":"native_input_boundary", "action":action, "target":target, "display_server":DisplayServer.get_name(), "root_window_id":root.get_window_id(), "root_window_focus":root.has_focus(), "root_window_visible":root.visible, "focus_owner":str(focus.get_path()) if is_instance_valid(focus) else "", "focus_owner_class":focus.get_class() if is_instance_valid(focus) else "", "pressed_actions":pressed, "mouse_buttons":Input.get_mouse_button_mask()}
+	if not is_instance_valid(host): return result
+	var window: Window = host.get_window()
+	result.merge({"main_window_id":window.get_window_id(), "main_window_focus":window.has_focus(), "busy":host.busy, "loading_job":host.loading_job != null, "exit_save_pending":host._exit_save_pending(), "main_process_mode":host.process_mode, "hud_command_allowed":host._hud_command_allowed(), "keyboard_control_allowed":host._keyboard_control_allowed()})
+	if host.store != null: result["store_error"] = host.store.last_error
+	if is_instance_valid(host.ui):
+		result.merge({"page":host.ui.page, "menu_open":host.ui.menu_open, "panel_visible":host.ui.panel.visible, "station_visible":host.ui.station_layer.visible, "loading_suspended":host.ui.loading_suspended, "hud_focus_active":host.ui.hud_focus.active, "command_input_blocked":host.ui.command_input_blocked(), "keyboard_blocked":host.ui.keyboard_blocked()})
+		result["operation_kind"] = host.ui.operation_kind
+		result["ui_feedback"] = host.ui.toast.text if is_instance_valid(host.ui.toast) else ""
+	if host.state != null and host.state.ship() != null:
+		result.merge({"world_id":host.state.world_id, "session_id":host.state.session_id, "epoch":host.state.epoch, "ship_id":host.state.ship().ship_instance_id, "ship_status":host.state.ship().status, "site":XJSpaceCoordinates.current_site(host.state)})
+	if host.local_navigation != null:
+		result["navigation"] = {"active":host.local_navigation.active(), "mode":host.local_navigation.mode, "phase":host.local_navigation.phase, "target":host.local_navigation.target_id, "last_error":host.local_navigation.last_error}
+		if host.state != null and is_instance_valid(host.world) and host.gameplay != null and _writer_idle():
+			result["target_qualification"] = host.navigation_context(target)
+	if host.travel != null: result["travel_active"] = host.travel.active()
+	return result
+
+func ensure_native_focus(action: String, target: String = "") -> bool:
+	if DisplayServer.get_name() == "headless": return true
+	var deadline: int = Time.get_ticks_msec() + 5000
+	var last_request: int = 0
+	var stable_frames: int = 0
+	var attempts: int = 0
+	while stable_frames < 3 and Time.get_ticks_msec() < deadline:
+		var window: Window = host.get_window() if is_instance_valid(host) else root
+		if not window.has_focus() and Time.get_ticks_msec() - last_request >= 250:
+			window.grab_focus()
+			last_request = Time.get_ticks_msec()
+			attempts += 1
+		await frames(1)
+		stable_frames = stable_frames + 1 if root.has_focus() and window.has_focus() else 0
+	var boundary: Dictionary = _input_boundary(action, target)
+	boundary.merge({"focus_attempts":attempts, "stable_focus_frames":stable_frames, "focus_deadline_ms":5000})
+	observations.append(boundary)
+	print("NAVIGATION_INPUT_BOUNDARY ", JSON.stringify(boundary))
+	return check(stable_frames == 3 and bool(boundary.root_window_focus) and bool(boundary.get("main_window_focus", false)), "actual native Main window focused before " + action)
+
+func test_command(action: String, target: String, quantity: int, extra: String) -> void:
+	# Retry only the OS focus request, never the gameplay command. Do not clear
+	# page/keyboard/epoch/target blockers: negative cases must reach real Main.
+	await ensure_native_focus(action, target)
+	await host._command(action, target, quantity, extra)
+
 func start_host() -> void:
 	host = Main.new()
 	host.progress_database_path = database_path
@@ -56,6 +109,7 @@ func start_host() -> void:
 	host.set_process(false)
 	await frames()
 	check(host.services_ready, "real Main opens isolated SQLite and validates presentation")
+	await ensure_native_focus("Main boot")
 
 func release_host() -> void:
 	if is_instance_valid(host): host.queue_free()
@@ -105,7 +159,7 @@ func ensure_target_site(id: String) -> bool:
 	var before_site: String = XJSpaceCoordinates.current_site(host.state)
 	var target_site: String = host.world.target_site(id)
 	var before_pose: Transform3D = pose()
-	await host._command("nav_warp", id, 1, "")
+	await test_command("nav_warp", id, 1, "")
 	if not check(navigation().call("warp_active") and navigation().get("target_id") == id and pose().is_equal_approx(before_pose), "real site transition starts from captured source without teleport " + id): return false
 	var ticks: int = 0
 	while navigation().call("active") and ticks < 1800:
@@ -130,7 +184,7 @@ func boundary_alignment_checks() -> void:
 	var heading: Vector3 = host.world.target_direction(station_id)
 	var initial_error: float = (-initial.basis.z).angle_to(heading)
 	check(initial_error > float(host.local_navigation.rules.value("alignment_tolerance_rad")) and absf(initial.basis.x.y) > 0.01, "boundary alignment starts with genuine non-default heading and roll")
-	await host._command("nav_warp", station_id, 1, "")
+	await test_command("nav_warp", station_id, 1, "")
 	if not check(navigation().call("warp_active") and navigation().get("phase") == "warmup", "legal boundary pose starts actual remote-site warp"): return
 	var ticks: int = 0
 	var budget_valid: bool = true
@@ -164,6 +218,7 @@ func press_action(action: String) -> void:
 	host._unhandled_input(event)
 
 func click_button(button: Button, label: String) -> bool:
+	await ensure_native_focus("GUI " + label)
 	await frames(3)
 	if not check(is_instance_valid(button) and button.is_visible_in_tree() and not button.disabled, "actual navigation button is reachable " + label): return false
 	var point: Vector2 = button.get_global_rect().get_center()
@@ -192,9 +247,9 @@ func _run() -> void:
 	root.content_scale_size = root.size
 	await start_host()
 	if not host.services_ready: await finish(); return
-	await host._command("new_world", "本星系导航与紧凑态势独立验收", 1, "")
+	await test_command("new_world", "本星系导航与紧凑态势独立验收", 1, "")
 	if not check(host.state != null, "fresh world created through Main and actual SQLite"): await finish(); return
-	await host._command("undock", "", 1, "")
+	await test_command("undock", "", 1, "")
 	await wait_writer()
 	host.ui.show_page("")
 	host._sync_presentation_stage()
@@ -238,7 +293,7 @@ func step(delta: float = 1.0 / 60.0) -> void:
 	host.camera.step(delta)
 
 func stop_navigation() -> void:
-	await host._command("nav_stop", "", 1, "")
+	await test_command("nav_stop", "", 1, "")
 	await wait_writer()
 
 func eligibility_checks() -> void:
@@ -274,7 +329,7 @@ func source_failure_check() -> void:
 	var count: int = snapshots()
 	var epoch: int = host.state.epoch
 	host.state.epoch += 1
-	await host._command("nav_warp", station_id, 1, "")
+	await test_command("nav_warp", station_id, 1, "")
 	host.state.epoch = epoch
 	await wait_writer()
 	check(not navigation().call("active") and pose().is_equal_approx(original) and host.world.flight.velocity.is_zero_approx(), "real SQLite CAS source-save refusal cannot move or arm warp")
@@ -451,20 +506,20 @@ func tactical_fire_navigation_checks() -> void:
 	if not check(npc != null, "tactical auto-fire fixture projects an actual catalog hostile"): return
 	var id: String = npc.npc_instance_id
 	var count: int = snapshots()
-	await host._command("combat_toggle", id, 1, "")
+	await test_command("combat_toggle", id, 1, "")
 	check(host.auto_fire_target == id and host.navigation_context(id).combat_active, "explicit Main combat action starts auto-fire only for a qualified live enemy got target=" + host.auto_fire_target + " expected=" + id + " combat=" + str(host.navigation_context(id).combat_active) + " npcs=" + str(host.world.npcs.keys()))
-	await host._command("nav_approach", id, 1, "")
+	await test_command("nav_approach", id, 1, "")
 	check(navigation().call("active") and navigation().get("mode") == "approach" and host.auto_fire_target == id, "starting tactical approach retains explicitly armed auto-fire identity")
 	await step()
 	check(host.auto_fire_target == id and navigation().get("mode") == "approach", "actual approach physics tick retains the requested auto-fire target")
-	await host._command("nav_orbit", id, 1, "")
+	await test_command("nav_orbit", id, 1, "")
 	check(navigation().call("active") and navigation().get("mode") == "orbit" and host.auto_fire_target == id, "switching to tactical orbit does not disarm explicit auto-fire got active=" + str(navigation().call("active")) + " mode=" + str(navigation().get("mode")) + " phase=" + str(navigation().get("phase")) + " fire=" + host.auto_fire_target + " orbit_ready=" + str(host.navigation_context(id).get("orbit_ready")) + " reason='" + str(host.navigation_context(id).get("orbit_reason")) + "' npc_dist=" + str(host.world.flight.global_position.distance_to((host.world.targets[id].node as Node3D).global_position)) + " sensor=" + str(host.gameplay.ship_roles.detection_range()) + " spawn_dist=" + str(host.auto_fire_target) + "'")
 	await step()
 	check(host.auto_fire_target == id and navigation().get("mode") == "orbit", "actual orbit physics tick retains explicit auto-fire target got fire=" + host.auto_fire_target + " mode=" + str(navigation().get("mode")) + " phase=" + str(navigation().get("phase")))
-	await host._command("combat_toggle", id, 1, "")
+	await test_command("combat_toggle", id, 1, "")
 	check(host.auto_fire_target.is_empty() and navigation().call("active"), "explicit stop-fire action disarms fire while keeping tactical navigation got fire=" + host.auto_fire_target + " active=" + str(navigation().call("active")) + " mode=" + str(navigation().get("mode")))
 	await remove_readonly_npc(npc)
-	await host._command("nav_stop", "", 1, "")
+	await test_command("nav_stop", "", 1, "")
 	host.gameplay.combat_remaining_s = 0.0
 	check(snapshots() == count and host.world.projectiles.active.is_empty() and host.pending_damage.is_empty() and host.state.find("npc_state", "npc_instance_id", id) == null, "tactical fixture is removed and projectiles cleared before any following SQLite snapshot")
 
@@ -480,7 +535,7 @@ func charge_and_cancel_checks() -> void:
 	var epoch_before: int = host.state.epoch
 	var session_before: Array[Dictionary] = host.store._records("SELECT last_committed_sequence FROM runtime_session WHERE world_id=? AND session_id=? AND epoch=?", [world_before, session_id_before, epoch_before])
 	if not check(session_before.size() == 1 and int(session_before[0].last_committed_sequence) == sequence_before, "current warmup source begins at the actual committed session sequence"): return
-	await host._command("nav_warp", station_id, 1, "")
+	await test_command("nav_warp", station_id, 1, "")
 	await wait_writer()
 	check(navigation().call("warp_active") and str(navigation().get("phase")) == "warmup", "Main starts warp only after durable source capture and enters visible warmup got active=" + str(navigation().call("warp_active")) + " phase=" + str(navigation().get("phase")) + " store='" + host.store.last_error + "'")
 	# Ordinary saves prune unreferenced old snapshots after commit. Net retained
@@ -499,7 +554,7 @@ func charge_and_cancel_checks() -> void:
 	host.ui.show_page("")
 	await stop_navigation()
 	check(not navigation().call("active") and pose().is_equal_approx(original), "explicit stop cancels warmup without moving the ship")
-	await host._command("nav_warp", station_id, 1, "")
+	await test_command("nav_warp", station_id, 1, "")
 	await wait_writer()
 	Input.action_press("forward")
 	await step()
@@ -507,7 +562,7 @@ func charge_and_cancel_checks() -> void:
 	check(not navigation().call("active"), "manual thrust input takes control and cancels local navigation")
 	await wait_writer()
 	await place_far()
-	await host._command("nav_warp", station_id, 1, "")
+	await test_command("nav_warp", station_id, 1, "")
 	await wait_writer()
 	Input.action_press("brake")
 	await step()
@@ -515,7 +570,7 @@ func charge_and_cancel_checks() -> void:
 	check(not navigation().call("active") and host.world.flight.velocity.is_zero_approx(), "X brake cancels charge and leaves no autonomous velocity")
 	await wait_writer()
 	await place_far()
-	await host._command("nav_warp", station_id, 1, "")
+	await test_command("nav_warp", station_id, 1, "")
 	await wait_writer()
 	host._sync_mouse_mode()
 	var pointer_origin: Vector2 = Vector2(root.size) * 0.5
@@ -580,7 +635,7 @@ func transit_stop_checks() -> void:
 	var departure_encoded: Vector3 = XJSpaceCoordinates.encoded(host.state.ship())
 	var departure_dto: Dictionary = _ship_pose_evidence()
 	var departure_collision_site: String = host.world.collision_site_id
-	await host._command("nav_warp", station_id, 1, "")
+	await test_command("nav_warp", station_id, 1, "")
 	await wait_writer()
 	var strategic_ticks: int = 0
 	while navigation().call("active") and navigation().get("phase") == "warmup" and strategic_ticks < 600:
@@ -628,7 +683,7 @@ func transit_stop_checks() -> void:
 	host.world.flight.write_back()
 	check(position().distance_to(pivot) < float(site.local_radius_m) and bool(context(local_target).warp_ready), "same-site source is legal and exceeds the actual minimum warp landing distance")
 	var origin: Vector3 = position()
-	await host._command("nav_warp", local_target, 1, "")
+	await test_command("nav_warp", local_target, 1, "")
 	await wait_writer()
 	var ticks: int = 0
 	while navigation().call("active") and navigation().get("phase") == "warmup" and ticks < 600:
@@ -642,7 +697,7 @@ func transit_stop_checks() -> void:
 	host.world.flight.global_position = origin
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
-	await host._command("nav_warp", local_target, 1, "")
+	await test_command("nav_warp", local_target, 1, "")
 	await wait_writer()
 	var safe_origin: Vector3 = position()
 	host.world.flight.global_position = host.world.targets[station_id].node.global_position
@@ -653,7 +708,7 @@ func transit_stop_checks() -> void:
 func warp_and_restart_checks() -> void:
 	await place_far()
 	var sector: String = host.state.current_sector()
-	await host._command("nav_warp", station_id, 1, "")
+	await test_command("nav_warp", station_id, 1, "")
 	await wait_writer()
 	host._request_save("auto", 2)
 	check(not host.deferred_save.is_empty() and not host.busy, "autosave waits while a local navigation controller owns motion")
@@ -680,7 +735,7 @@ func warp_and_restart_checks() -> void:
 	await capture("warp-arrived")
 	await release_host()
 	await start_host()
-	await host._command("continue", "", 1, "")
+	await test_command("continue", "", 1, "")
 	await wait_writer()
 	if not check(host.state != null, "new Main actually reopens the sealed arrival snapshot"): return
 	host.ui.show_page("")
@@ -688,11 +743,11 @@ func warp_and_restart_checks() -> void:
 	check(host.state.world_id == world_id and host.state.epoch > old_epoch and host.state.current_sector() == sector, "SQLite restart restores the same world and sector under a fresh session epoch")
 	check(pose().is_equal_approx(arrival_pose) and host.world.flight.velocity.is_zero_approx() and host.state.ship().status == T.ShipStatus.FLYING and not navigation().call("active"), "real restart restores durable arrival pose and idle autonomous controller")
 	host.ui.target_id = station_id
-	await host._command("interact_target", station_id, 1, "")
+	await test_command("interact_target", station_id, 1, "")
 	await wait_writer()
 	host._sync_presentation_stage()
 	check(host.state.ship().status == T.ShipStatus.DOCKED and host.hangar.visible and not host.world.visible, "the actual post-warp station interaction enters the station scene")
-	await host._command("undock", "", 1, "")
+	await test_command("undock", "", 1, "")
 	await wait_writer()
 	host.ui.show_page("")
 	host._sync_presentation_stage()
@@ -703,7 +758,7 @@ func approach_orbit_checks() -> void:
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
 	var before: Vector3 = position()
-	await host._command("nav_approach", station_id, 1, "")
+	await test_command("nav_approach", station_id, 1, "")
 	await wait_writer()
 	check(navigation().call("active") and str(navigation().get("mode")) == "approach" and position().is_equal_approx(before), "approach starts continuous flight without any instantaneous relocation")
 	var max_speed: float = float(host.gameplay.call("metrics", host.state.ship()).speed_mps)
@@ -719,7 +774,7 @@ func approach_orbit_checks() -> void:
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
 	before = position()
-	await host._command("nav_orbit", station_id, 1, "")
+	await test_command("nav_orbit", station_id, 1, "")
 	await wait_writer()
 	check(navigation().call("active") and str(navigation().get("mode")) == "orbit" and position().is_equal_approx(before), "orbit starts without a jump and owns the production flight controller")
 	valid_speed = true
@@ -870,7 +925,7 @@ func dock_command_check() -> void:
 	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, center + Vector3(900, 800, 1600))
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
-	await host._command("nav_dock", station_id, 1, "")
+	await test_command("nav_dock", station_id, 1, "")
 	await wait_writer()
 	var ticks: int = 0
 	while navigation().call("active") and ticks < 1800:
