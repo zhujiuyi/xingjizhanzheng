@@ -14,6 +14,10 @@ const ResourceStatus = preload("res://runtime/resource_status.gd")
 const BusinessList = preload("res://runtime/ui/business_list.gd")
 const InfoList = preload("res://runtime/ui/info_list.gd")
 const DroneAvailability = preload("res://runtime/ui/drone_availability.gd")
+const RelatedNavigation = preload("res://runtime/ui/related_navigation.gd")
+const HUDFocus = preload("res://runtime/ui/hud_focus.gd")
+const Disclosure = preload("res://runtime/ui/disclosure.gd")
+var hud_focus: RefCounted = HUDFocus.new()
 const WarehousePanel = preload("res://runtime/ui/warehouse_panel.gd")
 const ItemPortraits = preload("res://runtime/ui/item_portraits.gd")
 const ServiceNavigation = preload("res://runtime/ui/service_navigation.gd")
@@ -397,6 +401,7 @@ func _ready() -> void:
 	_responsive()
 
 func bind(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted, world: XJSector, rig: XJCameraRig, showcase: Node = null) -> void:
+	hud_focus.reset(self)
 	if state == null or state.world_id != runtime.world_id or state.session_id != runtime.session_id:
 		mission_filter = "all"; mission_status_filter = "current"; mission_location_filter = "local"
 		industry_tab = "manufacture"
@@ -427,6 +432,7 @@ func bind(runtime: XJRuntimeState, db: XJCatalog, business: RefCounted, world: X
 	_refresh_targets()
 
 func show_title(save_slots: Array[Dictionary]) -> void:
+	hud_focus.reset(self)
 	page_stack.clear()
 	business_quantities.clear()
 	business_quantity_identity = ""
@@ -448,7 +454,9 @@ func show_title(save_slots: Array[Dictionary]) -> void:
 	var start: Button = _button(body, "建立新远征", func(): requested.emit("new_world", new_name.text.strip_edges(), 1, ""))
 	_primary(start) if slots.is_empty() else _secondary(start)
 	if not slots.is_empty():
-		_button(body, "航行档案" + (" · 收起" if title_show_slots else ""), func(): title_show_slots = not title_show_slots; show_title(slots))
+		var archives: Button = _button(body, "", func(): title_show_slots = not title_show_slots; show_title(slots))
+		archives.name = "TitleArchivesToggle"
+		Disclosure.apply(archives, "航行档案", title_show_slots, slots.size())
 		if title_show_slots: _show_slots()
 	var utilities: HBoxContainer = HBoxContainer.new()
 	utilities.add_theme_constant_override("separation", 12)
@@ -461,6 +469,7 @@ func show_title(save_slots: Array[Dictionary]) -> void:
 
 func show_page(next_page: String) -> void:
 	if loading_suspended: return
+	hud_focus.reset(self)
 	# Old links remain usable, while the service itself lives on its asset row.
 	if next_page == "salvage": next_page = "warehouse"
 	if next_page == "fitting" and state != null and not state.player().has_docked_station_id and gameplay.fitting_analysis.supported(): next_page = "fitting_analysis"
@@ -504,8 +513,6 @@ func show_page(next_page: String) -> void:
 		return
 	_build_panel(_page_title(next_page), "%s  /  %s  /  %d 信用点" % [_station_name(state.player().docked_station_id) if state.player().has_docked_station_id else _sector_name(state.current_sector()), _ship_name(state.ship().ship_def_id), state.player().credit])
 	if next_page in ["warehouse", "fitting", "market", "industry", "salvage", "research"] and not state.player().has_docked_station_id:
-		if next_page=="ships" and gameplay.fitting_analysis.supported():_button(body,"舰船定位",show_page.bind("ship_roles")).name="ShipRolesEntry"
-		if next_page=="ships" and gameplay.hired.supported():_button(body,"雇佣僚舰",show_page.bind("hire")).name="HireFleetEntry"
 		_text("此服务需要停靠空间站。使用星图找到站点，进入停靠范围并减速后按 F。")
 		_focus_page.call_deferred()
 		return
@@ -563,6 +570,7 @@ func notify(message: String, is_error: bool = false) -> void:
 	message_age = 0.0
 
 func tick(delta: float) -> void:
+	hud_focus.maintain(self)
 	if page=="consignments":
 		var freight_panel: Node=body.find_child("ConsignmentPanel",true,false)
 		if freight_panel!=null:freight_panel.call("refresh")
@@ -632,8 +640,14 @@ func ui_input_blocked() -> bool:
 	return keyboard_blocked() or _pointer_over(flight_header) or _pointer_over(target_panel) or _pointer_over(work_box) or _pointer_over(mission_navigation_row) or _pointer_over(operation_bar) or _pointer_over(navigation) or _pointer_over(flight_dock) or _pointer_over(instrument) or _pointer_over(equipment_bar) or _pointer_over(navigation_frame) or _pointer_over(controls) or _pointer_over(toast) or _pointer_over(flight_cues) or (is_instance_valid(navigation_hud) and _pointer_over(navigation_hud.radar_frame))
 
 func keyboard_blocked() -> bool:
+	return hud_focus.active or command_input_blocked()
+
+func command_input_blocked() -> bool:
 	var focus: Control = root.get_viewport().gui_get_focus_owner()
 	return menu_open or panel.visible or station_layer.visible or focus is LineEdit or focus is TextEdit
+
+func _input(event: InputEvent) -> void:
+	if hud_focus.handle(self, event): get_viewport().set_input_as_handled()
 
 func refresh_page() -> void:
 	if loading_suspended: return
@@ -727,6 +741,7 @@ func _build_panel(title: String, description: String) -> void:
 	heading.max_lines_visible = 2
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if page != "title":
+		_add_related_navigation(header)
 		# One return control, named for where it actually goes. It is now the page's
 		# only navigation: the service column is gone, so this is how a player gets
 		# back to the station hub or to flight.
@@ -785,6 +800,7 @@ func _build_stage_frame() -> void:
 	UISkin.apply_text_style(heading, "page")
 	heading.name = "PageHeading"
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_add_related_navigation(header)
 	var close: Button = _button(header, _close_label(), _back)
 	close.name = "PanelClose"
 	close.custom_minimum_size.x = 132
@@ -961,12 +977,6 @@ func _ships() -> void:
 		management.setup(self, fleet_section)
 		_ships_strip()
 		return
-	var tools: HFlowContainer = HFlowContainer.new()
-	body.add_child(tools)
-	if gameplay.fitting_analysis.supported():
-		_button(tools, "舰船角色与预算", show_page.bind("ship_roles")).name = "ShipRolesEntry"
-	if gameplay.hired.supported():
-		_button(tools, "雇佣僚舰", show_page.bind("hire")).name = "HireFleetEntry"
 	_ships_cards()
 	_ships_strip()
 
@@ -1197,7 +1207,7 @@ func _warehouse_transfer(kind: String, id: String, quantity: int, destination: S
 
 func _resize_warehouse_panel() -> void:
 	if page == "warehouse" and is_instance_valid(warehouse_panel) and is_instance_valid(page_scroll) and page_scroll.size.y > 0.0:
-		warehouse_panel.fit_height(page_scroll.size.y)
+		warehouse_panel.call("fit_view", page_scroll.size.x, page_scroll.size.y)
 
 func _fitting() -> void:
 	# Stage layout. The hangar keeps showing the ship being worked on; the slot list
@@ -1207,12 +1217,6 @@ func _fitting() -> void:
 	# suggest otherwise.
 	stage_rows.clear()
 	var tools: HFlowContainer = _action_bar(body, "FittingTools")
-	if gameplay.fitting_analysis.supported():
-		_button(tools, "比较配装与资源预算", show_page.bind("fitting_analysis")).name = "FittingAnalysisEntry"
-	if gameplay.scenarios.supported():
-		_button(tools, "配装挑战", show_page.bind("trials")).name = "FittingTrialEntry"
-	if DroneAvailability.capable(gameplay):
-		_button(tools, "无人机整备", show_page.bind("drones")).name = "FittingDroneManagement"
 	var metrics: Dictionary = gameplay.call("metrics", state.ship())
 	_stage_stat("供能", "%.0f / %.0f" % [metrics.power_used, metrics.power_capacity])
 	_stage_stat("算力", "%.0f / %.0f" % [metrics.cpu_used, metrics.cpu_capacity])
@@ -1249,7 +1253,7 @@ func _fitting() -> void:
 			_fitting_card(list, container.container_id, slot_type, slot_name, "未安装", slot_description, [])
 	if state.ship().policy_id != "normal_owned":
 		_text("当前为保障或借用舰，使用随船设备；切换自有舰后可调整装配。", UISkin.SIZE_BODY)
-		_button(tools, "选择自有舰", show_page.bind("ships")).name = "FittingOwnedShipEntry"
+		_button(body, "选择自有舰", show_page.bind("ships")).name = "FittingOwnedShipEntry"
 		_fitting_finish(list)
 		return
 	var filter: Button = _button(tools, "全部本地设备" if not fitting_show_all else "仅适配当前舰", func(): fitting_show_all = not fitting_show_all; refresh_page())
@@ -1338,16 +1342,21 @@ func _fitting_select(id: String) -> void:
 		if not reason.is_empty(): button.tooltip_text = reason
 
 func _market() -> void:
+	var help: String = "在各行填写成交数量；报价含税与声望优惠。悬停名称查看物品详情。"
 	var filters: HFlowContainer = HFlowContainer.new()
+	filters.tooltip_text = help
 	body.add_child(filters)
 	for filter: String in ["buy", "ships", "sell"]:
-		var button: Button = _button(filters, str({"buy": "购买物资", "ships": "购买船体", "sell": "出售本地资产"}[filter]) + (" · 当前" if filter == market_filter else ""), _set_market_filter.bind(filter))
+		var button: Button = _button(filters, str({"buy": "购买物资", "ships": "购买船体", "sell": "出售本地资产"}[filter]), _set_market_filter.bind(filter))
+		button.tooltip_text = help
 		button.autowrap_mode = TextServer.AUTOWRAP_OFF
 		button.custom_minimum_size = Vector2(132, 36)
 		button.toggle_mode = true
 		button.set_pressed_no_signal(filter == market_filter)
 		UISkin.apply_button(button, "filter", false, filter == market_filter)
-	_text("在各行填写成交数量；报价含税与声望优惠。悬停名称查看物品详情。", 14)
+	var hint: Label = _text_to(body, help, UISkin.SIZE_BODY)
+	hint.name = "MarketHelp"
+	hint.visible = root.size.y >= 480.0
 	var count: int = 0
 	var list: VBoxContainer = _business_list("站点交易清单", "实收单价" if market_filter == "sell" else "含税单价", "成交数量")
 	if market_filter == "buy":
@@ -1388,8 +1397,6 @@ func _market() -> void:
 	_update_quotes()
 
 func _industry() -> void:
-	var tools: HFlowContainer = _action_bar(body, "IndustryTools")
-	if gameplay.projects.supported(): _button(tools, "边疆工程", show_page.bind("projects")).name = "IndustryProjects"
 	var tabs: HFlowContainer = _action_bar(body, "IndustryTabs")
 	for tab: String in ["manufacture", "jobs", "demands", "recycle"]:
 		if tab in ["jobs", "demands"] and not gameplay.industry.supported(): continue
@@ -1465,7 +1472,7 @@ func open_sources(item_id: String = "") -> void:
 
 func _source_button(parent: Node, blueprint_id: String) -> void:
 	var quote: Dictionary = quotes[-1]
-	var button: Button = _button(parent, "材料来源", func():
+	var button: Button = _button(parent, "来源", func():
 		if not _business_context_valid(quote): return
 		var inputs: Array = gameplay.resource_intel.ingredients(blueprint_id)
 		if inputs.is_empty(): return
@@ -1478,12 +1485,6 @@ func _source_button(parent: Node, blueprint_id: String) -> void:
 	button.tooltip_text = "查询本行缺料的采集、采购、加工和打捞地点及实际航路，不消耗任何物资。"
 
 func _missions() -> void:
-	var tools: HFlowContainer = _action_bar(body, "MissionTools")
-	if gameplay.expeditions.supported():_button(tools,"远征航线",show_page.bind("expeditions")).name="MissionExpeditions"
-	if gameplay.scenarios.supported():_button(tools,"航路封锁",show_page.bind("blockades")).name="MissionBlockades"
-	if gameplay.consignments.supported():_button(tools,"承运合同",show_page.bind("consignments")).name="MissionFreight"
-	if gameplay.operations.supported():
-		_button(tools,"拆除与突破",func(): show_page("operations")).name = "MissionOperations"
 	_campaign_summary()
 	_mission_filter_group("type", "类型", ["all", "tutorial", "story", "civilization", "contract"], {"all": "全部类型", "tutorial": "新手教学", "story": "主线剧情", "civilization": "文明入籍", "contract": "地区合同"}, mission_filter)
 	_mission_filter_group("status", "状态", ["current", "active", "available", "all", "completed"], {"current": "当前任务", "all": "全部路线", "active": "进行中", "available": "可接取", "completed": "已完成"}, mission_status_filter)
@@ -1722,12 +1723,6 @@ func _research() -> void:
 
 func _map() -> void:
 	_text("选择星系查看情报；拖动视图、滚轮缩放。定位后，前往虫洞并减速按 F 穿越。", 14)
-	var tools: HFlowContainer = _action_bar(body, "MapTools")
-	if gameplay.exploration.supported():
-		var events: Button = _button(tools, "星域探索事件", func(): open_exploration())
-		events.name = "MapExplorationEvents"
-	var sources: Button = _button(tools, "查询物资来源", func(): open_sources())
-	sources.name = "MapResourceSources"
 	var identity: String = state.world_id + ":" + catalog.content_hash
 	if map_view_identity != identity: map_view_state.clear()
 	map_view_identity = identity
@@ -1891,23 +1886,20 @@ func _resize_map_canvas() -> void:
 	canvas.custom_minimum_size.y = height
 
 func _pause() -> void:
-	var tools: HFlowContainer = _action_bar(body, "PauseTools")
-	if gameplay.telemetry.supported():_button(tools,"航行战报",show_page.bind("reports")).name="PauseReports"
-	if gameplay.fitting_analysis.supported():_button(tools,"查看当前配装分析",show_page.bind("fitting_analysis")).name="PauseFittingAnalysis"
 	_text("世界时间已暂停。保存成功后才会更新存档；等待中的保存可取消。", 14)
 	var flight_card: VBoxContainer = _card("航行控制")
 	var controls: HFlowContainer = _action_bar(flight_card, "PauseFlightActions")
 	var resume: Button = _wide_button(_button(controls, "继续航行", _back))
 	_primary(resume)
-	_secondary(_wide_button(_button(controls, "设置", show_page.bind("settings"))))
-	if DroneAvailability.capable(gameplay): _secondary(_button(controls, _service_label("drones"), show_page.bind("drones")))
 	var help := VBoxContainer.new()
 	help.name = "FlightControlHelp"
-	var help_toggle: Button = _button(flight_card, "操舰与快捷键", func(): help.visible = not help.visible; _link_page_focus.call_deferred())
+	var help_toggle: Button = _button(flight_card, "", _toggle_page_disclosure.bind(weakref(help), "FlightHelpToggle", "操舰与快捷键"))
 	help_toggle.name = "FlightHelpToggle"
+	Disclosure.apply(help_toggle, "操舰与快捷键", false)
 	flight_card.add_child(help)
 	_text_to(help, "光标常驻：左键短击只选目标，长按拖动观察；双击总览目标自动转向并接近。拖动松开后保留角度，滚轮缩放，右键禁用。", 13)
 	_text_to(help, "W/S 沿当前观察航向加速/反向加速，A/D 左右转弯；Space/C 升降、Q/E 滚转；Ctrl 发射、Z 自动开火、X 停船、Shift 增推、F 交互、V 视角。X 只停船；左拖看向上方后按 W 可向上航行。", 13)
+	_text_to(help, "Tab 切换目标；F6 进入 HUD 键盘操作，Tab/Shift+Tab 或方向键移动，Enter/Space 操作，Esc 返回操舰。HUD 模式内暂停操舰和页面快捷键。", 13)
 	help.hide()
 	var rescue: Button = _wide_button(_command(flight_card, "舰船损失后返回保障站", "request_rescue"))
 	rescue.name = "RescueButton"
@@ -1922,8 +1914,9 @@ func _pause() -> void:
 		_wide_button(_command(session_card, "取消等待中的保存", "cancel_save"))
 	var archive := VBoxContainer.new()
 	archive.name = "ArchiveDetails"
-	var archive_toggle: Button = _button(body, "管理存档", func(): archive.visible = not archive.visible; _link_page_focus.call_deferred())
+	var archive_toggle: Button = _button(body, "", _toggle_page_disclosure.bind(weakref(archive), "ArchiveDetailsToggle", "管理存档"))
 	archive_toggle.name = "ArchiveDetailsToggle"
+	Disclosure.apply(archive_toggle, "管理存档", false, slots.size())
 	body.add_child(archive)
 	var page_body: VBoxContainer = body
 	body = archive; card_grid = null
@@ -1936,6 +1929,34 @@ func _pause() -> void:
 	var discard: Button = _wide_button(_button(danger, "放弃未保存进度并退出", func(): requested.emit("quit_without_save", "", 1, "")))
 	discard.name = "QuitWithoutSave"
 	UISkin.apply_button(discard, "danger")
+
+func _toggle_page_disclosure(reference: WeakRef, toggle_name: String, title: String) -> void:
+	var content: Control = reference.get_ref() as Control
+	if not is_instance_valid(content) or content.is_queued_for_deletion() or not body.is_visible_in_tree() or not body.is_ancestor_of(content): return
+	var toggle: Button = body.find_child(toggle_name, true, false) as Button
+	if not is_instance_valid(toggle): return
+	var focus: Control = root.get_viewport().gui_get_focus_owner()
+	content.visible = not content.visible
+	if not content.visible and is_instance_valid(focus) and content.is_ancestor_of(focus): toggle.grab_focus()
+	Disclosure.apply(toggle, title, content.visible, slots.size() if toggle_name == "ArchiveDetailsToggle" else -1)
+	_link_page_focus.call_deferred()
+
+func update_save_slots(save_slots: Array[Dictionary]) -> void:
+	slots = save_slots
+	if page != "pause" or loading_suspended: return
+	var archive: VBoxContainer = body.find_child("ArchiveDetails", true, false) as VBoxContainer
+	var toggle: Button = body.find_child("ArchiveDetailsToggle", true, false) as Button
+	if not is_instance_valid(archive) or not is_instance_valid(toggle): return
+	var view: Dictionary = capture_local_view(body)
+	for child: Node in archive.get_children():
+		archive.remove_child(child)
+		child.queue_free()
+	var page_body: VBoxContainer = body
+	body = archive; card_grid = null
+	_show_slots(true)
+	body = page_body; card_grid = null
+	Disclosure.apply(toggle, "管理存档", archive.visible, slots.size())
+	finish_local_rebuild(body, view)
 
 func _settings() -> void:
 	if preferences.is_empty():
@@ -2377,7 +2398,8 @@ func _business_list(title: String, price_heading: String = "单价 / 信用点",
 		return _information_list(body, title, title, state.ship().ship_def_id if page == "ship_roles" else "")
 	var list: XJBusinessList = BusinessList.new()
 	body.add_child(list)
-	list.configure(title, price_heading, quantity_heading, page in ["market", "industry"])
+	var mode: String = market_filter if page == "market" else industry_tab if page == "industry" else ""
+	list.configure(title, price_heading, quantity_heading, page in ["market", "industry"], mode)
 	if page in ["market", "industry"]: business_list_view = list
 	return list
 
@@ -2914,6 +2936,9 @@ func _update_hud_visibility() -> void:
 
 func _responsive() -> void:
 	if not is_instance_valid(root): return
+	if page == "market" and is_instance_valid(body):
+		var hint: Label = body.find_child("MarketHelp", true, false) as Label
+		if hint != null: hint.visible = root.size.y >= 480.0
 	_resize_map_canvas()
 	var compact: bool = root.size.x < 950
 	var safe: float = 8.0 if compact else 16.0
@@ -3412,8 +3437,26 @@ func _update_quote(row: Dictionary, quantity_override: int = -1) -> void:
 	var status: String = reason if not reason.is_empty() else "可生产" if row.kind == "recipe" else "可拆解" if row.kind == "recycle" else "可成交"
 	row.status_label.text = prefix + (" · " if not prefix.is_empty() else "") + status
 	row.status_label.tooltip_text = row.status_label.text
+	row.row.set_meta("business_status_full", row.status_label.text)
 	row.button.disabled = not reason.is_empty()
 	row.button.tooltip_text = status
+	if is_instance_valid(business_list_view) and business_list_view.has_method("present_status"):
+		var short_prefix: String = prefix.replace("站点库存", "库存").split(" · ")[0]
+		var short_status: String = short_prefix + (" · " if not short_prefix.is_empty() else "") + _short_business_status(status)
+		business_list_view.call("present_status", str(row.row.get_meta("row_id", "")), short_status, row.status_label.text)
+
+func _short_business_status(status: String) -> String:
+	if status in ["可生产", "可拆解", "可成交"]: return status
+	if status.contains("解锁"): return "未解锁"
+	if status.contains("整数"): return "数量无效"
+	if status.contains("材料") or status.contains("缺少") or status.contains("耗材"): return "缺料"
+	if status.contains("预算"): return "预算不足"
+	if status.contains("额度"): return "额度不足"
+	if status.contains("库存"): return "库存不足"
+	if status.contains("信用点"): return "资金不足"
+	if status.contains("空间") or status.contains("容量"): return "容量不足"
+	if status.contains("声望") or status.contains("爵位") or status.contains("资格"): return "资格不足"
+	return "受限"
 
 func _business_stock(id: String) -> Dtos.ShopStockStateDto:
 	for stock: Dtos.ShopStockStateDto in state.rows("shop_stock_state"):
@@ -3799,6 +3842,49 @@ func _close_label(short: bool = false, tooltip: bool = false) -> String:
 	if short: return "←"
 	var destination: String = _destination_label(_back_destination())
 	return ("返回 " + destination) if tooltip else ("← " + destination)
+
+func _related_entries() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if state == null or gameplay == null: return result
+	var family: String = _service_context_page()
+	var groups: Dictionary = {
+		"ships": ["ships", "ship_roles", "hire", "fitting"],
+		"fitting": ["fitting", "fitting_analysis", "trials", "drones", "ships"],
+		"missions": ["missions", "expeditions", "blockades", "consignments", "operations"],
+		"industry": ["industry", "projects", "sources"],
+		"market": ["market", "sources"],
+		"map": ["map", "exploration", "sources"],
+		"civilizations": ["civilizations", "research", "frontier"],
+		"research": ["research", "civilizations"],
+		"pause": ["pause", "reports", "fitting_analysis", "drones", "settings"],
+	}
+	var capabilities: Dictionary = {"ship_roles":"fitting_analysis", "fitting_analysis":"fitting_analysis", "hire":"hired", "trials":"scenarios", "blockades":"scenarios", "expeditions":"expeditions", "consignments":"consignments", "operations":"operations", "projects":"projects", "exploration":"exploration", "frontier":"frontier", "reports":"telemetry"}
+	var docked: bool = state.player().has_docked_station_id
+	var seen: Array[String] = []
+	for entry: String in groups.get(family, []):
+		var destination: String = "fitting_analysis" if entry == "fitting" and not docked else entry
+		if destination == page or destination in seen: continue
+		if destination in ["industry", "market", "research"] and not docked: continue
+		if destination == "drones" and (not DroneAvailability.capable(gameplay) or (not docked and DroneAvailability.equipped(gameplay).is_empty())): continue
+		if capabilities.has(destination):
+			var subsystem: RefCounted = gameplay.get(str(capabilities[destination]))
+			if subsystem == null or not subsystem.has_method("supported") or not subsystem.call("supported"): continue
+		seen.append(destination)
+		result.append({"id": destination, "title": _page_title(destination)})
+	return result
+
+func _add_related_navigation(parent: Node) -> void:
+	var entries: Array[Dictionary] = _related_entries()
+	if entries.is_empty(): return
+	var related: MenuButton = RelatedNavigation.new()
+	parent.add_child(related)
+	related.configure(self, entries)
+
+func _open_related(destination: String) -> void:
+	if not _related_entries().any(func(entry: Dictionary): return str(entry.id) == destination): return
+	if destination == "sources": open_sources()
+	elif destination == "exploration": open_exploration()
+	else: show_page(destination)
 
 func _action_bar(parent: Node, name_hint: String) -> HFlowContainer:
 	var bar := HFlowContainer.new()

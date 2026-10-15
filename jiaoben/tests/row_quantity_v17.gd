@@ -99,6 +99,9 @@ func quote_for(id: String) -> Dictionary:
 		if str(quote.get("target", "")) == id: return quote
 	return {}
 
+func business_status(quote: Dictionary) -> String:
+	return str(quote.row.get_meta("status_full", quote.status_label.tooltip_text if not quote.status_label.tooltip_text.is_empty() else quote.status_label.text))
+
 func business_rows() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var view: Node = host.ui.get("business_list_view") as Node
@@ -149,39 +152,53 @@ func visible_control(control: Control) -> bool:
 
 func actual_click(button: Button, expected_action: String, expected_target: String = "") -> bool:
 	if not check(button != null and not button.disabled, "legal action button exists " + expected_action): return false
-	await reveal(button)
 	var before_events: int = requested_events.size()
 	var emitted: Dictionary = {"count": 0}
 	var observer: Callable = func(): emitted["count"] = int(emitted["count"]) + 1
 	button.pressed.connect(observer)
+	await reveal(button)
+	Input.flush_buffered_events()
 	var deadline: int = Time.get_ticks_msec() + 1500
 	var ready: bool = false
 	var stable: int = 0
+	var stable_since: int = Time.get_ticks_msec()
 	var previous: Rect2 = button.get_global_rect()
 	while Time.get_ticks_msec() < deadline:
 		if DisplayServer.get_name() != "headless" and not root.has_focus(): root.grab_focus()
 		var center: Vector2 = button.get_global_rect().get_center()
-		host.get_viewport().warp_mouse(center)
+		if stable == 0 or not button.get_global_rect().has_point(button.get_global_mouse_position()): host.get_viewport().warp_mouse(center)
 		var motion := InputEventMouseMotion.new()
-		motion.position = center; motion.global_position = center
+		motion.position = center; motion.global_position = center; motion.button_mask = 0; motion.window_id = root.get_window_id()
 		host.get_viewport().push_input(motion, true)
+		Input.flush_buffered_events()
 		await process_frame
 		var hover: Control = host.get_viewport().gui_get_hovered_control()
 		var hover_ok: bool = hover != null and (hover == button or button.is_ancestor_of(hover))
 		if DisplayServer.get_name() != "headless": hover_ok = hover_ok and root.has_focus() and button.get_global_rect().has_point(button.get_global_mouse_position())
 		var current: Rect2 = button.get_global_rect()
 		stable = stable + 1 if current.is_equal_approx(previous) and hover_ok and visible_control(button) else 0
+		if stable == 0: stable_since = Time.get_ticks_msec()
 		previous = current
-		if stable >= 2: ready = true; break
+		if stable >= 3 and Time.get_ticks_msec() - stable_since >= 100: ready = true; break
 	if not check(ready, "actual viewport GUI pointer/focus reaches action " + expected_action):
 		print("ROW_QUANTITY_V17_GUI_TIMEOUT " + JSON.stringify({"action": expected_action, "page": host.ui.page, "rect": str(button.get_global_rect()), "focus": root.has_focus(), "hover": str(host.get_viewport().gui_get_hovered_control()), "pointer": str(button.get_global_mouse_position())}))
 		button.pressed.disconnect(observer)
 		return false
+	# A physical click keeps one pointer position. Do not chase a control which
+	# moves or is removed by focus/commit. Explicit masks distinguish held input
+	# from release, and different frames let the actual GUI own its mouse capture.
+	var click_point: Vector2 = button.get_global_rect().get_center()
+	var trace: Array[Dictionary] = []
+	trace.append(click_witness(button, "before", click_point))
 	for pressed: bool in [true, false]:
 		var event := InputEventMouseButton.new()
 		event.button_index = MOUSE_BUTTON_LEFT; event.pressed = pressed
-		event.position = button.get_global_rect().get_center(); event.global_position = event.position
+		event.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0; event.window_id = root.get_window_id()
+		event.position = click_point; event.global_position = click_point
 		host.get_viewport().push_input(event, true)
+		Input.flush_buffered_events()
+		await frames(2)
+		trace.append(click_witness(button, "held" if pressed else "released", click_point))
 	await frames(4)
 	var settled: bool = await wait_writer(expected_action if not expected_action.is_empty() else "industry category")
 	if is_instance_valid(button) and button.pressed.is_connected(observer): button.pressed.disconnect(observer)
@@ -190,9 +207,17 @@ func actual_click(button: Button, expected_action: String, expected_target: Stri
 	if matched and not expected_action.is_empty():
 		var request: Dictionary = requested_events[-1]
 		matched = str(request.action) == expected_action and (expected_target.is_empty() or str(request.target) == expected_target)
+	print("ROW_QUANTITY_V17_CLICK_WITNESS " + JSON.stringify({"action": expected_action, "target": expected_target, "pressed_callbacks": emitted["count"], "requests_before": before_events, "requests_after": requested_events.size(), "requests": requested_events.slice(before_events), "trace": trace, "matched": matched}))
 	var passed: bool = check(int(emitted["count"]) == 1 and matched, "one actual GUI category click changes only presentation" if expected_action.is_empty() else "one actual GUI click emits one production command " + expected_action)
 	if passed and not expected_action.is_empty(): gui_transactions += 1
 	return passed
+
+func click_witness(button: Variant, phase: String, point: Vector2) -> Dictionary:
+	var hover: Control = host.get_viewport().gui_get_hovered_control()
+	var focus: Control = host.get_viewport().gui_get_focus_owner()
+	var valid: bool = is_instance_valid(button)
+	var rect: Rect2 = button.get_global_rect() if valid else Rect2()
+	return {"phase": phase, "page": host.ui.page, "generation": host.ui.business_generation, "point": [point.x, point.y], "button_live": valid, "button_inside": valid and button.is_inside_tree(), "rect": [rect.position.x, rect.position.y, rect.size.x, rect.size.y], "draw_mode": button.get_draw_mode() if valid else -1, "hover": str(hover.get_path()) if is_instance_valid(hover) and hover.is_inside_tree() else "", "hover_action": str(hover.get_meta("action", "")) if is_instance_valid(hover) else "", "hover_target": str(hover.get_meta("target", "")) if is_instance_valid(hover) else "", "focus": str(focus.get_path()) if is_instance_valid(focus) and focus.is_inside_tree() else "", "global_left": Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)}
 
 func amount_for(id: String) -> SpinBox:
 	return quote_for(id).get("amount") as SpinBox
@@ -421,11 +446,11 @@ func rejection_checks() -> void:
 	await show_page("market", "buy")
 	var ore: Dictionary = quote_for("ore_ferrosilicate")
 	ore.amount.value = stock("ore_ferrosilicate").quantity + 1; await frames(3)
-	check((ore.button as Button).disabled and str(ore.status_label.text).contains("库存"), "excess row quantity disables purchase with true stock reason")
+	check((ore.button as Button).disabled and business_status(ore).contains("库存"), "excess row quantity disables purchase with true stock reason")
 	if not await reject_quote(ore, "stock insufficient"): return
 	ore.amount.value = 1; var credit: int = host.state.player().credit
 	host.state.player().credit = 0; host.ui._update_quotes(); await frames(3)
-	check((ore.button as Button).disabled and str(ore.status_label.text).contains("信用点"), "zero funds disables actual quote")
+	check((ore.button as Button).disabled and business_status(ore).contains("信用点"), "zero funds disables actual quote")
 	if not await reject_quote(ore, "funds insufficient"): return
 	host.state.player().credit = credit; host.ui._update_quotes()
 	# A dirty input must be re-qualified at click; a previously enabled amount
@@ -469,7 +494,7 @@ func rejection_checks() -> void:
 	var original: Dictionary = {}
 	for row: D.InventoryStackStateDto in stackable: original[row.stack_id] = row.quantity; row.quantity = 0
 	host.ui._update_quotes()
-	check((recipe.button as Button).disabled and str(recipe.status_label.text).contains("材料"), "missing actual inputs disables only its manufacturing row")
+	check((recipe.button as Button).disabled and business_status(recipe).contains("材料"), "missing actual inputs disables only its manufacturing row")
 	await reject_quote(recipe, "materials insufficient")
 	for row: D.InventoryStackStateDto in stackable: row.quantity = int(original[row.stack_id])
 	host.ui._update_quotes()
@@ -505,8 +530,8 @@ func blur_quote_sync_checks() -> void:
 	var expected_price: int = int(host.gameplay.get("economy").call("quote", "ore_ferrosilicate", parsed_after, false)) if normalized else 0
 	var legitimate: bool = normalized and stock("ore_ferrosilicate").quantity >= parsed_after and host.state.player().credit >= expected_price and host.ui._service_reason("trade").is_empty()
 	var synchronized: bool = (not button.disabled) == legitimate and quote_amount(quote.total_label) == expected_price and str(quote.quantity_label.text) == (str(parsed_after) if normalized else "—")
-	if normalized: synchronized = synchronized and not str(quote.status_label.text).contains("请输入")
-	else: synchronized = synchronized and str(quote.status_label.text).contains("请输入")
+	if normalized: synchronized = synchronized and not business_status(quote).contains("请输入")
+	else: synchronized = synchronized and business_status(quote).contains("请输入")
 	print("ROW_QUANTITY_V17_BLUR_RESULT " + JSON.stringify({"raw_before": raw_before, "raw_after": raw_after, "value": amount.value, "parsed": parsed_after, "disabled": button.disabled, "status": quote.status_label.text, "quote_amount": quote_amount(quote.total_label), "expected_price": expected_price, "expected_allowed": legitimate, "focus_owner": str(host.get_viewport().gui_get_focus_owner()), "context_valid": host.ui.call("_business_context_valid", quote), "request_count_before": requests_before, "request_count_after": requested_events.size(), "assets_unchanged": totals() == before}))
 	check(host.get_viewport().gui_get_focus_owner() == other.get_line_edit() and requested_events.size() == requests_before and totals() == before, "moving to another quantity input performs no trade or authority mutation")
 	if check(synchronized, "focus-exit quote and eligibility match actual restored or still-invalid row text"): blur_quote_checks += 1
@@ -592,6 +617,11 @@ func label_fits(label: Label) -> bool:
 	if not label.is_visible_in_tree(): return true
 	return label.size.y + 1.0 >= label.get_theme_font("font").get_height(label.get_theme_font_size("font_size")) * maxi(1, label.get_line_count())
 
+func monetary_fits(label: Label) -> bool:
+	if label == null or not label.is_visible_in_tree(): return false
+	var width: float = label.get_theme_font("font").get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.get_theme_font_size("font_size")).x
+	return label_fits(label) and width <= label.size.x + 1.0 and label.text_overrun_behavior == TextServer.OVERRUN_NO_TRIMMING and label.horizontal_alignment == HORIZONTAL_ALIGNMENT_RIGHT
+
 func capture(label: String) -> void:
 	if DisplayServer.get_name() == "headless": return
 	await frames(4); await RenderingServer.frame_post_draw
@@ -643,6 +673,16 @@ func warehouse_layout(suffix: String) -> void:
 			host.get_viewport().gui_release_focus()
 
 func layout_checks() -> void:
+	await show_page("market", "buy")
+	if await set_amount("ore_ferrosilicate", 2, true):
+		var live_amount: SpinBox = amount_for("ore_ferrosilicate")
+		var identity: int = live_amount.get_instance_id()
+		var before: Dictionary = totals(); var requests: int = requested_events.size()
+		root.size = Vector2i(1280, 720); root.content_scale_size = Vector2i(640, 360); await frames(10)
+		check(amount_for("ore_ferrosilicate").get_instance_id() == identity and live_amount.get_line_edit().text == "2" and int(live_amount.value) != 2 and host.get_viewport().gui_get_focus_owner() == live_amount.get_line_edit(), "compact column transition preserves the same focused editor and its genuinely unsubmitted text")
+		root.size = Vector2i(1440, 900); root.content_scale_size = root.size; await frames(10)
+		check(amount_for("ore_ferrosilicate").get_instance_id() == identity and live_amount.get_line_edit().text == "2" and int(live_amount.value) != 2 and totals() == before and requested_events.size() == requests, "restoring full columns neither replaces editors nor commits a trade")
+		host.get_viewport().gui_release_focus()
 	for layout: Dictionary in [{"size": Vector2i(1440, 900), "scale": 1.0}, {"size": Vector2i(1280, 720), "scale": 1.0}, {"size": Vector2i(1440, 900), "scale": 2.0}, {"size": Vector2i(1280, 720), "scale": 2.0}]:
 		root.size = layout.size; root.content_scale_size = Vector2i(Vector2(layout.size) / float(layout.scale))
 		var suffix: String = "%dx%d-%d" % [layout.size.x, layout.size.y, int(float(layout.scale) * 100)]
@@ -652,10 +692,24 @@ func layout_checks() -> void:
 			check(host.ui.quantity_input == null and host.ui.body.find_child("OperationQuantity", true, false) == null, "page never shows detached global quantity " + page + " " + suffix)
 			if page == "warehouse": await warehouse_layout(suffix)
 			else:
+				var list: Node = host.ui.business_list_view
+				if host.ui.root.size.x <= 720:
+					check(bool(list.get_meta("compact_columns", false)) and list.horizontal_scroll.scroll_horizontal == 0 and list.horizontal_scroll.get_h_scroll_bar().max_value <= list.horizontal_scroll.get_h_scroll_bar().page + 1.0, "narrow trading table exposes its priority columns without horizontal scrolling " + page + " " + suffix)
 				for entry: Dictionary in business_rows():
 					var amount: SpinBox = entry.get("amount") as SpinBox
 					for field: String in ["name", "description", "unit", "quantity", "unit_price", "total", "status"]: check(label_fits(entry[field]), "business row text fits " + page + " " + suffix + " " + str(entry.row.get_meta("row_id")) + " " + field)
 					if amount != null: check(entry.row.is_ancestor_of(amount) and amount.size.y >= amount.get_combined_minimum_size().y - 0.5, "quantity belongs to the exact business row " + page + " " + suffix)
+					check(monetary_fits(entry.unit_price) and monetary_fits(entry.total), "both actual unit and total monetary values remain complete and right aligned " + page + " " + suffix)
+					if bool(list.get_meta("compact_columns", false)):
+						var viewport: Rect2 = list.horizontal_scroll.get_global_rect()
+						for field: String in ["name", "unit_price", "total", "actions"]:
+							var rect: Rect2 = (entry[field] as Control).get_global_rect()
+							check(rect.position.x >= viewport.position.x - 1.0 and rect.end.x <= viewport.end.x + 1.0, "compact essential trading field stays horizontally accessible " + page + " " + suffix + " " + field)
+					var action_y: float = NAN
+					for child: Node in entry.actions.get_children():
+						if not child is Button or not child.is_visible_in_tree(): continue
+						if is_nan(action_y): action_y = child.get_global_rect().get_center().y
+						check(absf(child.get_global_rect().get_center().y - action_y) <= 1.0, "trading primary and secondary actions remain on one horizontal row " + page + " " + suffix)
 				var target: SpinBox = amount_for("ore_ferrosilicate" if page == "market" else "recipe_structural")
 				if target != null:
 					host.get_viewport().gui_release_focus(); target.get_line_edit().grab_focus(); await frames(4)

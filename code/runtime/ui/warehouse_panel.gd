@@ -1,5 +1,5 @@
 class_name XJWarehousePanel
-extends HBoxContainer
+extends BoxContainer
 ## Warehouse presentation only. Eligibility and capacities come from Inventory.
 signal transfer_requested(kind: String, id: String, quantity: int, destination: String)
 signal open_salvage_requested(package_id: String)
@@ -10,6 +10,9 @@ var _quote: Callable
 var _quantity_limit: int = 1
 var _compact: bool = false
 var _has_salvage_actions: bool = false
+var _stacked: bool = false
+var _shallow: bool = false
+var _available_width: float = 0.0
 
 func configure(ship_rows: Array[Dictionary], station_rows: Array[Dictionary], ship_title: String, station_title: String, quantity_limit: int, quote: Callable) -> void:
 	name = "WarehousePanel"
@@ -36,25 +39,62 @@ func configure(ship_rows: Array[Dictionary], station_rows: Array[Dictionary], sh
 	_set_compact(false)
 
 func fit_height(available: float) -> void:
-	# The outer service page owns only the headings; each inventory scrolls itself.
-	custom_minimum_size.y = maxf(120.0, available - 2.0)
-	_set_compact(available < 240.0)
+	fit_view(_available_width if _available_width > 0.0 else size.x, available)
+
+func fit_view(available_width: float, available_height: float) -> void:
+	_available_width = available_width
+	var normal: Dictionary = _cell_sizes(false)
+	var normal_dual: float = 2.0 * (_table_width(normal) + 2.0 * UISkin.GAP + 16.0) + UISkin.GAP
+	var compact: bool = available_height < 240.0 or available_width < normal_dual
+	var cell: Dictionary = _cell_sizes(compact)
+	var pane_min: float = _table_width(cell) + (8.0 if compact else 2.0 * UISkin.GAP) + 16.0
+	var stacked: bool = available_width > 0.0 and available_width < 2.0 * pane_min + UISkin.GAP
+	if stacked != _stacked:
+		_stacked = stacked
+		# Native orientation changes retain every node, path, editor and callback.
+		vertical = stacked
+	set_meta("stacked_panes", stacked)
+	# The page owns the vertical budget. Fixed 200/96px minima pushed the top
+	# pane outside a 640x360 page even though each individual row fit its table.
+	custom_minimum_size.y = maxf(0.0, available_height - 2.0)
+	_shallow = false
+	_set_compact(compact)
+	if stacked and get_combined_minimum_size().y > available_height:
+		# Keep both inventory captions and one complete actual row. Only repeated
+		# table headings fold in the shallow profile; columns and inputs survive.
+		_shallow = true
+		for column: Dictionary in refs.get("columns", []): column.header_frame.hide()
+		_update_pane_minimums()
+	set_meta("shallow_stacked", _shallow)
+	var focus: Control = get_viewport().gui_get_focus_owner()
+	if is_instance_valid(focus) and is_ancestor_of(focus): _reveal_local_control(focus)
+
+func _table_width(cell: Dictionary) -> float:
+	return float(cell.image + cell.name + cell.location + cell.amount + cell.actions + 4 * cell.gap + 2 * cell.margin)
 
 func _set_compact(compact: bool) -> void:
 	_compact = compact
-	var cell: Dictionary = _cell_sizes()
+	var cell: Dictionary = _cell_sizes(compact)
 	for column: Dictionary in refs.get("columns", []):
 		var frame: PanelContainer = column.column
 		frame.custom_minimum_size.x = 180 if compact else 220
+		frame.custom_minimum_size.y = 0
+		frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		(frame.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(4 if compact else UISkin.GAP)
 		column.content_layout.add_theme_constant_override("separation", 4 if compact else UISkin.GAP)
 		column.heading.add_theme_font_size_override("font_size", 14 if compact else 17)
+		column.heading.text = str(column.title) + " · " + str(column.subtitle) if _stacked else str(column.title)
+		column.heading.tooltip_text = str(column.title) + "\n" + str(column.subtitle)
+		column.heading.autowrap_mode = TextServer.AUTOWRAP_OFF if _stacked else TextServer.AUTOWRAP_WORD_SMART
+		column.heading.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS if _stacked else TextServer.OVERRUN_NO_TRIMMING
+		column.subheading.visible = not _stacked
 		column.subheading.add_theme_font_size_override("font_size", 10 if compact else 11)
 		column.subheading.max_lines_visible = 1 if compact else 2
 		column.subheading.autowrap_mode = TextServer.AUTOWRAP_OFF if compact else TextServer.AUTOWRAP_WORD_SMART
 		column.subheading.clip_text = compact
 		column.subheading.tooltip_text = column.subheading.text
 		(column.header_frame.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(int(cell.margin))
+		column.header_frame.visible = not _shallow
 		column.header.add_theme_constant_override("separation", int(cell.gap))
 		for label: Label in [column.inventory_heading, column.location_heading, column.amount_heading, column.action_heading]: label.add_theme_font_size_override("font_size", 10 if compact else 11)
 		_size_cell(column.image_heading, float(cell.image))
@@ -94,11 +134,21 @@ func _set_compact(compact: bool) -> void:
 			_size_cell(row.amount_placeholder, float(cell.amount))
 			_size_cell(row.action_placeholder, float(cell.actions))
 			for label: Label in [row.amount_placeholder, row.action_placeholder]: label.add_theme_font_size_override("font_size", 10 if compact else 11)
+	_update_pane_minimums()
 
-func _cell_sizes() -> Dictionary:
-	# Presentation dimensions only. The table scrolls horizontally when a pane
-	# is narrower; cargo, location and controls never reflow into another line.
-	var sizes: Dictionary = {"image": 24, "name": 156, "location": 72, "amount": 70, "button": 68, "gap": 4, "margin": 3} if _compact else {"image": 32, "name": 184, "location": 86, "amount": 82, "button": 76, "gap": 6, "margin": 5}
+func _update_pane_minimums() -> void:
+	for column: Dictionary in refs.get("columns", []):
+		var minimum: float = 0.0
+		if _stacked:
+			var records: Array = refs.ship_rows if column.scroll == refs.ship_scroll else refs.station_rows
+			minimum = (records[0].row as Control).get_combined_minimum_size().y if not records.is_empty() else column.content.get_combined_minimum_size().y
+			if not _shallow: minimum += column.header_frame.get_combined_minimum_size().y + column.table.get_theme_constant("separation")
+		column.scroll.custom_minimum_size.y = minimum
+
+func _cell_sizes(compact: bool) -> Dictionary:
+	# Presentation dimensions only. Their measured total chooses the pane
+	# orientation; cargo, location and controls retain the same per-row grid.
+	var sizes: Dictionary = {"image": 24, "name": 156, "location": 72, "amount": 70, "button": 68, "gap": 4, "margin": 3} if compact else {"image": 32, "name": 184, "location": 86, "amount": 82, "button": 76, "gap": 6, "margin": 5}
 	# All rows keep the same operation column when a local package adds a claim.
 	sizes["actions"] = int(sizes.button) * (2 if _has_salvage_actions else 1) + (int(sizes.gap) if _has_salvage_actions else 0)
 	return sizes
@@ -161,7 +211,7 @@ func _column(node_name: String, title: String, subtitle: String, inventory_headi
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 5)
 	table.add_child(content)
-	return {"column": frame, "scroll": scroll, "table": table, "content": content, "content_layout": column, "heading": heading, "subheading": subheading, "header": header, "header_frame": header_frame, "image_heading": image_heading, "inventory_heading": inventory_title, "location_heading": location, "amount_heading": amount_heading, "action_heading": action_heading}
+	return {"column": frame, "scroll": scroll, "table": table, "content": content, "content_layout": column, "title": title, "subtitle": subtitle, "heading": heading, "subheading": subheading, "header": header, "header_frame": header_frame, "image_heading": image_heading, "inventory_heading": inventory_title, "location_heading": location, "amount_heading": amount_heading, "action_heading": action_heading}
 
 func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	var remote: bool = bool(data.remote)
@@ -361,7 +411,8 @@ func _refresh_tooltip(row: Dictionary) -> void:
 	row.location.tooltip_text = tooltip
 
 func _reveal_local_control(control: Control) -> void:
-	# Reveal in the owning inventory only; the opposite pane keeps its position.
+	# Reveal the owning inventory and its outer page; the opposite pane is never
+	# an ancestor and retains both scroll offsets in stacked mode as well.
 	# The SpinBox owns its arrows outside the embedded LineEdit's rectangle.
 	# Focus on the editor must reveal the whole quantity control on both axes.
 	var target: Control = control.get_parent() as SpinBox if control is LineEdit and control.get_parent() is SpinBox else control
@@ -371,10 +422,9 @@ func _reveal_local_control_after_layout(reference: WeakRef) -> void:
 	var control: Control=reference.get_ref() as Control
 	if not is_instance_valid(control) or not is_inside_tree() or is_queued_for_deletion() or not is_ancestor_of(control): return
 	var ancestor: Node = control.get_parent()
-	while ancestor != null and ancestor != self:
+	while ancestor != null:
 		if ancestor is ScrollContainer:
 			ancestor.ensure_control_visible(control)
-			return
 		ancestor = ancestor.get_parent()
 
 func snapshot_view() -> Dictionary:

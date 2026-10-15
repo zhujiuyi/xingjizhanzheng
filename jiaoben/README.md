@@ -2,21 +2,28 @@
 
 ## 航行加载响应
 
-`py jiaoben/tests/startup_navigation_run.py [--executable <v0.34.0 EXE>]` 使用真实标题按钮、共享审计锁、fresh UUID 库与严格双日志，验证新建/继续/保存返回标题的响应以及加载后持续运行。可传 `--profile-copy <jiaoben/tmp 内已关闭的副本>`，先继续原世界再新建；加 `--profile-new-first` 单独验证未先升级的旧档直接新建。不得传个人原件。旧 v0.33.0 反例另加 `--legacy-v61`，只在 tmp 暂存适配脚本。失败/安全停止入口为 `py jiaoben/tests/loading_failure_run.py [--executable <v0.33.1 EXE>]`，固定两条预期错误各一次，其余诊断严格拒绝。原始报告在 logs，截图/副本在 tmp，边界与验收见 [71](../doc/71-航行加载响应与旧档性能修复.md)。
+`py jiaoben/tests/startup_navigation_run.py [--executable <v0.36.0 EXE>]` 使用真实标题按钮、共享审计锁、fresh UUID 库与严格双日志，验证新建/继续/保存返回标题的响应以及加载后持续运行。可传 `--profile-copy <jiaoben/tmp 内已关闭的副本>`，先继续原世界再新建；加 `--profile-new-first` 单独验证未先升级的旧档直接新建。不得传个人原件。旧 v0.33.0 反例另加 `--legacy-v61`，只在 tmp 暂存适配脚本。失败/安全停止入口为 `py jiaoben/tests/loading_failure_run.py [--executable <v0.33.1 EXE>]`，固定两条预期错误各一次，其余诊断严格拒绝。原始报告在 logs，截图/副本在 tmp，边界与验收见 [71](../doc/71-航行加载响应与旧档性能修复.md)。
 
 ## 全界面UI审查
 
-源码原生检查：`py jiaoben/tests/ui_quality_audit_run.py --label before` 或 `--label after --strict-layout`。工具持有共享运行锁，使用fresh UUID测试库，覆盖28个独立页面/四种尺寸与缩放/声明的子视图、真实控件交互、UI源文件前后摘要与严格双日志；不使用个人存档。实际Windows 0.35.0.0可加`--executable <EXE>`，仅固定v61入口，拒绝向旧EXE传新参数或使用通用`--script`。信用点/解锁/有限库存为明示展示夹具，购船/招募/配装/保存/出港调用真实入口；不能将其作为自然成长或全战斗运行态验收。报告在logs、截图及控件JSON在tmp/ui-quality-audit。`--headless`仅检查结构，不能替代原生图。问题与实际证据见[68](../doc/68-全界面工业风审查与整改.md)。
+源码原生检查：`py jiaoben/tests/ui_quality_audit_run.py --label before` 或 `--label after --strict-layout`。工具持有共享运行锁，使用fresh UUID测试库，覆盖28个独立页面/四种尺寸与缩放/声明的子视图、真实控件交互、UI源文件前后摘要与严格双日志；不使用个人存档。实际Windows 0.36.0.0可加`--executable <EXE>`，仅固定v61入口，拒绝向旧EXE传新参数或使用通用`--script`。信用点/解锁/有限库存为明示展示夹具，购船/招募/配装/保存/出港调用真实入口；不能将其作为自然成长或全战斗运行态验收。报告在logs、截图及控件JSON在tmp/ui-quality-audit。`--headless`仅检查结构，不能替代原生图。问题与实际证据见[68](../doc/68-全界面工业风审查与整改.md)。
 
-交互专项：`py jiaoben/tests/ui_interaction_consistency_run.py [--executable <0.35.0.0 EXE>]`。使用同样的锁和fresh UUID，验证未提交/失焦数量、真实资格、旧配装报价、内部SpinBox编辑器焦点、上下文返回和旧页面/旧世界回调。不能把有资金视为有库存；所有禁用判断与业务服务的实际资格比较。
+交互专项：`py jiaoben/tests/ui_interaction_consistency_run.py [--executable <0.36.0.0 EXE>]`。使用同样的锁和fresh UUID，验证未提交/失焦数量、真实资格、旧配装报价、内部SpinBox编辑器焦点、上下文返回和旧页面/旧世界回调。不能把有资金视为有库存；所有禁用判断与业务服务的实际资格比较。
 
 材质、特效与新舰造型：`py jiaoben/tests/render_quality_audit_run.py --label after --baseline <已接受before报告>`，实际包另加`--executable <0.33.0.0 EXE> --source-reference <已接受source-after报告>`。before须在改动前的源码保存；after验证真实资源、几何/锚点、画质切换、FX像素可见性与寿命/暂停/预算、全状态/RNG及严格双日志。模型作者流程为Blender运行`art/build_ships_v4.py`，原生`art/preview_ships_v4.gd`生成逐舰三角度与缩略图，`art/bake_hangar_reflection.gd`仅捕捉静态机库；生成资源后更新两个新表现包manifest及ship_v4 manifest。所有引擎操作串行持锁；图像或manifest存在不能代替实际验收。范围与结果见[69](../doc/69-交互一致性与材质表现优化.md)、[70](../doc/70-舰船造型重建.md)。
 
 ## 信息分层与场景化入口
 
-`py jiaoben/tests/ui_information_v63_run.py [--executable <0.35.0.0 EXE>]` 使用固定v63入口、共享锁、fresh UUID测试库和严格双日志，核验当前舰无人机权限/实际装配、站内与飞行命令分离、摘要列表与旧隐藏回调、研究分类及真实投入、成长推荐推进、回收包一次领取、文明分区和合同详情。1280×720/200%货舱领取使用实际640×360逻辑画布。18种目录权限、三艘真实切换/装配舰、资金/进度/容器边界为明示测试夹具，不能替代自然成长或全部战斗验证。源码与实际包分开运行，报告在logs，截图和测试库在tmp/ui-information-v63；整改记录与28页覆盖映射见[72](../doc/72-界面信息分层与场景化入口整改.md)。
+`py jiaoben/tests/ui_information_v63_run.py [--executable <0.36.0.0 EXE>]` 使用固定v63入口、共享锁、fresh UUID测试库和严格双日志，核验当前舰无人机权限/实际装配、站内与飞行命令分离、摘要列表与旧隐藏回调、研究分类及真实投入、成长推荐推进、回收包一次领取、文明分区和合同详情。1280×720/200%货舱领取使用实际640×360逻辑画布。18种目录权限、三艘真实切换/装配舰、资金/进度/容器边界为明示测试夹具，不能替代自然成长或全部战斗验证。源码与实际包分开运行，报告在logs，截图和测试库在tmp/ui-information-v63；整改记录与28页覆盖映射见[72](../doc/72-界面信息分层与场景化入口整改.md)。
 
 ## 既有专项入口
+
+Windows仓储与交易使用 `py jiaoben/verify_combat_v18.py --native --only warehouse row-quantity [--executable <0.36.0.0 EXE>]`，沿用固定仓储/行数量入口，启动前只读检查PCK参数存在，严格fresh UUID和双日志。旧Mac专用runner保留为历史工具。仓储来源夹具先真实出港并放入NPC的权威地点，再调用原伤害/封存服务；不直接生成战利品。导航用 `py jiaoben/tests/navigation_commands_v6_run.py --native [--executable <0.36.0.0 EXE>]`，WASAPI/Dummy自动按平台选择，外层600秒；覆盖停止、合法大坐标转向、跃迁/穿门/抵达及持久边界。
+
+
+遗留界面专项：`py jiaoben/tests/ui_completion_v64_run.py`仅运行本轮七组（相关功能菜单、研究空态、累计指标、折叠、HUD键盘、距离、四尺寸交易）。可加`--executable <已核验且包含固定v64入口的Windows EXE>`；runner校验二进制身份与`--xj-verify-ui-completion-v64`，拒绝向旧包传通用脚本。源码与实际PCK分开运行，共用审计锁、fresh UUID私有库、严格双日志及源码/测试摘要。脚本600秒看门狗、外层660秒有界等待；`--headless`仅作结构/分发检查，不能替代原生窗口。
+
+v64覆盖1440×900、1024×648、1920×1080、1280×720@200%（实际640×360逻辑画布），记录完整关键控件、真实菜单/按来路返回、F6模式下实际导航/停止与战斗开关、模式外原Tab切目标，以及数量2的实际购买/扣款。7字段展示与入籍边界为明示临时夹具，真实交易前恢复；报告裁剪通过原telemetry服务的零时长生命周期边界验证，不作为正常航行证据。最大17槽只把真实目录槽位/模块数据显示于生产EquipmentBar，四尺寸逐磁贴测矩形、标签、完整tooltip与环数值，然后恢复原资源；不创建权威设备、不保存假装配，不声称合法满装。报告在`logs/ui-completion-v64-*`，截图/私有库在`tmp/ui-completion-v64/<UUID>/`。当前最终重复与实际包结果仍待主整合者填写，方案、已实施范围与已证实的适用回归见[75](../doc/75-遗留交互与回归整改计划审核.md)。
 
 正常成长续段来源统一使用`prepare_natural_checkpoint.py --report <logs中的已通过报告> --case natural-research|natural-rescue`。输出只读核对后的来源凭据和路径文件。`--only natural-rescue`读取`XJ_NATURAL_RESEARCH_ORIGIN`，运行实际战斗、修复护送、交付与整备款；源库不写入。此组尚待运行，不能因脚本存在就视为通过。
 

@@ -418,11 +418,13 @@ func _target_rule(entry: Dictionary) -> Dictionary:
 	return result
 
 func _heading_delta(direction: Vector3, delta: float) -> float:
-	if direction.length_squared() < 0.000001: return 0.0
+	if not direction.is_finite() or direction.length_squared() < 0.000001: return 0.0
 	var body: XJFlight = world.flight
 	var up: Vector3 = body.global_basis.y
 	if direction.normalized().cross(up).length_squared() < 0.000001: up = body.global_basis.x
-	var desired: Basis = XJFlight.leveled_basis(Transform3D(Basis.IDENTITY, body.global_position).looking_at(body.global_position + direction, up).basis)
+	# A direction is independent of position. A one-metre offset at a large local
+	# position can trip Transform3D.looking_at's relative point-equality guard.
+	var desired: Basis = XJFlight.leveled_basis(Basis.looking_at(direction.normalized(), up))
 	var current: Quaternion = body.global_basis.get_rotation_quaternion()
 	var destination_attitude: Quaternion = desired.get_rotation_quaternion()
 	var angle: float = current.angle_to(destination_attitude)

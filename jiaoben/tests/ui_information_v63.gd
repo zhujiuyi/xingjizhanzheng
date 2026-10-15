@@ -69,7 +69,7 @@ func research_information_case() -> void:
 	for kind: String in ["faction", "specialization", "exploration", "facility"]:
 		if not await choose("ResearchTab_" + kind, "open research category " + kind): continue
 		var completed: Button = button_named("ResearchShowCompleted")
-		if completed.text == "显示已完成": await choose("ResearchShowCompleted", "include completed catalog rows " + kind)
+		if completed.is_visible_in_tree() and not completed.button_pressed: await choose("ResearchShowCompleted", "include completed catalog rows " + kind)
 		var selectors: Array[Node] = host.ui.body.find_children("ResearchSelect_*", "Button", true, false)
 		if not check(not selectors.is_empty(), "real catalog rows exist in research category " + kind): continue
 		for selector: Node in selectors:
@@ -91,7 +91,9 @@ func research_information_case() -> void:
 	check(host.ui.body.find_child("ResearchQualifications", true, false).is_visible_in_tree(), "qualification history opens only on demand")
 	await choose("ResearchUnlocks", "collapse qualification history")
 	check(not host.ui.body.find_child("ResearchQualifications", true, false).is_visible_in_tree(), "qualification history really collapses")
-	await choose("ResearchShowCompleted", "hide completed research history")
+	var history: Button = button_named("ResearchShowCompleted")
+	if history.is_visible_in_tree() and history.button_pressed: await choose("ResearchShowCompleted", "hide completed research history")
+	else: check(int(history.get_meta("count", -1)) == 0, "history control is hidden only when this category has no completed entries")
 	for selector: Node in host.ui.body.find_children("ResearchSelect_*", "Button", true, false):
 		var id: String = str(selector.get_meta("target", ""))
 		var built: bool = false
@@ -323,7 +325,7 @@ func drone_capability_case() -> void:
 		host._process(0.0)
 		if hull_id == "shuttle_swift":
 			await show_interaction("fitting")
-			check(button_named("FittingDroneManagement") == null, "unsupported actual hull has no fitting drone entry")
+			check(not host.ui._related_entries().any(func(entry: Dictionary): return str(entry.id) == "drones"), "unsupported actual hull has no related drone entry")
 			host.ui.show_page("drones"); await frames(6)
 			check(host.ui.page == "fitting" and button_named("DroneOrder_attack") == null, "unsupported legacy direct drone route redirects to actual fitting")
 			await host._command("undock", "", 1, ""); await settle_writer("real unsupported hull undock"); host._process(0.0)

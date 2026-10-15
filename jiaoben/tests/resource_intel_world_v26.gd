@@ -1,5 +1,53 @@
 extends "civilization_world_v24.gd"
 ## Real window entry, source navigation and readonly UI. Supplies/unlocks are explicit fixtures.
+func source_writer_idle() -> bool:
+	return is_instance_valid(host) and not host.busy and host.loading_job == null and (host.ui == null or not host.ui.loading_suspended)
+
+func settle() -> void:
+	# Arrival emits a deferred save. Several quiet frames include that boundary;
+	# local_navigation.active=false alone does not mean the writer has finished.
+	var deadline: int = Time.get_ticks_msec() + 60000
+	var stable_frames: int = 0
+	while is_instance_valid(host) and stable_frames < 3 and Time.get_ticks_msec() < deadline:
+		await frames(1)
+		stable_frames = stable_frames + 1 if source_writer_idle() else 0
+	check(source_writer_idle() and stable_frames == 3, "source navigation waits for busy job and loading suspension to clear")
+	if source_writer_idle(): host._process(0.0)
+
+func source_popup_key(code: Key, popup: PopupMenu) -> void:
+	for down: bool in [true, false]:
+		# A PopupMenu is a Window. Route through the native window dispatcher even
+		# for embedded popups; viewport.push_input bypasses this routing contract.
+		# Enter may dispose the old menu before key-up, which then targets root.
+		var target_window: Window = popup if is_instance_valid(popup) else root
+		var event := InputEventKey.new()
+		event.keycode = code; event.physical_keycode = code; event.pressed = down
+		event.window_id = target_window.get_window_id()
+		Input.parse_input_event(event)
+		await frames(1)
+	await frames(2)
+
+func reopen_sources_from_chart() -> bool:
+	var menu: MenuButton = host.ui.panel.find_child("RelatedNavigation", true, false) as MenuButton
+	if not check(menu != null, "star chart exposes its actual related navigation menu"): return false
+	var popup: PopupMenu = menu.get_popup()
+	var wanted: int = -1
+	for index: int in range(popup.item_count):
+		if str(popup.get_item_metadata(index)) == "sources" and not popup.is_item_disabled(index): wanted = index; break
+	if not check(wanted >= 0, "actual related menu offers the eligible resource intelligence destination"): return false
+	var wanted_id: int = popup.get_item_id(wanted)
+	if not await click(menu, "reopen sources through star chart"): return false
+	if not check(popup.visible, "native related popup opens from the actual pointer press"): return false
+	for step: int in range(popup.item_count + 1):
+		if popup.get_focused_item() == wanted: break
+		await source_popup_key(KEY_DOWN, popup)
+	if not check(popup.get_focused_item() == wanted, "native popup keyboard focuses the exact resource intelligence item"): return false
+	var selections: Array[int] = []
+	popup.id_pressed.connect(func(id: int): selections.append(id), CONNECT_ONE_SHOT)
+	await source_popup_key(KEY_ENTER, popup)
+	await settle()
+	return check(selections == [wanted_id], "native popup Enter submits exactly one resource intelligence selection")
+
 func _ready() -> void:
 	get_tree().set_meta("xj_resource_intel_world_v26_diagnostic", true)
 	get_tree().create_timer(180.0).timeout.connect(func(): check(false, "source native watchdog"); finish())
@@ -50,8 +98,9 @@ func run() -> void:
 	check(host.ui.resource_chart.information.text.contains("定位：") and host.ui.resource_chart.information.text.contains("活动："), "actual star chart explains sector roles")
 	check(state_signature() == before, "star-chart source inspection is readonly")
 	await capture("sources-map")
-	await click(host.ui.body.find_child("MapResourceSources", true, false), "reopen sources through star chart")
+	if not await reopen_sources_from_chart(): await finish(); return
 	check(host.ui.page == "sources", "map supports sources without another station menu entry")
+	check(state_signature() == before, "related source navigation writes no assets progress or RNG")
 	await click(host.ui.body.find_child("SourceFilter_采矿", true, false), "retain extraction navigation scope")
 	for size: Vector2i in [Vector2i(1280, 720), Vector2i(3440, 1370)]:
 		root.size = size; root.content_scale_factor = 2.0 if size.x == 1280 else 1.0
@@ -80,8 +129,12 @@ func run() -> void:
 		await frames(2)
 		if host.local_navigation.warp_active() and not host.gameplay.situational.spatial_active:observation_boundary_seen=true
 	check(not host.local_navigation.active() and host.ui.target_id == info.waypoint_id, "real navigation reaches the selected transit gate")
+	await settle()
 	host.get_viewport().warp_mouse(root.get_visible_rect().get_center())
-	print("SOURCE_INPUT_CONTEXT ",JSON.stringify({"focus":root.has_focus(),"busy":host.busy,"page":host.ui.page,"keyboard_blocked":host.ui.keyboard_blocked(),"travel":host.travel.active(),"warp":host.local_navigation.warp_active()}))
+	var gate_context: Dictionary = host.interaction_context()
+	print("SOURCE_INPUT_CONTEXT ",JSON.stringify({"focus":root.has_focus(),"busy":host.busy,"loading_job":host.loading_job!=null,"loading_suspended":host.ui.loading_suspended,"page":host.ui.page,"keyboard_blocked":host.ui.keyboard_blocked(),"travel":host.travel.active(),"warp":host.local_navigation.warp_active(),"interaction":gate_context}))
+	if not check(source_writer_idle() and host.deferred_save.is_empty() and host._keyboard_control_allowed() and bool(gate_context.get("ready",false)) and str(gate_context.get("target_id","")) == str(info.waypoint_id), "single actual F input is sent only after committed arrival and real gate eligibility"):
+		await finish(); return
 	await key(KEY_F)
 	deadline = Time.get_ticks_msec() + 50000
 	var location: Dictionary = host.store.catalog.one("resource_node_locations", "node_id", node.node_id)
@@ -89,6 +142,7 @@ func run() -> void:
 		if host.state.current_sector() == node.sector_id and host.gameplay.same_anchor_site(host.state.ship(), host.store.catalog.one("anchor_defs", "anchor_id", location.anchor_id)) and not host.local_navigation.active(): break
 		await frames(2)
 		if (host.local_navigation.warp_active() or host.travel.active()) and not host.gameplay.situational.spatial_active:observation_boundary_seen=true
+	await settle()
 	host.set_process(false); host.set_physics_process(false)
 	check(host.state.current_sector() == node.sector_id, "actual F input crosses the planned star-system gate")
 	check(host.gameplay.same_anchor_site(host.state.ship(), host.store.catalog.one("anchor_defs", "anchor_id", location.anchor_id)), "actual warp arrives in source's declared AU site")

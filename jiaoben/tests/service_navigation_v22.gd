@@ -133,8 +133,7 @@ func key(code: Key, viewport: Viewport = null, reverse: bool = false) -> void:
 			# before Viewport.push_input. Inject through the real window dispatcher;
 			# direct popup.push_input would skip that production handler entirely.
 			input.window_id = target.get_window_id()
-			if target.is_embedded(): root.push_input(input, true)
-			else: Input.parse_input_event(input)
+			Input.parse_input_event(input)
 			await frames(1)
 		else:
 			target.push_input(input, true)
@@ -150,6 +149,26 @@ func authority() -> String:
 	value["slots"] = host.store._records("SELECT slot_id,current_snapshot_id,generation FROM save_slot ORDER BY slot_id", [])
 	value["preferences"] = host.store.preferences()
 	return JSON.stringify(value)
+
+func related_analysis() -> bool:
+	var menu: MenuButton = host.ui.panel.find_child("RelatedNavigation", true, false) as MenuButton
+	if not check(menu != null, "actual flight pause has related navigation"): return false
+	var popup: PopupMenu = menu.get_popup()
+	var wanted: int = -1
+	for index: int in range(popup.item_count):
+		if str(popup.get_item_metadata(index)) == "fitting_analysis" and not popup.is_item_disabled(index): wanted = index; break
+	if not check(wanted >= 0, "actual flight related menu offers analysis"): return false
+	var id: int = popup.get_item_id(wanted)
+	if not await click(menu, "real flight opens related menu"): return false
+	if not check(popup.visible, "actual flight related popup is visible"): return false
+	for step: int in range(popup.item_count + 1):
+		if popup.get_focused_item() == wanted: break
+		await key(KEY_DOWN, popup)
+	if not check(popup.get_focused_item() == wanted, "actual flight popup keyboard focuses analysis"): return false
+	var selected: Array[int] = []
+	popup.id_pressed.connect(func(value: int): selected.append(value), CONNECT_ONE_SHOT)
+	await key(KEY_ENTER, popup); await settle()
+	return check(selected == [id], "real flight popup selects exactly one analysis destination")
 
 func sequence(buttons: Array[Button]) -> Array[String]:
 	var ids: Array[String] = []
@@ -445,7 +464,7 @@ func guarded_departure() -> void:
 	await capture("flight-market-docking-guard")
 	await show("missions")
 	await show("pause")
-	if await click(host.ui.body.find_child("PauseFittingAnalysis", true, false) as Button, "real flight fitting analysis navigation"):
+	if await related_analysis():
 		check(host.ui.page == "fitting_analysis" and host.ui.body.find_children("BusinessQuantity_*", "SpinBox", true, false).is_empty(), "flight fitting navigation reaches analysis without installation or transaction editors")
 		panel_identity("fitting")
 		check(host.ui.body.find_child("FittingCalculate", true, false) != null, "actual read-only fitting analysis controls remain accessible in flight")

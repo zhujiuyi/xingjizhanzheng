@@ -2,6 +2,7 @@ extends VBoxContainer
 ## Research is a station service, not a simulated production queue.
 const UISkin = preload("res://runtime/ui_theme.gd")
 const Interaction = preload("res://runtime/ui/ui_interaction.gd")
+const Disclosure = preload("res://runtime/ui/disclosure.gd")
 
 const CATEGORIES: Array[String] = ["faction", "specialization", "exploration", "facility"]
 const TITLES: Dictionary = {"faction": "势力研究", "specialization": "火控专精", "exploration": "探索研究", "facility": "本站设施"}
@@ -16,8 +17,10 @@ var show_unlocks: bool = false
 var entries: Array[Dictionary] = []
 var rows: Array[Dictionary] = []
 var tabs: Dictionary = {}
+var toolbar: HFlowContainer
 var list: VBoxContainer
 var detail: VBoxContainer
+var detail_frame: PanelContainer
 var qualifications: VBoxContainer
 var summary: Label
 var evidence: Label
@@ -56,7 +59,7 @@ func setup(ui: Node) -> void:
 	add_theme_constant_override("separation", UISkin.SECTION_GAP)
 	summary = u._text_to(self, "", 13)
 	summary.add_theme_color_override("font_color", UISkin.MUTED)
-	var toolbar: HFlowContainer = HFlowContainer.new()
+	toolbar = HFlowContainer.new()
 	toolbar.name = "ResearchCategories"
 	toolbar.add_theme_constant_override("h_separation", UISkin.GAP)
 	toolbar.add_theme_constant_override("v_separation", UISkin.GAP)
@@ -77,11 +80,11 @@ func setup(ui: Node) -> void:
 	list.name = "ResearchList"
 	list.add_theme_constant_override("separation", 0)
 	add_child(list)
-	var frame: PanelContainer = u._frame(self, "ResearchDetailFrame")
+	detail_frame = u._frame(self, "ResearchDetailFrame")
 	detail = VBoxContainer.new()
 	detail.name = "ResearchDetail"
 	detail.add_theme_constant_override("separation", UISkin.GAP)
-	frame.add_child(detail)
+	detail_frame.add_child(detail)
 	unlock_button = u._button(self, "", _toggle_unlocks)
 	unlock_button.name = "ResearchUnlocks"
 	qualifications = VBoxContainer.new()
@@ -137,6 +140,8 @@ func _toggle_completed() -> void:
 
 func _toggle_unlocks() -> void:
 	if not _current(): return
+	var focus: Control = get_viewport().gui_get_focus_owner()
+	if show_unlocks and is_instance_valid(focus) and qualifications.is_ancestor_of(focus): unlock_button.grab_focus()
 	show_unlocks = not show_unlocks
 	_build_qualifications()
 	_remember()
@@ -147,22 +152,29 @@ func _clear(parent: Node) -> void:
 		child.queue_free()
 
 func _build_list() -> void:
-	var view: Dictionary = u.capture_local_view(list)
+	var view: Dictionary = u.capture_local_view(self)
+	# Keep the same guarded history control when it moves into/out of the empty card.
+	if completed_button.get_parent() != toolbar: completed_button.reparent(toolbar, false)
 	_clear(list)
 	rows.clear()
-	var header: HBoxContainer = HBoxContainer.new()
-	header.add_theme_constant_override("separation", UISkin.GAP)
-	var header_frame: PanelContainer = PanelContainer.new()
-	header_frame.add_theme_stylebox_override("panel", UISkin.table_header())
-	list.add_child(header_frame)
-	header_frame.add_child(header)
-	var name_heading: Label = u._text_to(header, "名称", 13)
-	name_heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_column(header, "状态", 112)
-	_column(header, "费用 / 信用点", 192, true)
-	var visible_ids: Array[String] = []
+	var visible_entries: Array[Dictionary] = []
 	for entry: Dictionary in entries:
-		if entry.kind != category or (not show_completed and _done(entry)): continue
+		if entry.kind == category and (show_completed or not _done(entry)): visible_entries.append(entry)
+	completed_button.visible = _completed_count() > 0
+	if not visible_entries.is_empty():
+		var header: HBoxContainer = HBoxContainer.new()
+		header.add_theme_constant_override("separation", UISkin.GAP)
+		var header_frame: PanelContainer = PanelContainer.new()
+		header_frame.name = "ResearchTableHeader"
+		header_frame.add_theme_stylebox_override("panel", UISkin.table_header())
+		list.add_child(header_frame)
+		header_frame.add_child(header)
+		var name_heading: Label = u._text_to(header, "名称", 13)
+		name_heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_column(header, "状态", 112)
+		_column(header, "费用 / 信用点", 192, true)
+	var visible_ids: Array[String] = []
+	for entry: Dictionary in visible_entries:
 		visible_ids.append(str(entry.id))
 		var frame: PanelContainer = PanelContainer.new()
 		frame.name = "ResearchRow_" + str(entry.id)
@@ -184,13 +196,39 @@ func _build_list() -> void:
 		var fee: Label = _column(line, _fee(entry), 192, true)
 		rows.append({"entry": entry, "frame": frame, "button": button, "status": state_label, "fee": fee})
 	if not visible_ids.has(selected): selected = visible_ids[0] if not visible_ids.is_empty() else ""
-	if visible_ids.is_empty():
-		u._text_to(list, "此类项目已全部完成。可开启「显示已完成」查看。", 14).add_theme_color_override("font_color", UISkin.MUTED)
+	if visible_ids.is_empty(): _build_empty_state()
 	membership = _membership()
 	_build_detail()
 	_style_selection()
 	_remember()
-	u.finish_local_rebuild(list, view)
+	u.finish_local_rebuild(self, view)
+
+func _completed_count() -> int:
+	var count: int = 0
+	for entry: Dictionary in entries:
+		if entry.kind == category and _done(entry): count += 1
+	return count
+
+func _build_empty_state() -> void:
+	var frame: PanelContainer = u._frame(list, "ResearchEmptyState")
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", UISkin.GAP)
+	frame.add_child(content)
+	var message: Label = u._text_to(content, "此类项目已全部完成。" if _completed_count() > 0 else "当前站点没有此类研究项目。", UISkin.SIZE_BODY)
+	message.name = "ResearchEmptyMessage"
+	message.add_theme_color_override("font_color", UISkin.MUTED)
+	if _completed_count() > 0:
+		completed_button.reparent(content, false)
+		return
+	for candidate: String in CATEGORIES:
+		if candidate == category or _category_count(candidate) == 0: continue
+		var next: Button = u._button(content, "查看" + str(TITLES[candidate]), _set_category.bind(candidate))
+		next.name = "ResearchEmptyCategory"
+		next.set_meta("action", "research_category")
+		next.set_meta("target", candidate)
+		return
+	var missions: Button = u._button(content, "查看任务与合同", _open_page.bind("missions"))
+	missions.name = "ResearchEmptyMissions"
 
 func _column(parent: Node, text: String, width: int, right: bool = false) -> Label:
 	var label: Label = u._text_to(parent, text, 13)
@@ -222,9 +260,8 @@ func _build_detail() -> void:
 	quantity = null; progress_label = null; action_reason = null; cost_label = null
 	primary = null; donation = null; market = null; industry = null
 	var entry: Dictionary = _selected_entry()
-	if entry.is_empty():
-		u._text_to(detail, "选择项目查看条件与操作。", 14)
-		return
+	detail_frame.visible = not entry.is_empty()
+	if entry.is_empty(): return
 	var definition: Dictionary = entry.definition
 	u._text_to(detail, str(definition.display_name), 18)
 	if category == "specialization":
@@ -428,8 +465,7 @@ func _process(delta: float) -> void:
 	_update()
 
 func _style_selection() -> void:
-	completed_button.text = "收起已完成" if show_completed else "显示已完成"
-	UISkin.apply_button(completed_button, "filter", true, show_completed)
+	Disclosure.apply(completed_button, "已完成项目", show_completed, _completed_count())
 	for id: String in tabs:
 		UISkin.apply_button(tabs[id], "filter", true, id == category)
 	for row: Dictionary in rows:
@@ -490,8 +526,7 @@ func _build_qualifications() -> void:
 	_clear(qualifications)
 	u._link_page_focus.call_deferred()
 	qualifications.visible = show_unlocks
-	unlock_button.text = ("收起" if show_unlocks else "查看") + "已解锁科技与资格（%d）" % u.state.rows("unlock_state").size()
-	UISkin.apply_button(unlock_button, "filter", true, show_unlocks)
+	Disclosure.apply(unlock_button, "已解锁科技与资格", show_unlocks, u.state.rows("unlock_state").size())
 	if not show_unlocks: return
 	var names: PackedStringArray = []
 	for row: RefCounted in u.state.rows("unlock_state"):

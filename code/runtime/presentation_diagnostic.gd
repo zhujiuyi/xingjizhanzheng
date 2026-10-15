@@ -143,6 +143,7 @@ static func run(host: Node, output_dir: String) -> bool:
 	_check(evidence, not host.world.flight.visual.visible and host.ui.instrument_title.text.contains("舰体隐藏") and host.ui.show_ship_button.is_visible_in_tree(), "packed cockpit identifies hidden hull and exposes recovery control")
 	var flight_pose: Transform3D = host.world.flight.global_transform
 	var flight_velocity: Vector3 = host.world.flight.velocity
+	await _control_focus_boundary(host, "ship-recovery")
 	host.ui.show_ship_button.pressed.emit()
 	_check(evidence, host.camera.mode == Types.CameraMode.FOLLOW and host.state.player().camera_mode == Types.CameraMode.FOLLOW and host.world.flight.visual.is_visible_in_tree() and host.world.flight.global_transform.is_equal_approx(flight_pose) and host.world.flight.velocity.is_equal_approx(flight_velocity) and host.ui.instrument_title.text.contains("跟随视角"), "packed recovery shows centered ship without changing flight motion")
 	host.set_process(true)
@@ -286,6 +287,7 @@ static func run(host: Node, output_dir: String) -> bool:
 	var station_screen: Vector2 = host.camera.camera.unproject_position(station.global_position)
 	_check(evidence, not host.camera.camera.is_position_behind(station.global_position) and host._world_target_at(station_screen) == station_id, "packed station model can be selected by its real physical ray hit")
 	await _capture(host, output_dir, "arrival")
+	await _control_focus_boundary(host, "arrival-dock")
 	var docking: bool = host._navigation_command("dock", station_id)
 	var dock_steps: int = 0
 	while host.local_navigation.active() and dock_steps < 1800:
@@ -638,7 +640,7 @@ static func _business_list_checks(host: Node, evidence: Dictionary, output_dir: 
 	_check(evidence, changed_valid and host.ui.quantity_value == initial_quantity, "packed row SpinBox refreshes only its real rounded quote on the same list rows while other quantities and the legacy global value stay unchanged")
 	var compact: bool = goods.size() >= 2 and host.ui.quantity_input == null and host.ui.body.find_child("OperationQuantity", true, false) == null
 	for entry: Dictionary in goods:
-		compact = compact and is_instance_valid(entry.amount) and not entry.quantity.visible and not entry.description.visible and entry.name.autowrap_mode == TextServer.AUTOWRAP_OFF and not entry.name.tooltip_text.is_empty() and entry.row.size.y <= 64.0
+		compact = compact and is_instance_valid(entry.amount) and not entry.quantity.is_visible_in_tree() and not entry.description.is_visible_in_tree() and entry.name.autowrap_mode == TextServer.AUTOWRAP_OFF and not entry.name.tooltip_text.is_empty() and entry.row.size.y <= 64.0
 		var center: float = entry.image.global_position.y + entry.image.size.y * 0.5
 		for control: Control in [entry.name, entry.amount, entry.unit_price, entry.total, entry.status, entry.actions]:
 			compact = compact and absf(control.global_position.y + control.size.y * 0.5 - center) <= 1.0
@@ -657,7 +659,7 @@ static func _business_list_checks(host: Node, evidence: Dictionary, output_dir: 
 		if price > initial_credit:
 			var disabled: bool = false
 			for button: Node in entry.actions.find_children("*", "Button", true, false): disabled = disabled or button.disabled
-			shortage_quote = shortage_quote or disabled and entry.status.text.contains("信用点不足") and entry.total.text == str(price)
+			shortage_quote = shortage_quote or disabled and entry.status.tooltip_text.contains("信用点不足") and entry.status.get_theme_color("font_color").is_equal_approx(XJUITheme.WARN) and entry.total.text == str(price)
 	_check(evidence, hulls_valid, "packed hull list keeps vessel portraits, descriptions, unit and one-vessel transaction quantity")
 	_check(evidence, hull_quotes and shortage_quote, "packed hull prices use real taxed quotes and remain readable when funds disable purchasing")
 	await _capture(host, output_dir, "business-hulls")
@@ -982,6 +984,7 @@ static func _attitude_checks(host: Node, evidence: Dictionary, output_dir: Strin
 	body.reset_physics_interpolation()
 	host.camera.bind(body, host.store.catalog, Types.CameraMode.FRONT)
 	host.state.player().camera_mode = Types.CameraMode.FRONT
+	await _control_focus_boundary(host, "rolled-ship-recovery")
 	host.ui.show_ship_button.pressed.emit()
 	host.camera.step(0.0)
 	_check(evidence, host.camera.mode == Types.CameraMode.FOLLOW and absf(host.camera.camera.global_basis.x.y) < 0.00001 and body.global_transform.is_equal_approx(legacy_pose) and body.velocity == Vector3.ZERO, "packed ship-recovery view removes inherited roll without instantly changing the physical vessel")

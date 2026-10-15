@@ -1,4 +1,4 @@
-extends SceneTree
+extends Node
 ## Full Main commands + fresh SQLite. Explicit fixed ticks, no personal saves.
 ## Synthetic UI contacts are removed before any database capture.
 const Main = preload("res://runtime/main.gd")
@@ -14,9 +14,16 @@ var station_id: String
 var gate_id: String
 var planet_id: String
 var finishing: bool = false
+var root: Window
+var directory: String
+var observations: Array[Dictionary] = []
 
-func _initialize() -> void:
-	create_timer(150.0).timeout.connect(func(): print("NAVIGATION_COMMANDS_V6_RESULT FAIL watchdog"); quit(1))
+func _ready() -> void:
+	get_tree().set_meta("xj_navigation_commands_v6_diagnostic", true)
+	root = get_tree().root
+	# Real site transitions, physics frames and durable saves make this a full
+	# integration run. Leave 30 seconds for shutdown before the runner's 600 s cap.
+	get_tree().create_timer(570.0).timeout.connect(func(): print("NAVIGATION_COMMANDS_V6_RESULT FAIL watchdog"); get_tree().quit(1))
 	call_deferred("_run")
 
 func check(value: bool, label: String) -> bool:
@@ -26,12 +33,18 @@ func check(value: bool, label: String) -> bool:
 	return value
 
 func frames(count: int = 2) -> void:
-	for frame: int in range(count): await process_frame
+	for frame: int in range(count): await get_tree().process_frame
 
 func wait_writer() -> void:
-	var deadline: int = Time.get_ticks_msec() + 5000
-	while host.busy and Time.get_ticks_msec() < deadline: await process_frame
-	check(not host.busy, "actual SQLite writer reaches stable boundary")
+	var deadline: int = Time.get_ticks_msec() + 60000
+	var stable_frames: int = 0
+	while is_instance_valid(host) and stable_frames < 3 and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+		stable_frames = stable_frames + 1 if _writer_idle() else 0
+	check(_writer_idle() and stable_frames == 3, "actual SQLite writer reaches stable boundary")
+
+func _writer_idle() -> bool:
+	return is_instance_valid(host) and not host.busy and host.loading_job == null and (host.ui == null or not host.ui.loading_suspended)
 
 func start_host() -> void:
 	host = Main.new()
@@ -48,13 +61,13 @@ func release_host() -> void:
 	if is_instance_valid(host): host.queue_free()
 	host = null
 	await frames()
-	await create_timer(0.25).timeout
+	await get_tree().create_timer(0.25).timeout
 
 func capture(label: String) -> void:
 	if DisplayServer.get_name() == "headless": return
 	await frames(4)
 	await RenderingServer.frame_post_draw
-	var path := ProjectSettings.globalize_path("res://../jiaoben/logs/navigation-commands-v6-" + label + ".png")
+	var path: String = directory.path_join(label + ".png")
 	check(root.get_texture().get_image().save_png(path) == OK, "native capture " + label)
 	captures += 1
 
@@ -70,16 +83,79 @@ func position() -> Vector3:
 	return host.world.flight.global_position
 
 func place_far() -> void:
-	var target: Node3D = host.world.targets[station_id].node
-	# ~181 km. The old 27 km offset sat inside the catalog's 150 km minimum warp
-	# distance, so every warp check below it was refused with a correct reason.
-	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, target.global_position + Vector3(144000, 60000, 222000))
+	# Station distance comes from a real inter-site warp, never an out-of-bounds
+	# local teleport. This declared picking/tactical pose stays inside the gate site.
+	if not await ensure_target_site(gate_id): return
+	var target: Node3D = host.world.targets[gate_id].node
+	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, target.global_position + Vector3(4000, 1000, 4000))
 	host.world.flight.velocity = Vector3.ZERO
 	host.world.flight.write_back()
 	host.camera.bind(host.world.flight, host.store.catalog, T.CameraMode.FOLLOW)
 	host.camera.step(1.0)
 	host.ui.target_id = station_id
 	host.ui.tick(1.0)
+	var site: Dictionary = host.store.catalog.one("site_defs", "site_id", XJSpaceCoordinates.current_site(host.state))
+	var pivot := Vector3(site.pivot_x_m, site.pivot_y_m, site.pivot_z_m)
+	check(position().distance_to(pivot) < float(site.local_radius_m) and host.world.target_is_local(gate_id) and not host.world.target_is_local(station_id), "warp fixture uses actual transitioned site and legal local coordinates")
+
+func ensure_target_site(id: String) -> bool:
+	if host.world.target_is_local(id): return true
+	if navigation().call("active"): await stop_navigation()
+	await wait_writer()
+	var before_site: String = XJSpaceCoordinates.current_site(host.state)
+	var target_site: String = host.world.target_site(id)
+	var before_pose: Transform3D = pose()
+	await host._command("nav_warp", id, 1, "")
+	if not check(navigation().call("warp_active") and navigation().get("target_id") == id and pose().is_equal_approx(before_pose), "real site transition starts from captured source without teleport " + id): return false
+	var ticks: int = 0
+	while navigation().call("active") and ticks < 1800:
+		await step()
+		ticks += 1
+		if host.busy: await wait_writer()
+	await frames(3)
+	await wait_writer()
+	if not host.deferred_save.is_empty(): await step(); await wait_writer()
+	observations.append({"case":"actual_site_transition", "target":id, "origin_site":before_site, "destination_site":XJSpaceCoordinates.current_site(host.state), "ticks":ticks})
+	return check(ticks < 1800 and navigation().get("phase") == "arrived" and XJSpaceCoordinates.current_site(host.state) == target_site and before_site != target_site and host.world.target_is_local(id) and host.deferred_save.is_empty() and _writer_idle(), "real site transition commits destination and stable arrival " + id)
+
+func boundary_alignment_checks() -> void:
+	var site: Dictionary = host.store.catalog.one("site_defs", "site_id", XJSpaceCoordinates.current_site(host.state))
+	var pivot := Vector3(site.pivot_x_m, site.pivot_y_m, site.pivot_z_m)
+	var local_offset := Vector3(80000, 40000, 120000)
+	if not check(local_offset.length() < float(site.local_radius_m), "alignment fixture is inside the actual local flight boundary"): return
+	host.world.flight.global_transform = Transform3D(Basis.from_euler(Vector3(0.42, -1.15, 0.25)), pivot + local_offset)
+	host.world.flight.velocity = Vector3.ZERO
+	host.world.flight.write_back()
+	var initial: Transform3D = pose()
+	var heading: Vector3 = host.world.target_direction(station_id)
+	var initial_error: float = (-initial.basis.z).angle_to(heading)
+	check(initial_error > float(host.local_navigation.rules.value("alignment_tolerance_rad")) and absf(initial.basis.x.y) > 0.01, "boundary alignment starts with genuine non-default heading and roll")
+	await host._command("nav_warp", station_id, 1, "")
+	if not check(navigation().call("warp_active") and navigation().get("phase") == "warmup", "legal boundary pose starts actual remote-site warp"): return
+	var ticks: int = 0
+	var budget_valid: bool = true
+	var finite_attitude: bool = true
+	var max_arc: float = 0.0
+	var max_budget: float = 0.0
+	var position_retained: bool = true
+	while navigation().get("phase") == "warmup" and ticks < 600:
+		var before: Quaternion = host.world.flight.global_basis.get_rotation_quaternion()
+		var budget: float = float(host.gameplay.call("metrics", host.state.ship()).turn_radps) / 60.0
+		await step()
+		var after: Quaternion = host.world.flight.global_basis.get_rotation_quaternion()
+		var arc: float = before.angle_to(after)
+		# angle_to's float32 dot/acos has measurement roundoff. This 0.001-rad
+		# tolerance does not change the catalog turn rate or production budget.
+		budget_valid = budget_valid and is_finite(arc) and arc <= budget + 0.001
+		finite_attitude = finite_attitude and host.world.flight.global_basis.is_finite()
+		position_retained = position_retained and position().is_equal_approx(initial.origin)
+		max_arc = maxf(max_arc, arc); max_budget = maxf(max_budget, budget)
+		ticks += 1
+	var final_error: float = (-host.world.flight.global_basis.z).angle_to(heading)
+	observations.append({"case":"legal_boundary_alignment", "site":XJSpaceCoordinates.current_site(host.state), "position":[initial.origin.x,initial.origin.y,initial.origin.z], "local_radius_m":float(site.local_radius_m), "offset_m":local_offset.length(), "initial_heading_error_rad":initial_error, "final_heading_error_rad":final_error, "maximum_tick_arc_rad":max_arc, "maximum_catalog_tick_budget_rad":max_budget, "angle_measurement_tolerance_rad":0.001, "ticks":ticks})
+	check(budget_valid and finite_attitude and position_retained, "every actual warmup tick respects catalog angle budget and keeps a finite stationary pose")
+	check(ticks < 600 and navigation().get("phase") == "travel" and final_error <= float(host.local_navigation.rules.value("alignment_tolerance_rad")) + 0.00001 and final_error < initial_error, "boundary alignment reaches real travel only after facing the accepted direction")
+	await stop_navigation()
 
 func press_action(action: String) -> void:
 	var event := InputEventAction.new()
@@ -87,11 +163,30 @@ func press_action(action: String) -> void:
 	event.pressed = true
 	host._unhandled_input(event)
 
+func click_button(button: Button, label: String) -> bool:
+	await frames(3)
+	if not check(is_instance_valid(button) and button.is_visible_in_tree() and not button.disabled, "actual navigation button is reachable " + label): return false
+	var point: Vector2 = button.get_global_rect().get_center()
+	for pressed: bool in [true, false]:
+		var event := InputEventMouseButton.new()
+		event.button_index = MOUSE_BUTTON_LEFT; event.position = point; event.global_position = point; event.pressed = pressed
+		root.push_input(event, true)
+		await frames(1)
+	await wait_writer()
+	return true
+
 func snapshots() -> int:
 	return int(host.store._records("SELECT count(*) AS n FROM save_snapshot")[0].n)
 
 func _run() -> void:
-	database_path = ProjectSettings.globalize_path("res://../jiaoben/tmp/navigation-commands-v6-%d.db" % Time.get_ticks_usec())
+	directory = OS.get_environment("XJ_NAVIGATION_COMMANDS_V6_DIRECTORY").replace("\\", "/")
+	var source_path: String = (get_script() as Script).resource_path.replace("\\", "/")
+	var expected_root: String = source_path.get_base_dir().get_base_dir().path_join("tmp/navigation-commands-v6")
+	var uuid := RegEx.new()
+	uuid.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+	database_path = directory.path_join("progress.db")
+	if not check(source_path.is_absolute_path() and not source_path.contains("..") and source_path.ends_with("/jiaoben/tests/navigation_commands_v6.gd") and directory.is_absolute_path() and not directory.contains("..") and directory.get_base_dir() == expected_root and uuid.search(directory.get_file()) != null and not FileAccess.file_exists(database_path), "fresh UUID navigation database is test-owned"):
+		get_tree().quit(2); return
 	root.size = Vector2i(1440, 900)
 	root.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 	root.content_scale_size = root.size
@@ -109,12 +204,14 @@ func _run() -> void:
 	if not check(not station_id.is_empty() and not gate_id.is_empty() and not planet_id.is_empty(), "real current sector provides station, gate and scenic planet"): await finish(); return
 	check(host.world.visible and not host.hangar.visible and root.get_camera_3d() == host.camera.camera, "fixture explicitly activates real flight scene and camera")
 	if not check(host.has_method("navigation_context") and host.get("local_navigation") != null, "Main wires the production local navigation controller"): await finish(); return
-	place_far()
+	await place_far()
+	await boundary_alignment_checks()
+	await place_far()
 	await eligibility_checks()
 	await npc_sensor_checks()
 	await physical_pick_checks()
 	await tactical_fire_navigation_checks()
-	place_far()
+	await place_far()
 	await source_failure_check()
 	await charge_and_cancel_checks()
 	await transit_stop_checks()
@@ -135,7 +232,7 @@ func context(id: String) -> Dictionary:
 func step(delta: float = 1.0 / 60.0) -> void:
 	# CharacterBody3D uses the engine's real physics-frame delta internally.
 	# Resume inside physics_frame so move_and_slide matches this explicit tick.
-	await physics_frame
+	await get_tree().physics_frame
 	host._physics_process(delta)
 	host.ui.tick(delta)
 	host.camera.step(delta)
@@ -156,7 +253,7 @@ func eligibility_checks() -> void:
 	check(float(station.get("distance_m", 0.0)) > float(host.store.catalog.rule("target_marker_detection_range_m")) and station.get("warp_ready", false), "catalog-known current-sector station stays warp-selectable beyond local sensor range got distance=" + str(station.get("distance_m")) + " ready=" + str(station.get("warp_ready")) + " reason='" + str(station.get("warp_reason")) + "' site='" + str(XJSpaceCoordinates.site_for_entity(host.state, "station", station_id)) + "' current='" + str(XJSpaceCoordinates.current_site(host.state)) + "'")
 	host.gameplay.combat_remaining_s = float(host.store.catalog.rule("combat_exit_delay_s"))
 	check(not context(station_id).get("warp_ready", true) and not str(context(station_id).get("warp_reason", context(station_id).get("reason", ""))).is_empty(), "combat blocks local warp with an actionable refusal")
-	check(context(station_id).get("approach_ready", false) and context(station_id).get("orbit_ready", false), "combat retains tactical approach and orbit controls")
+	check(context(gate_id).get("approach_ready", false) and context(gate_id).get("orbit_ready", false), "combat retains tactical approach and orbit controls")
 	host.gameplay.combat_remaining_s = 0.0
 	host.world.projectiles.fire(host.state.ship().ship_instance_id, host.world.flight.get_rid(), position(), Vector3.FORWARD, 100.0, 1000.0, Vector3.ZERO)
 	check(not context(station_id).get("warp_ready", true), "an actual in-flight projectile blocks warp source capture")
@@ -256,6 +353,9 @@ func remove_readonly_npc(npc: D.NpcStateDto) -> void:
 	await frames()
 
 func physical_target_point(id: String, distance_m: float = 1600.0) -> Vector2:
+	# Only a committed local site has live physics colliders. Reach it through the
+	# actual controller before applying the declared local camera/picking pose.
+	if not await ensure_target_site(id): return Vector2(-1, -1)
 	var node: Node3D = host.world.targets[id].node
 	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, node.global_position + Vector3(0, 0, distance_m))
 	host.world.flight.velocity = Vector3.ZERO
@@ -266,7 +366,7 @@ func physical_target_point(id: String, distance_m: float = 1600.0) -> Vector2:
 	# The v0.8 rig samples an interpolated render pose. Settle the real physics
 	# and render pump after teleporting this explicit picking fixture, then
 	# project with the same current camera used by Main's physical ray.
-	await physics_frame
+	await get_tree().physics_frame
 	await frames(4)
 	host.camera.snapped = false
 	host.camera.step(0.0)
@@ -275,7 +375,7 @@ func physical_target_point(id: String, distance_m: float = 1600.0) -> Vector2:
 	var colliders: Array[Node] = node.find_children("*", "CollisionShape3D", true, false)
 	var aim: Vector3 = colliders[0].global_position if not colliders.is_empty() else node.global_position
 	host.camera.camera.look_at(aim, Vector3.UP)
-	await physics_frame
+	await get_tree().physics_frame
 	return host.camera.camera.unproject_position(aim)
 
 func physical_pick_checks() -> void:
@@ -284,7 +384,10 @@ func physical_pick_checks() -> void:
 	check(host.call("_world_target_at", station_point) == station_id, "real station collision and main camera projection resolve exact world target")
 	var gate_point: Vector2 = await physical_target_point(gate_id)
 	check(host.call("_world_target_at", gate_point) == gate_id, "real wormhole frame collider can be picked without filling its opening")
-	place_far()
+	var gate: Node3D = host.world.targets[gate_id].node
+	var opening: Vector2 = host.camera.camera.unproject_position(gate.global_position)
+	check(host.world.target_is_local(gate_id) and host.call("_world_target_at", opening) != gate_id, "actual local wormhole opening remains free of a fabricated solid pick collider")
+	await place_far()
 	var npc: D.NpcStateDto = spawn_readonly_npc(position() + Vector3(200, 160, -1500), "navigation-ray-npc-fixture")
 	if check(npc != null, "ray-pick NPC uses real archetype, runtime row and production body"):
 		var id: String = npc.npc_instance_id
@@ -299,7 +402,7 @@ func physical_pick_checks() -> void:
 	if DisplayServer.get_name() != "headless":
 		root.grab_focus()
 		var focus_deadline: int = Time.get_ticks_msec() + 1500
-		while not root.has_focus() and Time.get_ticks_msec() < focus_deadline: await process_frame
+		while not root.has_focus() and Time.get_ticks_msec() < focus_deadline: await get_tree().process_frame
 		host.get_viewport().warp_mouse(station_point)
 		await frames(4)
 		await RenderingServer.frame_post_draw
@@ -337,7 +440,7 @@ func physical_pick_checks() -> void:
 	check(host.state.rows("npc_state").all(func(row: RefCounted): return row.npc_instance_id != "navigation-ray-npc-fixture") and host.world.projectiles.active.is_empty(), "ray-pick fixture leaves no transient hostile or projectile for later saves")
 
 func tactical_fire_navigation_checks() -> void:
-	place_far()
+	await place_far()
 	var weapon_range: float = 0.0
 	for equipment: D.EquipmentStateDto in host.gameplay.call("equipped", host.state.ship()):
 		var definition: Dictionary = host.store.catalog.one("module_defs", "module_id", equipment.module_def_id)
@@ -366,13 +469,29 @@ func tactical_fire_navigation_checks() -> void:
 	check(snapshots() == count and host.world.projectiles.active.is_empty() and host.pending_damage.is_empty() and host.state.find("npc_state", "npc_instance_id", id) == null, "tactical fixture is removed and projectiles cleared before any following SQLite snapshot")
 
 func charge_and_cancel_checks() -> void:
-	place_far()
+	await place_far()
+	await wait_writer()
 	var original: Transform3D = pose()
-	var count: int = snapshots()
+	var retained_before: int = snapshots()
+	var sequence_before: int = host.state.capture_sequence
+	var snapshot_before: String = host.state.snapshot.meta.snapshot_id
+	var world_before: String = host.state.world_id
+	var session_id_before: String = host.state.session_id
+	var epoch_before: int = host.state.epoch
+	var session_before: Array[Dictionary] = host.store._records("SELECT last_committed_sequence FROM runtime_session WHERE world_id=? AND session_id=? AND epoch=?", [world_before, session_id_before, epoch_before])
+	if not check(session_before.size() == 1 and int(session_before[0].last_committed_sequence) == sequence_before, "current warmup source begins at the actual committed session sequence"): return
 	await host._command("nav_warp", station_id, 1, "")
 	await wait_writer()
 	check(navigation().call("warp_active") and str(navigation().get("phase")) == "warmup", "Main starts warp only after durable source capture and enters visible warmup got active=" + str(navigation().call("warp_active")) + " phase=" + str(navigation().get("phase")) + " store='" + host.store.last_error + "'")
-	check(snapshots() == count + 1 and pose().is_equal_approx(original), "warmup has exactly one committed source snapshot and no teleport")
+	# Ordinary saves prune unreferenced old snapshots after commit. Net retained
+	# row count is not the number of writes once the keep-recent window is full.
+	# Pin this command's session/epoch and require exactly one new sealed commit.
+	var sealed: Array[Dictionary] = host.store._records("SELECT snapshot_id,capture_sequence,reason FROM save_snapshot WHERE world_id=? AND writer_session_id=? AND writer_epoch=? AND capture_sequence>? AND status='sealed'", [world_before, session_id_before, epoch_before, sequence_before])
+	var session_after: Array[Dictionary] = host.store._records("SELECT last_committed_sequence,resume_snapshot_id FROM runtime_session WHERE world_id=? AND session_id=? AND epoch=?", [world_before, session_id_before, epoch_before])
+	var sequence_after: int = host.state.capture_sequence
+	var snapshot_after: String = host.state.snapshot.meta.snapshot_id
+	observations.append({"case":"warmup_source_commit", "retained_before":retained_before, "retained_after":snapshots(), "sequence_before":sequence_before, "sequence_after":sequence_after, "snapshot_before":snapshot_before, "snapshot_after":snapshot_after, "new_sealed_snapshots":sealed.size(), "durable_session":session_after})
+	check(host.state.world_id == world_before and host.state.session_id == session_id_before and host.state.epoch == epoch_before and sequence_after == sequence_before + 1 and sealed.size() == 1 and int(sealed[0].capture_sequence) == sequence_before + 1 and str(sealed[0].reason) == "auto" and str(sealed[0].snapshot_id) == snapshot_after and snapshot_after != snapshot_before and session_after.size() == 1 and int(session_after[0].last_committed_sequence) == sequence_before + 1 and str(session_after[0].resume_snapshot_id) == snapshot_after and pose().is_equal_approx(original), "warmup has exactly one committed source snapshot and no teleport")
 	var tick: int = host.state.snapshot.meta.simulation_tick
 	host.ui.show_page("pause")
 	for i: int in range(90): await step()
@@ -387,7 +506,7 @@ func charge_and_cancel_checks() -> void:
 	Input.action_release("forward")
 	check(not navigation().call("active"), "manual thrust input takes control and cancels local navigation")
 	await wait_writer()
-	place_far()
+	await place_far()
 	await host._command("nav_warp", station_id, 1, "")
 	await wait_writer()
 	Input.action_press("brake")
@@ -395,7 +514,7 @@ func charge_and_cancel_checks() -> void:
 	Input.action_release("brake")
 	check(not navigation().call("active") and host.world.flight.velocity.is_zero_approx(), "X brake cancels charge and leaves no autonomous velocity")
 	await wait_writer()
-	place_far()
+	await place_far()
 	await host._command("nav_warp", station_id, 1, "")
 	await wait_writer()
 	host._sync_mouse_mode()
@@ -445,10 +564,71 @@ func charge_and_cancel_checks() -> void:
 	host.flight_look.clear()
 	await wait_writer()
 
+func _pose_evidence(value: Transform3D) -> Dictionary:
+	var attitude: Quaternion = value.basis.get_rotation_quaternion()
+	return {"origin":[value.origin.x,value.origin.y,value.origin.z], "quaternion":[attitude.x,attitude.y,attitude.z,attitude.w]}
+
+func _ship_pose_evidence() -> Dictionary:
+	var ship: D.ShipStateDto = host.state.ship()
+	return {"position":[ship.pos_x,ship.pos_y,ship.pos_z], "quaternion":[ship.quat_x,ship.quat_y,ship.quat_z,ship.quat_w], "velocity":[ship.vel_x,ship.vel_y,ship.vel_z]}
+
 func transit_stop_checks() -> void:
-	place_far()
-	var origin: Vector3 = position()
+	await place_far()
+	var departure_site: String = XJSpaceCoordinates.current_site(host.state)
+	var destination_site: String = host.world.target_site(station_id)
+	var departure_pose: Transform3D = pose()
+	var departure_encoded: Vector3 = XJSpaceCoordinates.encoded(host.state.ship())
+	var departure_dto: Dictionary = _ship_pose_evidence()
+	var departure_collision_site: String = host.world.collision_site_id
 	await host._command("nav_warp", station_id, 1, "")
+	await wait_writer()
+	var strategic_ticks: int = 0
+	while navigation().call("active") and navigation().get("phase") == "warmup" and strategic_ticks < 600:
+		await step(); strategic_ticks += 1
+	if not check(strategic_ticks < 600 and navigation().get("phase") == "travel", "actual cross-site warmup reaches strategic travel"): return
+	# Warmup owns attitude and legitimately turns the ship. Preserve the source
+	# position separately, then freeze the aligned attitude for transit/cancel.
+	var aligned_departure: Transform3D = pose()
+	var aligned_dto: Dictionary = _ship_pose_evidence()
+	var heading_error: float = (-aligned_departure.basis.z).angle_to(host.local_navigation.warp_heading)
+	check(aligned_departure.origin.is_equal_approx(departure_pose.origin) and XJSpaceCoordinates.encoded(host.state.ship()).is_equal_approx(departure_encoded) and heading_error <= host.local_navigation.rules.value("alignment_tolerance_rad") + 0.00001, "cross-site warmup aligns attitude without moving the encoded source position")
+	var macro_before: Dictionary = host.world.strategic_components(position())
+	var elapsed_before: float = host.local_navigation.travel_elapsed_s
+	await step()
+	var macro_after: Dictionary = host.world.strategic_components(position())
+	var scalar_delta: float = XJSpaceCoordinates.scalar_distance(macro_before, macro_after)
+	check(is_finite(scalar_delta), "cross-site scalar progress is finite")
+	var transit_pose: Transform3D = pose()
+	var transit_checks: Dictionary = {"scalar_progress":scalar_delta > 1.0, "time_progress":host.local_navigation.travel_elapsed_s > elapsed_before, "local_origin_retained":transit_pose.origin.is_equal_approx(departure_pose.origin), "dto_origin_retained":XJSpaceCoordinates.encoded(host.state.ship()).is_equal_approx(departure_encoded), "aligned_attitude_retained":transit_pose.basis.is_equal_approx(aligned_departure.basis), "origin_site_retained":XJSpaceCoordinates.current_site(host.state) == departure_site, "destination_collision_site":host.world.collision_site_id == destination_site, "projection_active":host.world.departure_active and is_instance_valid(host.world.departure_projection) and not host.world.strategic_render_position.is_empty(), "velocity_zero":host.world.flight.velocity.is_zero_approx()}
+	var transit_record: Dictionary = {"case":"cross_site_transit", "before":_pose_evidence(departure_pose), "aligned":_pose_evidence(aligned_departure), "after":_pose_evidence(transit_pose), "dto_before":departure_dto, "dto_aligned":aligned_dto, "dto_after":_ship_pose_evidence(), "origin_site":departure_site, "destination_site":destination_site, "site_after":XJSpaceCoordinates.current_site(host.state), "collision_site_before":departure_collision_site, "collision_site_after":host.world.collision_site_id, "macro_before":macro_before, "macro_after":macro_after, "scalar_delta_m":scalar_delta, "elapsed_before_s":elapsed_before, "elapsed_after_s":host.local_navigation.travel_elapsed_s, "duration_s":host.local_navigation.travel_duration_s, "heading_error_rad":heading_error, "checks":transit_checks}
+	observations.append(transit_record)
+	print("NAV_CROSS_SITE_DIAGNOSTIC ", JSON.stringify(transit_record))
+	check(transit_checks.values().all(func(flag: Variant): return bool(flag)), "cross-site transit advances real scalar route while preserving encoded departure pose")
+	await stop_navigation()
+	var cancelled_pose: Transform3D = pose()
+	var cancel_checks: Dictionary = {"local_origin_retained":cancelled_pose.origin.is_equal_approx(departure_pose.origin), "dto_origin_retained":XJSpaceCoordinates.encoded(host.state.ship()).is_equal_approx(departure_encoded), "aligned_attitude_retained":cancelled_pose.basis.is_equal_approx(aligned_departure.basis), "origin_site_restored":XJSpaceCoordinates.current_site(host.state) == departure_site, "collision_site_restored":host.world.collision_site_id == departure_site, "macro_projection_cleared":host.world.strategic_render_position.is_empty(), "projection_removed":not host.world.departure_active and not is_instance_valid(host.world.departure_projection), "velocity_zero":host.world.flight.velocity.is_zero_approx(), "controller_stopped":not host.local_navigation.active()}
+	var cancel_record: Dictionary = {"case":"cross_site_cancel", "before":_pose_evidence(departure_pose), "aligned":_pose_evidence(aligned_departure), "cancelled":_pose_evidence(cancelled_pose), "dto_cancelled":_ship_pose_evidence(), "origin_site":departure_site, "site_cancelled":XJSpaceCoordinates.current_site(host.state), "collision_site_cancelled":host.world.collision_site_id, "macro_cancelled":host.world.strategic_components(position()), "phase":host.local_navigation.phase, "checks":cancel_checks}
+	observations.append(cancel_record)
+	print("NAV_CROSS_SITE_DIAGNOSTIC ", JSON.stringify(cancel_record))
+	check(cancel_checks.values().all(func(flag: Variant): return bool(flag)), "cross-site cancel restores durable departure site and removes transit projection")
+	# Preserve the separate same-site clear-space stop contract. Authored teaching
+	# markers are offset from the station pivot, so a source inside the 150 km
+	# local volume can still exceed the unchanged 150 km minimum landing path.
+	if not await ensure_target_site(station_id): return
+	var local_target: String = ""
+	for id: String in host.world.targets:
+		if str(host.world.targets[id].kind) == "marker" and host.world.target_is_local(id): local_target = id; break
+	if not check(not local_target.is_empty(), "same-site warp uses an actual authored offset flight marker"): return
+	var site: Dictionary = host.store.catalog.one("site_defs", "site_id", XJSpaceCoordinates.current_site(host.state))
+	var pivot := Vector3(site.pivot_x_m, site.pivot_y_m, site.pivot_z_m)
+	var marker: Node3D = host.world.targets[local_target].node
+	var radius: float = float(site.local_radius_m) - host.local_navigation.rules.value("arrival_tolerance_m") * 2.0
+	host.world.flight.global_transform = Transform3D(Basis.IDENTITY, pivot - pivot.direction_to(marker.global_position) * radius)
+	host.world.flight.velocity = Vector3.ZERO
+	host.world.flight.write_back()
+	check(position().distance_to(pivot) < float(site.local_radius_m) and bool(context(local_target).warp_ready), "same-site source is legal and exceeds the actual minimum warp landing distance")
+	var origin: Vector3 = position()
+	await host._command("nav_warp", local_target, 1, "")
 	await wait_writer()
 	var ticks: int = 0
 	while navigation().call("active") and navigation().get("phase") == "warmup" and ticks < 600:
@@ -459,8 +639,10 @@ func transit_stop_checks() -> void:
 	check(navigation().call("warp_active") and safe_midpoint.distance_to(origin) > 1.0, "warp moves continuously before its arrival and supports a real in-transit stop")
 	await stop_navigation()
 	check(position().is_equal_approx(safe_midpoint) and host.world.flight.velocity.is_zero_approx(), "ordinary clear-space transit cancel stops at the current point rather than snapping to origin")
-	place_far()
-	await host._command("nav_warp", station_id, 1, "")
+	host.world.flight.global_position = origin
+	host.world.flight.velocity = Vector3.ZERO
+	host.world.flight.write_back()
+	await host._command("nav_warp", local_target, 1, "")
 	await wait_writer()
 	var safe_origin: Vector3 = position()
 	host.world.flight.global_position = host.world.targets[station_id].node.global_position
@@ -469,7 +651,7 @@ func transit_stop_checks() -> void:
 	check(position().is_equal_approx(safe_origin) and host.world.flight.velocity.is_zero_approx(), "station-overlap cancellation recovers the last validated safe flight point")
 
 func warp_and_restart_checks() -> void:
-	place_far()
+	await place_far()
 	var sector: String = host.state.current_sector()
 	await host._command("nav_warp", station_id, 1, "")
 	await wait_writer()
@@ -488,7 +670,7 @@ func warp_and_restart_checks() -> void:
 	check(ticks < 1800 and not navigation().call("active"), "bounded actual Main fixed ticks complete charge and local warp")
 	var station: Node3D = host.world.targets[station_id].node
 	var gate: Node3D = host.world.targets[gate_id].node
-	check(position().distance_to(station.global_position) < position().distance_to(gate.global_position), "rapid UI reselection does not retarget a previously accepted navigation command")
+	check(position().distance_to(station.global_position) < position().distance_to(gate.global_position) and navigation().get("target_id") == station_id and host.world.target_is_local(station_id), "rapid UI reselection does not retarget a previously accepted navigation command")
 	check(host.state.current_sector() == sector and host.state.ship().status == T.ShipStatus.FLYING and host.world.flight.velocity.is_zero_approx(), "local warp arrives stationary in the same sector without automatic station entry")
 	check(host.interaction_context(station_id).ready, "warp arrival meets the actual station interaction range and speed contract")
 	check(host.deferred_save.is_empty() and not host.busy, "arrival reaches the real SQLite autosave boundary and drains pending request")
@@ -557,7 +739,7 @@ func ui_checks() -> void:
 	var overview: Control = host.ui.get("overview")
 	var equipment: Control = host.ui.get("equipment_bar")
 	if not check(is_instance_valid(overview) and is_instance_valid(equipment), "Main binds current overview and actual equipment cycle bar"): return
-	place_far()
+	await place_far()
 	await frames(3)
 	host.ui.tick(1.0)
 	check(host.ui.target_buttons.has(station_id) and host.ui.target_buttons.has(gate_id), "catalog-known station and gate remain in real overview beyond sensor range")
@@ -596,13 +778,11 @@ func ui_checks() -> void:
 	var actions: Dictionary = overview.get("action_buttons")
 	check(actions.nav_warp.is_visible_in_tree() and not actions.nav_warp.disabled and actions.nav_dock.is_visible_in_tree(), "selected known station offers qualified warp and explicit dock operations")
 	check(overview.get("selected_title").text == str(host.world.targets[station_id].title), "selected operation card displays the exact selected station name")
-	actions.nav_warp.pressed.emit()
-	await wait_writer()
+	if not await click_button(actions.nav_warp, "selected-card warp"): return
 	host.ui.tick(1.0)
 	check(navigation().call("warp_active") and navigation().get("target_id") == station_id, "selected-card warp invokes real Main source capture for its own target")
 	check(actions.nav_stop.is_visible_in_tree() and not actions.nav_stop.disabled, "active navigation card exposes a live stop action")
-	actions.nav_stop.pressed.emit()
-	await wait_writer()
+	if not await click_button(actions.nav_stop, "selected-card stop without expansion"): return
 	host.ui.tick(1.0)
 	check(not navigation().call("active") and host.world.flight.velocity.is_zero_approx(), "selected-card stop reaches actual flight owner and stops motion")
 	var actual: Array = host.gameplay.call("equipped", host.state.ship())
@@ -654,7 +834,7 @@ func ui_checks() -> void:
 			check(overview.is_visible_in_tree() and equipment.is_visible_in_tree() and viewport.encloses(overview.get_global_rect()) and viewport.encloses(equipment.get_global_rect()), "overview and equipment panel fit %s at %.0f%%" % [window_size, scale * 100])
 			check(not overview.get_global_rect().intersects(equipment.get_global_rect()) and not equipment.get_global_rect().intersects(host.ui.instrument.get_global_rect()) and not equipment.get_global_rect().intersects(host.ui.navigation_hud.radar_frame.get_global_rect()), "equipment/overview avoid radar and flight readout %s at %.0f%%" % [window_size, scale * 100])
 			check(not overview.get_global_rect().intersects(host.ui.instrument.get_global_rect()) and viewport.encloses(host.ui.navigation.get_global_rect()), "selected actions and flight navigation keep independent bounds %s at %.0f%%" % [window_size, scale * 100])
-			check(overview.get("filter_buttons").all.is_visible_in_tree() and overview.get("sort_buttons").distance.is_visible_in_tree() and overview.get("action_buttons").nav_warp.is_visible_in_tree(), "overview filters, sorting and selected operations remain present %s at %.0f%% got filters=%s sorting=%s actions=%s selected='%s' warp_ready=%s reason='%s'" % [window_size, scale * 100, str(overview.get("filter_buttons").all.is_visible_in_tree()), str(overview.get("sort_buttons").distance.is_visible_in_tree()), str(overview.get("action_buttons").nav_warp.is_visible_in_tree()), str(host.ui.target_id), str(host.navigation_context(station_id).get("warp_ready")), str(host.navigation_context(station_id).get("warp_reason"))])
+			check(overview.get("filter_buttons").all.is_visible_in_tree() and overview.get("sort_buttons").distance.is_visible_in_tree() and overview.get("action_buttons").nav_warp.is_visible_in_tree() and not overview.get("action_buttons").nav_warp.disabled and bool(context(station_id).warp_ready), "overview filters, sorting and selected operations remain present %s at %.0f%% got filters=%s sorting=%s actions=%s selected='%s' warp_ready=%s reason='%s'" % [window_size, scale * 100, str(overview.get("filter_buttons").all.is_visible_in_tree()), str(overview.get("sort_buttons").distance.is_visible_in_tree()), str(overview.get("action_buttons").nav_warp.is_visible_in_tree()), str(host.ui.target_id), str(host.navigation_context(station_id).get("warp_ready")), str(host.navigation_context(station_id).get("warp_reason"))])
 			if host.ui.root.size.x < 950.0:
 				var long_rows: Array[Dictionary] = overview.get("entry_rows").duplicate(true)
 				for row: Dictionary in long_rows:
@@ -672,6 +852,13 @@ func ui_checks() -> void:
 	await frames(3)
 	host.ui.tick(1.0)
 	check(host.ui.navigation_hud != null and host.ui.navigation_hud.selected_id == station_id, "overview selection continues to drive one existing radar/target annotation")
+	if not await ensure_target_site(station_id): return
+	host.ui.target_id = station_id
+	host.ui.tick(1.0)
+	check(not bool(context(station_id).warp_ready) and actions.nav_approach.is_visible_in_tree() and actions.nav_orbit.is_visible_in_tree(), "arrived station exposes qualified local actions instead of pretending near-range warp is ready")
+	if not await click_button(overview.get("more_actions"), "expand unavailable station operations"): return
+	host.ui.tick(1.0)
+	check(actions.nav_warp.is_visible_in_tree() and actions.nav_warp.disabled and not str(context(station_id).warp_reason).is_empty() and not actions.nav_warp.tooltip_text.is_empty(), "more operations retains the near-range warp action with its actual refusal")
 	host.ui.show_page("pause")
 	host.ui.tick(1.0)
 	check(not overview.is_visible_in_tree() and not equipment.is_visible_in_tree(), "pause hides flight overview and equipment controls together")
@@ -701,5 +888,10 @@ func finish() -> void:
 	if finishing: return
 	finishing = true
 	await release_host()
+	var summary: Dictionary = {"result":"PASS" if failures.is_empty() else "FAIL", "checks":checks, "failures":failures.size(), "failure_labels":failures, "captures":captures, "directory":directory, "packed_runtime":OS.has_feature("standalone"), "observations":observations, "fixture_scope":"fresh SQLite; actual inter-site warps; explicit legal local picking/tactical poses; transient catalog NPCs and UI-only sorting rows removed before saves; no personal data"}
+	var report := FileAccess.open(directory.path_join("result.json"), FileAccess.WRITE)
+	if report != null: report.store_string(JSON.stringify(summary)); report.close()
+	else: get_tree().quit(2); return
+	print("NAVIGATION_COMMANDS_V6_FINAL_JSON ", JSON.stringify(summary))
 	print("NAVIGATION_COMMANDS_V6_RESULT %s checks=%d failures=%d captures=%d" % ["PASS" if failures.is_empty() else "FAIL", checks, failures.size(), captures])
-	quit(0 if failures.is_empty() else 1)
+	get_tree().quit(0 if failures.is_empty() else 1)

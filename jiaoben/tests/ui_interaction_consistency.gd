@@ -66,7 +66,7 @@ func research_case() -> void:
 	await actual_click(host.ui.body.find_child("ResearchTab_specialization",true,false) as Button,"open real specialization category")
 	await frames(5)
 	var completed: Button=host.ui.body.find_child("ResearchShowCompleted",true,false) as Button
-	if completed!=null and completed.text=="显示已完成":await actual_click(completed,"show completed specialization for donation controls")
+	if completed!=null and completed.is_visible_in_tree() and not completed.button_pressed:await actual_click(completed,"show completed specialization for donation controls")
 	await actual_click(host.ui.body.find_child("ResearchSelect_spec_range",true,false) as Button,"select actual range specialization")
 	await frames(5)
 	var spin: SpinBox=host.ui.body.find_child("SpecializationQuantity",true,false) as SpinBox
@@ -133,7 +133,7 @@ func focus_and_return_case() -> void:
 	await show_interaction("pause")
 	await host._command("nav_stop", "", 1, "")
 	await frames(4)
-	await actual_click(host.ui.body.find_child("PauseFittingAnalysis",true,false) as Button,"open analysis from pause")
+	await actual_related("fitting_analysis", "open analysis from pause")
 	await frames(10)
 	var from_pause: Button=host.ui.panel.find_child("PanelClose",true,false) as Button
 	check(from_pause!=null and from_pause.text=="← 暂停与存读档","analysis opened from pause names pause as its destination")

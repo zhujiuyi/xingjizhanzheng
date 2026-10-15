@@ -50,10 +50,18 @@ func check(value: bool, label: String) -> bool:
 func frames(count: int = 3) -> void:
 	for index: int in range(count): await get_tree().process_frame
 
-func wait_writer() -> void:
-	var deadline: int = Time.get_ticks_msec() + 5000
-	while host.busy and Time.get_ticks_msec() < deadline: await get_tree().process_frame
-	check(not host.busy, "actual SQLite writer settles")
+func wait_writer(action: String = "GUI transfer") -> bool:
+	if not check(is_instance_valid(host), "warehouse wait retains its actual Main " + action): return false
+	var started: int = Time.get_ticks_msec()
+	var deadline: int = started + 30000
+	# Yield real scene frames to Main's asynchronous loading coroutine without
+	# resuming simulation or reading Store while its serial worker owns it.
+	while is_instance_valid(host) and (host.busy or host.loading_job != null or (host.ui != null and host.ui.loading_suspended) or host.process_mode == Node.PROCESS_MODE_DISABLED) and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	var complete: bool = is_instance_valid(host) and not host.busy and host.loading_job == null and host.ui != null and not host.ui.loading_suspended and host.process_mode != Node.PROCESS_MODE_DISABLED
+	if is_instance_valid(host):
+		print("WAREHOUSE_TRANSFER_V16_WAIT " + JSON.stringify({"action": action, "elapsed_ms": Time.get_ticks_msec() - started, "limit_ms": 30000, "busy": host.busy, "loading_job": host.loading_job != null, "loading_suspended": host.ui.loading_suspended if host.ui != null else true, "complete": complete}))
+	return check(complete, "actual SQLite writer and loading activation settle within 30 seconds " + action)
 
 func boot() -> bool:
 	host = Main.new(); host.progress_database_path = database_path
@@ -74,9 +82,10 @@ func release_host() -> void:
 	host = null
 	await frames(3); await get_tree().create_timer(0.25).timeout
 
-func command(action: String, target: String = "", quantity: int = 1, extra: String = "") -> void:
+func command(action: String, target: String = "", quantity: int = 1, extra: String = "") -> bool:
 	host._command(action, target, quantity, extra)
-	await frames(4); await wait_writer()
+	await frames(2)
+	return await wait_writer(action)
 
 func show() -> void:
 	host.ui.show_page("warehouse")
@@ -135,7 +144,7 @@ func first_grant(container: String, id: String, count: int, policy: String = "no
 	return str(created[0]) if not created.is_empty() else ""
 
 func prepare() -> bool:
-	await command("new_world", "双列表仓储独立验收")
+	if not await command("new_world", "双列表仓储独立验收"): return false
 	if not check(host.state != null and host.state.player().has_docked_station_id, "fresh world legally starts at a formal station"): return false
 	station_id = host.state.player().docked_station_id
 	var inventory: RefCounted = host.gameplay.get("inventory")
@@ -190,16 +199,30 @@ func prepare() -> bool:
 		var mapping: Dictionary = host.store.catalog.one("npc_salvage_defs", "npc_def_id", str(definition.npc_id))
 		print("WAREHOUSE_TRANSFER_V16_PACKAGE_SOURCE " + JSON.stringify({"encounter_id": encounter_id, "spawn_id": str(member.spawn_id), "generated": npc != null, "npc_id": npc.npc_instance_id if npc != null else "", "hull": npc.hull if npc != null else -1.0, "package_def": str(mapping.get("package_def_id", "")), "module_id": module_id}))
 		if not check(npc != null and npc.alive and not mapping.is_empty(), "official encounter member is initialized with actual package definition"): return false
+		var source_id: String = npc.npc_instance_id
+		var source_generation: int = npc.generation
+		print("WAREHOUSE_TRANSFER_V16_DAMAGE_CONTEXT " + JSON.stringify({"ship_site": host.gameplay.spatial_site("ship", controlled_ship_id), "npc_site": host.gameplay.spatial_site("npc", source_id), "same_site": host.gameplay.same_entity_site("ship", host.state.ship(), "npc", npc), "source_anchor": definition.anchor_id, "fixture": "actual undock then explicit same-site source pose; not natural travel"}))
+		# The combat service rejects damage across spatial sites. Keep the official
+		# source at its authored site and move the actual flying fixture ship there.
+		if not await command("undock"): return false
+		if not check(host.state.ship().status == T.ShipStatus.FLYING, "real undock supplies legal flying source-damage precondition"): return false
+		if not await place_ship_at_anchor(str(definition.anchor_id), Vector3(0.0, 0.0, 1000.0)): return false
+		npc = host.state.find("npc_state", "npc_instance_id", source_id) as D.NpcStateDto
+		if not check(npc != null and npc.alive and npc.spawn_id == str(member.spawn_id) and npc.generation == source_generation and host.gameplay.same_entity_site("ship", host.state.ship(), "npc", npc), "official unchanged source and flying ship share the authored combat site"): return false
 		var applied: float = float(host.gameplay.call("damage_npc", npc.npc_instance_id, Vector3.ONE * 100000.0))
+		print("WAREHOUSE_TRANSFER_V16_DAMAGE_RESULT " + JSON.stringify({"applied": applied, "source_id": source_id, "generation": source_generation, "alive": npc.alive, "hull": npc.hull, "ship_site": host.gameplay.spatial_site("ship", controlled_ship_id), "npc_site": host.gameplay.spatial_site("npc", source_id)}))
 		if not check(applied > 0.0 and not npc.alive and is_zero_approx(npc.hull), "actual combat damage destroys the chosen package source"): return false
 		for candidate: D.SalvagePackageStateDto in host.state.rows("salvage_package_state"):
 			if candidate.source_npc_instance_id == npc.npc_instance_id:
+				if not check(candidate.source_generation == source_generation and candidate.package_def_id == str(mapping.package_def_id) and candidate.status == "sealed", "actual damage seals the original source generation and mapped package definition"): return false
 				salvage_id = candidate.package_id; candidate.host_container_id = warehouse
 		print("WAREHOUSE_TRANSFER_V16_PACKAGE_RESULT " + JSON.stringify({"source_npc": npc.npc_instance_id, "source_hull": npc.hull, "module_id": module_id, "salvage_id": salvage_id, "packages": host.state.rows("salvage_package_state").size()}))
 		break
 	host.gameplay.call("tick", float(host.store.catalog.rule("combat_exit_delay_s")) + 0.2)
+	await station_fixture(station_id)
+	if not check(host.state.ship().status == T.ShipStatus.DOCKED and host.state.player().docked_station_id == station_id, "source fixture returns through real docking before warehouse transactions"): return false
 	if not check(not module_id.is_empty() and not salvage_id.is_empty() and remote_stations.size() == 2, "fixture retains damaged real equipment, a real frozen salvage package and two remote warehouses"): return false
-	print("WAREHOUSE_TRANSFER_V16_FIXTURE funding=none grants=explicit-catalog-services unlocks=explicit-encounter-eligibility hulls=explicit-created kill=explicit-aggregate-damage salvage-endpoint=explicit-placement station=" + station_id)
+	print("WAREHOUSE_TRANSFER_V16_FIXTURE funding=none grants=explicit-catalog-services unlocks=explicit-encounter-eligibility hulls=explicit-created kill=real-same-site-aggregate-damage source-pose=explicit-anchor-site actual-undock-dock=true salvage-endpoint=explicit-placement station=" + station_id)
 	await show()
 	return check(not refs().is_empty(), "production warehouse exposes its real dual-list references")
 
@@ -255,8 +278,10 @@ func actual_click(button: Button, expected: Dictionary) -> bool:
 		var event := InputEventMouseButton.new(); event.button_index = MOUSE_BUTTON_LEFT; event.pressed = down
 		event.position = button.get_global_rect().get_center(); event.global_position = event.position
 		host.get_viewport().push_input(event, true)
-	await frames(5); await wait_writer()
+	await frames(5)
+	var settled: bool = await wait_writer(str(expected.action))
 	if is_instance_valid(button) and button.pressed.is_connected(listener): button.pressed.disconnect(listener)
+	if not settled: return false
 	var matched: bool = requested.size() == before + 1
 	if matched: matched = requested[-1] == expected
 	if int(observed.count) != 1 or not matched:
@@ -423,6 +448,21 @@ func capture(label: String) -> void:
 	var image: Image = root.get_texture().get_image()
 	if check(not image.is_empty() and image.save_png(directory.path_join(label + ".png")) == OK, "native warehouse capture " + label): captures += 1
 
+func rect_values(rect: Rect2) -> Array[float]:
+	return [rect.position.x, rect.position.y, rect.size.x, rect.size.y]
+
+func surface_observation(suffix: String) -> void:
+	var panes: Array[Dictionary] = []
+	for column: Dictionary in refs().get("columns", []):
+		var records: Array = rows("ship_rows" if column.scroll == refs().ship_scroll else "station_rows")
+		var first: Dictionary = {}
+		if not records.is_empty():
+			for field: String in ["row", "name", "quantity", "amount", "button", "claim"]:
+				var control: Control = records[0].get(field) as Control
+				if is_instance_valid(control): first[field] = {"rect": rect_values(control.get_global_rect()), "minimum": [control.get_combined_minimum_size().x, control.get_combined_minimum_size().y]}
+		panes.append({"frame": rect_values(column.column.get_global_rect()), "frame_minimum": [column.column.get_combined_minimum_size().x, column.column.get_combined_minimum_size().y], "scroll": rect_values(column.scroll.get_global_rect()), "heading": rect_values(column.heading.get_global_rect()), "header_visible": column.header_frame.is_visible_in_tree(), "vertical": column.scroll.scroll_vertical, "horizontal": column.scroll.scroll_horizontal, "first": first})
+	print("WAREHOUSE_TRANSFER_V16_SURFACES " + JSON.stringify({"layout": suffix, "logical_root": rect_values(host.ui.root.get_global_rect()), "native_size": [root.size.x, root.size.y], "panel": rect_values(host.ui.panel.get_global_rect()), "page_scroll": rect_values(host.ui.page_scroll.get_global_rect()), "page_vertical": host.ui.page_scroll.scroll_vertical, "warehouse": rect_values(panel().get_global_rect()), "warehouse_minimum": [panel().get_combined_minimum_size().x, panel().get_combined_minimum_size().y], "stacked": panel().get_meta("stacked_panes", false), "shallow": panel().get_meta("shallow_stacked", false), "panes": panes}))
+
 func layout_checks() -> void:
 	for layout: Dictionary in [{"size": Vector2i(1440, 900), "scale": 1.0}, {"size": Vector2i(1280, 720), "scale": 1.0}, {"size": Vector2i(1440, 900), "scale": 2.0}, {"size": Vector2i(1280, 720), "scale": 2.0}]:
 		root.size = layout.size; root.content_scale_size = Vector2i(Vector2(layout.size) / float(layout.scale))
@@ -432,10 +472,38 @@ func layout_checks() -> void:
 		var left: ScrollContainer = data.get("ship_scroll") as ScrollContainer
 		var right: ScrollContainer = data.get("station_scroll") as ScrollContainer
 		if not check(left != null and right != null and left != right, "two independently scrolling inventory surfaces " + suffix): continue
+		surface_observation(suffix)
 		check(host.ui.panel.get_global_rect().encloses(left.get_global_rect()) and host.ui.panel.get_global_rect().encloses(right.get_global_rect()) and Rect2(Vector2.ZERO, host.ui.root.size).encloses(host.ui.panel.get_global_rect()), "warehouse surfaces fit actual logical viewport " + suffix)
+		check(host.ui.page_scroll.get_global_rect().encloses(left.get_global_rect()) and host.ui.page_scroll.get_global_rect().encloses(right.get_global_rect()), "both warehouse surfaces fit inside the actual outer scroll viewport " + suffix)
 		var left_frame: Control = data.get("ship_column") as Control
 		var right_frame: Control = data.get("station_column") as Control
-		check(left_frame.global_position.x + left_frame.size.x <= right_frame.global_position.x + 1.0 and absf(left_frame.global_position.y - right_frame.global_position.y) <= 1.0, "cargo remains on left and station inventory on right " + suffix)
+		if bool(panel().get_meta("stacked_panes", false)):
+			check(left_frame.get_global_rect().end.y <= right_frame.global_position.y + 1.0 and absf(left_frame.global_position.x - right_frame.global_position.x) <= 1.0 and absf(left_frame.size.x - right_frame.size.x) <= 1.0, "narrow warehouse keeps cargo above station in two full-width independent panes " + suffix)
+		else:
+			check(left_frame.global_position.x + left_frame.size.x <= right_frame.global_position.x + 1.0 and absf(left_frame.global_position.y - right_frame.global_position.y) <= 1.0, "wide warehouse keeps cargo on left and station inventory on right " + suffix)
+		if host.ui.root.size.x <= 720:
+			check(bool(panel().get_meta("stacked_panes", false)) and left.get_h_scroll_bar().max_value <= left.get_h_scroll_bar().page + 1.0 and right.get_h_scroll_bar().max_value <= right.get_h_scroll_bar().page + 1.0, "narrow warehouse exposes both inventories without horizontal scrolling " + suffix)
+		for column: Dictionary in data.get("columns", []):
+			var owner_rows: Array = data.ship_rows if column.scroll == left else data.station_rows
+			var shallow: bool = bool(panel().get_meta("shallow_stacked", false))
+			check(column.header_frame.is_visible_in_tree() == (not shallow), "only shallow stacked warehouse folds its repeated table header " + suffix)
+			if shallow and not owner_rows.is_empty():
+				check(visible(column.heading) and visible(owner_rows[0].row), "shallow warehouse keeps each caption and its complete first row visible " + suffix)
+				for field: String in ["name", "quantity", "amount", "button", "claim"]:
+					var control: Control = owner_rows[0].get(field) as Control
+					if is_instance_valid(control): check(visible(control) and control.size.y + 1.0 >= control.get_combined_minimum_size().y, "shallow first-row field retains complete geometry and font minimum " + suffix + " " + field)
+			for row: Dictionary in owner_rows:
+				var actual_cells: Array[Control] = [row.image, row.names, row.location]
+				actual_cells.append(row.amount if is_instance_valid(row.amount) else row.amount_placeholder)
+				actual_cells.append(row.action_group if is_instance_valid(row.action_group) else row.action_placeholder)
+				for index: int in range(actual_cells.size()):
+					var header_cell: Control = column.header.get_child(index) as Control
+					if shallow:
+						check(absf(header_cell.custom_minimum_size.x - actual_cells[index].custom_minimum_size.x) <= 1.0 and actual_cells[index].size.x + 1.0 >= actual_cells[index].get_combined_minimum_size().x, "folded header retains the declared column widths while actual cells remain complete " + suffix + " " + str(row.id) + " " + str(index))
+					else:
+						var expected: Rect2 = header_cell.get_global_rect()
+						var actual: Rect2 = actual_cells[index].get_global_rect()
+						check(absf(expected.position.x - actual.position.x) <= 1.0 and absf(expected.size.x - actual.size.x) <= 1.0, "warehouse header and actual named column share one grid " + suffix + " " + str(row.id) + " " + str(index))
 		for row: Dictionary in rows():
 			check(label_fits(row.quantity) and label_fits(row.location) and (not (row.status as Control).is_visible_in_tree() or label_fits(row.status)), "quantity/location/restriction text remains readable " + suffix + " " + str(row.id))
 			check(str(row.row.get_meta("row_id", "")) == str(row.id), "responsive layout retains asset row identity " + suffix + " " + str(row.id))
@@ -508,35 +576,67 @@ func tooltip_checks() -> void:
 	var witness: Control = row.get("button") as Control
 	if witness == null: witness = row.get("status") as Control
 	if not check(witness != null and not witness.tooltip_text.is_empty(), "restricted real row exposes its reason tooltip"): return
+	root.gui_release_focus(); root.grab_focus()
+	await frames(6)
 	await reveal(witness)
-	var point: Vector2 = witness.get_global_rect().get_center()
-	host.get_viewport().warp_mouse(point)
-	var event := InputEventMouseMotion.new(); event.position = point; event.global_position = point
-	host.get_viewport().push_input(event, true)
+	var deadline: int = Time.get_ticks_msec() + 2500
+	var stable_since: int = Time.get_ticks_msec()
+	var stable: int = 0
+	var previous: Rect2 = witness.get_global_rect()
+	while Time.get_ticks_msec() < deadline:
+		var point: Vector2 = witness.get_global_rect().get_center()
+		if stable == 0 or not witness.get_global_rect().has_point(witness.get_global_mouse_position()): host.get_viewport().warp_mouse(point)
+		var event := InputEventMouseMotion.new()
+		event.position = point; event.global_position = point; event.button_mask = 0; event.window_id = root.get_window_id()
+		host.get_viewport().push_input(event, true); Input.flush_buffered_events(); await frames(1)
+		var hover: Control = host.get_viewport().gui_get_hovered_control()
+		var matching: bool = is_instance_valid(hover) and (hover == witness or witness.is_ancestor_of(hover))
+		stable = stable + 1 if matching and root.has_focus() and visible(witness) and witness.get_global_rect().is_equal_approx(previous) and witness.get_global_rect().has_point(witness.get_global_mouse_position()) else 0
+		if stable == 0: stable_since = Time.get_ticks_msec()
+		previous = witness.get_global_rect()
+		if stable >= 3 and Time.get_ticks_msec() - stable_since >= 100: break
+	check(stable >= 3 and Time.get_ticks_msec() - stable_since >= 100, "real restricted control receives stable native pointer before tooltip delay")
+	var expected_text: String = witness.tooltip_text
+	# Stop injecting motion during the actual native tooltip timer.
 	await get_tree().create_timer(float(ProjectSettings.get_setting("gui/timers/tooltip_delay_sec", 0.5)) + 0.25).timeout
 	await frames(4)
-	var label: Label = tooltip_label(root, witness.tooltip_text)
+	var label: Label = tooltip_label(root, expected_text)
 	var popup: Window = label.get_window() if label != null else null
+	var actual_hover: Control = host.get_viewport().gui_get_hovered_control()
+	print("WAREHOUSE_TRANSFER_V16_TOOLTIP " + JSON.stringify({"target": str(witness.get_path()), "target_rect": rect_values(witness.get_global_rect()), "expected_text": expected_text, "current_text": witness.tooltip_text, "hover": str(actual_hover.get_path()) if is_instance_valid(actual_hover) and actual_hover.is_inside_tree() else "", "mouse": [witness.get_global_mouse_position().x, witness.get_global_mouse_position().y], "focus": root.has_focus(), "page_vertical": host.ui.page_scroll.scroll_vertical, "label": label != null, "popup": str(popup.name) if popup != null else ""}))
 	check(label != null and popup is PopupPanel and popup.visible and popup.get_script() == null and str(popup.name).begins_with("@PopupPanel@"), "real pointer hover opens builtin restriction tooltip")
 	if label != null and popup != null:
 		check(popup.size.x <= root.size.x and popup.size.y <= root.size.y and Rect2(Vector2.ZERO, Vector2(popup.size)).encloses(label.get_global_rect()), "restriction tooltip fits native window and popup")
 	await capture("warehouse-restricted-tooltip")
+
+func place_ship_at_anchor(anchor_id: String, offset: Vector3 = Vector3.ZERO) -> bool:
+	var anchor: Dictionary = host.store.catalog.one("anchor_defs", "anchor_id", anchor_id)
+	if not check(not anchor.is_empty() and host.state.ship().status == T.ShipStatus.FLYING, "explicit placement has a real anchor and legal flying ship " + anchor_id): return false
+	var ship: D.ShipStateDto = host.state.ship()
+	ship.sector_id = str(anchor.sector_id)
+	ship.pos_x = float(anchor.x_m) + offset.x; ship.pos_y = float(anchor.y_m) + offset.y; ship.pos_z = float(anchor.z_m) + offset.z
+	ship.vel_x = 0.0; ship.vel_y = 0.0; ship.vel_z = 0.0
+	for container: D.ContainerStateDto in host.state.rows("container_state"):
+		if container.ship_instance_id == ship.ship_instance_id: container.sector_id = ship.sector_id
+	if not check(host.gameplay.assign_anchor_site("ship", ship.ship_instance_id, anchor_id), "explicit placement retains authoritative anchor site " + anchor_id): return false
+	if not check(host._stage_candidate(host.state, host.store.catalog), "Main stages explicit anchor-site fixture " + anchor_id): return false
+	host._activate(host.state)
+	host.set_process(false); host.set_physics_process(false)
+	var flight: XJFlight = host.world.flight
+	flight.global_position = host.world.anchor_position(anchor_id) + offset; flight.velocity = Vector3.ZERO
+	flight.write_back(); flight.get_global_transform_interpolated(); flight.reset_physics_interpolation()
+	await frames(3)
+	return check(host.gameplay.same_anchor_site(host.state.ship(), anchor) and host.state.ship().status == T.ShipStatus.FLYING, "staged fixture keeps scene and authoritative flying site consistent " + anchor_id)
 
 func station_fixture(destination: String) -> void:
 	# Explicit endpoint placement tests rebind lifecycle; this is not a claim of
 	# naturally completing travel. Docking itself still uses the real command.
 	var station: Dictionary = host.store.catalog.one("station_defs", "station_id", destination)
 	var ship: D.ShipStateDto = host.state.ship()
-	ship.sector_id = str(station.sector_id); ship.status = T.ShipStatus.FLYING
+	ship.status = T.ShipStatus.FLYING
 	ship.has_station_id = false; ship.station_id = ""; ship.vel_x = 0.0; ship.vel_y = 0.0; ship.vel_z = 0.0
 	host.state.player().has_docked_station_id = false; host.state.player().docked_station_id = ""
-	for container: D.ContainerStateDto in host.state.rows("container_state"):
-		if container.ship_instance_id == ship.ship_instance_id: container.sector_id = ship.sector_id
-	if not check(host._stage_candidate(host.state, host.store.catalog), "Main stages explicit alternate station sector"): return
-	host._activate(host.state)
-	var flight: XJFlight = host.world.flight
-	flight.global_position = host.world.anchor_position(str(station.station_anchor_id)); flight.velocity = Vector3.ZERO
-	flight.write_back(); flight.get_global_transform_interpolated(); flight.reset_physics_interpolation()
+	if not await place_ship_at_anchor(str(station.station_anchor_id)): return
 	await command("dock", destination)
 	check(host.state.player().docked_station_id == destination and host.state.player().has_docked_station_id, "actual docking accepts station fixture " + destination)
 	await show()
@@ -566,7 +666,8 @@ func persistence_checks() -> void:
 	var sealed: Array[Dictionary] = host.store._records("SELECT l.slot_id,l.generation,l.current_snapshot_id FROM save_slot l JOIN save_snapshot s ON s.snapshot_id=l.current_snapshot_id WHERE l.world_id=? AND l.slot_kind='manual' AND l.slot_index=2 AND s.status='sealed'", [world])
 	if not check(sealed.size() == 1, "manual warehouse checkpoint is actually sealed in SQLite"): return
 	var slot: Dictionary = sealed[0]
-	await command("load", str(slot.slot_id), int(slot.generation), str(slot.current_snapshot_id)); await show()
+	if not await command("load", str(slot.slot_id), int(slot.generation), str(slot.current_snapshot_id)): return
+	await show()
 	if not check(host.state != null and host.state.world_id == world, "manual checkpoint loads the requested real world"): return
 	check(asset_state() == expected, "manual checkpoint reload restores exact inventory and package provenance")
 	check(old_panel.get_ref() == null or (old_panel.get_ref() as Node).is_queued_for_deletion(), "manual reload clears old panel references")
@@ -575,7 +676,9 @@ func persistence_checks() -> void:
 	# is a lifecycle witness, not a second authority or a live UI feature.
 	var stale_view: Control = panel()
 	stale_view.get_parent().remove_child(stale_view); add_child(stale_view); stale_view.hide()
-	await command("load", str(slot.slot_id), int(slot.generation), str(slot.current_snapshot_id)); await show()
+	if not await command("load", str(slot.slot_id), int(slot.generation), str(slot.current_snapshot_id)):
+		stale_view.queue_free(); return
+	await show()
 	var before_requests: int = requested.size()
 	stale_view.emit_signal("transfer_requested", "stack", stack_a, 1, cargo)
 	await frames(4)
@@ -583,7 +686,8 @@ func persistence_checks() -> void:
 	stale_view.queue_free(); await frames(3)
 	await release_host()
 	if not await boot(): return
-	await command("load", str(slot.slot_id), int(slot.generation), str(slot.current_snapshot_id)); await show()
+	if not await command("load", str(slot.slot_id), int(slot.generation), str(slot.current_snapshot_id)): return
+	await show()
 	if not check(host.state != null and host.state.world_id == world, "separate Main reopens the requested sealed world"): return
 	restarts += 1
 	check(asset_state() == expected and host.state.ship().ship_instance_id == controlled_ship_id, "separate Main SQLite restart restores controlled cargo and all station goods exactly")
@@ -598,7 +702,9 @@ func persistence_checks() -> void:
 		previous_ids.append(str(row.id))
 		if str(row.kind) == "stack": previous_stacks[str(row.id)] = stack(str(row.id))
 	prior_view.get_parent().remove_child(prior_view); add_child(prior_view); prior_view.hide()
-	await command("new_world", "仓储世界引用隔离验收"); await show()
+	if not await command("new_world", "仓储世界引用隔离验收"):
+		prior_view.queue_free(); return
+	await show()
 	check(host.state.world_id != world and host.state != prior_state and panel().get_instance_id() != prior_panel_id, "new world replaces warehouse world, authority and active view")
 	var new_destination: String = str(host.gameplay.get("inventory").call("hold", host.state.ship(), T.ContainerKind.CARGO))
 	var reusable_id: String

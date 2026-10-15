@@ -60,6 +60,8 @@ const POINTER_DRAG_TOLERANCE_PX: float = 6.0
 func _ready() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for v18_contract: Dictionary in [
+		{"flag":"--xj-verify-ui-completion-v64","file":"ui_completion_v64.gd","prefix":"ui-completion-v64","env":"XJ_UI_COMPLETION_V64","meta":"xj_ui_completion_v64_diagnostic"},
+		{"flag":"--xj-verify-navigation-commands-v6","file":"navigation_commands_v6.gd","prefix":"navigation-commands-v6","env":"XJ_NAVIGATION_COMMANDS_V6","meta":"xj_navigation_commands_v6_diagnostic"},
 		{"flag":"--xj-verify-ui-information-v63","file":"ui_information_v63.gd","prefix":"ui-information-v63","env":"XJ_UI_INFORMATION_V63","meta":"xj_ui_information_v63_diagnostic"},
 		{"flag":"--xj-verify-loading-failure-v62","file":"loading_failure_v62.gd","prefix":"loading-failure-v62","env":"XJ_LOADING_FAILURE_V62","meta":"xj_loading_failure_v62_diagnostic"},
 		{"flag":"--xj-verify-startup-navigation-v62","file":"startup_navigation_v62.gd","prefix":"startup-navigation-v62","env":"XJ_STARTUP_NAVIGATION_V62","meta":"xj_startup_navigation_v62_diagnostic"},
@@ -508,6 +510,7 @@ func _paused() -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if state == null or busy:
 		return
+	if ui.hud_focus.active and event is InputEventKey: return
 	if event.is_action_pressed("menu"):
 		var next_page := "pause" if ui.page.is_empty() or ui.page == "station" else _home_page()
 		if ui.page == "settings": next_page = "pause"
@@ -606,7 +609,10 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _keyboard_control_allowed() -> bool:
-	return state != null and world != null and ui != null and not busy and not _exit_save_pending() and state.ship().status == Types.ShipStatus.FLYING and not ui.keyboard_blocked() and (DisplayServer.get_name() == "headless" or get_window().has_focus())
+	return _hud_command_allowed() and not ui.hud_focus.active
+
+func _hud_command_allowed() -> bool:
+	return state != null and world != null and ui != null and not busy and not _exit_save_pending() and state.ship().status == Types.ShipStatus.FLYING and not ui.command_input_blocked() and (DisplayServer.get_name() == "headless" or get_window().has_focus())
 
 func _world_target_at(screen_position: Vector2) -> String:
 	if local_navigation != null and local_navigation.warp_active(): return ""
@@ -834,7 +840,7 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 		"civilization_map", "war_navigate":
 			_civilization_navigation(action, target)
 		"set_combat_option":
-			if combat_automation != null and _keyboard_control_allowed() and not travel.active() and not local_navigation.warp_active() and not _paused():
+			if combat_automation != null and _hud_command_allowed() and not travel.active() and not local_navigation.warp_active() and not _paused():
 				combat_automation.set_option(target, extra == "on")
 			_sync_combat_automation()
 		"mission_locate", "mission_travel", "mission_station":
@@ -872,7 +878,7 @@ func _command(action: String, target: String, quantity: int, extra: String) -> v
 			_sync_combat_automation()
 		"interact", "interact_target": _interact(target)
 		"show_ship":
-			if state == null or world == null or camera == null or state.ship().status != Types.ShipStatus.FLYING or ui.keyboard_blocked(): return
+			if camera == null or not _hud_command_allowed(): return
 			_release_observation()
 			camera.bind(world.flight, store.catalog, Types.CameraMode.FOLLOW)
 			state.player().camera_mode = camera.mode
@@ -1634,7 +1640,7 @@ func navigation_context(target_id: String) -> Dictionary:
 	return result
 
 func _navigation_command(mode: String, target_id: String, retain_combat_options: bool = false) -> bool:
-	if state == null or local_navigation == null or busy or _exit_save_pending() or ui.keyboard_blocked(): return false
+	if local_navigation == null or not _hud_command_allowed(): return false
 	if travel != null and travel.active():
 		ui.notify("请等待虫洞传送结束。", true)
 		return false
@@ -1873,7 +1879,7 @@ func _save_now(kind: String, index: int, after: String = "") -> void:
 		saved = store.save(state, kind, index)
 	if saved:
 		if presentation != null and after.is_empty(): presentation.ui_result(true)
-		ui.slots = store.list_slots()
+		ui.update_save_slots(store.list_slots())
 		ui.notify("已保存 · " + {"manual": "手动", "auto": "自动", "quick": "快速"}[kind] + " " + str(index + 1))
 		if after == "quit":
 			get_tree().quit()

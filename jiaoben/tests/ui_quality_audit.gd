@@ -156,6 +156,10 @@ func structural_assertions(ui: Node, name: String) -> void:
 			var columns: HBoxContainer = row.row.find_child("BusinessColumns", true, false)
 			if columns == null or columns.get_child_count() != header.get_child_count(): aligned = false; continue
 			for index: int in range(header.get_child_count()):
+				var header_cell: Control = header.get_child(index)
+				var row_cell: Control = columns.get_child(index)
+				aligned = aligned and header_cell.visible == row_cell.visible
+				if not header_cell.visible: continue
 				var expected: Rect2 = (header.get_child(index) as Control).get_global_rect()
 				var actual: Rect2 = (columns.get_child(index) as Control).get_global_rect()
 				aligned = aligned and absf(expected.position.x - actual.position.x) <= 1.0 and absf(expected.size.x - actual.size.x) <= 1.0
@@ -168,7 +172,7 @@ func structural_assertions(ui: Node, name: String) -> void:
 		for button: Button in overview.target_buttons.values():
 			if not button.is_visible_in_tree(): continue
 			var row: Node = button.get_child(0)
-			for pair: Array in [["distance", "Distance"], ["name", "Name"], ["type", "Type"]]:
+			for pair: Array in [["distance", "DistanceCell"], ["name", "Name"], ["type", "Type"]]:
 				var heading: Rect2 = (overview.sort_buttons[pair[0]] as Control).get_global_rect()
 				var cell: Rect2 = (row.get_node(pair[1]) as Control).get_global_rect()
 				aligned = aligned and absf(heading.position.x - cell.position.x) <= 1.0 and absf(heading.size.x - cell.size.x) <= 1.0
@@ -202,6 +206,7 @@ func _check_equipment_row_fit(name: String) -> void:
 		visible_tiles += 1
 		tile_height = maxf(tile_height, tile.get_combined_minimum_size().y)
 		if str(tile.name).begins_with("Module_"): unit = maxf(unit, tile.get_combined_minimum_size().x)
+	var has_installed_tile: bool = unit > 0.0
 	if unit <= 0.0:
 		# No module fitted: fall back to the widest tile the row currently shows.
 		for child: Node in row.get_children():
@@ -223,7 +228,12 @@ func _check_equipment_row_fit(name: String) -> void:
 	if per_line < 1.0:
 		check(false, "equipment dock is narrower than a single tile (%.0f px tile in %.0f px) " % [unit, row.size.x] + name)
 		return
-	for case: Dictionary in [{"label": "current", "slots": visible_tiles}, {"label": "largest hull", "slots": worst_slots}]:
+	var loadouts: Array[Dictionary] = [{"label": "current", "slots": visible_tiles}]
+	if has_installed_tile: loadouts.append({"label": "largest hull", "slots": worst_slots})
+	# A summary saying "empty slots x13" is one wide aggregate, not the width of
+	# thirteen installed modules. v64 renders the full largest loadout at all four
+	# sizes; this current-footprint check must not manufacture seventeen summaries.
+	for case: Dictionary in loadouts:
 		var slots: int = int(case.slots)
 		var lines: float = ceil(float(slots) / per_line)
 		var needed: float = lines * tile_height + maxf(0.0, lines - 1.0) * gap
@@ -283,6 +293,35 @@ func actual_click(button: Button, message: String) -> bool:
 	await frames(4)
 	interaction_checks += 1
 	return check(int(observed.pressed) == 1, "real viewport GUI dispatch emits one press " + message)
+
+func native_key(code: Key, target: Window = null, reverse: bool = false) -> void:
+	for pressed: bool in [true, false]:
+		if not is_instance_valid(target): target = root
+		var event := InputEventKey.new()
+		event.keycode = code; event.physical_keycode = code; event.pressed = pressed; event.shift_pressed = reverse
+		if target is PopupMenu:
+			event.window_id = target.get_window_id()
+			Input.parse_input_event(event)
+		else: target.push_input(event, true)
+		await frames(1)
+	await frames(3)
+
+func actual_related(destination: String, message: String) -> bool:
+	var menu: MenuButton = host.ui.panel.find_child("RelatedNavigation", true, false) as MenuButton
+	if not check(menu != null, "contextual related navigation exists " + message): return false
+	var popup: PopupMenu = menu.get_popup()
+	var wanted: int = -1
+	for index: int in range(popup.item_count):
+		if str(popup.get_item_metadata(index)) == destination: wanted = index
+	if not check(wanted >= 0, "related destination is eligible " + destination): return false
+	if not await actual_click(menu, "open related navigation " + message): return false
+	if not check(popup.visible, "real native related menu opens " + message): return false
+	for step: int in range(popup.item_count + 1):
+		if popup.get_focused_item() == wanted: break
+		await native_key(KEY_DOWN, popup)
+	if not check(popup.get_focused_item() == wanted, "native keyboard reaches exact related destination " + destination): return false
+	await native_key(KEY_ENTER, popup)
+	return check(host.ui.page == destination, "real menu navigates once to " + destination)
 
 func probe_states(button: Button, message: String) -> void:
 	if not check(button != null and not button.disabled, "state probe uses actionable semantic button " + message): return
@@ -357,29 +396,19 @@ func pointer_trace(stage: String) -> void:
 
 func horizontal_scroll_interaction(suffix: String) -> void:
 	var list: Node = host.ui.body.find_child("BusinessList", true, false)
-	if not check(list != null, "compact market has the real business list"): return
-	var proxy: HScrollBar = list.get("top_scrollbar")
+	if not check(list != null, "responsive market has the real business list"): return
 	var scroll: ScrollContainer = list.get("horizontal_scroll")
-	if not check(proxy.is_visible_in_tree() and Rect2(Vector2.ZERO, host.ui.root.size).encloses(proxy.get_global_rect()) and proxy.max_value > proxy.page, "compact market exposes a bounded top horizontal scrollbar"): return
-	var before: int = scroll.scroll_horizontal
-	var point: Vector2 = proxy.get_global_rect().end - Vector2(4, proxy.size.y * 0.5)
-	host.get_viewport().warp_mouse(point)
-	var motion := InputEventMouseMotion.new()
-	motion.position = point; motion.global_position = point; root.push_input(motion, true)
-	await frames(4)
-	for down: bool in [true, false]:
-		var mouse := InputEventMouseButton.new()
-		mouse.position = point; mouse.global_position = point; mouse.button_index = MOUSE_BUTTON_LEFT; mouse.pressed = down
-		root.push_input(mouse, true)
-		await frames(3)
+	var bar: HScrollBar = scroll.get_h_scroll_bar()
+	check(bar.max_value <= bar.page + 1.0 and scroll.scroll_horizontal == 0, "responsive market keeps its complete operation path without horizontal scrolling")
 	var rows: Array = list.get("rows")
-	var reachable: bool = not rows.is_empty()
-	if reachable:
-		var actions: Control = rows[0].actions
-		reachable = scroll.get_global_rect().encloses(actions.get_global_rect())
-	check(scroll.scroll_horizontal > before and absf(proxy.value - scroll.scroll_horizontal) <= 1.0 and reachable, "real top scrollbar moves table and reveals complete right action column")
+	check(not rows.is_empty(), "responsive market has genuine quoted rows")
+	for row: Dictionary in rows:
+		for key: String in ["unit_price", "total"]:
+			var label: Label = row[key]
+			var natural: float = label.get_theme_font("font").get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.get_theme_font_size("font_size")).x
+			check(label.is_visible_in_tree() and label.size.x + 1.0 >= natural and label.text_overrun_behavior == TextServer.OVERRUN_NO_TRIMMING, "responsive financial field renders every digit " + str(row.id) + " " + key)
 	interaction_checks += 1
-	await inspect("market-horizontal-right-" + suffix, "market")
+	await inspect("market-responsive-columns-" + suffix, "market")
 
 func research_top(suffix: String) -> void:
 	# Keep the original focus-driven screenshot and add the intentional top view.
@@ -616,7 +645,7 @@ func variants(suffix: String) -> void:
 		var button: Button = host.ui.body.find_child(name, true, false)
 		if check(button != null, "analysis embedded disclosure exists " + name):
 			await actual_click(button, "analysis disclosure " + name)
-			check(button.button_pressed and button.text == ("收起条件" if name == "FittingConditionsToggle" else "收起详情"), "real analysis toggle state and caption synchronize " + name)
+			check(button.button_pressed and bool(button.get_meta("expanded", false)), "real analysis disclosure exposes its expanded state " + name)
 	var details: Control = host.ui.body.find_child("FittingDetailedValues", true, false)
 	check(details != null and details.visible, "real analysis detail disclosure becomes visible")
 	host.ui.page_scroll.scroll_vertical = 0
@@ -656,7 +685,7 @@ func information_variants(suffix: String) -> void:
 		await actual_click(tab, "research category " + kind)
 		await frames(5)
 		var show_done: Button = host.ui.body.find_child("ResearchShowCompleted", true, false)
-		if show_done != null and show_done.text == "显示已完成": await actual_click(show_done, "show researched history " + kind)
+		if show_done != null and show_done.is_visible_in_tree() and not show_done.button_pressed: await actual_click(show_done, "show researched history " + kind)
 		var selectors: Array[Node] = host.ui.body.find_children("ResearchSelect_*", "Button", true, false)
 		if not selectors.is_empty(): await actual_click(selectors[-1] as Button, "select actual research detail " + str(selectors[-1].name))
 		check(host.ui.body.find_children("ResearchDetail", "VBoxContainer", true, false).size() == 1, "technology category constructs a single selected detail " + kind)

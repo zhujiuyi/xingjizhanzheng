@@ -1,6 +1,7 @@
 extends VBoxContainer
 const T = preload("res://contracts/contract_types.gd")
 const UISkin = preload("res://runtime/ui_theme.gd")
+const Disclosure = preload("res://runtime/ui/disclosure.gd")
 var u: Node
 var context: Dictionary
 var distance: SpinBox
@@ -17,10 +18,9 @@ func setup(ui: Node) -> void:
 	u=ui;context={"state":u.state,"epoch":u.state.epoch,"session":u.state.session_id,"station":u.state.player().docked_station_id,"ship":u.state.ship().ship_instance_id,"generation":u.business_generation}
 	add_theme_constant_override("separation",UISkin.GAP)
 	var filters: HFlowContainer=HFlowContainer.new()
-	var conditions: Button=u._button(self,"计算条件",func():filters.visible=not filters.visible)
+	var conditions: Button=u._button(self,"",_toggle_disclosure.bind(weakref(filters),"FittingConditionsToggle","计算条件"))
 	conditions.name="FittingConditionsToggle"
-	conditions.toggle_mode=true
-	conditions.toggled.connect(func(open: bool):conditions.text="收起条件" if open else "计算条件")
+	Disclosure.apply(conditions,"计算条件",false)
 	add_child(filters);filters.hide()
 	var distance_label: Label = u._text_to(filters,"局部射击距离（米）",14)
 	distance_label.name = "FittingDistanceLabel"
@@ -65,6 +65,17 @@ func _current() -> bool:
 func _clear() -> void:
 	for child: Node in results.get_children():results.remove_child(child);child.queue_free()
 
+func _toggle_disclosure(reference: WeakRef,control_name: String,title: String) -> void:
+	if not _current():return
+	var content: Control=reference.get_ref() as Control
+	var toggle: Button=find_child(control_name,true,false) as Button
+	if not is_instance_valid(content) or content.is_queued_for_deletion() or not is_ancestor_of(content) or not is_instance_valid(toggle):return
+	var focus: Control=get_viewport().gui_get_focus_owner()
+	if content.visible and is_instance_valid(focus) and content.is_ancestor_of(focus):toggle.grab_focus()
+	content.visible=not content.visible
+	Disclosure.apply(toggle,title,content.visible)
+	u._link_page_focus.call_deferred()
+
 func _input_signature() -> String:
 	return JSON.stringify([str(candidate.get_selected_metadata()),str(slot.get_selected_metadata()),str(target.get_selected_metadata()),layer.selected,float(distance.get_line_edit().text) if distance.get_line_edit().text.is_valid_float() else null])
 
@@ -107,9 +118,9 @@ func _summary(before: Dictionary,after: Dictionary) -> void:
 	_issues(before,"当前")
 	if not after.is_empty():_issues(after,"替换后")
 	var detail: VBoxContainer=VBoxContainer.new();detail.name="FittingDetailedValues"
-	var toggle: Button=u._button(results,"完整数值",func():detail.visible=not detail.visible)
-	toggle.name="FittingDetailsToggle";toggle.toggle_mode=true
-	toggle.toggled.connect(func(open: bool):toggle.text="收起详情" if open else "完整数值")
+	var toggle: Button=u._button(results,"",_toggle_disclosure.bind(weakref(detail),"FittingDetailsToggle","完整数值"))
+	toggle.name="FittingDetailsToggle"
+	Disclosure.apply(toggle,"完整数值",false)
 	results.add_child(detail)
 	# Reuse the complete calculation view only inside the explicit disclosure.
 	var summary: VBoxContainer=results;results=detail

@@ -6,6 +6,7 @@ signal command(action: String, id: String)
 signal support_requested(item_id: String,target_id: String,stop: bool)
 const UISkin = preload("res://runtime/ui_theme.gd")
 const ResourceStatus = preload("res://runtime/resource_status.gd")
+const Disclosure = preload("res://runtime/ui/disclosure.gd")
 const DISTANCE_COLUMN_WIDTH: int = 56
 const TYPE_COLUMN_WIDTH: int = 44
 const ROW_INSET: int = 4
@@ -290,13 +291,19 @@ func _layout_actions() -> void:
 	elif selected_kind == "station": primary = ["nav_approach","nav_orbit"]
 	elif selected_kind in ["npc","drone"]: primary = ["combat_engage","combat_toggle","nav_orbit"]
 	if selected_friendly:primary=["nav_approach","nav_orbit"]
+	# An accepted navigation order must always have a directly reachable stop.
+	if bool(eligible_actions.get("nav_stop", false)) and not action_buttons.nav_stop.disabled: primary.append("nav_stop")
 	var extra: bool = false
+	var extra_count: int = 0
 	for action: String in action_buttons:
 		var eligible: bool = bool(eligible_actions.get(action,false))
 		extra = extra or (eligible and action not in primary)
+		if eligible and action not in primary: extra_count += 1
 		action_buttons[action].visible = eligible and (actions_expanded or action in primary)
 	more_actions.visible = extra
-	more_actions.text = "收起操作" if actions_expanded else "更多操作"
+	var focus_mode: int = more_actions.focus_mode
+	Disclosure.apply(more_actions, "更多操作", actions_expanded, extra_count)
+	more_actions.focus_mode = focus_mode
 	_queue_list_layout()
 
 func set_support_options(records: Array[Dictionary],busy: bool) -> void:
@@ -419,9 +426,22 @@ func _refresh_rows() -> void:
 			row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			row.add_theme_constant_override("separation", COLUMN_GAP)
 			button.add_child(row)
-			var distance: Label = _label(row, "", 10, UISkin.MUTED)
-			distance.name = "Distance"; distance.custom_minimum_size.x = DISTANCE_COLUMN_WIDTH
+			var distance_cell := HBoxContainer.new()
+			distance_cell.name = "DistanceCell"
+			distance_cell.custom_minimum_size.x = DISTANCE_COLUMN_WIDTH
+			distance_cell.add_theme_constant_override("separation", 2)
+			distance_cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			row.add_child(distance_cell)
+			var distance: Label = _label(distance_cell, "", 10, UISkin.TEXT)
+			distance.name = "Distance"
 			distance.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			distance.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var unit: Label = _label(distance_cell, "", 9, UISkin.MUTED)
+			unit.name = "DistanceUnit"
+			unit.custom_minimum_size.x = 16
+			unit.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			unit.size_flags_horizontal = Control.SIZE_SHRINK_END
+			unit.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			var title: Label = _label(row, "", 11, UISkin.TEXT)
 			title.name = "Name"; title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			var type: Label = _label(row, "", 9, UISkin.MUTED)
@@ -448,7 +468,12 @@ func _refresh_rows() -> void:
 			reserve.add_theme_font_size_override("font_size", 9 if _compact else 10)
 			reserve.add_theme_color_override("font_color", UISkin.WARN if bool(record.get("resource_info", {}).get("depleted", false)) else UISkin.MUTED)
 			button.tooltip_text += "\n" + full_summary + "\n再生按世界时间推进；暂停与退出不推进。"
-		button.get_child(0).get_node("Distance").text = format_distance(float(record.distance_m))
+		var formatted: PackedStringArray = format_distance(float(record.distance_m)).split(" ")
+		var distance_cell: Control = button.get_child(0).get_node("DistanceCell")
+		distance_cell.get_node("Distance").text = formatted[0]
+		distance_cell.get_node("DistanceUnit").text = formatted[1] if formatted.size() > 1 else ""
+		distance_cell.set_meta("distance_metres", float(record.distance_m))
+		distance_cell.tooltip_text = format_distance(float(record.distance_m))
 		button.get_child(0).get_node("Name").text = str(record.title)
 		var name_label: Label = button.get_child(0).get_node("Name")
 		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if _compact else TextServer.AUTOWRAP_OFF

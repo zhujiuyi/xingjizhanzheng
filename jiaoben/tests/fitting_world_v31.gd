@@ -2,6 +2,36 @@ extends "tactics_world_v29.gd"
 ## Real UI research, readonly projected replacement and physical tuned beam range.
 var range_item: String=""
 var burst_item: String=""
+func related_destination(destination: String) -> bool:
+	var menu: MenuButton = host.ui.panel.find_child("RelatedNavigation", true, false) as MenuButton
+	if not check(menu != null, "page exposes actual related navigation menu " + destination): return false
+	var popup: PopupMenu = menu.get_popup()
+	var wanted: int = -1
+	for index: int in range(popup.item_count):
+		if str(popup.get_item_metadata(index)) == destination and not popup.is_item_disabled(index): wanted = index; break
+	if not check(wanted >= 0, "actual menu contains eligible destination " + destination): return false
+	var wanted_id: int = popup.get_item_id(wanted)
+	if not await click(menu, "actual page opens related menu " + destination): return false
+	if not check(popup.visible, "related popup opens through real pointer input " + destination): return false
+	for step: int in range(popup.item_count + 1):
+		if popup.get_focused_item() == wanted: break
+		await related_key(KEY_DOWN, popup)
+	if not check(popup.get_focused_item() == wanted, "native popup focuses exact item " + destination): return false
+	var selections: Array[int] = []
+	popup.id_pressed.connect(func(id: int): selections.append(id), CONNECT_ONE_SHOT)
+	await related_key(KEY_ENTER, popup)
+	return check(selections == [wanted_id], "native popup emits exactly one actual selection " + destination)
+
+func related_key(code: Key, popup: PopupMenu) -> void:
+	for down: bool in [true, false]:
+		var target_window: Window = popup if is_instance_valid(popup) else root
+		var event := InputEventKey.new()
+		event.keycode = code; event.physical_keycode = code; event.pressed = down
+		event.window_id = target_window.get_window_id()
+		Input.parse_input_event(event)
+		await frames(1)
+	await frames(2)
+
 func settle() -> void:
 	# Async loading keeps the native frame loop alive while the Store worker
 	# runs. Wait for Main completion before manually pumping presentation.
@@ -60,7 +90,8 @@ func run() -> void:
 	host=Main.new();host.progress_database_path=directory.path_join("progress.db");root.add_child(host);await frames(5)
 	await host._command("new_world","配装与专精原生",1,"");await settle();host.set_process(false);host.set_physics_process(false)
 	if not await fixture():await finish();return
-	await show("fitting");await click(host.ui.body.find_child("FittingAnalysisEntry",true,false),"actual fitting opens analysis")
+	await show("fitting")
+	if not await related_destination("fitting_analysis"): await finish(); return
 	check(host.ui.page=="fitting_analysis" and host.ui.body.find_child("FittingResults",true,false)!=null,"actual analysis report exists")
 	check(host.ui.body.find_child("FittingKeyValues",true,false)!=null and not host.ui.body.find_child("FittingDetailedValues",true,false).visible,"analysis leads with a compact numerical table and collapsed details")
 	await capture("fitting-current-budget")
@@ -100,7 +131,8 @@ func run() -> void:
 	await capture("fitting-range-comparison")
 	await click(host.ui.body.find_child("FittingApply",true,false),"apply validated specialization from comparison")
 	check(host.state.find("equipment_state","item_instance_id",range_item)!=null,"native atomic action installs selected control")
-	await show("ships");await click(host.ui.body.find_child("ShipRolesEntry",true,false),"open eighteen hull role matrix")
+	await show("ships")
+	if not await related_destination("ship_roles"): await finish(); return
 	var rows: int=0
 	for node: Node in host.ui.body.find_children("*","",true,false):
 		if node.has_meta("asset_kind") and node.get_meta("asset_kind")=="ship":rows+=1

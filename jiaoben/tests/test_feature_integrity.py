@@ -271,13 +271,15 @@ class FeatureIntegrityTests(unittest.TestCase):
                     if data.get("asset_version") == "art-full-v1" and resource_path in LEGACY_VISUAL_BYTES:
                         self.assertEqual(resource.suffix, ".txt", "V1 bytes are inert archives")
                         self.assertNotIn(resource.relative_to(CODE).as_posix(), self.runtime)
-                    self.assertTrue(resource.is_file())
                     archived = {'service-navigation-v1': 'f69e046f0f5a27a58957cd05eeb49607a47bfe98',
                                 'service-navigation-v2': 'a11278a1ae881744d999fd81e6a44b7d79a8aeb0'}
                     version = data.get('asset_version')
-                    if version in archived and resource_path == 'res://runtime/ui/service_navigation.gd':
-                        raw = subprocess.check_output(['git', 'show', archived[version] + ':code/runtime/ui/service_navigation.gd'], cwd=ROOT)
+                    if version in archived:
+                        frozen_manifest = subprocess.check_output(['git', 'show', archived[version] + ':' + path.relative_to(ROOT).as_posix()], cwd=ROOT)
+                        self.assertEqual(path.read_bytes(), frozen_manifest, "Published historical manifests remain byte-identical")
+                        raw = subprocess.check_output(['git', 'show', archived[version] + ':code/' + resource_path.removeprefix('res://')], cwd=ROOT)
                     else:
+                        self.assertTrue(resource.is_file())
                         raw = resource.read_bytes()
                     self.assertEqual(hashlib.sha256(raw).hexdigest(), asset["sha256"])
                     checked += 1

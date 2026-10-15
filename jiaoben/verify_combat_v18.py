@@ -79,6 +79,7 @@ CASES = {
     "resource-intel-world": ("resource_intel_world_v26.gd", "XJ_RESOURCE_INTEL_WORLD_V26", "resource-intel-world-v26", "RESOURCE_INTEL_WORLD_V26", "--xj-verify-resource-intel-world-v26"),
     "resource-intel": ("resource_intel_v26.gd", "XJ_RESOURCE_INTEL_V26", "resource-intel-v26", "RESOURCE_INTEL_V26", "--xj-verify-resource-intel-v26"),
     "row-quantity": ("row_quantity_v17.gd", "XJ_ROW_QUANTITY_V17", "row-quantity-v17", "ROW_QUANTITY_V17", "--xj-verify-row-quantities"),
+    "warehouse": ("warehouse_transfer_v16.gd", "XJ_WAREHOUSE_V16", "warehouse-transfer-v16", "WAREHOUSE_TRANSFER_V16", "--xj-verify-warehouse"),
     "industry": ("industry_v25.gd", "XJ_INDUSTRY_V25", "industry-v25", "INDUSTRY", "--xj-verify-industry-v25"),
     "industry-world": ("industry_world_v25.gd", "XJ_INDUSTRY_WORLD_V25", "industry-world-v25", "INDUSTRY_WORLD_V25", "--xj-verify-industry-world-v25"),
     "civilization-world": ("civilization_world_v24.gd", "XJ_CIVILIZATION_WORLD_V24", "civilization-world-v24", "CIVILIZATION_WORLD_V24", "--xj-verify-civilization-world-v24"),
@@ -108,6 +109,15 @@ def sha(path):
 
 def require_supported_diagnostics(binary, names):
     """Read PE metadata before launching flags absent from older clients."""
+    # Every exported test must have a real fixed endpoint. An unknown argument
+    # must never fall through to ordinary startup against the personal profile.
+    with binary.with_suffix('.pck').open('rb') as stream:
+        with mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as packed:
+            for name in names:
+                flag = CASES[name][4]
+                if not flag.startswith('--'): flag = f'--xj-verify-{flag}-v18'
+                if packed.find(flag.encode('utf-8')) < 0:
+                    raise RuntimeError(f'客户端包没有固定诊断入口 {flag}；未启动游戏。')
     if not set(names).intersection({"march", "march-world", "march-upgrade", "march-routes", "natural-mid", "natural-rank", "natural-scout", "natural-research", "natural-rescue", "natural-logistics", "natural-command", "natural-war", "natural-hull", "natural-expedition", "natural-project", "growth-world", "owned-fleet", "owned-fleet-travel", "owned-fleet-world", "auxiliary-world", "fleet-integration", "fleet-upgrade", "owned-combat-world", "auxiliary-boundaries", "legacy-chain", "legacy-early", "legacy-boundary", "natural-growth", "natural-recovery", "natural-checkpoint", "market-cache", "retention"}):
         return
     env = os.environ.copy()
@@ -120,15 +130,6 @@ def require_supported_diagnostics(binary, names):
     minimum = (0, 32, 0, 0) if set(names).intersection({'march','march-world','march-upgrade','march-routes','natural-mid','natural-rank','natural-scout','natural-research','natural-rescue','natural-logistics','natural-command','natural-war','natural-hull','natural-expedition','natural-project','growth-world'}) else (0, 31, 0, 0)
     if len(numbers) < 3 or tuple((numbers + [0] * 4)[:4]) < minimum:
         raise RuntimeError(f"这些诊断需要 {'.'.join(map(str,minimum))} 及以上客户端，当前为 {version or '未知'}；未启动游戏。旧包升级须使用其原有固定入口。")
-    # Development candidates can share a version while adding fixed endpoints.
-    # Refuse an absent flag before an older candidate can fall through to the
-    # ordinary user-data startup path.
-    with binary.with_suffix('.pck').open('rb') as stream:
-        with mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as packed:
-            for name in names:
-                flag = CASES[name][4]
-                if flag.startswith('--') and packed.find(flag.encode('utf-8')) < 0:
-                    raise RuntimeError(f'客户端包没有固定诊断入口 {flag}；未启动游戏。')
 
 
 def activate(process, ready_output=None):
@@ -509,6 +510,12 @@ def run_suite():
             summary = record["summary"]
             assert summary["checks"] >= 5000 and summary["gui_transactions"] >= 16
             assert summary["invalid_cases"] >= 5 and summary["stale_rejections"] >= 7 and summary["layouts"] == 4 and summary["restarts"] == 1
+            assert len(captures) == (6 if args.native else 0)
+        if name == "warehouse":
+            summary = record["summary"]
+            assert summary["revision"] == "dual-list-row-quantity-remote-readonly" and summary["layouts"] == 4
+            assert summary["remote_stations"] >= 2 and summary["gui_transfers"] == 8 and summary["restarts"] == 1
+            assert Path(summary["database_path"]).resolve() == (directory / "progress.db").resolve()
             assert len(captures) == (6 if args.native else 0)
         if name == "service-navigation":
             summary = record["summary"]

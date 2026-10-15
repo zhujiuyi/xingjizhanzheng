@@ -2,6 +2,7 @@ extends RefCounted
 const T=preload("res://contracts/contract_types.gd")
 const UISkin=preload("res://runtime/ui_theme.gd")
 const Interaction=preload("res://runtime/ui/ui_interaction.gd")
+const Disclosure=preload("res://runtime/ui/disclosure.gd")
 var u: Node
 var faction: String=""
 var selected_stage: Dictionary={}
@@ -78,6 +79,7 @@ func _view_signature(stage: Dictionary,available: Array[Dictionary]) -> String:
 
 func _rebuild() -> void:
 	if not _current():return
+	var view: Dictionary=u.capture_local_view(box)
 	if is_instance_valid(choices) and choices.selected>=0 and choices.selected<paths.size():activity_key=_path_key(paths[choices.selected])
 	revision+=1
 	for child: Node in box.get_children():box.remove_child(child);child.queue_free()
@@ -101,6 +103,7 @@ func _rebuild() -> void:
 	signature=_view_signature(selected_stage,paths)
 	_update_values()
 	u._link_page_focus.call_deferred()
+	u.finish_local_rebuild(box,view)
 
 func _path_key(path: Dictionary) -> String:return str(path.stage_id)+":"+str(path.activity_index)
 
@@ -148,9 +151,9 @@ func _build_routes() -> void:
 	for goal: Dictionary in goals:
 		if str(goal.stage_id)!=str(selected_stage.get("stage_id","")) and not bool(u.gameplay.growth.progress(goal).complete):later.append(goal)
 	if later.is_empty():return
-	var fold: Button=u._button(box,("收起" if routes_open else "查看")+"其他路线 / 后续规划 · "+str(later.size()),func():
-		if _current():routes_open=not routes_open;_rebuild())
+	var fold: Button=u._button(box,"",_toggle_group.bind("routes"))
 	fold.name="GrowthRoutesToggle"
+	Disclosure.apply(fold,"其他路线 / 后续规划",routes_open,later.size())
 	var content:=VBoxContainer.new();content.name="GrowthRoutes";content.visible=routes_open;box.add_child(content)
 	u._text_to(content,"这是规划顺序；科技、考核、远征和工程仍按各自资格开放，可并行选择。",13).add_theme_color_override("font_color",UISkin.MUTED)
 	var chosen: int=0
@@ -182,11 +185,21 @@ func _build_history() -> void:
 	for goal: Dictionary in goals:
 		if bool(u.gameplay.growth.progress(goal).complete):completed.append(goal)
 	if completed.is_empty():return
-	var fold: Button=u._button(box,("收起" if history_open else "查看")+"完成记录 · "+str(completed.size()),func():
-		if _current():history_open=not history_open;_rebuild())
+	var fold: Button=u._button(box,"",_toggle_group.bind("history"))
 	fold.name="GrowthHistoryToggle"
+	Disclosure.apply(fold,"完成记录",history_open,completed.size())
 	var content:=VBoxContainer.new();content.name="GrowthHistory";content.visible=history_open;box.add_child(content)
 	for goal: Dictionary in completed:u._text_to(content,"✓ "+str(goal.display_name),13).add_theme_color_override("font_color",UISkin.MUTED)
+
+func _toggle_group(group: String) -> void:
+	if not _current():return
+	var content: Control=box.find_child("GrowthRoutes" if group=="routes" else "GrowthHistory",true,false) as Control
+	var toggle: Button=box.find_child("GrowthRoutesToggle" if group=="routes" else "GrowthHistoryToggle",true,false) as Button
+	var focus: Control=u.root.get_viewport().gui_get_focus_owner()
+	if is_instance_valid(content) and content.visible and is_instance_valid(focus) and content.is_ancestor_of(focus) and is_instance_valid(toggle):toggle.grab_focus()
+	if group=="routes":routes_open=not routes_open
+	else:history_open=not history_open
+	_rebuild()
 
 func _update_values() -> void:
 	if is_instance_valid(values) and not selected_stage.is_empty():

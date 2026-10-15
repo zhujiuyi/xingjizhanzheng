@@ -3,6 +3,7 @@ const T=preload("res://contracts/contract_types.gd")
 const ResourceStatus=preload("res://runtime/resource_status.gd")
 const UISkin=preload("res://runtime/ui_theme.gd")
 const Interaction=preload("res://runtime/ui/ui_interaction.gd")
+const Disclosure=preload("res://runtime/ui/disclosure.gd")
 var u: Node
 var mode: String
 var context: Dictionary
@@ -144,25 +145,34 @@ func _expeditions() -> void:
 func _reports() -> void:
 	var service: RefCounted=u.gameplay.telemetry
 	report_history_rows.clear()
-	var total_label: Label=u._text_to(self,"",17);total_label.add_theme_color_override("font_color",UISkin.ICE);live_labels.append({"kind":"total","label":total_label})
+	_report_metrics()
 	var actions: HFlowContainer=HFlowContainer.new();add_child(actions)
 	_request(actions,"导出CSV","export_flight_report","csv","").name="ReportExportCSV"
 	_request(actions,"导出JSON","export_flight_report","json","").name="ReportExportJSON"
 	u._text_to(self,"导出仅包含本地游戏指标；不含角色名称、凭据、输入内容或系统路径。飞行中升级的部分记录会明确标注。",13).add_theme_color_override("font_color",UISkin.MUTED)
 	if u.gameplay.journal.supported():
 		var statistics:=VBoxContainer.new();statistics.name="ReportStatistics";statistics.visible=report_statistics_open
-		var toggle: Button=u._button(actions,"活动与物资统计",func():
+		var toggle: Button=u._button(actions,"",func():
 			if _current():
-				report_statistics_open=not report_statistics_open;statistics.visible=report_statistics_open
 				var live: Button=actions.get_node_or_null("ReportStatisticsToggle") as Button
-				if is_instance_valid(live):live.text="收起活动与物资统计" if report_statistics_open else "活动与物资统计"
+				var focus: Control=get_viewport().gui_get_focus_owner()
+				if report_statistics_open and is_instance_valid(focus) and statistics.is_ancestor_of(focus) and is_instance_valid(live):live.grab_focus()
+				report_statistics_open=not report_statistics_open;statistics.visible=report_statistics_open
+				if is_instance_valid(live):Disclosure.apply(live,"活动与物资统计",report_statistics_open)
 				u._link_page_focus.call_deferred())
 		toggle.name="ReportStatisticsToggle";add_child(statistics)
-		toggle.text="收起活动与物资统计" if report_statistics_open else "活动与物资统计"
+		Disclosure.apply(toggle,"活动与物资统计",report_statistics_open)
 		var measured: Label=u._text_to(statistics,"",14);measured.name="ReportMeasurements";measured.add_theme_color_override("font_color",UISkin.MUTED);live_labels.append({"kind":"measurements","label":measured})
 		var recent: Label=u._text_to(statistics,"",14);recent.name="ReportRecentActivities";recent.add_theme_color_override("font_color",UISkin.MUTED);live_labels.append({"kind":"activities","label":recent})
 	var reports: Array[Dictionary]=service.export_rows()
-	if reports.is_empty():u._text_to(self,"尚无航行战报。正常出港后开始记录，导出入口仍可查看累计数据。",14);return
+	if reports.is_empty():
+		var frame: PanelContainer=u._frame(self,"ReportEmptyState")
+		var content:=VBoxContainer.new();content.add_theme_constant_override("separation",UISkin.GAP);frame.add_child(content)
+		u._text_to(content,"尚无航行战报。正常出港后开始记录，累计数据仍可导出。",UISkin.SIZE_BODY).name="ReportEmptyMessage"
+		var next: Button=u._button(content,"前往机库" if u.state.player().has_docked_station_id else "返回航行",func():
+			if _current():u.show_page("station" if u.state.player().has_docked_station_id else ""))
+		next.name="ReportEmptyAction"
+		return
 	var latest_id: String=str(reports[0].sequence)
 	var list: VBoxContainer=u._information_list(self,"最近航行","flight-reports",latest_id)
 	list.name="ReportList"
@@ -178,22 +188,59 @@ func _reports() -> void:
 	list.connect("selection_changed",func(_id: String):
 		if _current():_update())
 	if not report_history_rows.is_empty():
-		var history: Button=u._button(actions,("收起" if report_history_open else "查看")+"历史航行 · "+str(report_history_rows.size()),func():
+		var history: Button=u._button(actions,"",func():
 			if not _current():return
-			report_history_open=not report_history_open
 			var live: Button=actions.get_node_or_null("ReportHistoryToggle") as Button
-			if is_instance_valid(live):live.text=("收起" if report_history_open else "查看")+"历史航行 · "+str(report_history_rows.size())
+			var focus: Control=get_viewport().gui_get_focus_owner()
+			if report_history_open and is_instance_valid(focus) and is_instance_valid(live):
+				for row: Control in report_history_rows:
+					if is_instance_valid(row) and row.is_ancestor_of(focus):live.grab_focus();break
+			report_history_open=not report_history_open
+			if is_instance_valid(live):Disclosure.apply(live,"历史航行",report_history_open,report_history_rows.size())
 			for row: Control in report_history_rows:
 				if is_instance_valid(row):row.visible=report_history_open
 			if not report_history_open:list.call("select_row",latest_id)
 			u._link_page_focus.call_deferred())
 		history.name="ReportHistoryToggle"
+		Disclosure.apply(history,"历史航行",report_history_open,report_history_rows.size())
+
+func _report_metrics() -> void:
+	var metrics:=HFlowContainer.new();metrics.name="ReportMetrics"
+	metrics.add_theme_constant_override("h_separation",UISkin.GAP)
+	metrics.add_theme_constant_override("v_separation",UISkin.GAP)
+	add_child(metrics)
+	for spec: Dictionary in [
+		{"id":"outings","title":"累计出航","fields":[["outings","次"]]},
+		{"id":"lost_outings","title":"舰船损毁","fields":[["lost_outings","次"]]},
+		{"id":"mined_units","title":"累计采集","fields":[["mined_units","单位"]]},
+		{"id":"credits","title":"累计收支","fields":[["income_credit","收入 / 信用点"],["spent_credit","费用 / 信用点"]]},
+		{"id":"damage","title":"累计伤害","fields":[["damage_dealt","分摊伤害"],["damage_taken","承受伤害"]]}
+	]:
+		var card: PanelContainer=u._frame(metrics,"ReportMetric_"+str(spec.id))
+		card.custom_minimum_size.x=160
+		var content:=VBoxContainer.new();content.add_theme_constant_override("separation",4);card.add_child(content)
+		var heading: Label=u._text_to(content,str(spec.title),UISkin.SIZE_NOTE)
+		heading.add_theme_color_override("font_color",UISkin.MUTED)
+		for field: Array in spec.fields:
+			var value: Label=u._text_to(content,"0",UISkin.SIZE_PAGE)
+			value.name="ReportTotal_"+str(field[0])
+			value.set_meta("telemetry_field",str(field[0]))
+			value.autowrap_mode=TextServer.AUTOWRAP_OFF
+			value.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
+			UISkin.apply_text_style(value,"page")
+			var unit: Label=u._text_to(content,str(field[1]),UISkin.SIZE_NOTE)
+			unit.add_theme_color_override("font_color",UISkin.MUTED)
+			unit.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
+			live_labels.append({"kind":"total","field":str(field[0]),"label":value})
+
 func _update() -> void:
 	for entry: Dictionary in live_labels:
 		if not is_instance_valid(entry.label):continue
 		if entry.kind=="total":
 			var total: RefCounted=u.gameplay.telemetry.totals()
-			entry.label.text="累计出航 %d · 损毁 %d · 采集 %d单位\n收益 %d / 费用 %d信用点 · 分摊伤害 %.0f / 承伤 %.0f" % [total.outings,total.lost_outings,total.mined_units,total.income_credit,total.spent_credit,total.damage_dealt,total.damage_taken]
+			var value: Variant=total.get(entry.field)
+			entry.label.text="%.0f" % float(value) if entry.field in ["damage_dealt","damage_taken"] else str(int(value))
+			entry.label.set_meta("metric_value",value)
 		elif entry.kind=="report":
 			for report: Dictionary in u.gameplay.telemetry.export_rows():
 				if report.sequence!=entry.sequence:continue

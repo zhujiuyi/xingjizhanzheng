@@ -143,17 +143,15 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 			labels.add_child(icon)
 			var title: Label = _header_label(labels, "", 9, UISkin.TEXT)
 			var cost: Label = _header_label(labels, "", 9, UISkin.MUTED)
-			# Pinned to the bottom edge instead of stacked in the column: the status
-			# line used to make every tile a line taller, which is what pushed a full
-			# battleship loadout past the dock at the smallest supported size.
+			# Share the icon area without enlarging the compact tile or slot-ID row.
 			var status: Label = _header_label(button, "", 9, UISkin.MUTED)
-			status.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+			status.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 			status.offset_left = 4; status.offset_right = -4
-			status.offset_top = -14; status.offset_bottom = -1
+			status.offset_top = 2; status.offset_bottom = 16
 			status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			status.clip_text = true
 			status.max_lines_visible = 1
-			module_labels[id] = {"title": title, "status": status, "cost": cost}
+			module_labels[id] = {"title": title, "status": status, "cost": cost, "icon": icon}
 			var ring: SlotRing = SlotRing.new()
 			ring.name = "ActualCycle"
 			button.add_child(ring)
@@ -175,6 +173,9 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 		# Only the states a frame cannot express get words. Ready is the absence of
 		# a ring; a running cycle, a lock or a shortage still needs to be readable.
 		labels.status.text = _short_status(record)
+		labels.status.visible = not labels.status.text.is_empty()
+		# A compact state replaces the icon area; it never overprints the slot ID.
+		labels.icon.modulate.a = 0.0 if labels.status.visible else 1.0
 		labels.cost.text = "电容 %.0f · 热量 %.0f" % [float(record.get("energy_eu", 0.0)), float(record.get("heat_hu", 0.0))]
 		labels.cost.hide()
 		# Enabled but not ready: cycling, i.e. momentarily blocked, not selected.
@@ -259,6 +260,9 @@ func _tighten_slot_surface(button: Button) -> void:
 ## short tags. Nothing is dropped: the full phrase stays in the tooltip, and the
 ## states that matter are the ones that get the ink.
 func _short_status(record: Dictionary) -> String:
+	var state: String = str(record.get("state_label", ""))
+	if state.begins_with("冷却 "): return "冷却"
+	if state.begins_with("运行 "): return "运行"
 	match str(record.get("state_label", "")):
 		"设备损坏": return "损坏"
 		"过热锁定": return "锁定"
