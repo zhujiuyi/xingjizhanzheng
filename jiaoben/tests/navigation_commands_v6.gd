@@ -152,6 +152,43 @@ func place_far() -> void:
 	var pivot := Vector3(site.pivot_x_m, site.pivot_y_m, site.pivot_z_m)
 	check(position().distance_to(pivot) < float(site.local_radius_m) and host.world.target_is_local(gate_id) and not host.world.target_is_local(station_id), "warp fixture uses actual transitioned site and legal local coordinates")
 
+## The recentred view must not be taken from underneath the vessel. Navigation steers
+## the nose along the route, and an AU-scale route is inclined, so the pose the arrival
+## bind rebuilds its camera reference from is routinely pitched. An arm placed wholly in
+## that pitched frame loses height as the pitch grows - by atan(height/distance), about
+## 14 degrees for a shuttle - and beyond that the camera passes under the hull and the
+## arrival view is an upward one.
+func arrival_view_checks() -> void:
+	var flight: Node3D = host.world.flight
+	var original: Transform3D = flight.global_transform
+	var profile: Dictionary = {}
+	for row in host.store.catalog.rows("camera_profile_defs"):
+		if row.ship_id == host.state.ship().ship_def_id and row.mode == "follow": profile = row
+	if profile.is_empty():
+		check(false, "arrival view fixture finds the vessel's real follow profile")
+		return
+	var level_deg: float = rad_to_deg(atan2(float(profile.height_m), float(profile.distance_m)))
+	var lowest: float = 999.0
+	var highest: float = -999.0
+	for pitch_deg: float in [0.0, 10.0, 20.0, 35.0, 50.0, 70.0]:
+		flight.global_transform = Transform3D(Basis.from_euler(Vector3(deg_to_rad(pitch_deg), 0.4, 0.0)), flight.global_position)
+		flight.reset_physics_interpolation()
+		host.camera.bind(flight, host.store.catalog, T.CameraMode.FOLLOW)
+		for step: int in range(240): host.camera.step(0.05)
+		# Measured against the position the rig actually aims at, not the physical one:
+		# the two differ by the interpolation pump's lag, which is not what is under test.
+		var arm: Vector3 = host.camera.camera.global_position - host.camera.render_position()
+		var elevation: float = rad_to_deg(atan2(arm.y, maxf(Vector2(arm.x, arm.z).length(), 0.001)))
+		lowest = minf(lowest, elevation)
+		highest = maxf(highest, elevation)
+	check(lowest > 0.0, "an inclined arrival heading still leaves the camera above the vessel rather than under it: lowest elevation %.1f deg" % lowest)
+	check(absf(highest - lowest) < 1.0, "the recentred view is the profile's own angle whatever the vessel's pitch: %.1f to %.1f deg" % [lowest, highest])
+	check(absf(highest - level_deg) < 1.0, "and that angle is the profile's declared height over distance, %.1f deg" % level_deg)
+	flight.global_transform = original
+	flight.reset_physics_interpolation()
+	host.camera.bind(flight, host.store.catalog, T.CameraMode.FOLLOW)
+	host.camera.step(1.0)
+
 func ensure_target_site(id: String) -> bool:
 	if host.world.target_is_local(id): return true
 	if navigation().call("active"): await stop_navigation()
@@ -260,6 +297,7 @@ func _run() -> void:
 	check(host.world.visible and not host.hangar.visible and root.get_camera_3d() == host.camera.camera, "fixture explicitly activates real flight scene and camera")
 	if not check(host.has_method("navigation_context") and host.get("local_navigation") != null, "Main wires the production local navigation controller"): await finish(); return
 	await place_far()
+	await arrival_view_checks()
 	await boundary_alignment_checks()
 	await place_far()
 	await eligibility_checks()

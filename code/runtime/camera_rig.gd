@@ -188,9 +188,23 @@ func step(delta: float) -> void:
 		if ship.visual != null:
 			ship.visual.visible = true
 		var distance := clampf(float(profile.distance_m) * zoom, float(profile.zoom_min_m), float(profile.zoom_max_m))
+		# The arm keeps the vessel's bearing but not its pitch: "behind and above" has to
+		# mean behind the heading and above the horizon. Placed wholly in the reference's
+		# own frame the two cancel out, and any heading steeper than atan(height/distance)
+		# - about 14 degrees for a shuttle, 18 for a cruiser - puts the camera below the
+		# ship it is following. An arrival heading is exactly that case: navigation steers
+		# the nose along the route, and an AU-scale route is inclined.
+		var arm_frame: Basis = observation_basis
+		var heading: Vector3 = observation_basis * Vector3.FORWARD
+		var flat := Vector3(heading.x, 0.0, heading.z)
+		# A vertical heading has no horizontal component and is left alone: for a ship
+		# pointing straight up, "behind it" really is below it, and that is what the
+		# recentred view is expected to show.
+		if flat.length_squared() > 0.000001:
+			arm_frame = Basis.looking_at(flat.normalized(), Vector3.UP).orthonormalized()
 		var offset := Vector3(0.0, float(profile.height_m), distance)
 		offset = Basis(Vector3.UP, orbit.x) * Basis(Vector3.RIGHT, orbit.y) * offset
-		desired = target_point + observation_basis * offset
+		desired = target_point + arm_frame * offset
 		up = Vector3.UP
 	var smoothing: float = float(profile.position_smooth_s)
 	var mix: float = 1.0 - exp(-maxf(delta, 0.0) / smoothing) if smoothing > 0.0 else 1.0
