@@ -360,12 +360,12 @@ func responsive(compact: bool, available_height: float = -1.0) -> void:
 	content.move_child(selection_card, 0 if compact else content.get_child_count() - 1)
 	selection_card.add_theme_stylebox_override("panel", UISkin.hud_panel(4 if compact else UISkin.GAP))
 	selection_card.get_node("SelectedTargetDetails").add_theme_constant_override("separation", 4)
-	selected_title.add_theme_font_size_override("font_size", 12 if compact else 14)
-	selected_distance.add_theme_font_size_override("font_size", 10 if compact else 11)
-	resource_label.add_theme_font_size_override("font_size", 10 if compact else 11)
+	selected_title.add_theme_font_size_override("font_size", UISkin.SIZE_BODY if compact else UISkin.SIZE_SECTION)
+	selected_distance.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
+	resource_label.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 	status_label.max_lines_visible = 1 if compact else 2
 	for button: Variant in action_buttons.values():
-		button.add_theme_font_size_override("font_size", 10 if compact else 11)
+		button.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 		button.custom_minimum_size.y = 22 if compact else 24
 	for entry: Dictionary in npc_bars: entry.label.custom_minimum_size.x = 58 if compact else 70
 	_refresh_rows()
@@ -521,7 +521,7 @@ func _refresh_rows() -> void:
 		if resource:
 			var full_summary: String = str(record.get("resource_summary", "资源状态不可用"))
 			reserve.text = compact_resource_summary(record.get("resource_info", {})) if _compact else full_summary
-			reserve.add_theme_font_size_override("font_size", 9 if _compact else 10)
+			reserve.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 			reserve.add_theme_color_override("font_color", UISkin.WARN if bool(record.get("resource_info", {}).get("depleted", false)) else UISkin.MUTED)
 			button.tooltip_text += "\n" + full_summary + "\n再生按世界时间推进；暂停与退出不推进。"
 		var formatted: PackedStringArray = format_distance(float(record.distance_m)).split(" ")

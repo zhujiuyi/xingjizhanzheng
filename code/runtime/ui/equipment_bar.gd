@@ -21,6 +21,9 @@ var combat_option_buttons: Dictionary = {}
 var combat_options_row: HBoxContainer
 var combat_status_label: Label
 var _compact: bool = false
+## Short state per fitted module, kept so the badge can be re-laid-out when the layout
+## changes size without a refresh having to rebuild the records.
+var _slot_status: Dictionary = {}
 var _combat_options: Dictionary = {"fire": false, "orbit": false, "seek": false}
 var _combat_message: String = "手动战斗"
 var _combat_blocked: bool = false
@@ -28,18 +31,25 @@ var _combat_blocked: bool = false
 ## Slot geometry. The circle is the slot and the strip under it carries the slot ID,
 ## which is why the tile is taller than it is wide.
 ##
-## The strip is sized to what the label actually needs, not to what looks right: a
-## Label is never smaller than its font's line height, so a 13 px strip holding a 10 px
-## font measured 15 px and hung two pixels past the tile. 15 is that line height.
+## The strip is what the label actually needs, and the number is measured rather than
+## reasoned about: a Label is never smaller than its font's line height, and the note
+## role's 11 px font measures 17 px. Two earlier guesses (13, then 15) were both short
+## for exactly that reason and hung the slot ID past the tile.
 ##
-## Tuned against the worst case rather than a fixture: a battleship fits 17 modules
-## plus the engine control. At 1440x900 that is one line of 19; at 640x360 the row is
-## 360 px and holds 14 per line, so a full loadout wraps to two lines of 36 px inside
-## the 76 px it is given.
-const SLOT_CIRCLE: float = 31.0
-const SLOT_LABEL: float = 15.0
-const SLOT_CIRCLE_COMPACT: float = 22.0
-const SLOT_LABEL_COMPACT: float = 14.0
+## Tuned against the worst case rather than a fixture: a battleship fits 17 modules plus
+## the engine control, rendered at all four sizes. A full loadout holds one line down to
+## 1024 wide at 30 px. At 640x360 the row is 342 px and wraps to two lines, and that is
+## what sets the compact circle: two lines of (circle + 17) plus a gap have to fit the
+## 76 px the row is given, so the circle is 19.
+##
+## Two larger circles were tried first and both passed the wrap arithmetic while still
+## overflowing the panel, because the row and the panel around it are not the same
+## height, and the row's own height moves with the dock's text. Sizing to the arithmetic
+## rather than to the measured fit is what made this take three attempts.
+const SLOT_CIRCLE: float = 30.0
+const SLOT_LABEL: float = 17.0
+const SLOT_CIRCLE_COMPACT: float = 19.0
+const SLOT_LABEL_COMPACT: float = 17.0
 
 func _ready() -> void:
 	name = "EquipmentCycles"
@@ -151,8 +161,8 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 		labels.title.text = "%s%d" % [str(record.get("slot_short", "")), int(record.get("slot_index", 0)) + 1]
 		# Only the states a frame cannot express get words. Ready is the absence of
 		# a ring; a running cycle, a lock or a shortage still needs to be readable.
-		labels.status.text = _short_status(record)
-		labels.status.visible = not labels.status.text.is_empty()
+		_slot_status[id] = _short_status(record)
+		_apply_slot_status(id, labels)
 		# A compact state replaces the portrait but never the disc or the rim, and it
 		# never overprints the slot ID, which is in its own strip below the circle.
 		var slot_surface: UISkin.CircularSlot = labels.icon
@@ -233,6 +243,15 @@ func _hover_slot(surface_ref: WeakRef, entered: bool) -> void:
 	slot.hover = entered
 	slot.queue_redraw()
 
+## The state badge is words drawn over the portrait, and at 640x360 the compact circle is
+## 19 px wide while two characters at the note size need 22. The ring already says the
+## module is cycling, so the words move to the tooltip at that size - which carries the
+## full state, in its original wording, at every size.
+func _apply_slot_status(id: String, labels: Dictionary) -> void:
+	var status: Label = labels.status
+	status.text = "" if _compact else str(_slot_status.get(id, ""))
+	status.visible = not status.text.is_empty()
+
 ## One place decides how big a slot is. refresh() and responsive() both need it and
 ## used to set the size on their own, which is how a tile can end up sized for one
 ## layout while it is being drawn for the other.
@@ -247,7 +266,7 @@ func _apply_slot_geometry(button: Button, labels: Dictionary, ring: UISkin.RingA
 	slot.queue_redraw()
 	var title: Label = labels.title
 	title.offset_top = -strip
-	title.add_theme_font_size_override("font_size", 9 if compact else 10)
+	title.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 	ring.compact = compact
 	ring.offset_bottom = circle
 	ring.queue_redraw()
@@ -286,13 +305,15 @@ func responsive(compact: bool) -> void:
 	combat_status_label.visible = not compact
 	for option: String in combat_option_buttons:
 		var check: CheckBox = combat_option_buttons[option]
-		check.add_theme_font_size_override("font_size", 10 if compact else 11)
+		check.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 		check.custom_minimum_size.y = 24
 	engine_button.custom_minimum_size = Vector2(54, 36 if compact else 28)
 	for id: String in module_buttons.keys():
 		_apply_slot_geometry(module_buttons[id], module_labels[id], module_progress[id], compact)
-	for labels: Dictionary in module_labels.values():
-		labels.status.add_theme_font_size_override("font_size", 9)
+	for id: String in module_labels.keys():
+		var slot_labels: Dictionary = module_labels[id]
+		slot_labels.status.add_theme_font_size_override("font_size", UISkin.text_size("note"))
+		_apply_slot_status(id, slot_labels)
 	# The "empty slots x N" summary is sized by its own text, not by the circle: it is
 	# one aggregate standing for many sockets, not a socket.
 	for button: Variant in empty_slot_buttons.values():

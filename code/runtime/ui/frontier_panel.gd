@@ -36,7 +36,7 @@ func setup(ui: Node,id: String) -> void:
 	if selected.is_empty():selected=_default_target()
 	u.frontier_selected_id=selected
 	if selected.is_empty():
-		u._text_to(self,"边疆战役与治理",18)
+		u._text_to(self,"边疆战役与治理",u.UISkin.SIZE_SECTION)
 		u._text_to(self,"当前没有进行中的边疆战役或属于你的可治理星系。文明页可查看战役委托与主权条件。",14).name="FrontierEmptyState"
 		var entry: Button=u._button(self,"查看文明战役与治理",func():
 			if _current():u.set_meta("civilization_section","campaign");u.show_page("civilizations"))
@@ -45,7 +45,7 @@ func setup(ui: Node,id: String) -> void:
 	var row: RefCounted=service.campaign(selected)
 	var title: String=u._sector_name(selected)
 	if row!=null:title=u._sector_name(u.catalog.one("civilization_war_defs","war_id",selected).target_sector_id)
-	u._text_to(self,"边疆 · "+title,18)
+	u._text_to(self,"边疆 · "+title,u.UISkin.SIZE_SECTION)
 	status=u._text_to(self,service.status_text(selected),16);status.name="FrontierStatus"
 	var nav: HFlowContainer=HFlowContainer.new();add_child(nav)
 	_button(nav,"定位","frontier_map",selected,null,service.expected_token(selected)).name="FrontierLocate"

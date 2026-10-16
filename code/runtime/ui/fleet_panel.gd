@@ -67,7 +67,7 @@ func _crew() -> void:
 
 func _fleet() -> void:
 	var service: RefCounted=u.gameplay.owned_fleet
-	u._text_to(self,"自有僚舰 %d / %d · 雇佣合同单独管理" % [service.active().size(),int(service.balance.max_owned_companions)],16)
+	u._text_to(self,"自有僚舰 %d / %d · 雇佣合同单独管理" % [service.active().size(),int(service.balance.max_owned_companions)],UISkin.SIZE_SECTION)
 	u._text_to(self,"随行 %d 艘 · 总质量 %.1f 吨 · 过门按舰计费" % [u.gameplay.hired.party_fee(1),(float(u.gameplay.metrics(u.state.ship()).total_mass_kg)+u.gameplay.hired.party_mass_kg())/1000.0],14)
 	u._text_to(self,"停靠后部署；出航前指派操舰员。跃迁前集结，弹药和电容取自各舰。",13).add_theme_color_override("font_color",UISkin.MUTED)
 	var count: int=0
@@ -80,7 +80,7 @@ func _fleet() -> void:
 		if deployment==null or deployment.phase=="docked":_action(flow,"部署 · %d" % service.quote(ship.ship_instance_id),ship.ship_instance_id,"deploy")
 		elif deployment.phase=="deployed":
 			for pair: Array in [["推进","advance"],["集结","regroup"],["集火","focus"],["撤退","retreat"],["归港收回","recover"]]:_action(flow,pair[0],ship.ship_instance_id,pair[1])
-	if count==0:u._text_to(self,"暂无闲置自有舰。购买或建造舰船后，在这里部署。",14)
+	if count==0:u._text_to(self,"暂无闲置自有舰。购买或建造舰船后，在这里部署。",UISkin.SIZE_BODY)
 
 func _action(parent: Node,title: String,id: String,kind: String,ship_id: String="") -> void:
 	var service: RefCounted=u.gameplay.crew if section=="crew" else u.gameplay.owned_fleet

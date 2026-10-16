@@ -26,7 +26,7 @@ func setup(ui: Node) -> void:
 		if row!=null and row.profile_id==spec.profile_id:
 			_active_contract(service,row,frame,entry.actions)
 		else:
-			u._text_to(frame,"雇佣费 %d · 押金 %d · 租期 %.0f秒" % [spec.hire_fee_credit,spec.deposit_credit,spec.lease_s],14)
+			u._text_to(frame,"雇佣费 %d · 押金 %d · 租期 %.0f秒" % [spec.hire_fee_credit,spec.deposit_credit,spec.lease_s],UISkin.SIZE_BODY)
 			u._text_to(frame,"押金按返航船况结算；主舰损毁会触发紧急回收，押金不退。",13).add_theme_color_override("font_color",UISkin.MUTED)
 			var reason: String=service.hire_reason(spec.profile_id);var button: Button=_button(entry.actions,"雇佣","hire_action",spec.profile_id,_token)
 			button.name="Hire_"+str(spec.profile_id);button.disabled=not reason.is_empty();button.tooltip_text=reason

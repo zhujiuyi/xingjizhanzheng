@@ -84,9 +84,9 @@ func _rebuild() -> void:
 	revision+=1
 	for child: Node in box.get_children():box.remove_child(child);child.queue_free()
 	selected_stage=_recommended();paths=_current_paths(selected_stage);choices=null;preview_fields={}
-	u._text_to(box,"当前推荐目标",18)
+	u._text_to(box,"当前推荐目标",UISkin.SIZE_SECTION)
 	if selected_stage.is_empty():
-		u._text_to(box,"此文明成长目标均已达成。仍可按各系统资格继续选择活动。",14)
+		u._text_to(box,"此文明成长目标均已达成。仍可按各系统资格继续选择活动。",UISkin.SIZE_BODY)
 		values=null;note=null
 	else:
 		u._text_to(box,str(selected_stage.display_name),16).name="GrowthCurrentStage"
@@ -116,7 +116,7 @@ func _activities(parent: Node,available: Array[Dictionary],prefix: String,planni
 			picker.add_item(u.gameplay.growth.activity_label(path))
 			if prefix=="Growth" and _path_key(path)==activity_key:picker.select(picker.item_count-1)
 		parent.add_child(picker)
-	else:u._text_to(parent,u.gameplay.growth.activity_label(available[0]),14)
+	else:u._text_to(parent,u.gameplay.growth.activity_label(available[0]),UISkin.SIZE_BODY)
 	_actions(parent,available,picker,prefix,planning)
 	return picker
 
@@ -163,7 +163,7 @@ func _build_routes() -> void:
 	var previous: Button=u._button(route_row,"上一目标",func():
 		if _current() and chosen>0:preview_stage_id=str(later[chosen-1].stage_id);_rebuild())
 	previous.name="GrowthPreviewPrevious";previous.disabled=chosen==0
-	var current: Label=u._text_to(route_row,"%d / %d · %s" % [chosen+1,later.size(),later[chosen].display_name],14)
+	var current: Label=u._text_to(route_row,"%d / %d · %s" % [chosen+1,later.size(),later[chosen].display_name],UISkin.SIZE_BODY)
 	current.name="GrowthStage";current.set_meta("stage_id",str(later[chosen].stage_id));current.set_meta("route_count",later.size())
 	var next: Button=u._button(route_row,"下一目标",func():
 		if _current() and chosen+1<later.size():preview_stage_id=str(later[chosen+1].stage_id);_rebuild())
@@ -173,7 +173,7 @@ func _build_routes() -> void:
 
 func _render_preview(stage: Dictionary) -> void:
 	for child: Node in preview.get_children():preview.remove_child(child);child.queue_free()
-	var progress: Label=u._text_to(preview,"",14)
+	var progress: Label=u._text_to(preview,"",UISkin.SIZE_BODY)
 	u._text_to(preview,"收益 · "+str(stage.outcome_label),13).add_theme_color_override("font_color",UISkin.MUTED)
 	_activities(preview,u.gameplay.growth.activities(stage.stage_id),"GrowthPreview",true)
 	preview_fields={"stage":stage,"label":progress}

@@ -433,7 +433,7 @@ func _ready() -> void:
 	sovereignty_filter = OptionButton.new()
 	sovereignty_filter.name = "SovereigntyFilter"
 	sovereignty_filter.custom_minimum_size.x = 112
-	sovereignty_filter.add_theme_font_size_override("font_size", 12)
+	sovereignty_filter.add_theme_font_size_override("font_size", UISkin.text_size("note"))
 	sovereignty_filter.item_selected.connect(_sovereignty_changed)
 	find_row.add_child(sovereignty_filter)
 	navigator = OptionButton.new()
@@ -454,12 +454,12 @@ func _ready() -> void:
 	_toolbar_button(view_row, "−", "ChartZoomOut", func(): diagram.zoom_at(1.0 / 1.2, diagram.size * 0.5))
 	_toolbar_button(view_row, "+", "ChartZoomIn", func(): diagram.zoom_at(1.2, diagram.size * 0.5))
 	zoom_readout = Label.new()
-	zoom_readout.add_theme_font_size_override("font_size", 12)
+	zoom_readout.add_theme_font_size_override("font_size", UISkin.text_size("note"))
 	view_row.add_child(zoom_readout)
 	result_count = Label.new()
 	result_count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	result_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	result_count.add_theme_font_size_override("font_size", 12)
+	result_count.add_theme_font_size_override("font_size", UISkin.text_size("note"))
 	result_count.add_theme_color_override("font_color", UISkin.MUTED)
 	view_row.add_child(result_count)
 	diagram = ChartDrawing.new()
@@ -470,7 +470,7 @@ func _ready() -> void:
 	legend.name = "ChartLegend"
 	legend.text = "外圈安全色：高青 / 中琥珀 / 低红 · 青灰节点归属见详情 · 菱形争夺\n白圈当前位置 · 琥珀圈选中 · 实线开放 / 虚线受限 / 点线游离航路\n滚轮缩放 · 左拖平移 · 点击星系查看 · 方向键平移 · Home 全图"
 	legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	legend.add_theme_font_size_override("font_size", 12)
+	legend.add_theme_font_size_override("font_size", UISkin.text_size("note"))
 	legend.add_theme_color_override("font_color", UISkin.MUTED)
 	legend.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(legend)
@@ -495,7 +495,7 @@ func _toolbar_button(parent: Control, title: String, identity: String, callback:
 	button.text = title
 	button.name = identity
 	button.custom_minimum_size = Vector2(36, 29)
-	button.add_theme_font_size_override("font_size", 12)
+	button.add_theme_font_size_override("font_size", UISkin.text_size("note"))
 	UISkin.apply_button(button, "default", true)
 	button.pressed.connect(callback)
 	parent.add_child(button)

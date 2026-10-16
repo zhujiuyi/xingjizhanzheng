@@ -22,7 +22,7 @@ func setup(ui: Node) -> void:
 	conditions.name="FittingConditionsToggle"
 	Disclosure.apply(conditions,"计算条件",false)
 	add_child(filters);filters.hide()
-	var distance_label: Label = u._text_to(filters,"局部射击距离（米）",14)
+	var distance_label: Label = u._text_to(filters,"局部射击距离（米）",UISkin.SIZE_BODY)
 	distance_label.name = "FittingDistanceLabel"
 	distance_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	distance_label.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -162,7 +162,7 @@ func _issues(report: Dictionary,title: String) -> void:
 	if not issues.is_empty():_cell(results,title+" · "+" / ".join(issues),UISkin.WARN)
 func _render(title: String,report: Dictionary) -> void:
 	if not report.ok:u._text_to(results,str(report.reason),14);return
-	u._text_to(results,title,18)
+	u._text_to(results,title,UISkin.SIZE_SECTION)
 	var m: Dictionary=report.metrics
 	var table: GridContainer=GridContainer.new();table.columns=2;table.add_theme_constant_override("h_separation",UISkin.SECTION_GAP);results.add_child(table)
 	var values: Array[Array]=[

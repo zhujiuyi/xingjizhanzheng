@@ -71,7 +71,7 @@ func _build() -> void:
 		var item: RefCounted = u.state.find("item_instance_state", "item_instance_id", equipment.item_instance_id)
 		if item == null or row==null: continue
 		var card: VBoxContainer = VBoxContainer.new(); card.add_theme_constant_override("separation", UISkin.GAP); cards_root.add_child(card)
-		u._text_to(card, u._item_name(item.item_def_id), 19)
+		u._text_to(card, u._item_name(item.item_def_id), UISkin.SIZE_PAGE)
 		var label: Label = u._text_to(card, "", 14);label.name="DroneReadout_"+item.item_instance_id
 		label.add_theme_color_override("font_color", UISkin.ICE)
 		label.mouse_filter=Control.MOUSE_FILTER_PASS
@@ -104,7 +104,7 @@ func _build() -> void:
 				var launch: Button=u._button(actions,pair[0],_request("auxiliary_launch",item_id,1,destination+"|"+expected,built))
 				launch.name="AuxiliaryLaunch_"+item_id+("_self" if destination==u.state.ship().ship_instance_id else "_target");launches.append({"button":launch,"target":destination,"token":expected})
 		cards.append({"row":row,"item":item,"equipment":equipment,"label":label,"button":replenish,"missing":missing,"revision":revision,"maximum":count,"launches":launches,"flying":flying})
-	if cards.is_empty():u._text_to(cards_root,"当前舰尚无可整备的无人机库。",14)
+	if cards.is_empty():u._text_to(cards_root,"当前舰尚无可整备的无人机库。",UISkin.SIZE_BODY)
 	if keep_intel:
 		if not is_instance_valid(_intel_view):
 			_intel_view=preload("res://runtime/ui/auxiliary_intel_panel.gd").new();add_child(_intel_view);_intel_view.setup(u)

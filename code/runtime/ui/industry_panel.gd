@@ -38,7 +38,7 @@ func _build() -> void:
 	for child: Node in get_children(): remove_child(child); child.queue_free()
 	rows.clear(); signature = _signature()
 	if mode == "jobs":
-		_label(self, "制造订单 · 全部空间站", 18)
+		_label(self, "制造订单 · 全部空间站", UISkin.SIZE_SECTION)
 		_label(self, "每站同时加工一份，订单与待领成品合计最多 %d 份。暂停与退出不推进；成品需回原站领取。" % int(u.gameplay.industry.balance.queue_limit), 13)
 		var jobs: Array = u.gameplay.industry.jobs()
 		if jobs.is_empty(): _label(self, "尚无订单。在下方配方行填写批数并提交生产。")
@@ -58,7 +58,7 @@ func _build() -> void:
 			cancel.tooltip_text = "等待开工：退还全部材料与服务费。已开工：材料按 %d%% 向下取整返还，服务费不退。" % int(u.gameplay.industry.balance.running_refund_bp / 100)
 			rows.append({"job": job, "label": status, "claim": claim, "cancel": cancel})
 	else:
-		_label(self, "本站区域需求", 18)
+		_label(self, "本站区域需求", UISkin.SIZE_SECTION)
 		_label(self, "只交付本站仓库的普通自有材料；按实际交付数量支付信用点，完成全部缺额后获得声望与限时工业优惠。", 13)
 		for row: Dictionary in u.gameplay.industry.demands(u.state.player().docked_station_id):
 			var card: VBoxContainer = VBoxContainer.new(); add_child(card)

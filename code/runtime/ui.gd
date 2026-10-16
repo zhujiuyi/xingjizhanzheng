@@ -262,7 +262,7 @@ func _ready() -> void:
 	var navigation_layout: VBoxContainer = VBoxContainer.new()
 	navigation_layout.add_theme_constant_override("separation", 4)
 	navigation_frame.add_child(navigation_layout)
-	top = _text_to(navigation_layout, "航行", 14)
+	top = _text_to(navigation_layout, "航行", UISkin.SIZE_BODY)
 	# Location / risk zone / credits / ship name: three plain facts, so they read
 	# in body colour. Amber is reserved for "selected" and "the one primary action".
 	top.add_theme_color_override("font_color", UISkin.TEXT)
@@ -279,7 +279,7 @@ func _ready() -> void:
 	navigation_stop_button.custom_minimum_size = Vector2(40, 22)
 	navigation_stop_button.focus_mode = Control.FOCUS_NONE
 	UISkin.apply_button(navigation_stop_button, "default", true)
-	navigation_stop_button.add_theme_font_size_override("font_size", 10)
+	navigation_stop_button.add_theme_font_size_override("font_size", UISkin.text_size("note"))
 	navigation_stop_button.hide()
 	var objective_frame: PanelContainer = _frame(root, "FlightObjective")
 	objective_frame.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
@@ -296,7 +296,7 @@ func _ready() -> void:
 	mission_heading.name = "MissionHeading"
 	UISkin.apply_text_style(mission_heading, "note")
 	mission_heading.add_theme_color_override("font_color", UISkin.TEXT)
-	objective = _text_to(hud_left, "", 14)
+	objective = _text_to(hud_left, "", UISkin.SIZE_BODY)
 	objective.max_lines_visible = 4
 	mission_navigation_row = HFlowContainer.new()
 	mission_navigation_row.name = "MissionNavigationActions"
@@ -368,7 +368,7 @@ func _ready() -> void:
 	controls.offset_top = -37
 	controls.offset_right = 302
 	controls.add_theme_color_override("font_color", UISkin.MUTED)
-	toast = _label(root, "", 14)
+	toast = _label(root, "", UISkin.SIZE_BODY)
 	toast.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	toast.offset_left = 370
 	toast.offset_right = -320
@@ -390,7 +390,7 @@ func _ready() -> void:
 	operation_row.name = "OperationRow"
 	operation_row.add_theme_constant_override("separation", 16)
 	operation_bar.add_child(operation_row)
-	operation_label = _text_to(operation_row, "", 14)
+	operation_label = _text_to(operation_row, "", UISkin.SIZE_BODY)
 	operation_label.custom_minimum_size.x = 0
 	operation_label.max_lines_visible = 3
 	operation_label.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -479,7 +479,7 @@ func show_title(save_slots: Array[Dictionary]) -> void:
 	body.add_child(utilities)
 	_secondary(_button(utilities, "设置", func(): show_page("settings")))
 	_secondary(_button(utilities, "退出游戏", func(): requested.emit("quit", "", 1, "")))
-	var footer: Label = _text_to(body, "本机保存 · 原创星域 · 离线航行", 12)
+	var footer: Label = _text_to(body, "本机保存 · 原创星域 · 离线航行", UISkin.SIZE_NOTE)
 	footer.add_theme_color_override("font_color", UISkin.MUTED)
 	_focus_page.call_deferred()
 
@@ -903,7 +903,7 @@ func _station() -> void:
 	var services: VBoxContainer = VBoxContainer.new()
 	services.add_theme_constant_override("separation", 8)
 	station_services.add_child(services)
-	var heading: Label = _text_to(services, "服务导航", 14)
+	var heading: Label = _text_to(services, "服务导航", UISkin.SIZE_BODY)
 	heading.name = "StationNavigationHeading"
 	heading.add_theme_color_override("font_color", UISkin.ICE)
 	var service_scroll: ScrollContainer = ScrollContainer.new()
@@ -949,7 +949,7 @@ func _station() -> void:
 	_module_heading(details, "舰泊档案", "当前驾驶舰")
 	station_ship_name = _text_to(details, _ship_name(state.ship().ship_def_id), 22)
 	station_ship_name.add_theme_color_override("font_color", UISkin.ICE)
-	station_ship_status = _text_to(details, "", 14)
+	station_ship_status = _text_to(details, "", UISkin.SIZE_BODY)
 	var funds: Label = _text_to(details, "%d 信用点" % state.player().credit, UISkin.SIZE_SECTION)
 	UISkin.apply_text_style(funds, "section")
 	funds.add_theme_color_override("font_color", UISkin.TEXT)
@@ -1512,7 +1512,7 @@ func _missions() -> void:
 	body.add_child(navigation)
 	var previous: Button = _button(navigation, "上一页", func(): mission_page -= 1; show_page("missions"))
 	previous.disabled = mission_page <= 0
-	_text_to(navigation, "%d 项 · %d / %d 页" % [filtered.size(), mission_page + 1, pages], 14)
+	_text_to(navigation, "%d 项 · %d / %d 页" % [filtered.size(), mission_page + 1, pages], UISkin.SIZE_BODY)
 	var next: Button = _button(navigation, "下一页", func(): mission_page += 1; show_page("missions"))
 	next.disabled = mission_page >= pages - 1
 	if filtered.is_empty():
@@ -1834,7 +1834,7 @@ func _map_demands(parent: Node, sector_id: String) -> void:
 		var station: Dictionary = _one("station_defs","station_id",spec.station_id)
 		if str(station.get("sector_id",""))!=sector_id: continue
 		var demand_id: String = spec.demand_id
-		_text_to(parent,"需求 · "+_station_name(spec.station_id)+" · "+_item_name(spec.item_id),14)
+		_text_to(parent,"需求 · "+_station_name(spec.station_id)+" · "+_item_name(spec.item_id),UISkin.SIZE_BODY)
 		var label: Label = _text_to(parent,gameplay.situational.demand_text(demand_id),13)
 		label.name="DemandIntel_"+demand_id
 		var witness: WeakRef=weakref(label)
@@ -1941,7 +1941,7 @@ func _pause() -> void:
 	archive.hide()
 	_text("谨慎操作", 20)
 	var danger: VBoxContainer = _card("放弃本次未保存进度")
-	_text_to(danger, "此操作直接退出；下次从最后成功存档恢复。本次尚未保存的变化会丢失。", 14)
+	_text_to(danger, "此操作直接退出；下次从最后成功存档恢复。本次尚未保存的变化会丢失。", UISkin.SIZE_BODY)
 	var discard: Button = _wide_button(_button(danger, "放弃未保存进度并退出", func(): requested.emit("quit_without_save", "", 1, "")))
 	discard.name = "QuitWithoutSave"
 	UISkin.apply_button(discard, "danger")
@@ -2060,7 +2060,7 @@ func _slot_card(slot: Dictionary, title: String, save_index: int = -1) -> void:
 		world.tooltip_text = world.text
 		var updated: String = str(slot.get("updated_utc", "")).replace("T", " ").replace("Z", "")
 		_text_to(card, "保存时间（UTC）", 12).add_theme_color_override("font_color", UISkin.MUTED)
-		_text_to(card, updated if not updated.is_empty() else "时间未记录", 14)
+		_text_to(card, updated if not updated.is_empty() else "时间未记录", UISkin.SIZE_BODY)
 	if save_index >= 0:
 		var save: Button = _wide_button(_button(card, "保存至手动槽 %d" % (save_index + 1), func(): requested.emit("save", str(save_index), 1, "manual")))
 		_secondary(save)
@@ -2369,7 +2369,7 @@ func _quantity() -> void:
 	toolbar.name = "BusinessQuantityToolbar"
 	toolbar.add_theme_constant_override("separation", 12)
 	body.add_child(toolbar)
-	var heading: Label = _text_to(toolbar, "操作数量", 14)
+	var heading: Label = _text_to(toolbar, "操作数量", UISkin.SIZE_BODY)
 	heading.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	heading.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	heading.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -3011,7 +3011,7 @@ func _responsive() -> void:
 		flight_header.offset_top = safe
 		flight_header.offset_bottom = safe + header_height
 		flight_header.add_theme_stylebox_override("panel", UISkin.hud_panel(4))
-		top.add_theme_font_size_override("font_size", 10 if compact else 13)
+		top.add_theme_font_size_override("font_size", 11 if compact else UISkin.SIZE_BODY)
 		top.autowrap_mode = TextServer.AUTOWRAP_OFF
 		top.clip_text = true
 	if is_instance_valid(flight_dock):
@@ -3055,7 +3055,7 @@ func _responsive() -> void:
 		navigation_frame.offset_bottom = flight_content_top
 		navigation_frame.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 		navigation_status.max_lines_visible = 1 if compact else 2
-		navigation_status.add_theme_font_size_override("font_size", 10 if compact else 12)
+		navigation_status.add_theme_font_size_override("font_size", 11 if compact else UISkin.SIZE_BODY)
 		navigation_stop_button.custom_minimum_size.y = 20
 	if is_instance_valid(hud_left):
 		var frame: PanelContainer = hud_left.get_parent()
@@ -3066,15 +3066,15 @@ func _responsive() -> void:
 		frame.offset_right = left_edge + left_width
 		frame.add_theme_stylebox_override("panel", UISkin.hud_panel(5 if compact else 10))
 		hud_left.add_theme_constant_override("separation", 3 if compact else 8)
-		objective.add_theme_font_size_override("font_size", 10 if compact else 13)
+		objective.add_theme_font_size_override("font_size", 11 if compact else UISkin.SIZE_BODY)
 		objective.max_lines_visible = 2 if compact else 5
 		for action_button: Button in [mission_locate_button,mission_travel_button,mission_guide_button]:
 			action_button.custom_minimum_size = Vector2(72,22 if compact else 26)
-			action_button.add_theme_font_size_override("font_size",10 if compact else 11)
+			action_button.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 		var heading: Control = hud_left.find_child("MissionHeading",false,false)
 		if heading != null: heading.visible = not compact or not work_box.visible
 		work_progress.show_percentage = not compact
-		work_label.add_theme_font_size_override("font_size",10 if compact else 12)
+		work_label.add_theme_font_size_override("font_size", 11 if compact else UISkin.SIZE_BODY)
 		work_label.autowrap_mode = TextServer.AUTOWRAP_OFF if compact else TextServer.AUTOWRAP_WORD_SMART
 		work_label.clip_text = compact
 		work_label.max_lines_visible = 1 if compact else 3
@@ -3082,7 +3082,7 @@ func _responsive() -> void:
 		instrument.custom_minimum_size.x = 200.0 if compact else 268.0
 		instrument.add_theme_stylebox_override("panel",UISkin.hud_panel(4 if compact else 6))
 		instrument_title.visible = not compact
-		instrument_title.add_theme_font_size_override("font_size",10)
+		instrument_title.add_theme_font_size_override("font_size", UISkin.text_size("note"))
 		instrument_title.clip_text = true
 		instrument_title.autowrap_mode = TextServer.AUTOWRAP_OFF
 		dial.visible = true
@@ -3092,7 +3092,7 @@ func _responsive() -> void:
 		var instrument_row: HBoxContainer = instrument.find_child("InstrumentReadouts",true,false)
 		instrument_row.add_theme_constant_override("separation",4 if compact else 8)
 		for entry: Dictionary in condition_bars:
-			entry.label.add_theme_font_size_override("font_size",10 if compact else 12)
+			entry.label.add_theme_font_size_override("font_size", 11 if compact else UISkin.SIZE_BODY)
 			entry.label.autowrap_mode = TextServer.AUTOWRAP_OFF
 			entry.label.clip_text = true
 		# The arcs are the reading now, so they stay at every size: only the legend text
@@ -3103,7 +3103,7 @@ func _responsive() -> void:
 			dot.compact = compact
 			dot.queue_redraw()
 		for readout_label: Label in [energy_label,heat_label,cargo_label]:
-			readout_label.add_theme_font_size_override("font_size",10 if compact or readout_label == cargo_label else 12)
+			readout_label.add_theme_font_size_override("font_size", 11 if compact or readout_label == cargo_label else UISkin.SIZE_BODY)
 			readout_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 			readout_label.clip_text = true
 		cargo_label.visible = not compact
@@ -3125,7 +3125,7 @@ func _responsive() -> void:
 		navigation_hud.radar_frame.add_theme_stylebox_override("panel",UISkin.hud_panel(5))
 		navigation_hud.radar_frame.offset_left = left_edge
 		navigation_hud.radar_frame.offset_right = left_edge + (150 if compact else 220)
-		navigation_hud.range_label.add_theme_font_size_override("font_size",10 if compact else 12)
+		navigation_hud.range_label.add_theme_font_size_override("font_size", 11 if compact else UISkin.SIZE_BODY)
 	if is_instance_valid(controls):
 		# Detailed controls live on the ship button's tooltip, freeing the top strip.
 		controls.hide()
@@ -3155,10 +3155,10 @@ func _responsive() -> void:
 		operation_bar.offset_top = notification_top
 		operation_bar.offset_bottom = notification_top + operation_height
 		operation_bar.add_theme_stylebox_override("panel", UISkin.hud_panel(4 if compact else 6))
-		operation_label.add_theme_font_size_override("font_size", 10 if compact else 12)
+		operation_label.add_theme_font_size_override("font_size", 11 if compact else UISkin.SIZE_BODY)
 		operation_label.max_lines_visible = 3 if compact else 2
 		operation_cancel.custom_minimum_size = Vector2(64 if compact else 96, 24 if compact else 28)
-		operation_cancel.add_theme_font_size_override("font_size", 10 if compact else 11)
+		operation_cancel.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 		operation_bar.find_child("OperationRow", true, false).add_theme_constant_override("separation", 4 if compact else UISkin.GAP)
 	if is_instance_valid(toast):
 		toast.visible = not toast.text.is_empty() and not (operation_bar.visible and toast.text == operation_message)
@@ -3166,7 +3166,7 @@ func _responsive() -> void:
 		toast.offset_right = notice_left + notice_width
 		toast.offset_top = notification_top + operation_height + 4.0 if operation_bar.visible else notification_top
 		toast.offset_bottom = toast.offset_top + (33 if compact else 39)
-		toast.add_theme_font_size_override("font_size", 10 if compact else 12)
+		toast.add_theme_font_size_override("font_size", 11 if compact else UISkin.SIZE_BODY)
 		if panel != null and (panel.visible or station_layer.visible):
 			toast.offset_top = root.size.y - 45.0
 			toast.offset_bottom = root.size.y - 8.0
@@ -3175,10 +3175,10 @@ func _responsive() -> void:
 		flight_cues.offset_right=notice_left+notice_width
 		flight_cues.offset_top=toast.offset_bottom+6.0 if toast.visible else notification_top+(operation_height+6.0 if operation_bar.visible else 0.0)
 		flight_cues.offset_bottom=flight_cues.offset_top+maxf(28.0,flight_cues.get_combined_minimum_size().y)
-	if is_instance_valid(npc_title): npc_title.add_theme_font_size_override("font_size", 10 if compact else 11)
+	if is_instance_valid(npc_title): npc_title.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 	if is_instance_valid(npc_detail): npc_detail.add_theme_constant_override("separation", 2 if compact else 4)
 	for entry: Dictionary in npc_bars:
-		entry.label.add_theme_font_size_override("font_size", 10 if compact else 12)
+		entry.label.add_theme_font_size_override("font_size", 11 if compact else UISkin.SIZE_BODY)
 		entry.bar.custom_minimum_size.y = 5 if compact else 7
 	if is_instance_valid(panel):
 		panel.offset_left = safe
@@ -3581,7 +3581,7 @@ func _build_instrument() -> void:
 	var layout: VBoxContainer = VBoxContainer.new()
 	layout.add_theme_constant_override("separation", 4)
 	instrument.add_child(layout)
-	instrument_title = _text_to(layout, "舰况 / 巡航", 14)
+	instrument_title = _text_to(layout, "舰况 / 巡航", UISkin.SIZE_BODY)
 	instrument_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	instrument_title.add_theme_color_override("font_color", UISkin.MUTED)
 	var row: HBoxContainer = HBoxContainer.new()
@@ -3644,7 +3644,7 @@ func _build_instrument() -> void:
 		if index == 0: energy_bar = ring
 		elif index == 1: heat_bar = ring
 		else: cargo_ring = ring
-	compact_speed_label = _text_to(resource_text, XJSpaceUnits.speed(0.0) + " · 跟随", 10)
+	compact_speed_label = _text_to(resource_text, XJSpaceUnits.speed(0.0) + " · 跟随", UISkin.SIZE_NOTE)
 	compact_speed_label.name = "CompactSpeed"
 	compact_speed_label.clip_text = true
 	compact_speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -3654,11 +3654,11 @@ func _build_instrument() -> void:
 	energy_label.custom_minimum_size.x = 0
 	heat_label = _text_to(resource_rows[1], "热量", 13)
 	heat_label.custom_minimum_size.x = 0
-	cargo_label = _text_to(resource_rows[2], "载荷", 12)
+	cargo_label = _text_to(resource_rows[2], "载荷", UISkin.SIZE_NOTE)
 	cargo_label.custom_minimum_size.x = 0
 	cargo_label.add_theme_color_override("font_color", UISkin.MUTED)
 	for readout: Label in [energy_label, heat_label, cargo_label]: readout.mouse_filter = Control.MOUSE_FILTER_PASS
-	health = _label(root, "", 12)
+	health = _label(root, "", UISkin.SIZE_NOTE)
 	health.hide() # 保留测试/辅助读取接口，正式仪表只使用环形读数。
 
 func _build_navigation() -> void:
@@ -3747,7 +3747,7 @@ func _rail_geometry(button: Button, dial: UISkin.IconDial, label: Label, compact
 	dial.compact = compact
 	dial.offset_bottom = circle
 	dial.queue_redraw()
-	label.add_theme_font_size_override("font_size", 10 if compact else UISkin.SIZE_NOTE)
+	label.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 	label.offset_top = -strip
 
 func _build_target_module() -> void:

@@ -65,13 +65,13 @@ func build() -> void:
 		for allowed: Dictionary in u.catalog.rows("trial_hull_defs"):
 			if allowed.trial_id==selected:hulls.append(u._ship_name(allowed.ship_id))
 		u._text_to(self,"参考预算 %d / %d 信用点 · 服务费 %d" % [service().budget(),spec.budget_credit,spec.fee_credit],15).tooltip_text="计入主舰与自有僚舰的舰体、设备、耗材、机库存量和已指派船员，以及雇佣舰参考造价。受领后绑定编队、岗位和设备；结算保留作战期间最高合法预算。"
-		u._text_to(self,"舰型："+"、".join(hulls),14)
-		if spec.objective_kind=="precision":u._text_to(self,"计分距离 %.1f–%.1f km · 有效伤害 %.0f HP" % [spec.min_range_m/1000.0,spec.max_range_m/1000.0,spec.target_hp],14)
-		elif spec.objective_kind=="support":u._text_to(self,"有效远修 %.0f HP · 保护友舰抵达出口" % spec.target_hp,14)
-		if row.best_elapsed_s>0:u._text_to(self,"最佳 %.1f 秒 · 最低参考造价 %d" % [row.best_elapsed_s,row.best_cost],14)
+		u._text_to(self,"舰型："+"、".join(hulls),UISkin.SIZE_BODY)
+		if spec.objective_kind=="precision":u._text_to(self,"计分距离 %.1f–%.1f km · 有效伤害 %.0f HP" % [spec.min_range_m/1000.0,spec.max_range_m/1000.0,spec.target_hp],UISkin.SIZE_BODY)
+		elif spec.objective_kind=="support":u._text_to(self,"有效远修 %.0f HP · 保护友舰抵达出口" % spec.target_hp,UISkin.SIZE_BODY)
+		if row.best_elapsed_s>0:u._text_to(self,"最佳 %.1f 秒 · 最低参考造价 %d" % [row.best_elapsed_s,row.best_cost],UISkin.SIZE_BODY)
 	else:
-		u._text_to(self,"签发：%s · 服务费 %d · 送达每批 %d 信用点" % [u._station_name(spec.station_id),spec.fee_credit,spec.credit_per_unit],14)
-		u._text_to(self,"侦测 %.1f km · 静默 ≤%.0f m/s · 侧路 %.0f 秒" % [spec.detection_radius_m/1000.0,spec.quiet_speed_mps,spec.bypass_window_s],14)
+		u._text_to(self,"签发：%s · 服务费 %d · 送达每批 %d 信用点" % [u._station_name(spec.station_id),spec.fee_credit,spec.credit_per_unit],UISkin.SIZE_BODY)
+		u._text_to(self,"侦测 %.1f km · 静默 ≤%.0f m/s · 侧路 %.0f 秒" % [spec.detection_radius_m/1000.0,spec.quiet_speed_mps,spec.bypass_window_s],UISkin.SIZE_BODY)
 	u._text_to(self,spec.description,14).add_theme_color_override("font_color",UISkin.MUTED)
 	status_label=u._text_to(self,"",15);status_label.name="ScenarioStatus";status_label.add_theme_color_override("font_color",UISkin.ICE)
 	var nav: HFlowContainer=HFlowContainer.new();add_child(nav);route(nav)
@@ -93,7 +93,7 @@ func build() -> void:
 		for node: Dictionary in u.catalog.rows("blockade_node_defs"):
 			if node.blockade_id!=selected:continue
 			var index: int=int(node.node_index);var progress: RefCounted=service()._node(selected,index)
-			u._text_to(self,service().node_label(selected,index)+(" · 已完成" if progress.completed else " · 未处理"),14)
+			u._text_to(self,service().node_label(selected,index)+(" · 已完成" if progress.completed else " · 未处理"),UISkin.SIZE_BODY)
 			var tools: HFlowContainer=HFlowContainer.new();add_child(tools);route(tools,index)
 			if node.node_kind=="survey":
 				var scan: Button=button(tools,"付费调查节点","blockade_action","survey|"+str(row.generation)+"|"+str(index));scan.name="BlockadeSurvey_"+str(index)
@@ -101,7 +101,7 @@ func build() -> void:
 	awards();signature=stamp();refresh();u.finish_local_rebuild(self,view)
 func awards() -> void:
 	if u.state.rows("tactical_award_state").is_empty():return
-	u._text_to(self,"已取得称号",16)
+	u._text_to(self,"已取得称号",UISkin.SIZE_SECTION)
 	var tools: HFlowContainer=HFlowContainer.new();add_child(tools)
 	var hidden: bool=not u.state.rows("tactical_award_state").any(func(award: RefCounted):return award.selected)
 	var hide_award: Button=u._button(tools,"隐藏称号"+(" · 当前" if hidden else ""),func():

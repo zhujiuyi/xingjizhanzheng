@@ -21,7 +21,7 @@ func setup(ui: CanvasLayer) -> void:
 		var entry: Dictionary=list.append_row(str(spec.operation_id),Services.icon("missions"),str(spec.display_name),"","","","","","")
 		var card: VBoxContainer = entry.details
 		u._text_to(card, "在对应签发站接取，出港后抵达起点开始。无需清场；实际到达撤离点后返回签发站交付。暂停与退出不推进计时。", 13).add_theme_color_override("font_color", UISkin.MUTED)
-		var text: Label = u._text_to(card, "", 14)
+		var text: Label = u._text_to(card, "", UISkin.SIZE_BODY)
 		text.add_theme_color_override("font_color", UISkin.ICE)
 		var guide: String = "实际射击拆除推进干扰装置。装置周围降低推进效率，与截击干扰取较强效果。完成部分拆除可保留对应成果，敌舰仍可存活。" if spec.operation_kind == "demolition" else "最多运送%d批物资，每批占%.0f升 / %.0f千克。按本舰真实空余装载；加速暴露%.0f秒，暴露时每累计%.0f实际伤害损失一批，允许主动抛货。" % [spec.target_units,spec.cargo_volume_l,spec.cargo_mass_kg,spec.exposure_duration_s,spec.loss_damage_hp]
 		u._text_to(card, guide, 14).add_theme_color_override("font_color", UISkin.MUTED)

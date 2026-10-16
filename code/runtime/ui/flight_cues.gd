@@ -33,8 +33,8 @@ func refresh(game: RefCounted, small: bool, show_hud: bool) -> void:
 		var cue: Dictionary=cues[index]
 		var row: HBoxContainer=list.get_child(index)
 		var icon: TextureRect=row.get_child(0);icon.texture=Navigation.icon(cue.icon_page)
-		var label: Label=row.get_child(1);label.add_theme_font_size_override("font_size",10 if compact else 12)
+		var label: Label=row.get_child(1);label.add_theme_font_size_override("font_size",11 if compact else UISkin.SIZE_BODY)
 		label.text=str(cue.title)+" · "+str(cue.detail)
 		var badge: Label=row.get_child(2);badge.text="+%d" % (cues.size()-count) if index==count-1 and cues.size()>count else ""
-		badge.add_theme_font_size_override("font_size",10 if compact else 12)
+		badge.add_theme_font_size_override("font_size",11 if compact else UISkin.SIZE_BODY)
 		label.add_theme_color_override("font_color",Color("ffbba2") if cue.severity=="danger" else UISkin.WARN if cue.severity=="warning" else UISkin.ICE)

@@ -66,7 +66,7 @@ func build(ui: Node) -> void:
 		if control.has_faction_id and control.faction_id==active_faction:owned+=1
 	var title: String=civ.faction_name(active_faction)
 	var summary:=HFlowContainer.new();summary.add_theme_constant_override("h_separation",UISkin.SECTION_GAP);u.body.add_child(summary)
-	u._text_to(summary,"声望 %d · %s · 管辖 %d 个星系" % [u.gameplay.economy.reputation(active_faction),current_rank.display_name,owned],14)
+	u._text_to(summary,"声望 %d · %s · 管辖 %d 个星系" % [u.gameplay.economy.reputation(active_faction),current_rank.display_name,owned],UISkin.SIZE_BODY)
 	var capital: Button=_command(summary,"定位核心星系","civilization_map",active_faction)
 	capital.name="CivilizationCapital";capital.tooltip_text="核心站："+u._station_name(str(selected.capital_station_id))
 	var tabs:=HFlowContainer.new();tabs.name="CivilizationSections";u.body.add_child(tabs)
@@ -102,7 +102,7 @@ func _build_progress(faction: String,civ: RefCounted,joined: String,title: Strin
 	if not pending.is_empty():
 		var mission: Dictionary=u.catalog.one("mission_defs","mission_id",pending.mission_id)
 		var row:=HFlowContainer.new();u.body.add_child(row)
-		u._text_to(row,"第%d/%d步 · %s" % [pending.step_index,steps.size(),mission.display_name],14)
+		u._text_to(row,"第%d/%d步 · %s" % [pending.step_index,steps.size(),mission.display_name],UISkin.SIZE_BODY)
 		var button: Button
 		if active!=null and active.mission_def_id==pending.mission_id:
 			button=u._button(row,"查看当前任务",func():
@@ -176,7 +176,7 @@ func _build_contribution(faction: String,civ: RefCounted) -> void:
 
 func _build_campaign(faction: String,civ: RefCounted) -> void:
 	u._text("舰队战争", 18)
-	war_status = u._text_to(u.body, "", 14)
+	war_status = u._text_to(u.body, "", UISkin.SIZE_BODY)
 	war_status.name = "CivilizationWarStatus"
 	war_status.add_theme_color_override("font_color", UISkin.ICE)
 	var campaign: RefCounted = civ.active_war()

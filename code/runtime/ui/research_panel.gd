@@ -73,7 +73,7 @@ func setup(ui: Node) -> void:
 		tabs[candidate] = tab
 	completed_button = u._button(toolbar, "", _toggle_completed)
 	completed_button.name = "ResearchShowCompleted"
-	evidence = u._text_to(self, "", 14)
+	evidence = u._text_to(self, "", UISkin.SIZE_BODY)
 	evidence.name = "ResearchEvidence"
 	evidence.add_theme_color_override("font_color", UISkin.ICE)
 	list = VBoxContainer.new()
@@ -263,14 +263,14 @@ func _build_detail() -> void:
 	detail_frame.visible = not entry.is_empty()
 	if entry.is_empty(): return
 	var definition: Dictionary = entry.definition
-	u._text_to(detail, str(definition.display_name), 18)
+	u._text_to(detail, str(definition.display_name), UISkin.SIZE_SECTION)
 	if category == "specialization":
 		_build_specialization(entry)
 		return
 	if category == "faction":
 		u._text_to(detail, "解锁 · " + u._unlock_name(str(definition.reward_unlock_id)), 14)
 		var reputation: int = int(u.gameplay.economy.reputation(_station_faction()))
-		u._text_to(detail, "势力声望 %d / %d · 研究费 %d 信用点" % [reputation, int(definition.required_reputation), int(definition.required_credit)], 14)
+		u._text_to(detail, "势力声望 %d / %d · 研究费 %d 信用点" % [reputation, int(definition.required_reputation), int(definition.required_credit)], UISkin.SIZE_BODY)
 		_materials(detail, "research_inputs", "research_id", str(entry.id))
 		for prerequisite: Dictionary in u._defs("research_prerequisites"):
 			if str(prerequisite.research_id) != str(entry.id): continue
@@ -290,15 +290,15 @@ func _build_detail() -> void:
 			mission.set_meta("target", verification_id)
 			mission.tooltip_text = "查看该验证任务的条件与接取地点。"
 	elif category == "exploration":
-		u._text_to(detail, str(definition.description), 14)
+		u._text_to(detail, str(definition.description), UISkin.SIZE_BODY)
 		u._text_to(detail, "解锁 · " + u._unlock_name(str(definition.reward_unlock_id)), 14)
-		u._text_to(detail, "消耗探索证据 %d · 研究费 %d 信用点" % [int(definition.required_insight), int(definition.required_credit)], 14)
+		u._text_to(detail, "消耗探索证据 %d · 研究费 %d 信用点" % [int(definition.required_insight), int(definition.required_credit)], UISkin.SIZE_BODY)
 		action_reason = u._text_to(detail, "", 13)
 		primary = u._command(_actions(detail), "研究", "exploration_research", str(entry.id))
 		primary.name = "ExploreResearch_" + str(entry.id)
 	else:
 		var service: String = str({"industry": "工业", "repair": "维修", "navigation": "导航", "warehouse": "仓储"}.get(str(definition.service_kind), "站点"))
-		u._text_to(detail, "%s设施 · 效率系数 %.2f · 建造费 %d 信用点" % [service, float(definition.effect_multiplier), int(definition.service_fee_credit)], 14)
+		u._text_to(detail, "%s设施 · 效率系数 %.2f · 建造费 %d 信用点" % [service, float(definition.effect_multiplier), int(definition.service_fee_credit)], UISkin.SIZE_BODY)
 		u._text_to(detail, "所需资格 · " + u._unlock_name(str(definition.required_unlock_id)) + ("（已解锁）" if u._unlocked(str(definition.required_unlock_id)) else "（未解锁）"), 13)
 		_materials(detail, "base_module_inputs", "base_module_id", str(entry.id))
 		u._text_to(detail, ("导航设施在本星系生效。" if str(definition.service_kind) == "navigation" else "设施在本站服务生效。") + "同站同型设施只可建造一次。", 13).add_theme_color_override("font_color", UISkin.MUTED)
@@ -326,7 +326,7 @@ func _build_specialization(entry: Dictionary) -> void:
 	var definition: Dictionary = entry.definition
 	u._text_to(detail, u.gameplay.specializations.description(str(definition.module_id)), 14)
 	u._text_to(detail, "前置 · " + u._unlock_name(str(definition.required_unlock_id)) + ("（已解锁）" if u._unlocked(str(definition.required_unlock_id)) else "（未解锁）"), 13)
-	progress_label = u._text_to(detail, "", 14)
+	progress_label = u._text_to(detail, "", UISkin.SIZE_BODY)
 	progress_label.name = "SpecializationProgress_" + str(entry.id)
 	progress_label.add_theme_color_override("font_color", UISkin.ICE)
 	var inputs: HFlowContainer = _actions(detail)
@@ -339,7 +339,7 @@ func _build_specialization(entry: Dictionary) -> void:
 	group.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	group.add_theme_constant_override("separation", UISkin.GAP)
 	inputs.add_child(group)
-	var quantity_label: Label = u._text_to(group, "本次分析点", 14)
+	var quantity_label: Label = u._text_to(group, "本次分析点", UISkin.SIZE_BODY)
 	quantity_label.name = "SpecializationQuantityLabel"
 	quantity_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	quantity_label.custom_minimum_size.x = 80

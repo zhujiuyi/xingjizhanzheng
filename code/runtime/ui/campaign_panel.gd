@@ -65,7 +65,7 @@ func _projects() -> void:
 	var id: String=u.project_selected_id
 	var row: RefCounted=service.instance(id);var def: Dictionary=service.definition(id);var token: String=service.token(id)
 	u._text_to(self,def.display_name+" · "+u._sector_name(def.sector_id),20)
-	u._text_to(self,"阶段 %d/3 · %s · 探索贡献 %d/%d" % [row.stage_index,"已完成" if row.phase=="completed" else service.stage(id,row.stage_index).display_name,service.evidence(id),def.required_evidence_units],14)
+	u._text_to(self,"阶段 %d/3 · %s · 探索贡献 %d/%d" % [row.stage_index,"已完成" if row.phase=="completed" else service.stage(id,row.stage_index).display_name,service.evidence(id),def.required_evidence_units],UISkin.SIZE_BODY)
 	var status: Label=u._text_to(self,"",14);status.name="ProjectStatus";status.add_theme_color_override("font_color",UISkin.ICE);live_labels.append({"label":status,"kind":"project","id":id})
 	var actions: HFlowContainer=HFlowContainer.new();add_child(actions);_nav(actions,"project",id,token)
 	var pause: Button=_request(actions,"恢复工程" if row.paused else "暂停工程","construction_action",id,("resume" if row.paused else "pause")+"||"+token)
@@ -73,11 +73,11 @@ func _projects() -> void:
 	pause.disabled=row.phase=="completed"
 	if row.phase=="completed":u._text_to(self,"制造费、维修费与补货改善已生效。" if service.owned(id) else "已建阶段保留；收复后恢复服务收益。",14);return
 	var spec: Dictionary=service.stage(id,row.stage_index)
-	u._text_to(self,"施工 %s · 服务费 %d 信用点" % [ResourceStatus.countdown(spec.work_s),spec.fee_credit],14)
+	u._text_to(self,"施工 %s · 服务费 %d 信用点" % [ResourceStatus.countdown(spec.work_s),spec.fee_credit],UISkin.SIZE_BODY)
 	for input: Dictionary in service.inputs(id,row.stage_index):
 		var delivered: RefCounted=service.delivered(input);var item_id: String=input.item_id
 		var remaining: int=int(input.required_units)-delivered.delivered_units
-		u._text_to(self,"%s · %d/%d · 集货站：%s" % [u._item_name(item_id),delivered.delivered_units,input.required_units,u._station_name(input.delivery_station_id)],14)
+		u._text_to(self,"%s · %d/%d · 集货站：%s" % [u._item_name(item_id),delivered.delivered_units,input.required_units,u._station_name(input.delivery_station_id)],UISkin.SIZE_BODY)
 		var controls: HFlowContainer=HFlowContainer.new();add_child(controls)
 		var spin: SpinBox=SpinBox.new();spin.min_value=1;spin.max_value=maxi(1,remaining);spin.step=1;spin.value=mini(10,maxi(1,remaining));spin.custom_minimum_size=Vector2(100,36);controls.add_child(spin)
 		spin.name="ProjectQuantity_"+item_id
@@ -127,7 +127,7 @@ func _expeditions() -> void:
 		return
 	var current: RefCounted=service.stage(run);var token: String=service.token(run.run_id)
 	u._text_to(self,service.route(run.route_id).display_name+" · 第%d/3段" % run.stage_index,20)
-	u._text_to(self,"本轮协调成果已入账：%d信用点 / %d探索证据" % [run.bonus_credit_total,run.bonus_insight_total],14)
+	u._text_to(self,"本轮协调成果已入账：%d信用点 / %d探索证据" % [run.bonus_credit_total,run.bonus_insight_total],UISkin.SIZE_BODY)
 	var state_label: Label=u._text_to(self,"",14);state_label.name="ExpeditionStatus";state_label.add_theme_color_override("font_color",UISkin.ICE);live_labels.append({"label":state_label,"kind":"expedition","id":run.run_id})
 	var actions: HFlowContainer=HFlowContainer.new();add_child(actions);_nav(actions,"expedition",run.run_id,token)
 	u._button(actions,"处理本段事件",func():
@@ -136,7 +136,7 @@ func _expeditions() -> void:
 	end.name="ExpeditionWithdraw";end.disabled=not service.reason(run.run_id,"withdraw").is_empty();end.tooltip_text=service.reason(run.run_id,"withdraw")
 	UISkin.apply_button(end,"danger");Interaction.action_state(end,service.reason(run.run_id,"withdraw"),"结束本轮远征；已结算段落保留，未结算目标停止继续。")
 	if run.phase=="checkpoint":
-		u._text_to(self,"已结算段落保留。选择下一段，或在此结束本轮。",14)
+		u._text_to(self,"已结算段落保留。选择下一段，或在此结束本轮。",UISkin.SIZE_BODY)
 		var next_options:=HFlowContainer.new();next_options.name="ExpeditionNextOptions";add_child(next_options)
 		for choice: Dictionary in service.options(run.route_id,run.stage_index+1):
 			var button: Button=_request(next_options,"继续 · "+u.gameplay.exploration.definition(choice.event_id).display_name,"expedition_action",run.run_id,"continue|"+str(choice.option_id)+"|"+token)

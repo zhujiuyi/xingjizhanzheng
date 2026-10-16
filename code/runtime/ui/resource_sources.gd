@@ -57,11 +57,11 @@ func setup(ui: Node) -> void:
 	var previous: Button = u._button(pager, "上一页", func():
 		if _current(): u.source_page -= 1; u.show_page("sources"))
 	previous.disabled = u.source_page <= 0
-	u._text_to(pager, "%d 个来源 · %d / %d 页" % [rows.size(), u.source_page + 1, pages], 14)
+	u._text_to(pager, "%d 个来源 · %d / %d 页" % [rows.size(), u.source_page + 1, pages], UISkin.SIZE_BODY)
 	var next: Button = u._button(pager, "下一页", func():
 		if _current(): u.source_page += 1; u.show_page("sources"))
 	next.disabled = u.source_page + 1 >= pages
-	if rows.is_empty(): u._text_to(self, "未记录符合条件的公开来源；可切换类别，或查看科研与剧情前置。", 14)
+	if rows.is_empty(): u._text_to(self, "未记录符合条件的公开来源；可切换类别，或查看科研与剧情前置。", UISkin.SIZE_BODY)
 	for index: int in range(u.source_page * 8, mini(rows.size(), (u.source_page + 1) * 8)):
 		_source_row(rows[index])
 
@@ -69,7 +69,7 @@ func _source_row(row: Dictionary) -> void:
 	var frame: PanelContainer = u._frame(self, "SourceCard_" + str(row.key).validate_node_name())
 	frame.add_theme_stylebox_override("panel", UISkin.panel_style())
 	var card: VBoxContainer = VBoxContainer.new(); card.add_theme_constant_override("separation", UISkin.GAP); frame.add_child(card)
-	var title: Label = u._text_to(card, "%s · %s · %s" % [row.kind, u._sector_name(row.sector_id), row.title], 16)
+	var title: Label = u._text_to(card, "%s · %s · %s" % [row.kind, u._sector_name(row.sector_id), row.title], UISkin.SIZE_SECTION)
 	title.name = "SourceTitle_" + str(row.key).validate_node_name()
 	if u.catalog.table_names.has("sector_activity_defs"):
 		var activity: Dictionary = u.catalog.one("sector_activity_defs", "sector_id", row.sector_id)

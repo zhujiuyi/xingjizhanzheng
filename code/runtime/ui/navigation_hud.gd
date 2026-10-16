@@ -96,7 +96,7 @@ func _ready() -> void:
 	range_label = Label.new()
 	range_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	range_label.clip_text = true
-	range_label.add_theme_font_size_override("font_size", 12)
+	range_label.add_theme_font_size_override("font_size", UISkin.text_size("note"))
 	row.add_child(range_label)
 	for direction: int in [-1, 1]:
 		var button := Button.new()

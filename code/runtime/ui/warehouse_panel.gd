@@ -82,13 +82,13 @@ func _set_compact(compact: bool) -> void:
 		frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		(frame.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(4 if compact else UISkin.GAP)
 		column.content_layout.add_theme_constant_override("separation", 4 if compact else UISkin.GAP)
-		column.heading.add_theme_font_size_override("font_size", 14 if compact else 17)
+		column.heading.add_theme_font_size_override("font_size", UISkin.SIZE_SECTION)
 		column.heading.text = str(column.title) + " · " + str(column.subtitle) if _stacked else str(column.title)
 		column.heading.tooltip_text = str(column.title) + "\n" + str(column.subtitle)
 		column.heading.autowrap_mode = TextServer.AUTOWRAP_OFF if _stacked else TextServer.AUTOWRAP_WORD_SMART
 		column.heading.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS if _stacked else TextServer.OVERRUN_NO_TRIMMING
 		column.subheading.visible = not _stacked
-		column.subheading.add_theme_font_size_override("font_size", 10 if compact else 11)
+		column.subheading.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 		column.subheading.max_lines_visible = 1 if compact else 2
 		column.subheading.autowrap_mode = TextServer.AUTOWRAP_OFF if compact else TextServer.AUTOWRAP_WORD_SMART
 		column.subheading.clip_text = compact
@@ -96,7 +96,7 @@ func _set_compact(compact: bool) -> void:
 		(column.header_frame.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(int(cell.margin))
 		column.header_frame.visible = not _shallow
 		column.header.add_theme_constant_override("separation", int(cell.gap))
-		for label: Label in [column.inventory_heading, column.location_heading, column.amount_heading, column.action_heading]: label.add_theme_font_size_override("font_size", 10 if compact else 11)
+		for label: Label in [column.inventory_heading, column.location_heading, column.amount_heading, column.action_heading]: label.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 		_size_cell(column.image_heading, float(cell.image))
 		_size_cell(column.inventory_heading, float(cell.name), true)
 		_size_cell(column.location_heading, float(cell.location))
@@ -111,10 +111,10 @@ func _set_compact(compact: bool) -> void:
 		row.image.custom_minimum_size = Vector2(float(cell.image), float(cell.image))
 		_size_cell(row.names, float(cell.name), true)
 		_size_cell(row.location, float(cell.location))
-		row.name.add_theme_font_size_override("font_size", 12 if compact else 13)
-		row.policy_badge.add_theme_font_size_override("font_size", 10 if compact else 11)
-		row.quantity.add_theme_font_size_override("font_size", 10 if compact else 11)
-		for label: Label in [row.location, row.description, row.status]: label.add_theme_font_size_override("font_size", 10 if compact else 11)
+		row.name.add_theme_font_size_override("font_size", UISkin.SIZE_BODY)
+		row.policy_badge.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
+		row.quantity.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
+		for label: Label in [row.location, row.description, row.status]: label.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 		if is_instance_valid(row.amount):
 			_size_cell(row.amount, float(cell.amount))
 			row.action_group.add_theme_constant_override("separation", int(cell.gap))
@@ -122,18 +122,18 @@ func _set_compact(compact: bool) -> void:
 			_size_cell(row.button, float(cell.button))
 			row.amount.custom_minimum_size.y = 30 if compact else 34
 			row.button.custom_minimum_size.y = 30 if compact else 34
-			row.amount.add_theme_font_size_override("font_size", 11 if compact else 12)
-			row.amount.get_line_edit().add_theme_font_size_override("font_size", 11 if compact else 12)
-			row.button.add_theme_font_size_override("font_size", 11 if compact else 12)
-			row.amount_heading.add_theme_font_size_override("font_size", 10 if compact else 11)
+			row.amount.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE if compact else UISkin.SIZE_BODY)
+			row.amount.get_line_edit().add_theme_font_size_override("font_size", UISkin.SIZE_NOTE if compact else UISkin.SIZE_BODY)
+			row.button.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE if compact else UISkin.SIZE_BODY)
+			row.amount_heading.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 			if is_instance_valid(row.claim):
 				_size_cell(row.claim, float(cell.button))
 				row.claim.custom_minimum_size.y = 30 if compact else 34
-				row.claim.add_theme_font_size_override("font_size", 10 if compact else 12)
+				row.claim.add_theme_font_size_override("font_size", 11 if compact else UISkin.SIZE_BODY)
 		else:
 			_size_cell(row.amount_placeholder, float(cell.amount))
 			_size_cell(row.action_placeholder, float(cell.actions))
-			for label: Label in [row.amount_placeholder, row.action_placeholder]: label.add_theme_font_size_override("font_size", 10 if compact else 11)
+			for label: Label in [row.amount_placeholder, row.action_placeholder]: label.add_theme_font_size_override("font_size", UISkin.SIZE_NOTE)
 	_update_pane_minimums()
 
 func _update_pane_minimums() -> void:
