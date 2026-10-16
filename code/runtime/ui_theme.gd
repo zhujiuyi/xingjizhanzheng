@@ -100,8 +100,17 @@ static func table_row(alternate: bool = false, inset: int = 8) -> StyleBoxFlat:
 static func input_style(read_only: bool = false, inset: int = 8) -> StyleBoxFlat:
 	return flat(COAL if read_only else Color("0c1014"), BORDER, inset)
 
+## A panel floating over the 3D scene is a backing, not a container. No border and no
+## title bar: just enough dark fill for the text on it to stay readable over whatever
+## the scene happens to be. Panels on an opaque page keep their edge - see
+## panel_style() - because there the border carries the grouping that a scene no
+## longer does. Drawing a bordered box on top of a scene made the HUD read as a stack
+## of windows rather than as an instrument panel.
 static func hud_panel(inset: int = 8) -> StyleBoxFlat:
-	return flat(Color(COAL, 0.88), Color(BORDER, 0.85), inset)
+	var result := StyleBoxFlat.new()
+	result.bg_color = Color(COAL, 0.68)
+	result.set_content_margin_all(inset)
+	return result
 
 static func button_surface(role: String = "default", state: String = "normal", compact: bool = false, active: bool = false) -> StyleBoxFlat:
 	var accent: Color = DANGER if role == "danger" else AMBER if role == "primary" or active else ICE
@@ -260,6 +269,68 @@ static func decorate(_panel: Control, _alpha: float = 0.9) -> void:
 	# Kept as an API for HUD callers; flat surfaces need no overlay node.
 	pass
 
+## Shared instrument geometry. Every ring in the interface - a slot's cycle, a target's
+## range, the ship's own gauges - starts at the same angle, turns the same way and draws
+## its backing at the same weight. A ring that started somewhere else or drew its
+## backing darker was one of the ways the old HUD looked assembled from parts rather
+## than designed.
+const RING_START: float = -PI * 0.5
+const RING_SWEEP: float = TAU
+const RING_WIDTH: float = 3.0
+const RING_WIDTH_COMPACT: float = 2.0
+const RING_BACKING: float = 0.4
+## A ring's own gap from its neighbour, so two rings never touch.
+const RING_STEP: float = 7.0
+
+## One backing arc plus one value arc. `start`/`sweep` are parameters because the speed
+## gauge is a gauge, not a progress ring: it deliberately leaves a gap at the bottom for
+## the number to sit in. Everything else uses the defaults, which is a full circle from
+## the top going clockwise.
+static func draw_arc_meter(canvas: CanvasItem, center: Vector2, radius: float, ratio: float, color: Color, width: float = RING_WIDTH, start: float = RING_START, sweep: float = RING_SWEEP) -> void:
+	if radius <= 0.0: return
+	canvas.draw_arc(center, radius, start, start + sweep, 64, Color(BORDER, RING_BACKING), width, true)
+	if ratio <= 0.0: return
+	canvas.draw_arc(center, radius, start, start + sweep * clampf(ratio, 0.0, 1.0), 64, color, width, true)
+
+## Splits "650 m" / "0.019 AU" / "0.0 m/s" into a value and a unit so they can be drawn
+## as two lines. Presentation only: both halves come from the string the game already
+## produced, so nothing here decides scale, precision or rounding.
+static func split_value_unit(text: String) -> Array[String]:
+	var parts: PackedStringArray = text.split(" ", false)
+	if parts.size() < 2: return [text, ""]
+	var unit: String = ""
+	for index: int in range(1, parts.size()):
+		unit += (" " if not unit.is_empty() else "") + parts[index]
+	return [parts[0], unit]
+
+## The two-line readout: the value carries, the unit only names it.
+static func draw_value_unit(canvas: CanvasItem, center: Vector2, width: float, value: String, unit: String, value_size: int = SIZE_PAGE, unit_size: int = SIZE_NOTE) -> void:
+	var face: Font = font_medium()
+	var value_y: float = center.y + value_size * 0.36
+	canvas.draw_string(face, Vector2(center.x - width * 0.5, value_y), value, HORIZONTAL_ALIGNMENT_CENTER, width, value_size, TEXT)
+	if unit.is_empty(): return
+	canvas.draw_string(font(), Vector2(center.x - width * 0.5, value_y + unit_size + 1.0), unit, HORIZONTAL_ALIGNMENT_CENTER, width, unit_size, MUTED)
+
+## Draws a texture clipped to a circle. Clipping is done by drawing the texture as a
+## polygon whose UVs trace the circle, so no mask texture and no shader is needed and
+## the widget adds nothing to the presentation manifests. The texture's central square
+## is used, which keeps a non-square portrait from stretching.
+static func draw_portrait(canvas: CanvasItem, center: Vector2, radius: float, texture: Texture2D, segments: int = 32) -> void:
+	if texture == null or radius <= 0.0: return
+	var tex_size: Vector2 = texture.get_size()
+	if tex_size.x <= 0.0 or tex_size.y <= 0.0: return
+	var half_uv: Vector2 = Vector2(minf(tex_size.x, tex_size.y) / tex_size.x, minf(tex_size.x, tex_size.y) / tex_size.y) * 0.5
+	var points := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var colors := PackedColorArray()
+	for index: int in range(segments):
+		var angle: float = TAU * float(index) / float(segments)
+		var direction: Vector2 = Vector2(cos(angle), sin(angle))
+		points.append(center + direction * radius)
+		uvs.append(Vector2(0.5, 0.5) + Vector2(direction.x * half_uv.x, direction.y * half_uv.y))
+		colors.append(Color.WHITE)
+	canvas.draw_polygon(points, colors, uvs, texture)
+
 class Dial extends Control:
 	var speed: float = 0.0
 	var ratios: Vector3 = Vector3.ONE
@@ -268,12 +339,108 @@ class Dial extends Control:
 	func _draw() -> void:
 		var center: Vector2 = size * Vector2(0.5, 0.56)
 		var radius: float = minf(size.x * 0.43, size.y * 0.44)
+		# A gauge, not a progress ring: the 1.3 pi sweep leaves the bottom open for the
+		# number. Everything else in the interface uses the full-circle default.
+		var start: float = PI * 0.85
+		var sweep: float = PI * 1.3
 		for index: int in range(3):
-			var r: float = radius - index * 7.0
-			draw_arc(center, r, PI * 0.85, PI * 2.15, 60, XJUITheme.BORDER, 3.0, true)
-			draw_arc(center, r, PI * 0.85, PI * (0.85 + 1.3 * clampf(ratios[index], 0, 1)), 60, XJUITheme.LAYER_SERIES[index], 3.0, true)
-		var face: Font = get_theme_default_font()
+			XJUITheme.draw_arc_meter(self, center, radius - index * XJUITheme.RING_STEP, ratios[index], XJUITheme.LAYER_SERIES[index], XJUITheme.RING_WIDTH, start, sweep)
 		var small: bool = size.x < 90
-		var speed_text: PackedStringArray = XJSpaceUnits.speed(speed).split(" ")
-		draw_string(face, Vector2(0, center.y + 4), speed_text[0], HORIZONTAL_ALIGNMENT_CENTER, size.x, 17 if small else 28, XJUITheme.TEXT)
-		draw_string(face, Vector2(0, center.y + (15 if small else 27)), speed_text[1] if speed_text.size() > 1 else "", HORIZONTAL_ALIGNMENT_CENTER, size.x, 10 if small else 11, XJUITheme.MUTED)
+		var parts: Array[String] = XJUITheme.split_value_unit(XJSpaceUnits.speed(speed))
+		var value_size: int = 17 if small else 28
+		var unit_size: int = 10 if small else 11
+		var face: Font = XJUITheme.font_medium()
+		draw_string(face, Vector2(0, center.y + value_size * 0.3), parts[0], HORIZONTAL_ALIGNMENT_CENTER, size.x, value_size, XJUITheme.TEXT)
+		if not parts[1].is_empty():
+			draw_string(XJUITheme.font(), Vector2(0, center.y + value_size * 0.3 + unit_size + 2.0), parts[1], HORIZONTAL_ALIGNMENT_CENTER, size.x, unit_size, XJUITheme.MUTED)
+
+## A stack of concentric rings over one centre, with an optional two-line caption inside.
+## The value is the arc; the caption only repeats the number the outer world already
+## knows, so a meter never invents a figure of its own.
+class RingMeter extends Control:
+	## Outer first. Each entry is {"ratio": float, "color": Color}.
+	var rings: Array[Dictionary] = []
+	var caption: String = ""
+	var unit: String = ""
+	var compact: bool = false
+	## Optional per-ring legend, outer first. Drawn under the meter, not inside it.
+	var legend: Array[String] = []
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var width: float = XJUITheme.RING_WIDTH_COMPACT if compact else XJUITheme.RING_WIDTH
+		var step: float = width + XJUITheme.RING_STEP - XJUITheme.RING_WIDTH
+		var center: Vector2 = Vector2(size.x * 0.5, size.y * 0.5)
+		var outer: float = minf(size.x, size.y) * 0.5 - width
+		for index: int in range(rings.size()):
+			var record: Dictionary = rings[index]
+			XJUITheme.draw_arc_meter(self, center, outer - index * step, float(record.get("ratio", 0.0)), record.get("color", XJUITheme.ICE), width)
+		if not caption.is_empty():
+			XJUITheme.draw_value_unit(self, center, size.x, caption, unit)
+
+## One equipment slot as a circle: a dark disc, the module's portrait clipped to it, and
+## the cycle remaining drawn as an arc around the rim. Replaces the tile that traced its
+## own rectangular perimeter, which is the shape rule this revision removes.
+class CircularSlot extends Control:
+	var portrait: Texture2D = null
+	var ratio: float = 0.0
+	var color: Color = XJUITheme.ICE
+	var empty: bool = false
+	var compact: bool = false
+	## Drawn in place of the portrait when there is none, so a slot with a module still
+	## reads as filled rather than as a hole.
+	var fallback: String = ""
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var width: float = XJUITheme.RING_WIDTH_COMPACT if compact else XJUITheme.RING_WIDTH
+		var center: Vector2 = size * 0.5
+		var radius: float = minf(size.x, size.y) * 0.5
+		var face_radius: float = radius - width
+		if face_radius <= 0.0: return
+		draw_circle(center, face_radius, Color(XJUITheme.COAL, 0.92))
+		if empty:
+			# An empty socket, drawn as a dim inner ring: it says "nothing fitted here"
+			# without a glyph that could be mistaken for a module mark.
+			draw_arc(center, face_radius * 0.45, 0.0, TAU, 24, Color(XJUITheme.BORDER, 0.7), 1.0, true)
+		elif portrait != null:
+			XJUITheme.draw_portrait(self, center, face_radius, portrait)
+		elif not fallback.is_empty():
+			draw_string(XJUITheme.font_medium(), Vector2(center.x - radius, center.y + 4.0), fallback, HORIZONTAL_ALIGNMENT_CENTER, size.x, 11, XJUITheme.MUTED)
+		XJUITheme.draw_arc_meter(self, center, radius - width * 0.5, ratio, color, width)
+
+## A target as the reference draws one: a circular portrait with the range under it in
+## two lines. Used only while the target count is small enough for the row to fit; past
+## that the list takes over, and the two views never appear together.
+class PortraitMarker extends Control:
+	var portrait: Texture2D = null
+	var value: String = ""
+	var unit: String = ""
+	var hostile: bool = false
+	var selected: bool = false
+	var compact: bool = false
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var width: float = XJUITheme.RING_WIDTH_COMPACT if compact else XJUITheme.RING_WIDTH
+		var diameter: float = minf(size.x, size.y - 26.0)
+		var center: Vector2 = Vector2(size.x * 0.5, diameter * 0.5)
+		var radius: float = diameter * 0.5
+		var face_radius: float = radius - width
+		if face_radius <= 0.0: return
+		var tint: Color = XJUITheme.DANGER if hostile else XJUITheme.ICE
+		draw_circle(center, face_radius, Color(XJUITheme.COAL, 0.92))
+		XJUITheme.draw_portrait(self, center, face_radius, portrait)
+		draw_arc(center, radius - width * 0.5, 0.0, TAU, 48, Color(XJUITheme.BORDER, 0.8), width, true)
+		if not selected: return
+		# Selection is a shape, not only a colour: a full ring outside the frame.
+		draw_arc(center, radius + width, 0.0, TAU, 48, XJUITheme.AMBER, width, true)
+		draw_string(XJUITheme.font_medium(), Vector2(0.0, diameter + 14.0), value, HORIZONTAL_ALIGNMENT_CENTER, size.x, 13, tint)
+		if not unit.is_empty():
+			draw_string(XJUITheme.font(), Vector2(0.0, diameter + 26.0), unit, HORIZONTAL_ALIGNMENT_CENTER, size.x, 11, XJUITheme.MUTED)
