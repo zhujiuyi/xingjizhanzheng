@@ -503,7 +503,7 @@ func layout_checks() -> void:
 					else:
 						var expected: Rect2 = header_cell.get_global_rect()
 						var actual: Rect2 = actual_cells[index].get_global_rect()
-						check(absf(expected.position.x - actual.position.x) <= 1.0 and absf(expected.size.x - actual.size.x) <= 1.0, "warehouse header and actual named column share one grid " + suffix + " " + str(row.id) + " " + str(index))
+						check(absf(expected.position.x - actual.position.x) <= 1.0 and absf(expected.size.x - actual.size.x) <= 1.0, "warehouse header and actual named column share one grid " + suffix + " " + str(row.id) + " " + str(index) + " header=" + " hx=%.1f hw=%.1f cx=%.1f cw=%.1f" % [expected.position.x, expected.size.x, actual.position.x, actual.size.x])
 		for row: Dictionary in rows():
 			check(label_fits(row.quantity) and label_fits(row.location) and (not (row.status as Control).is_visible_in_tree() or label_fits(row.status)), "quantity/location/restriction text remains readable " + suffix + " " + str(row.id))
 			check(str(row.row.get_meta("row_id", "")) == str(row.id), "responsive layout retains asset row identity " + suffix + " " + str(row.id))

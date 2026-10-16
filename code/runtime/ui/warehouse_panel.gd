@@ -148,7 +148,13 @@ func _update_pane_minimums() -> void:
 func _cell_sizes(compact: bool) -> Dictionary:
 	# Presentation dimensions only. Their measured total chooses the pane
 	# orientation; cargo, location and controls retain the same per-row grid.
-	var sizes: Dictionary = {"image": 24, "name": 156, "location": 72, "amount": 70, "button": 68, "gap": 4, "margin": 3} if compact else {"image": 32, "name": 184, "location": 86, "amount": 82, "button": 76, "gap": 6, "margin": 5}
+	#
+	# These are floors, so they have to be at least what the text needs: a control's real
+	# minimum is the larger of its declared width and its content. When the action buttons
+	# moved from a 12 px literal onto the type scale at 13, the two of them needed five
+	# more pixels than the column declared, the operation column grew, and every column to
+	# its left shifted with it - the header and the rows stopped sharing a grid.
+	var sizes: Dictionary = {"image": 24, "name": 156, "location": 72, "amount": 70, "button": 73, "gap": 4, "margin": 3} if compact else {"image": 32, "name": 184, "location": 86, "amount": 82, "button": 81, "gap": 6, "margin": 5}
 	# All rows keep the same operation column when a local package adds a claim.
 	sizes["actions"] = int(sizes.button) * (2 if _has_salvage_actions else 1) + (int(sizes.gap) if _has_salvage_actions else 0)
 	return sizes
