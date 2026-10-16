@@ -113,9 +113,16 @@ var instrument: PanelContainer
 var dial: Control
 var condition_bars: Array[Dictionary] = []
 var energy_label: Label
-var energy_bar: ProgressBar
+## The resources are values on rings now, not bars. Each is the same Ring object the
+## meter draws, so a reading cannot disagree with the arc beside it.
+var energy_bar: UISkin.Ring
 var heat_label: Label
-var heat_bar: ProgressBar
+var heat_bar: UISkin.Ring
+var cargo_ring: UISkin.Ring
+## One arc per resource, each beside its own name. Kept so a redraw can reach them
+## without walking the tree.
+var resource_dots: Array = []
+var resource_rows: Array = []
 var cargo_label: Label
 var instrument_title: Label
 var compact_speed_label: Label
@@ -3041,21 +3048,30 @@ func _responsive() -> void:
 			entry.label.add_theme_font_size_override("font_size",10 if compact else 12)
 			entry.label.autowrap_mode = TextServer.AUTOWRAP_OFF
 			entry.label.clip_text = true
-			entry.bar.visible = not compact
-			entry.bar.custom_minimum_size.y = 3
-		energy_bar.visible = not compact
-		heat_bar.visible = not compact
-		energy_bar.custom_minimum_size.y = 3
-		heat_bar.custom_minimum_size.y = 3
+		# The arcs are the reading now, so they stay at every size: only the legend text
+		# beside them shrinks. Hiding them in compact would leave the numbers with
+		# nothing to describe.
+		for dot: UISkin.RingMeter in resource_dots:
+			dot.custom_minimum_size = Vector2(14, 14) if compact else Vector2(18, 18)
+			dot.compact = compact
+			dot.queue_redraw()
 		for readout_label: Label in [energy_label,heat_label,cargo_label]:
 			readout_label.add_theme_font_size_override("font_size",10 if compact or readout_label == cargo_label else 12)
 			readout_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 			readout_label.clip_text = true
 		cargo_label.visible = not compact
-		for name_value: String in ["DefenseReadout","ResourceReadout"]:
-			var readout: VBoxContainer = instrument.find_child(name_value,true,false)
-			readout.custom_minimum_size.x = 54 if compact else 76
-			readout.add_theme_constant_override("separation",2)
+		for index: int in range(resource_rows.size()):
+			resource_rows[index].visible = not compact or index < 2
+		# The instrument is a fixed 200/268 px, so the two legends are budgeted around
+		# the dial rather than both claiming a share of the slack.
+		var defense_readout: VBoxContainer = instrument.find_child("DefenseReadout",true,false)
+		var resource_readout: VBoxContainer = instrument.find_child("ResourceReadout",true,false)
+		if is_instance_valid(defense_readout):
+			defense_readout.custom_minimum_size.x = 52 if compact else 64
+			defense_readout.add_theme_constant_override("separation",2)
+		if is_instance_valid(resource_readout):
+			resource_readout.custom_minimum_size.x = 84 if compact else 100
+			resource_readout.add_theme_constant_override("separation",2)
 	if is_instance_valid(equipment_bar): equipment_bar.call("responsive",compact)
 	if is_instance_valid(navigation_hud):
 		navigation_hud.responsive(root.size)
@@ -3525,10 +3541,20 @@ func _build_instrument() -> void:
 	row.name = "InstrumentReadouts"
 	row.add_theme_constant_override("separation", 18)
 	layout.add_child(row)
+	# The hero instrument comes first so the legends beside it can point at its rings.
+	# Shield, armour and structure are drawn around the speed itself; the columns on
+	# either side only name them. They used to be drawn twice - as arcs in the dial and
+	# again as three bars in the left column.
+	dial = UISkin.Dial.new()
+	dial.name = "SpeedDial"
+	dial.custom_minimum_size = Vector2(154, 125)
+	dial.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(dial)
 	var defense: VBoxContainer = VBoxContainer.new()
 	defense.name = "DefenseReadout"
-	defense.custom_minimum_size.x = 145
+	defense.custom_minimum_size.x = 60
 	defense.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	defense.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	defense.add_theme_constant_override("separation", 6)
 	row.add_child(defense)
 	for index: int in range(3):
@@ -3536,37 +3562,57 @@ func _build_instrument() -> void:
 		var label: Label = _text_to(defense, name_value, 13)
 		label.custom_minimum_size.x = 0
 		label.mouse_filter = Control.MOUSE_FILTER_PASS
-		var bar: ProgressBar = _bar(defense, UISkin.LAYER_SERIES[index], 5)
-		condition_bars.append({"label": label, "bar": bar, "name": name_value})
-	dial = UISkin.Dial.new()
-	dial.name = "SpeedDial"
-	dial.custom_minimum_size = Vector2(154, 125)
-	row.add_child(dial)
+		condition_bars.append({"label": label, "bar": dial.rings[index], "name": name_value})
 	var resources: VBoxContainer = VBoxContainer.new()
 	resources.name = "ResourceReadout"
-	resources.custom_minimum_size.x = 145
+	resources.custom_minimum_size.x = 104
 	resources.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	resources.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	resources.add_theme_constant_override("separation", 6)
 	row.add_child(resources)
-	compact_speed_label = _text_to(resources, XJSpaceUnits.speed(0.0) + " · 跟随", 10)
+	# Capacitor, heat and load are independent budgets, so each gets its own arc beside
+	# its own name. That is the opposite of shield/armour/structure, which really are
+	# nested layers and belong as concentric rings around the speed. Drawing all six as
+	# stacked bars said the two groups were the same kind of thing; drawing the
+	# resources as one nested meter would say the same thing the other way round.
+	var resource_text: VBoxContainer = VBoxContainer.new()
+	resource_text.name = "ResourceLegend"
+	resource_text.add_theme_constant_override("separation", 4)
+	resource_text.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	resources.add_child(resource_text)
+	for index: int in range(3):
+		var resource_row: HBoxContainer = HBoxContainer.new()
+		resource_row.name = ["ResourceRowEnergy", "ResourceRowHeat", "ResourceRowCargo"][index]
+		resource_row.add_theme_constant_override("separation", 4)
+		resource_text.add_child(resource_row)
+		var dot: UISkin.RingMeter = UISkin.RingMeter.new()
+		dot.name = ["EnergyArc", "HeatArc", "CargoArc"][index]
+		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var ring: UISkin.Ring = UISkin.Ring.new()
+		ring.color = [UISkin.ICE, UISkin.WARN, UISkin.LAYER_SERIES[2]][index]
+		dot.rings.append(ring)
+		resource_row.add_child(dot)
+		resource_dots.append(dot)
+		resource_rows.append(resource_row)
+		if index == 0: energy_bar = ring
+		elif index == 1: heat_bar = ring
+		else: cargo_ring = ring
+	compact_speed_label = _text_to(resource_text, XJSpaceUnits.speed(0.0) + " · 跟随", 10)
 	compact_speed_label.name = "CompactSpeed"
 	compact_speed_label.clip_text = true
 	compact_speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	compact_speed_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	compact_speed_label.hide()
-	energy_label = _text_to(resources, "电容", 13)
+	energy_label = _text_to(resource_rows[0], "电容", 13)
 	energy_label.custom_minimum_size.x = 0
-	energy_bar = _bar(resources, UISkin.ICE, 5)
-	heat_label = _text_to(resources, "热量", 13)
+	heat_label = _text_to(resource_rows[1], "热量", 13)
 	heat_label.custom_minimum_size.x = 0
-	# Heat is the one gauge that escalates: it warns before it locks the ship down.
-	heat_bar = _bar(resources, UISkin.WARN, 5)
-	cargo_label = _text_to(resources, "载荷", 12)
+	cargo_label = _text_to(resource_rows[2], "载荷", 12)
 	cargo_label.custom_minimum_size.x = 0
 	cargo_label.add_theme_color_override("font_color", UISkin.MUTED)
 	for readout: Label in [energy_label, heat_label, cargo_label]: readout.mouse_filter = Control.MOUSE_FILTER_PASS
 	health = _label(root, "", 12)
-	health.hide() # 保留测试/辅助读取接口，正式仪表只使用条形与弧形读数。
+	health.hide() # 保留测试/辅助读取接口，正式仪表只使用环形读数。
 
 func _build_navigation() -> void:
 	navigation = _frame(root, "FlightNavigation")
@@ -3721,7 +3767,6 @@ func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 		var tone: Color = UISkin.DANGER if values[index] <= 0.0 or (index == 2 and exposed) else UISkin.WARN if exposed else UISkin.TEXT
 		condition_bars[index].label.add_theme_color_override("font_color", tone)
 	dial.speed = _display_speed()
-	dial.ratios = Vector3(values[0] / maxf(maximums[0], 1.0), values[1] / maxf(maximums[1], 1.0), values[2] / maxf(maximums[2], 1.0))
 	dial.queue_redraw()
 	energy_label.tooltip_text = "电容  %.0f / %.0f" % [ship.energy, float(metrics.energy_max)]
 	energy_label.text = "电容 %.0f%%" % (ship.energy / maxf(float(metrics.energy_max), 1.0) * 100)
@@ -3733,16 +3778,22 @@ func _update_instrument(ship: Dtos.ShipStateDto, metrics: Dictionary) -> void:
 	heat_label.text = ("锁定 " if ship.overheated else "预警 " if heat_warning else "热量 ") + "%.0f%%" % (heat_ratio * 100)
 	heat_label.add_theme_color_override("font_color", UISkin.DANGER if ship.overheated else UISkin.WARN if heat_warning else UISkin.TEXT)
 	heat_label.tooltip_text = ("过热锁定 · " if ship.overheated else "热量预警 · " if heat_warning else "") + "热量 %.0f / %.0f HU" % [ship.heat, float(metrics.heat_max)]
-	# Three distinct states, three distinct visuals: normal heat stays neutral and
-	# only the database-driven warning ratio turns the meter amber-orange.
+	# Three distinct states, three distinct visuals: normal heat stays neutral and only
+	# the database-driven warning ratio turns the ring amber-orange. The colour is the
+	# arc's own, so the meter and the caption can never disagree.
 	var heat_fill: Color = UISkin.DANGER if ship.overheated else UISkin.WARN if heat_warning else UISkin.ICE
-	heat_bar.add_theme_stylebox_override("fill", UISkin.flat(heat_fill, Color.TRANSPARENT, 0))
+	heat_bar.color = heat_fill
 	heat_bar.max_value = maxf(float(metrics.heat_max), 1.0)
 	heat_bar.value = ship.heat
+	for dot: UISkin.RingMeter in resource_dots: dot.queue_redraw()
 	cargo_label.tooltip_text = "货 %.0f/%.0f L · 矿 %.0f/%.0f L" % [float(metrics.cargo_used_l), float(metrics.cargo_capacity_l), float(metrics.mineral_used_l), float(metrics.mineral_capacity_l)]
 	var entrusted: Dictionary=gameplay.consignments.cargo(ship.ship_instance_id)
 	if float(entrusted.volume)>0.0:cargo_label.tooltip_text+="\n承运货物 %.0f L / %.0f kg" % [entrusted.volume,entrusted.mass]
 	cargo_label.text = "载荷 %.0f%%" % (100.0 * float(metrics.cargo_used_l) / maxf(float(metrics.cargo_capacity_l),1.0))
+	# Load is a fill level, not a budget: the arc shows how full the hold is, so it and
+	# the percentage beside it are the same reading.
+	cargo_ring.max_value = maxf(float(metrics.cargo_capacity_l), 1.0)
+	cargo_ring.value = float(metrics.cargo_used_l)
 	compact_speed_label.tooltip_text = instrument_title.text + "\n" + instrument_title.tooltip_text + "\n" + cargo_label.tooltip_text
 	instrument.tooltip_text = compact_speed_label.tooltip_text
 

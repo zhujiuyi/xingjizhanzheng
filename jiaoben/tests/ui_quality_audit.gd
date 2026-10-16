@@ -457,8 +457,11 @@ func instrument_boundaries() -> void:
 			await frames(3)
 			var heat: Label = host.ui.heat_label
 			check(heat.text.begins_with(thermal.caption) and heat.get_theme_color("font_color") == thermal.color and label_fits(heat), "database thermal boundary has distinct readable caption and semantic color " + str(thermal.id) + " " + suffix)
-			var fill: StyleBoxFlat = host.ui.heat_bar.get_theme_stylebox("fill") as StyleBoxFlat
-			check(fill != null and fill.bg_color == thermal.fill, "thermal meter reflects warning or lock semantics " + str(thermal.id) + " " + suffix)
+			# Heat is a ring now, so its state is the arc's own colour rather than a bar's
+			# fill stylebox. The requirement is unchanged: three states, three distinct
+			# visuals, each one readable.
+			var heat_ring = host.ui.heat_bar
+			check(heat_ring != null and heat_ring.color == thermal.fill, "thermal ring reflects warning or lock semantics " + str(thermal.id) + " " + suffix)
 			boundary_observations.append({"case": thermal.id, "size": [size.x, size.y], "database_warning_ratio": warning, "heat": ship.heat, "overheated": ship.overheated, "text": heat.text, "color": heat.get_theme_color("font_color").to_html(true), "rect": rectangle(heat.get_global_rect())})
 		for field: String in original: ship.set(field, original[field])
 		host.ui._update_instrument(ship, metrics)

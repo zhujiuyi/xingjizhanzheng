@@ -370,11 +370,22 @@ static func draw_portrait(canvas: CanvasItem, center: Vector2, radius: float, te
 		colors.append(Color.WHITE)
 	canvas.draw_polygon(points, colors, uvs, texture)
 
+## The ship's hero instrument: the number that matters in the middle, the state of the
+## hull it is flying around it. The three rings are shield, armour and structure, held
+## as Ring objects so the interface reads the same values the arcs draw rather than
+## keeping a second copy of them.
 class Dial extends Control:
 	var speed: float = 0.0
-	var ratios: Vector3 = Vector3.ONE
+	var rings: Array = []
+
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if rings.is_empty():
+			for index: int in range(3):
+				var ring := XJUITheme.Ring.new()
+				ring.color = XJUITheme.LAYER_SERIES[index]
+				rings.append(ring)
+
 	func _draw() -> void:
 		var center: Vector2 = size * Vector2(0.5, 0.56)
 		var radius: float = minf(size.x * 0.43, size.y * 0.44)
@@ -382,8 +393,9 @@ class Dial extends Control:
 		# number. Everything else in the interface uses the full-circle default.
 		var start: float = PI * 0.85
 		var sweep: float = PI * 1.3
-		for index: int in range(3):
-			XJUITheme.draw_arc_meter(self, center, radius - index * XJUITheme.RING_STEP, ratios[index], XJUITheme.LAYER_SERIES[index], XJUITheme.RING_WIDTH, start, sweep)
+		for index: int in range(mini(rings.size(), 3)):
+			var ring: XJUITheme.Ring = rings[index]
+			XJUITheme.draw_arc_meter(self, center, radius - index * XJUITheme.RING_STEP, ring.ratio(), ring.color, XJUITheme.RING_WIDTH, start, sweep)
 		var small: bool = size.x < 90
 		var parts: Array[String] = XJUITheme.split_value_unit(XJSpaceUnits.speed(speed))
 		var value_size: int = 17 if small else 28
@@ -396,14 +408,23 @@ class Dial extends Control:
 ## A stack of concentric rings over one centre, with an optional two-line caption inside.
 ## The value is the arc; the caption only repeats the number the outer world already
 ## knows, so a meter never invents a figure of its own.
+## One measured value on a ring, separate from the widget that draws it. The interface
+## reads the same value the arc shows - a tooltip, a caption, a state colour - so the
+## number lives here rather than being derived twice from two different sources.
+class Ring extends RefCounted:
+	var value: float = 0.0
+	var max_value: float = 1.0
+	var color: Color = XJUITheme.ICE
+
+	func ratio() -> float:
+		return clampf(value / maxf(max_value, 0.001), 0.0, 1.0)
+
 class RingMeter extends Control:
-	## Outer first. Each entry is {"ratio": float, "color": Color}.
-	var rings: Array[Dictionary] = []
+	## Outer first.
+	var rings: Array = []
 	var caption: String = ""
 	var unit: String = ""
 	var compact: bool = false
-	## Optional per-ring legend, outer first. Drawn under the meter, not inside it.
-	var legend: Array[String] = []
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -414,8 +435,8 @@ class RingMeter extends Control:
 		var center: Vector2 = Vector2(size.x * 0.5, size.y * 0.5)
 		var outer: float = minf(size.x, size.y) * 0.5 - width
 		for index: int in range(rings.size()):
-			var record: Dictionary = rings[index]
-			XJUITheme.draw_arc_meter(self, center, outer - index * step, float(record.get("ratio", 0.0)), record.get("color", XJUITheme.ICE), width)
+			var ring: XJUITheme.Ring = rings[index]
+			XJUITheme.draw_arc_meter(self, center, outer - index * step, ring.ratio(), ring.color, width)
 		if not caption.is_empty():
 			XJUITheme.draw_value_unit(self, center, size.x, caption, unit)
 
