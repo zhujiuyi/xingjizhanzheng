@@ -319,12 +319,12 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	amount.value = 1
 	amount.editable = data.kind == "stack" and data.policy_id == "normal_owned"
 	amount.custom_minimum_size = Vector2(82, 34)
-	amount.add_theme_font_size_override("font_size", 12)
+	amount.add_theme_font_size_override("font_size", UISkin.text_size("body"))
 	amount.tooltip_text = "本行搬运数量，最多 %d %s" % [int(amount.max_value), str(data.unit)]
 	amount.set_meta("warehouse_amount", true)
 	amount.set_meta("row_id", data.id)
 	var edit: LineEdit = amount.get_line_edit()
-	edit.add_theme_font_size_override("font_size", 12)
+	edit.add_theme_font_size_override("font_size", UISkin.text_size("body"))
 	edit.add_theme_stylebox_override("normal", UISkin.input_style(false, 4))
 	edit.add_theme_stylebox_override("read_only", UISkin.input_style(true, 4))
 	actions.add_child(amount)
@@ -337,7 +337,7 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 	button.size_flags_horizontal = Control.SIZE_FILL
 	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	button.custom_minimum_size = Vector2(76, 34)
-	button.add_theme_font_size_override("font_size", 12)
+	button.add_theme_font_size_override("font_size", UISkin.text_size("body"))
 	UISkin.apply_button(button, "default", true)
 	button.set_meta("action", {"stack": "move_stack", "item": "move_item", "salvage": "move_salvage"}[str(data.kind)])
 	button.set_meta("target", data.id)
@@ -360,7 +360,7 @@ func _append_row(parent: VBoxContainer, data: Dictionary) -> Dictionary:
 		claim.name = "WarehouseOpenSalvage"
 		claim.text = "领取战利品"
 		claim.custom_minimum_size = Vector2(76, 34)
-		claim.add_theme_font_size_override("font_size", 12)
+		claim.add_theme_font_size_override("font_size", UISkin.text_size("body"))
 		UISkin.apply_button(claim, "primary", true)
 		claim.set_meta("action", "open_salvage")
 		claim.set_meta("target", data.id)

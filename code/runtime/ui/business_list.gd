@@ -87,7 +87,7 @@ func _ensure_layout() -> void:
 	header = _columns(frame, "BusinessHeader")
 	for index: int in range(COLUMN_DEFS.size()):
 		var cell: VBoxContainer = _column(header, index)
-		var label: Label = _label(cell, "", 12)
+		var label: Label = _label(cell, "", UISkin.text_size("note"))
 		label.add_theme_color_override("font_color", UISkin.MUTED)
 		_align(label, index)
 		_headers.append(label)
@@ -138,12 +138,14 @@ func append_row(id: String, thumbnail: Texture2D, title: String, description: St
 	image.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cells[0].add_child(image)
-	var name_label: Label = _label(cells[1], title, 14)
+	# The literal here used to say 14 and the style call below immediately replaced it
+	# with the subhead role's 13, so the two disagreed about a size neither was using.
+	var name_label: Label = _label(cells[1], title, UISkin.text_size("subhead"))
 	name_label.name = "BusinessName"
 	UISkin.apply_text_style(name_label, "subhead")
 	name_label.custom_minimum_size.y = ceilf(name_label.get_theme_font("font").get_height(UISkin.SIZE_BODY))
 	name_label.add_theme_color_override("font_color", UISkin.TEXT)
-	var description_label: Label = _label(cells[1], description, 12)
+	var description_label: Label = _label(cells[1], description, UISkin.text_size("note"))
 	description_label.name = "BusinessDescription"
 	description_label.add_theme_color_override("font_color", UISkin.MUTED)
 	if inline_quantities:
@@ -224,13 +226,13 @@ func enable_row_quantity(entry: Dictionary, maximum: int, value: int = 1, editab
 	amount.editable = editable
 	amount.custom_minimum_size = Vector2(94, 32)
 	amount.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	amount.add_theme_font_size_override("font_size", 12)
+	amount.add_theme_font_size_override("font_size", UISkin.text_size("body"))
 	amount.tooltip_text = "本行操作数量；与其他货品独立。"
 	amount.set_meta("business_amount", true)
 	amount.set_meta("row_id", entry.id)
 	var edit: LineEdit = amount.get_line_edit()
 	edit.alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	edit.add_theme_font_size_override("font_size", 12)
+	edit.add_theme_font_size_override("font_size", UISkin.text_size("body"))
 	edit.add_theme_stylebox_override("normal", UISkin.input_style(false, 4))
 	edit.add_theme_stylebox_override("read_only", UISkin.input_style(true, 4))
 	entry.quantity.get_parent().add_child(amount)

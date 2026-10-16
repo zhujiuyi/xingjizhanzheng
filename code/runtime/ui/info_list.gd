@@ -61,7 +61,7 @@ func append_row(id: String, thumbnail: Texture2D, title: String, description: St
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.max_lines_visible = 2
 	name_label.tooltip_text = title
-	var status_label: Label = _label(summary, status, 12)
+	var status_label: Label = _label(summary, status, UISkin.text_size("note"))
 	status_label.name = "InfoStatus"
 	status_label.custom_minimum_size.x = status_min_width
 	status_label.size_flags_horizontal = Control.SIZE_FILL
