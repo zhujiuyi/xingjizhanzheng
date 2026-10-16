@@ -11,6 +11,10 @@ const DISTANCE_COLUMN_WIDTH: int = 56
 const TYPE_COLUMN_WIDTH: int = 44
 const ROW_INSET: int = 4
 const COLUMN_GAP: int = 4
+## Up to this many targets are drawn as markers instead of a list. Four fit across the
+## overview column at its narrowest without the mark inside the circle shrinking past
+## the point where it can be read.
+const PORTRAIT_LIMIT: int = 4
 var filter_mode: String = "all"
 var sort_key: String = "distance"
 var sort_ascending: bool = true
@@ -34,6 +38,9 @@ var selected_kind: String = ""
 var selected_friendly: bool = false
 var target_list: VBoxContainer
 var target_scroll: ScrollContainer
+## The marker view, shown instead of the list while the target count is small.
+var portrait_row: HBoxContainer
+var portrait_buttons: Dictionary = {}
 var body_scroll: ScrollContainer
 var content: VBoxContainer
 var overview_content: VBoxContainer
@@ -58,7 +65,9 @@ var _layout_queued: bool = false
 
 func _ready() -> void:
 	name = "TargetModule"
-	add_theme_stylebox_override("panel", UISkin.hud_panel(UISkin.GAP))
+	# A dense list gets the denser backing: this panel is a column of numbers, and a
+	# world marker showing through it reads as a row that is not there.
+	add_theme_stylebox_override("panel", UISkin.hud_list_panel(UISkin.GAP))
 	body_scroll = ScrollContainer.new()
 	body_scroll.name = "OverviewBodyScroll"
 	body_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -105,6 +114,16 @@ func _ready() -> void:
 			else: sort_key = key; sort_ascending = true
 			_refresh_rows())
 		sort_buttons[key] = button
+	# Few targets read better as markers than as a table: the eye wants to see what is
+	# out there, not compare three columns of four rows. Past that the table wins,
+	# because columns are what make a long list scannable. The two never appear
+	# together, so there is only ever one thing to read.
+	portrait_row = HBoxContainer.new()
+	portrait_row.name = "TargetPortraits"
+	portrait_row.add_theme_constant_override("separation", 6)
+	portrait_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	portrait_row.visible = false
+	overview_content.add_child(portrait_row)
 	target_scroll = ScrollContainer.new()
 	target_scroll.name = "TargetScroll"
 	target_scroll.custom_minimum_size.y = 154
@@ -396,6 +415,36 @@ func _style_sort_header(button: Button, active: bool) -> void:
 	button.add_theme_color_override("font_color", UISkin.AMBER if active else UISkin.MUTED)
 	button.add_theme_color_override("font_hover_color", UISkin.AMBER if active else UISkin.TEXT)
 
+## The marker view, shown instead of the list while the count is small. Both views are
+## built from the same filtered and sorted rows, so switching between them never
+## changes which targets are in scope or what order they are in.
+func _refresh_portraits(rows: Array[Dictionary]) -> void:
+	for child: Node in portrait_row.get_children():
+		portrait_row.remove_child(child)
+		child.queue_free()
+	portrait_buttons.clear()
+	for record: Dictionary in rows:
+		var id: String = str(record.id)
+		var button: Button = _button(portrait_row, "")
+		button.name = "OverviewPortrait_" + id.validate_node_name()
+		button.custom_minimum_size = Vector2(56, 78)
+		button.pressed.connect(func(): selected.emit(id))
+		button.gui_input.connect(_target_gui_input.bind(id, button))
+		UISkin.apply_slot_hit(button)
+		var marker: UISkin.PortraitMarker = UISkin.PortraitMarker.new()
+		marker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		marker.compact = _compact
+		var kind: String = str(record.get("kind", ""))
+		marker.hostile = kind in ["npc", "drone", "wreck", "encounter"] and not bool(record.get("friendly", false))
+		marker.mark = str(record.get("type_title", "")).substr(0, 1)
+		var parts: Array[String] = UISkin.split_value_unit(format_distance(float(record.distance_m)))
+		marker.value = parts[0]
+		marker.unit = parts[1]
+		marker.tooltip_text = "%s · %s\n%s" % [str(record.title), str(record.get("type_title", "")), format_distance(float(record.distance_m))]
+		button.tooltip_text = marker.tooltip_text + "\n单击选择 · 双击转向并前往"
+		button.add_child(marker)
+		portrait_buttons[id] = button
+
 func _refresh_rows() -> void:
 	if target_list == null: return
 	var visible_rows: Array[Dictionary] = []
@@ -409,6 +458,13 @@ func _refresh_rows() -> void:
 		var bv: Variant = float(b.get("distance_m", INF)) if sort_key == "distance" else str(b.get("title", "")) if sort_key == "name" else str(b.get("type_title", ""))
 		if av == bv: return str(a.id) < str(b.id)
 		return av < bv if sort_ascending else av > bv)
+	var markers: bool = not visible_rows.is_empty() and visible_rows.size() <= PORTRAIT_LIMIT
+	portrait_row.visible = markers
+	target_scroll.visible = not markers
+	# The sort header names three columns, so it belongs to the view that has them.
+	# Leaving it up over the markers would be labelling nothing.
+	if is_instance_valid(sort_header_inset): sort_header_inset.visible = not markers
+	if markers: _refresh_portraits(visible_rows)
 	filtered_ids.clear()
 	for record: Dictionary in visible_rows:
 		var id: String = str(record.id)

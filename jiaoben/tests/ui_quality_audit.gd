@@ -177,7 +177,13 @@ func structural_assertions(ui: Node, name: String) -> void:
 				var cell: Rect2 = (row.get_node(pair[1]) as Control).get_global_rect()
 				aligned = aligned and absf(heading.position.x - cell.position.x) <= 1.0 and absf(heading.size.x - cell.size.x) <= 1.0
 			measured += 1
-		check(aligned and measured > 0, "actual overview headers align all three contact columns " + name)
+		# The list is the view with columns. The marker view has none and hides both the
+		# rows and the header, so there is nothing to align and nothing to measure - but
+		# it must not leave the header standing over markers that have no columns.
+		if (overview.target_scroll as Control).visible:
+			check(aligned and measured > 0, "actual overview headers align all three contact columns " + name)
+		else:
+			check(measured == 0 and not (overview.sort_header_inset as Control).visible, "the marker view hides the column header it has no columns for " + name)
 
 func settle_writer(message: String) -> void:
 	var deadline: int = Time.get_ticks_msec() + 10000
@@ -851,6 +857,29 @@ func _run() -> void:
 			await show_and_inspect("", "%dx%d" % [size.x, size.y])
 		root.size = Vector2i(1280, 720); root.content_scale_size = Vector2i(640, 360)
 		await show_and_inspect("", "1280x720-200pct")
+		# The overview draws markers instead of a list while few targets are in scope,
+		# and the unfiltered flight page has too many for that view to appear. The combat
+		# filter is a real filter over the real target set, so this exercises the marker
+		# branch rather than manufacturing targets for it. It runs here, in the flight
+		# state the rest of the flight checks use, because inspecting the flight page
+		# validates the whole of it.
+		root.size = Vector2i(1440, 900); root.content_scale_size = root.size
+		var overview: Node = host.ui.overview
+		overview.set("filter_mode", "combat")
+		overview.call("_refresh_rows")
+		await frames(6)
+		var marker_row: Control = overview.get("portrait_row")
+		var marker_buttons: Dictionary = overview.get("portrait_buttons")
+		var marker_scroll: Control = overview.get("target_scroll")
+		check(marker_row != null and marker_row.is_visible_in_tree() and not marker_buttons.is_empty() and marker_buttons.size() <= 4, "few targets draw as markers 1440x900")
+		check(marker_scroll != null and not marker_scroll.visible, "the marker view replaces the list rather than joining it 1440x900")
+		var marker_inside: bool = true
+		for button: Button in marker_buttons.values():
+			marker_inside = marker_inside and button.is_visible_in_tree() and overview.get_global_rect().grow(1.0).encloses(button.get_global_rect())
+		check(marker_inside, "every marker stays inside the overview column 1440x900")
+		await inspect("flight-markers-1440x900", "")
+		overview.set("filter_mode", "all")
+		overview.call("_refresh_rows")
 		if label == "after":
 			root.size = Vector2i(1440, 900)
 			root.content_scale_size = root.size

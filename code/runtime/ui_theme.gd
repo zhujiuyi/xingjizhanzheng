@@ -147,6 +147,17 @@ static func chip(state: String = "normal") -> StyleBoxFlat:
 		_: result.bg_color = Color(COAL, 0.5)
 	return result
 
+## A backing for a dense list rather than for a few labels. World markers and the scene
+## are drawn before the panels, so the lighter fill lets them show through: over a
+## sentence that reads as depth, over a column of numbers it reads as a stray mark that
+## belongs to the list and is not in it. Measured, not guessed - a marker behind the
+## overview came through at about half brightness, which is legible noise.
+static func hud_list_panel(inset: int = 8) -> StyleBoxFlat:
+	var result := StyleBoxFlat.new()
+	result.bg_color = Color(COAL, 0.9)
+	result.set_content_margin_all(inset)
+	return result
+
 static func apply_chip(button: Button) -> void:
 	for state: String in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
 		button.add_theme_stylebox_override(state, chip(state))
@@ -506,7 +517,13 @@ class RingArc extends Control:
 ## two lines. Used only while the target count is small enough for the row to fit; past
 ## that the list takes over, and the two views never appear together.
 class PortraitMarker extends Control:
+	## A real portrait where one exists. Targets do not currently carry a hull
+	## reference, so most of them fall through to `mark`.
 	var portrait: Texture2D = null
+	## One or two characters drawn in the circle instead of a portrait. The target
+	## types are already named in the interface, so the mark is the first character of
+	## the name the player already reads rather than a second vocabulary to learn.
+	var mark: String = ""
 	var value: String = ""
 	var unit: String = ""
 	var hostile: bool = false
@@ -525,11 +542,17 @@ class PortraitMarker extends Control:
 		if face_radius <= 0.0: return
 		var tint: Color = XJUITheme.DANGER if hostile else XJUITheme.ICE
 		draw_circle(center, face_radius, Color(XJUITheme.COAL, 0.92))
-		XJUITheme.draw_portrait(self, center, face_radius, portrait)
-		draw_arc(center, radius - width * 0.5, 0.0, TAU, 48, Color(XJUITheme.BORDER, 0.8), width, true)
-		if not selected: return
-		# Selection is a shape, not only a colour: a full ring outside the frame.
-		draw_arc(center, radius + width, 0.0, TAU, 48, XJUITheme.AMBER, width, true)
+		if portrait != null:
+			XJUITheme.draw_portrait(self, center, face_radius, portrait)
+		elif not mark.is_empty():
+			var mark_size: int = 20 if compact else 24
+			draw_string(XJUITheme.font_medium(), Vector2(0.0, center.y + mark_size * 0.36), mark, HORIZONTAL_ALIGNMENT_CENTER, size.x, mark_size, tint)
+		# A hostile ring, not just hostile text: the type is stated in words under the
+		# marker as well, so colour never carries the meaning on its own.
+		draw_arc(center, radius - width * 0.5, 0.0, TAU, 48, Color(tint, 0.55) if hostile else Color(XJUITheme.BORDER, 0.8), width, true)
+		if selected:
+			# Selection is a shape, not only a colour: a second ring outside the frame.
+			draw_arc(center, radius + width, 0.0, TAU, 48, XJUITheme.AMBER, width, true)
 		draw_string(XJUITheme.font_medium(), Vector2(0.0, diameter + 14.0), value, HORIZONTAL_ALIGNMENT_CENTER, size.x, 13, tint)
 		if not unit.is_empty():
 			draw_string(XJUITheme.font(), Vector2(0.0, diameter + 26.0), unit, HORIZONTAL_ALIGNMENT_CENTER, size.x, 11, XJUITheme.MUTED)
