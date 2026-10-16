@@ -451,6 +451,33 @@ class RingMeter extends Control:
 		if not caption.is_empty():
 			XJUITheme.draw_value_unit(self, center, size.x, caption, unit)
 
+## A navigation entry as the reference draws one: a circular frame with the mark inside.
+## The name goes under it as ordinary text rather than as a badge on the circle, because
+## this rail is read at a glance while flying and a word is found faster than a numeral
+## tucked against an edge.
+class IconDial extends Control:
+	var icon: Texture2D = null
+	var active: bool = false
+	var compact: bool = false
+	var hover: bool = false
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var width: float = XJUITheme.RING_WIDTH_COMPACT if compact else XJUITheme.RING_WIDTH
+		var center: Vector2 = size * 0.5
+		var radius: float = minf(size.x, size.y) * 0.5
+		var face_radius: float = radius - width
+		if face_radius <= 0.0: return
+		draw_circle(center, face_radius, Color(XJUITheme.COAL, 0.92))
+		if icon != null:
+			var mark: float = minf(face_radius * 1.35, 20.0 if not compact else 15.0)
+			draw_texture_rect(icon, Rect2(center - Vector2(mark, mark) * 0.5, Vector2(mark, mark)), false, XJUITheme.AMBER if active else Color.WHITE)
+		var edge: Color = XJUITheme.AMBER if active else Color(XJUITheme.BORDER, 0.8)
+		if hover and not active: edge = edge.lerp(XJUITheme.TEXT, 0.4)
+		draw_arc(center, radius - width * 0.5, 0.0, TAU, 48, edge, width, true)
+
 ## One equipment slot as a circle: a dark disc, the module's portrait clipped to it, and
 ## a static rim. Replaces the tile that traced its own rectangular perimeter, which is
 ## the shape rule this revision removes.

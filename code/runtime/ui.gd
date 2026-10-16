@@ -111,6 +111,9 @@ var title_background: TextureRect
 var title_shade: ColorRect
 var instrument: PanelContainer
 var dial: Control
+## Rail entries: the mark, its name, and the title the name is built from.
+var toolbar_dials: Dictionary = {}
+var toolbar_labels: Dictionary = {}
 var condition_bars: Array[Dictionary] = []
 var energy_label: Label
 ## The resources are values on rings now, not bars. Each is the same Ring object the
@@ -181,6 +184,12 @@ var fitting_show_all: bool = false
 ## Widest a settings control may get. Three sliders at window width was the
 ## clearest case of a sparse page stretching its own controls.
 const SETTINGS_COLUMN_WIDTH: int = 360
+## Rail geometry. The strip is the label's line height, not a round number: a Label is
+## never shorter than its font, the same rule that sized the equipment slots.
+const RAIL_DIAL: float = 32.0
+const RAIL_LABEL: float = 15.0
+const RAIL_DIAL_COMPACT: float = 26.0
+const RAIL_LABEL_COMPACT: float = 14.0
 const STAGE_PAGES: Array[String] = ["ships", "fitting", "ship_roles"]
 var stage_mode: bool = false
 var stage_header: PanelContainer
@@ -2874,8 +2883,41 @@ func _encounter_summary(entry: Dictionary) -> String:
 func _pointer_over(control: Control) -> bool:
 	return is_instance_valid(control) and control.is_visible_in_tree() and control.get_global_rect().has_point(control.get_global_mouse_position())
 
+## Rail names carry a real count where one exists, and nothing where none does: 星图 and
+## 系统 have no number to show, so they show none rather than a zero that means nothing.
+## The circle is marked only for the radar, because every page the rest of the rail opens
+## hides the rail itself - there would be nothing on screen to mark.
+func _refresh_rail() -> void:
+	if state == null or gameplay == null: return
+	var counts: Dictionary = {}
+	var missions: int = 0
+	for mission: Dtos.MissionStateDto in state.rows("mission_state"):
+		if mission.status in ["active", "ready"]: missions += 1
+	counts["missions"] = missions
+	if DroneAvailability.capable(gameplay): counts["drones"] = DroneAvailability.equipped(gameplay).size()
+	if gameplay.owned_fleet != null and gameplay.owned_fleet.supported(): counts["hire"] = gameplay.owned_fleet.active().size()
+	var compact: bool = root.size.x < 950.0
+	for key: String in toolbar_labels.keys():
+		var entry: Dictionary = toolbar_labels[key]
+		var label: Label = entry.get("label")
+		if not is_instance_valid(label): continue
+		var count: int = int(counts.get(key, 0))
+		var title: String = str(entry.get("title", ""))
+		# The count is a readout, not a name. Where there is no room for both, the name
+		# is the one that keeps its line and the count moves to the tooltip.
+		label.text = ("%s %d" % [title, count]) if count > 0 and not compact else title
+		label.tooltip_text = title if count <= 0 else "%s · %d 项" % [title, count]
+	for key: String in toolbar_dials.keys():
+		var rail_dial: UISkin.IconDial = toolbar_dials[key]
+		if not is_instance_valid(rail_dial): continue
+		var active: bool = key == "radar" and radar_expanded
+		if rail_dial.active != active:
+			rail_dial.active = active
+			rail_dial.queue_redraw()
+
 func _update_navigation() -> void:
 	if state == null or not is_instance_valid(sector) or catalog == null or gameplay == null: return
+	_refresh_rail()
 	var navigation_context: Dictionary = _navigation_context()
 	if toolbar_buttons.has("drones"):
 		var available: bool = DroneAvailability.capable(gameplay) and not DroneAvailability.equipped(gameplay).is_empty()
@@ -2949,7 +2991,11 @@ func _responsive() -> void:
 	_resize_map_canvas()
 	var compact: bool = root.size.x < 950
 	var safe: float = 8.0 if compact else 16.0
-	var rail_width: float = 40.0 if compact else 48.0
+	# Sized for the widest entry the rail can actually produce, which is not a guess: a
+	# name plus a real count, "无人机 3", measures 44 px at 11 px type. At 48 the label
+	# ran past the panel edge, so the rail is 58 and the compact rail gives up the count
+	# to its tooltip rather than the name.
+	var rail_width: float = 44.0 if compact else 58.0
 	var left_edge: float = safe + rail_width + 12.0
 	# Width of the flight overview column, not a sidebar: it is what the
 	# target list is sized to on the right edge.
@@ -2984,14 +3030,15 @@ func _responsive() -> void:
 		var visible_tools: int = 0
 		for button: Button in toolbar_buttons.values():
 			if button.visible: visible_tools += 1
-		navigation.offset_bottom = flight_content_top + visible_tools*(36.0 if compact else 42.0)+maxi(0,visible_tools-1)*(4.0 if compact else 8.0)+8.0
-		navigation.add_theme_stylebox_override("panel", UISkin.flat(Color(0.025,0.035,0.05,0.4),Color(0.15,0.21,0.27,0.35),2))
+		var rail_step: float = (RAIL_DIAL_COMPACT + RAIL_LABEL_COMPACT) if compact else (RAIL_DIAL + RAIL_LABEL)
+		var rail_gap: float = 4.0 if compact else 6.0
+		navigation.offset_bottom = flight_content_top + visible_tools * rail_step + maxi(0, visible_tools - 1) * rail_gap + 8.0
+		navigation.add_theme_stylebox_override("panel", UISkin.hud_panel(4))
 		var toolbar_row: VBoxContainer = navigation.get_node("ToolbarActions")
-		toolbar_row.add_theme_constant_override("separation", 4 if compact else 8)
-		for button: Variant in toolbar_buttons.values():
-			button.add_theme_font_size_override("font_size", 9 if compact else 10)
-			button.custom_minimum_size = Vector2(0,36 if compact else 42)
-			UISkin.apply_toolbar_button(button, button == radar_button and radar_expanded)
+		toolbar_row.add_theme_constant_override("separation", int(rail_gap))
+		for key: String in toolbar_dials.keys():
+			if not toolbar_labels.has(key): continue
+			_rail_geometry(toolbar_buttons[key], toolbar_dials[key], toolbar_labels[key].label, compact)
 	if is_instance_valid(navigation_frame):
 		navigation_frame.offset_left = left_edge
 		navigation_frame.offset_right = left_edge + left_width
@@ -3633,44 +3680,75 @@ func _build_navigation() -> void:
 		if key != "show_ship": callback = show_page.bind(key)
 		var button: Button = _button(row, title, callback)
 		toolbar_buttons[key] = button
+		button.text = ""
 		button.focus_mode = Control.FOCUS_NONE
-		button.custom_minimum_size = Vector2(42, 42)
-		button.focus_mode = Control.FOCUS_NONE
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.autowrap_mode = TextServer.AUTOWRAP_OFF
-		button.add_theme_font_size_override("font_size", 12)
 		# One mark per entry. Previously 无人机 and 僚舰 both drew as 舰队与借船 and
 		# 舰船 drew as an eye, so three of the seven rail buttons lied about what
 		# they opened.
-		button.icon = ServiceNavigation.texture(ServiceNavigation.OBSERVE_ICON) if key == "show_ship" else ServiceNavigation.icon(key)
-		button.expand_icon = true
-		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-		button.add_theme_constant_override("icon_max_width", 18)
+		var mark: Texture2D = ServiceNavigation.texture(ServiceNavigation.OBSERVE_ICON) if key == "show_ship" else ServiceNavigation.icon(key)
+		var label: Label = _rail_entry(button, key, title, mark)
+		toolbar_labels[key] = {"label": label, "title": title}
 		button.tooltip_text = {"missions":"任务与合同 · J", "map":"星域航路 · M", "drones":"无人机管理", "hire":"雇佣僚舰与四种编队指令", "pause":"暂停与存读档 · Esc"}.get(key, "显示舰船")
 		if key == "show_ship":
 			show_ship_button = button
 			button.name = "ShowPlayerShip"
 			button.tooltip_text = "恢复跟随视角、默认观察角度和镜头距离，舰船居中显示。V 切换视角；左键拖动观察，松开后保留角度。"
-		_secondary(button)
-		UISkin.apply_button(button, "default", true)
 	radar_button = _button(row, "雷达", func():
 		radar_expanded = not radar_expanded
 		_update_hud_visibility()
 		_responsive())
 	radar_button.name = "FlightRadarToggle"
-	radar_button.icon = ServiceNavigation.icon("radar")
-	radar_button.expand_icon = true
-	radar_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	radar_button.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-	radar_button.add_theme_constant_override("icon_max_width", 18)
+	radar_button.text = ""
 	radar_button.focus_mode = Control.FOCUS_NONE
-	radar_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	radar_button.autowrap_mode = TextServer.AUTOWRAP_OFF
-	radar_button.add_theme_stylebox_override("hover", UISkin.hud_button(true))
-	radar_button.add_theme_stylebox_override("pressed", UISkin.hud_button(true))
+	toolbar_labels["radar"] = {"label": _rail_entry(radar_button, "radar", "雷达", ServiceNavigation.icon("radar")), "title": "雷达"}
 	radar_button.tooltip_text = "展开 / 收起局部雷达；雷达中的目标可直接选择。"
 	toolbar_buttons["radar"] = radar_button
+
+## One rail entry: the circular mark with its name under it. The button keeps no surface
+## of its own, so the circle is the control rather than a tile around it, and hover
+## feedback is a faint fill that appears only under the pointer.
+func _rail_entry(button: Button, key: String, title: String, mark: Texture2D) -> Label:
+	UISkin.apply_slot_hit(button)
+	var dial: UISkin.IconDial = UISkin.IconDial.new()
+	dial.name = "RailDial"
+	dial.icon = mark
+	dial.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	dial.offset_bottom = RAIL_DIAL
+	button.add_child(dial)
+	var dial_ref: WeakRef = weakref(dial)
+	button.mouse_entered.connect(func():
+		var current: UISkin.IconDial = dial_ref.get_ref() as UISkin.IconDial
+		if is_instance_valid(current): current.hover = true; current.queue_redraw())
+	button.mouse_exited.connect(func():
+		var current: UISkin.IconDial = dial_ref.get_ref() as UISkin.IconDial
+		if is_instance_valid(current): current.hover = false; current.queue_redraw())
+	var label: Label = _text_to(button, title, UISkin.SIZE_NOTE)
+	label.name = "RailLabel_" + key
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.clip_text = true
+	label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	label.offset_top = -RAIL_LABEL
+	label.offset_bottom = 0
+	toolbar_dials[key] = dial
+	_rail_geometry(button, dial, label, root.size.x < 950)
+	return label
+
+## One place decides the rail's metrics. The rail's own height in _responsive() is
+## derived from the same three constants, because it used to be a separate literal that
+## had to be remembered whenever a button changed size.
+func _rail_geometry(button: Button, dial: UISkin.IconDial, label: Label, compact: bool) -> void:
+	var circle: float = RAIL_DIAL_COMPACT if compact else RAIL_DIAL
+	var strip: float = RAIL_LABEL_COMPACT if compact else RAIL_LABEL
+	button.custom_minimum_size = Vector2(0, circle + strip)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dial.compact = compact
+	dial.offset_bottom = circle
+	dial.queue_redraw()
+	label.add_theme_font_size_override("font_size", 10 if compact else UISkin.SIZE_NOTE)
+	label.offset_top = -strip
 
 func _build_target_module() -> void:
 	overview = OverviewPanel.new()
