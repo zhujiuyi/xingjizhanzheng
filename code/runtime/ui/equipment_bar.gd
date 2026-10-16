@@ -25,49 +25,21 @@ var _combat_options: Dictionary = {"fire": false, "orbit": false, "seek": false}
 var _combat_message: String = "手动战斗"
 var _combat_blocked: bool = false
 
-## Cooldown traced around a slot's own frame. A battleship fits 17 modules; at the
-## old 80 px tile that is 1424 px of tiles inside a 656 px dock, which put a
-## horizontal scroll bar in the flight HUD whenever a full loadout cycled. The
-## tiles are now flexible and the countdown is the frame itself, so nothing has to
-## scroll and the "循环就绪" caption has somewhere better to live.
-class SlotRing extends Control:
-	var value: float = 0.0
-	var max_value: float = 1.0
-	var tint: Color = XJUITheme.ICE
-
-	func _ready() -> void:
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-	func ratio() -> float:
-		return clampf(value / maxf(max_value, 0.001), 0.0, 1.0)
-
-	func _draw() -> void:
-		var amount: float = ratio()
-		if amount <= 0.0: return
-		var inset: float = 1.5
-		var rect := Rect2(Vector2(inset, inset), size - Vector2(inset, inset) * 2.0)
-		if rect.size.x <= 4.0 or rect.size.y <= 4.0: return
-		var points: PackedVector2Array = _perimeter(rect)
-		var traced: int = clampi(int(ceil(amount * float(points.size() - 1))) + 1, 2, points.size())
-		draw_polyline(points.slice(0, traced), tint, 2.0, true)
-
-	func _perimeter(rect: Rect2) -> PackedVector2Array:
-		var corners: Array[Vector2] = [
-			Vector2(rect.position.x, rect.position.y),
-			Vector2(rect.end.x, rect.position.y),
-			Vector2(rect.end.x, rect.end.y),
-			Vector2(rect.position.x, rect.end.y),
-		]
-		var per_side: int = 8
-		var points := PackedVector2Array()
-		for index: int in 4:
-			var from: Vector2 = corners[index]
-			var to: Vector2 = corners[(index + 1) % 4]
-			for step: int in per_side:
-				points.append(from.lerp(to, float(step) / float(per_side)))
-		points.append(corners[0])
-		return points
+## Slot geometry. The circle is the slot and the strip under it carries the slot ID,
+## which is why the tile is taller than it is wide.
+##
+## The strip is sized to what the label actually needs, not to what looks right: a
+## Label is never smaller than its font's line height, so a 13 px strip holding a 10 px
+## font measured 15 px and hung two pixels past the tile. 15 is that line height.
+##
+## Tuned against the worst case rather than a fixture: a battleship fits 17 modules
+## plus the engine control. At 1440x900 that is one line of 19; at 640x360 the row is
+## 360 px and holds 14 per line, so a full loadout wraps to two lines of 36 px inside
+## the 76 px it is given.
+const SLOT_CIRCLE: float = 31.0
+const SLOT_LABEL: float = 15.0
+const SLOT_CIRCLE_COMPACT: float = 22.0
+const SLOT_LABEL_COMPACT: float = 14.0
 
 func _ready() -> void:
 	name = "EquipmentCycles"
@@ -127,33 +99,37 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 				for current: Dictionary in module_records:
 					if str(current.id) == id: toggle_requested.emit(id, not bool(current.enabled)); return)
 			row.add_child(button)
-			var labels: VBoxContainer = VBoxContainer.new()
-			labels.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-			labels.offset_left = 5; labels.offset_right = -5
-			labels.offset_top = 2; labels.offset_bottom = -4
-			labels.add_theme_constant_override("separation", 0)
-			labels.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			button.add_child(labels)
-			var icon: TextureRect = TextureRect.new()
-			icon.texture = Portraits.texture("item", str(record.module_id))
-			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon.custom_minimum_size = Vector2(16,16)
-			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			labels.add_child(icon)
-			var title: Label = _header_label(labels, "", 9, UISkin.TEXT)
-			var cost: Label = _header_label(labels, "", 9, UISkin.MUTED)
-			# Share the icon area without enlarging the compact tile or slot-ID row.
+			# The slot is a circle and the portrait is clipped to it by the theme's
+			# draw_portrait, so there is no TextureRect and no mask texture: the shape
+			# lives in one widget and this tile is only the frame around it.
+			var slot: UISkin.CircularSlot = UISkin.CircularSlot.new()
+			slot.name = "SlotSurface"
+			slot.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+			slot.offset_bottom = SLOT_CIRCLE
+			button.add_child(slot)
+			var surface_ref: WeakRef = weakref(slot)
+			button.mouse_entered.connect(func(): _hover_slot(surface_ref, true))
+			button.mouse_exited.connect(func(): _hover_slot(surface_ref, false))
+			# The slot ID sits under the circle, the state badge over it. They cannot
+			# collide, which is what the tile's extra height buys.
+			var title: Label = _header_label(button, "", 10, UISkin.TEXT)
+			title.name = "SlotTitle"
+			title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			title.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+			title.offset_top = -SLOT_LABEL
+			title.offset_bottom = 0
 			var status: Label = _header_label(button, "", 9, UISkin.MUTED)
+			status.name = "SlotStatus"
 			status.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-			status.offset_left = 4; status.offset_right = -4
-			status.offset_top = 2; status.offset_bottom = 16
+			status.offset_top = 1; status.offset_bottom = 12
 			status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			status.clip_text = true
 			status.max_lines_visible = 1
-			module_labels[id] = {"title": title, "status": status, "cost": cost, "icon": icon}
-			var ring: SlotRing = SlotRing.new()
+			module_labels[id] = {"title": title, "status": status, "icon": slot}
+			var ring: UISkin.RingArc = UISkin.RingArc.new()
 			ring.name = "ActualCycle"
+			ring.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+			ring.offset_bottom = SLOT_CIRCLE
 			button.add_child(ring)
 			module_progress[id] = ring
 			module_buttons[id] = button
@@ -165,7 +141,10 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 		slot_records.append(slot_snapshot)
 		slot_buttons[str(record.get("slot_id", id))] = button
 		button.set_pressed_no_signal(bool(record.get("enabled", false)))
-		UISkin.apply_button(button, "filter", true, bool(record.get("enabled", false)))
+		# The button is a hit target with no surface: the circle is the slot. An
+		# enabled module is a bright rim, a switched-off one a dim rim, and the cycle
+		# arc overlays either while it counts down.
+		UISkin.apply_slot_hit(button)
 		_tighten_slot_surface(button)
 		button.tooltip_text = "%s\n%s槽 %d · %s\n循环 %.1f s · 电容 %.0f · 热量 %.0f\n耐久 %.0f · 点击%s设备" % [str(record.title), str(record.get("slot_title", "")), int(record.get("slot_index", 0)) + 1, str(record.get("state_label", "")), float(record.get("cycle_s", 0.0)), float(record.get("energy_eu", 0.0)), float(record.get("heat_hu", 0.0)), float(record.get("durability", 0.0)), "关闭" if bool(record.get("enabled", false)) else "启用"]
 		var labels: Dictionary = module_labels[id]
@@ -174,15 +153,17 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 		# a ring; a running cycle, a lock or a shortage still needs to be readable.
 		labels.status.text = _short_status(record)
 		labels.status.visible = not labels.status.text.is_empty()
-		# A compact state replaces the icon area; it never overprints the slot ID.
-		labels.icon.modulate.a = 0.0 if labels.status.visible else 1.0
-		labels.cost.text = "电容 %.0f · 热量 %.0f" % [float(record.get("energy_eu", 0.0)), float(record.get("heat_hu", 0.0))]
-		labels.cost.hide()
+		# A compact state replaces the portrait but never the disc or the rim, and it
+		# never overprints the slot ID, which is in its own strip below the circle.
+		var slot_surface: UISkin.CircularSlot = labels.icon
+		slot_surface.portrait = Portraits.texture("item", str(record.module_id))
+		slot_surface.show_portrait = not labels.status.visible
+		slot_surface.rim = Color(UISkin.ICE, 0.75) if bool(record.get("enabled", false)) else Color(UISkin.BORDER, UISkin.RING_BACKING)
+		slot_surface.queue_redraw()
 		# Enabled but not ready: cycling, i.e. momentarily blocked, not selected.
 		labels.status.add_theme_color_override("font_color", UISkin.WARN if not bool(record.get("ready", false)) and bool(record.get("enabled", false)) else UISkin.TEXT if bool(record.get("enabled", false)) else UISkin.MUTED)
-		button.custom_minimum_size = Vector2(30, 34 if _compact else 44)
-		button.size_flags_horizontal = Control.SIZE_FILL
-		var ring: SlotRing = module_progress[id]
+		var ring: UISkin.RingArc = module_progress[id]
+		_apply_slot_geometry(button, labels, ring, _compact)
 		# Same two values the old bar carried: database cycle length and the real
 		# remaining seconds, so the frame traces an authoritative countdown.
 		ring.max_value = maxf(float(record.get("cycle_s", 0.0)), 0.001)
@@ -217,7 +198,7 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 			placeholder.name = "EmptySlot_" + slot_id.validate_node_name()
 			placeholder.focus_mode = Control.FOCUS_NONE
 			placeholder.disabled = true
-			UISkin.apply_button(placeholder, "secondary", true)
+			UISkin.apply_chip(placeholder)
 			row.add_child(placeholder)
 			empty_slot_buttons[slot_id] = placeholder
 		placeholder.visible = slot_id == summary_id
@@ -244,6 +225,32 @@ func refresh(records: Array[Dictionary], resources: Dictionary, busy: bool = fal
 	engine_button.visible = has_engine
 	engine_button.disabled = busy or not bool(resources.get("engine_ready", false))
 	engine_button.tooltip_text = str(resources.get("engine_reason", "需要已启用且可支付循环消耗的增推设备。"))
+
+## Hover feedback lives on the rim because the slot has no surface to light up.
+func _hover_slot(surface_ref: WeakRef, entered: bool) -> void:
+	var slot: UISkin.CircularSlot = surface_ref.get_ref() as UISkin.CircularSlot
+	if not is_instance_valid(slot): return
+	slot.hover = entered
+	slot.queue_redraw()
+
+## One place decides how big a slot is. refresh() and responsive() both need it and
+## used to set the size on their own, which is how a tile can end up sized for one
+## layout while it is being drawn for the other.
+func _apply_slot_geometry(button: Button, labels: Dictionary, ring: UISkin.RingArc, compact: bool) -> void:
+	var circle: float = SLOT_CIRCLE_COMPACT if compact else SLOT_CIRCLE
+	var strip: float = SLOT_LABEL_COMPACT if compact else SLOT_LABEL
+	button.custom_minimum_size = Vector2(circle, circle + strip)
+	button.size_flags_horizontal = Control.SIZE_FILL
+	var slot: UISkin.CircularSlot = labels.icon
+	slot.compact = compact
+	slot.offset_bottom = circle
+	slot.queue_redraw()
+	var title: Label = labels.title
+	title.offset_top = -strip
+	title.add_theme_font_size_override("font_size", 9 if compact else 10)
+	ring.compact = compact
+	ring.offset_bottom = circle
+	ring.queue_redraw()
 
 ## A full battleship loadout wraps the row to two lines at the smallest supported
 ## size, so the vertical padding is trimmed to buy that second line real room
@@ -282,13 +289,14 @@ func responsive(compact: bool) -> void:
 		check.add_theme_font_size_override("font_size", 10 if compact else 11)
 		check.custom_minimum_size.y = 24
 	engine_button.custom_minimum_size = Vector2(54, 36 if compact else 28)
+	for id: String in module_buttons.keys():
+		_apply_slot_geometry(module_buttons[id], module_labels[id], module_progress[id], compact)
 	for labels: Dictionary in module_labels.values():
-		labels.title.add_theme_font_size_override("font_size", 10)
 		labels.status.add_theme_font_size_override("font_size", 9)
-		labels.cost.hide()
-	# Flexible, not fixed: 17 tiles share the dock width instead of overflowing it.
-	for button: Variant in slot_buttons.values():
-		button.custom_minimum_size = Vector2(30, 34 if compact else 44)
+	# The "empty slots x N" summary is sized by its own text, not by the circle: it is
+	# one aggregate standing for many sockets, not a socket.
+	for button: Variant in empty_slot_buttons.values():
+		button.custom_minimum_size = Vector2(0, SLOT_CIRCLE_COMPACT + SLOT_LABEL_COMPACT if compact else SLOT_CIRCLE + SLOT_LABEL)
 		button.size_flags_horizontal = Control.SIZE_FILL
 
 func _build_combat_options(parent: VBoxContainer) -> void:

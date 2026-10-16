@@ -112,6 +112,45 @@ static func hud_panel(inset: int = 8) -> StyleBoxFlat:
 	result.set_content_margin_all(inset)
 	return result
 
+## A hit target that is invisible until it is used. The equipment slot draws its own
+## circle, so a persistent button surface put a square tile around every round slot -
+## precisely the shape the slot rule removes. Only feedback appears, and only while the
+## pointer is on it, so the resting state is a circle and nothing else. The four states
+## still differ from each other: a control that cannot show it was pressed is not
+## interactive, it is decoration.
+static func slot_hit(state: String = "normal") -> StyleBoxFlat:
+	var result := StyleBoxFlat.new()
+	result.set_content_margin_all(1)
+	match state:
+		"hover": result.bg_color = Color(ICE, 0.10)
+		"pressed": result.bg_color = Color(AMBER, 0.18)
+		"hover_pressed": result.bg_color = Color(AMBER, 0.26)
+		"disabled": result.bg_color = Color(COAL, 0.34)
+		_: result.bg_color = Color(0, 0, 0, 0)
+	return result
+
+static func apply_slot_hit(button: Button) -> void:
+	for state: String in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+		button.add_theme_stylebox_override(state, slot_hit(state))
+
+## A borderless chip for a compact aggregate, such as "empty slots x 10". It is one
+## count standing for many sockets rather than a socket, so it stays a rectangle - but
+## a rectangle with no edge, so it does not reintroduce the boxes this revision removes.
+static func chip(state: String = "normal") -> StyleBoxFlat:
+	var result := StyleBoxFlat.new()
+	result.set_content_margin_all(6)
+	match state:
+		"hover": result.bg_color = Color(COAL, 0.5).lerp(ICE, 0.12)
+		"pressed": result.bg_color = Color(COAL, 0.5).lerp(AMBER, 0.18)
+		"hover_pressed": result.bg_color = Color(COAL, 0.5).lerp(AMBER, 0.24)
+		"disabled": result.bg_color = Color(COAL, 0.34)
+		_: result.bg_color = Color(COAL, 0.5)
+	return result
+
+static func apply_chip(button: Button) -> void:
+	for state: String in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+		button.add_theme_stylebox_override(state, chip(state))
+
 static func button_surface(role: String = "default", state: String = "normal", compact: bool = false, active: bool = false) -> StyleBoxFlat:
 	var accent: Color = DANGER if role == "danger" else AMBER if role == "primary" or active else ICE
 	var emphasized: bool = role in ["primary", "danger"] or active
@@ -381,17 +420,23 @@ class RingMeter extends Control:
 			XJUITheme.draw_value_unit(self, center, size.x, caption, unit)
 
 ## One equipment slot as a circle: a dark disc, the module's portrait clipped to it, and
-## the cycle remaining drawn as an arc around the rim. Replaces the tile that traced its
-## own rectangular perimeter, which is the shape rule this revision removes.
+## a static rim. Replaces the tile that traced its own rectangular perimeter, which is
+## the shape rule this revision removes.
+##
+## The rim carries no value. A slot's cycle is drawn by RingArc in its own node, because
+## the cycle must be able to disappear while the slot stays: an idle module is a visible
+## slot with nothing to count down.
 class CircularSlot extends Control:
 	var portrait: Texture2D = null
-	var ratio: float = 0.0
-	var color: Color = XJUITheme.ICE
 	var empty: bool = false
 	var compact: bool = false
-	## Drawn in place of the portrait when there is none, so a slot with a module still
-	## reads as filled rather than as a hole.
-	var fallback: String = ""
+	## Turned off while a state badge replaces the portrait, so the badge is readable
+	## without also hiding the disc and rim that say a module is fitted here.
+	var show_portrait: bool = true
+	## The rim is the only thing that says "fitted and switched on" now that the tile
+	## behind the circle is gone, so the slot's own state lives here.
+	var rim: Color = Color(XJUITheme.BORDER, XJUITheme.RING_BACKING)
+	var hover: bool = false
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -407,11 +452,34 @@ class CircularSlot extends Control:
 			# An empty socket, drawn as a dim inner ring: it says "nothing fitted here"
 			# without a glyph that could be mistaken for a module mark.
 			draw_arc(center, face_radius * 0.45, 0.0, TAU, 24, Color(XJUITheme.BORDER, 0.7), 1.0, true)
-		elif portrait != null:
+		elif show_portrait:
 			XJUITheme.draw_portrait(self, center, face_radius, portrait)
-		elif not fallback.is_empty():
-			draw_string(XJUITheme.font_medium(), Vector2(center.x - radius, center.y + 4.0), fallback, HORIZONTAL_ALIGNMENT_CENTER, size.x, 11, XJUITheme.MUTED)
-		XJUITheme.draw_arc_meter(self, center, radius - width * 0.5, ratio, color, width)
+		var edge: Color = rim.lerp(XJUITheme.TEXT, 0.35) if hover else rim
+		draw_arc(center, radius - width * 0.5, 0.0, TAU, 48, edge, width, true)
+
+## The value of a ring, on its own so it can be shown and hidden independently of the
+## thing it circles. Carries the same value/max_value pair the bar used before, so the
+## displayed arc is still the database cycle against the real remaining seconds.
+class RingArc extends Control:
+	var value: float = 0.0
+	var max_value: float = 1.0
+	var tint: Color = XJUITheme.ICE
+	var compact: bool = false
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func ratio() -> float:
+		return clampf(value / maxf(max_value, 0.001), 0.0, 1.0)
+
+	func _draw() -> void:
+		var amount: float = ratio()
+		if amount <= 0.0: return
+		var width: float = XJUITheme.RING_WIDTH_COMPACT if compact else XJUITheme.RING_WIDTH
+		var center: Vector2 = size * 0.5
+		var radius: float = minf(size.x, size.y) * 0.5 - width * 0.5
+		if radius <= 0.0: return
+		self.draw_arc(center, radius, XJUITheme.RING_START, XJUITheme.RING_START + XJUITheme.RING_SWEEP * amount, 64, tint, width, true)
 
 ## A target as the reference draws one: a circular portrait with the range under it in
 ## two lines. Used only while the target count is small enough for the row to fit; past
