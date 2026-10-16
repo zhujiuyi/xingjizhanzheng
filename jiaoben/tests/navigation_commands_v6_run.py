@@ -137,7 +137,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, default=Path("D:/DevTools/Godot/4.7.2/Godot_v4.7.2-stable_win64.exe"))
     parser.add_argument("--executable", type=Path, help="Actual Windows client with the registered fixed navigation diagnostic")
-    parser.add_argument("--expected-version", default="0.36.0.0", help="Exact Windows binary version expected in --executable mode")
+    parser.add_argument("--expected-version", default="0.37.0.0", help="Exact Windows binary version expected in --executable mode")
     parser.add_argument("--native", action="store_true")
     parser.add_argument("--audio-driver", choices=("Dummy", "WASAPI", "CoreAudio"))
     parser.add_argument("--navigation-only", action="store_true", help="Explicit partial core scope; full UI assertions and four layout captures are skipped")

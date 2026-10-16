@@ -1,7 +1,7 @@
 """Run residual interaction completion checks with a real window and strict logs.
 
 Source: py jiaoben/tests/ui_completion_v64_run.py
-PCK: add --executable <verified Windows 0.36.0.0 EXE>.
+PCK: add --executable <verified Windows 0.37.0.0 EXE>.
 Both routes use a fresh UUID and the same shared engine lock.
 """
 from pathlib import Path
@@ -110,7 +110,7 @@ def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, default=Path("D:/DevTools/Godot/4.7.2/Godot_v4.7.2-stable_win64.exe"))
-    parser.add_argument("--executable", type=Path, help="Actual Windows 0.36.0.0 PCK; fixed v64 flag only")
+    parser.add_argument("--executable", type=Path, help="Actual Windows 0.37.0.0 PCK; fixed v64 flag only")
     parser.add_argument("--headless", action="store_true", help="Dispatch/structure only; not native-window acceptance")
     args = parser.parse_args()
     import msvcrt

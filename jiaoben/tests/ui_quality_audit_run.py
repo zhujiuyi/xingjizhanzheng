@@ -2,7 +2,7 @@
 
 Run from the repository root: py jiaoben/tests/ui_quality_audit_run.py --label before
 Use --label after --strict-layout for the corrected critical viewport boundaries.
-Source uses a thin launcher; release 0.36.0.0 uses only its fixed diagnostic flag.
+Source uses a thin launcher; release 0.37.0.0 uses only its fixed diagnostic flag.
 Neither route opens a personal save database.
 """
 from pathlib import Path
@@ -34,9 +34,9 @@ def ui_source_snapshot():
 def inspect_release_binary(executable):
     sys.path.insert(0, str(ROOT / "jiaoben"))
     from build_client import inspect_windows_binary_version
-    result = inspect_windows_binary_version(executable, "0.36.0.0")
+    result = inspect_windows_binary_version(executable, "0.37.0.0")
     if result.get("result") != "PASS":
-        raise RuntimeError("Release diagnostics require verified Windows file/product version 0.36.0.0")
+        raise RuntimeError("Release diagnostics require verified Windows file/product version 0.37.0.0")
     return result
 
 
@@ -144,7 +144,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--label", choices=("before", "after"), required=True)
     parser.add_argument("--engine", type=Path, default=Path("D:/DevTools/Godot/4.7.2/Godot_v4.7.2-stable_win64.exe"))
-    parser.add_argument("--executable", type=Path, help="Actual Windows 0.36.0.0 client; fixed v61 diagnostic only")
+    parser.add_argument("--executable", type=Path, help="Actual Windows 0.37.0.0 client; fixed v61 diagnostic only")
     parser.add_argument("--headless", action="store_true", help="Structure only; no screenshot acceptance")
     parser.add_argument("--strict-layout", action="store_true", help="Fail critical frame viewport overflow")
     args = parser.parse_args()
