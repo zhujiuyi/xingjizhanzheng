@@ -23,41 +23,41 @@ Windows仓储与交易使用 `py jiaoben/verify_combat_v18.py --native --only wa
 
 遗留界面专项：`py jiaoben/tests/ui_completion_v64_run.py`仅运行本轮七组（相关功能菜单、研究空态、累计指标、折叠、HUD键盘、距离、四尺寸交易）。可加`--executable <已核验且包含固定v64入口的Windows EXE>`；runner校验二进制身份与`--xj-verify-ui-completion-v64`，拒绝向旧包传通用脚本。源码与实际PCK分开运行，共用审计锁、fresh UUID私有库、严格双日志及源码/测试摘要。脚本600秒看门狗、外层660秒有界等待；`--headless`仅作结构/分发检查，不能替代原生窗口。
 
-v64覆盖1440×900、1024×648、1920×1080、1280×720@200%（实际640×360逻辑画布），记录完整关键控件、真实菜单/按来路返回、F6模式下实际导航/停止与战斗开关、模式外原Tab切目标，以及数量2的实际购买/扣款。7字段展示与入籍边界为明示临时夹具，真实交易前恢复；报告裁剪通过原telemetry服务的零时长生命周期边界验证，不作为正常航行证据。最大17槽只把真实目录槽位/模块数据显示于生产EquipmentBar，四尺寸逐磁贴测矩形、标签、完整tooltip与环数值，然后恢复原资源；不创建权威设备、不保存假装配，不声称合法满装。报告在`logs/ui-completion-v64-*`，截图/私有库在`tmp/ui-completion-v64/<UUID>/`。最终实际Windows包14组16842项/304图及正式目录Store6项通过；源码/反例/实际证据分别归档，完整范围见[75](../doc/75-遗留交互与回归整改计划审核.md)。
+v64覆盖1440×900、1024×648、1920×1080、1280×720@200%（实际640×360逻辑画布），记录完整关键控件、真实菜单/按来路返回、F6模式下实际导航/停止与战斗开关、模式外原Tab切目标，以及数量2的实际购买/扣款。7字段展示与入籍边界为明示临时夹具，真实交易前恢复；报告裁剪通过原telemetry服务的零时长生命周期边界验证，不作为正常航行证据。最大17槽只把真实目录槽位/模块数据显示于生产EquipmentBar，四尺寸逐磁贴测矩形、标签、完整tooltip与环数值，然后恢复原资源；不创建权威设备、不保存假装配，不声称合法满装。截图/私有库在`tmp/ui-completion-v64/<UUID>/`。最终实际Windows包14组16842项/304图及正式目录Store6项通过；源码/反例/实际证据分别归档，完整范围见[75](../doc/75-遗留交互与回归整改计划审核.md)。
 
 正常成长续段来源统一使用`prepare_natural_checkpoint.py --report <logs中的已通过报告> --case natural-research|natural-rescue`。输出只读核对后的来源凭据和路径文件。`--only natural-rescue`读取`XJ_NATURAL_RESEARCH_ORIGIN`，运行实际战斗、修复护送、交付与整备款；源库不写入。此组尚待运行，不能因脚本存在就视为通过。
 
-主线/研究正常续段：`--only natural-research`读取`XJ_NATURAL_SCOUT_ORIGIN`指定的`logs/v52-scout-origin-*.json`，只使用已通过正常探索回放的关闭副本，执行原有主线、市场和研究入口。当前运行状态与来源边界见67。
+主线/研究正常续段：`--only natural-research`读取`XJ_NATURAL_SCOUT_ORIGIN`指定的，只使用已通过正常探索回放的关闭副本，执行原有主线、市场和研究入口。当前运行状态与来源边界见67。
 
-正常探索续段使用`--only natural-scout`与`XJ_NATURAL_EXAM_ORIGIN`指向`logs/v51-exam-origin-*.json`，只允许经摘要和已通过回放记录绑定的`natural-rank-v50`副本。购船、装配、导航、调查、战斗和领取均走Main真实入口，不注入进度或时钟。当前运行状态见67；未完成前不得将部分日志计为通过。
+正常探索续段使用`--only natural-scout`与`XJ_NATURAL_EXAM_ORIGIN`指向，只允许经摘要和已通过回放记录绑定的`natural-rank-v50`副本。购船、装配、导航、调查、战斗和领取均走Main真实入口，不注入进度或时钟。当前运行状态见67；未完成前不得将部分日志计为通过。
 
-v50补验：`--only march-routes`为三文明24条路线的战略矩阵（明示粗粒度时钟），`--native --only growth-world`验证实际成长入口；正常成长用`--only natural-mid`及`natural-rank`，分别通过`XJ_NATURAL_MID_ORIGIN`和`XJ_NATURAL_RANK_ORIGIN`指定经摘要核对的正常来源。后者的`v50-mid-origin-*.json`明确保留前段登记前提失败，不能作为整组通过凭据。运行仍须持有主工作区共享锁并串行；所有旧输入只读，勿使用个人库。
+v50补验：`--only march-routes`为三文明24条路线的战略矩阵（明示粗粒度时钟），`--native --only growth-world`验证实际成长入口；正常成长用`--only natural-mid`及`natural-rank`，分别通过`XJ_NATURAL_MID_ORIGIN`和`XJ_NATURAL_RANK_ORIGIN`指定经摘要核对的正常来源。后者的明确保留前段登记前提失败，不能作为整组通过凭据。运行仍须持有主工作区共享锁并串行；所有旧输入只读，勿使用个人库。
 
-v0.32联合源码检查：`verify_combat_v18.py --only march`验证114组行军/成长业务，`--native --only march-world`验证真实窗口、舰体和入门速度；`--only march-upgrade`须通过`XJ_MARCH_LEGACY_PROVENANCE`传入`logs/v49-march-legacy-source-*.json`中的已核实际v0.31旧输入。固定入口均为v49，实际EXE须至少0.32且PCK内存在对应参数，不能向旧EXE试探新参数。源码200项/6图通过，边界见61与`logs/v49-source-integration-checkpoint.json`，不等同自然成长或发行验收。
+v0.32联合源码检查：`verify_combat_v18.py --only march`验证114组行军/成长业务，`--native --only march-world`验证真实窗口、舰体和入门速度；`--only march-upgrade`须通过`XJ_MARCH_LEGACY_PROVENANCE`传入中的已核实际v0.31旧输入。固定入口均为v49，实际EXE须至少0.32且PCK内存在对应参数，不能向旧EXE试探新参数。源码200项/6图通过，边界见61，不等同自然成长或发行验收。
 
-v0.31正式Windows包已交付：最终包15组925项/36图、正式目录另6项与文件/ZIP一致性通过，汇总`logs/v48-final-candidate-checkpoint.json`和`logs/v48-delivery-verification.json`。下文开发检查点的“待验”只描述当时范围，当前状态见[26](../doc/26-开发阶段与交付记录.md)。完整目标继续S34和S29中后期，相关功能合并开发后统一验收。
+v0.31正式Windows包已交付：最终包15组925项/36图、正式目录另6项与文件/ZIP一致性通过。下文开发检查点的“待验”只描述当时范围，当前状态见[26](../doc/26-开发阶段与交付记录.md)。完整目标继续S34和S29中后期，相关功能合并开发后统一验收。
 
-保留策略：`--only retention`使用固定v48入口和`XJ_RETENTION_V48_INPUTS`指定的测试输入清单，在副本中验证成功保存后的独立清理、清理事务中断、已提交端点不回滚、旧手动/升级/跨世界引用保护及空间复用。原始输入只读核对SHA256；不得传入个人库。68项初次源码证据见`logs/v18-source-headless-174b99f8-7ec2-4017-a2f3-edbb09a860a7.json`，追加跨世界断言已在最终实际包74项通过。
+保留策略：`--only retention`使用固定v48入口和`XJ_RETENTION_V48_INPUTS`指定的测试输入清单，在副本中验证成功保存后的独立清理、清理事务中断、已提交端点不回滚、旧手动/升级/跨世界引用保护及空间复用。原始输入只读核对SHA256；不得传入个人库。68项初次源码证据，追加跨世界断言已在最终实际包74项通过。
 
 自然成长：`verify_combat_v18.py --only natural-growth`通过固定v45入口，从正常新世界完成五段教学和三类普通合同，再用实际收入购船、配装及招募。headless按固定渲染步长重放，模拟频率和玩法数值不变；没有资金、资产、资格、任务事件、姿态或时钟夹具，结果不代表人工乐趣。`natural-checkpoint`只加载SHA256匹配的已关闭回放库，比较全部108组/RNG在Main表现回调之前的读取边界；原始失败报告和通过的补验必须分开引用。`natural-recovery`从有组合来源凭据的正常世界副本验证真实NPC损失、救援、治疗和付费替代舰；源码24项通过，实际包待验。详见[67](../doc/67-自然成长经济与失败恢复验证.md)。
 
-缓存对照：`prepare_cache_reference_v47.py`从固定已提交源码生成两份带SHA256的测试参考，分别通过`XJ_MARKET_CACHE_V47_REFERENCE`及`XJ_MARKET_CACHE_V47_SPAWN_REFERENCE`传入`--only market-cache`。40项完整108组对照覆盖数学顺序、临界补货、目录替换和NPC生命周期；ID时钟是明示夹具。性能定位的临时源码插桩须核对摘要并在finally恢复，不将它混入发行源码。结果汇总`logs/v47-source-checkpoint.json`。
+缓存对照：`prepare_cache_reference_v47.py`从固定已提交源码生成两份带SHA256的测试参考，分别通过`XJ_MARKET_CACHE_V47_REFERENCE`及`XJ_MARKET_CACHE_V47_SPAWN_REFERENCE`传入`--only market-cache`。40项完整108组对照覆盖数学顺序、临界补货、目录替换和NPC生命周期；ID时钟是明示夹具。性能定位的临时源码插桩须核对摘要并在finally恢复，不将它混入发行源码。结果。
 
 早期旧档链：`prepare_legacy_chain_index_v44.py --early`校验format9–15的保留摘要与原SQL字段/主键；11–15另有实际旧PCK创建凭据，9/10仅有保留清单和历史输入登记，不扩大其来源结论。`legacy-early`复用固定v44入口；`legacy-boundary`用于从固定历史提交重建实际旧包得到的format6/8，准备和验收结果另行记录。引擎操作一律持有主工作区共享锁并串行。
 
 S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增SQL，`build_catalog.py --output jiaoben/tmp/fleet-candidate.db`执行闭合校验，`store_generate_fleet.py`只生成028/固定v0.23适配器和九组新状态（共108组），保护旧历史SQL。`verify_combat_v18.py --only owned-fleet owned-fleet-travel`使用fresh UUID库检查船员/部署业务和旅行事务；`--native --only owned-fleet-world`检查真实Main/GUI、故障连接活动世界绑定、物理跟随、AU取消/抵达及三种布局。实际包沿用固定`--xj-verify-owned-fleet[-travel|-world]-v40`入口，尚未执行包验收，禁止通用EXE `--script`。
 
-旅行103项、原生75项/5图的接线检查点见`logs/v40-travel-ui-checkpoint.json`，规格和证据边界见[66](../doc/66-自有舰队船员与辅助无人机.md)。资金、舰体、许可、姿态和遭遇隔离为声明夹具；故障须实际命中一次，不能仅凭资金未改变声称SQL回滚。独立工作树执行时额外持有主工作区`E:\星际战舰\jiaoben\tmp\feature-audit.lock`，引擎导入/检查/原生运行保持串行。剩余联合边界、真实旧PCK升级及最终发行仍待完成，不正常启动开发源码处理个人档。
+旅行103项、原生75项/5图的接线检查点，规格和证据边界见[66](../doc/66-自有舰队船员与辅助无人机.md)。资金、舰体、许可、姿态和遭遇隔离为声明夹具；故障须实际命中一次，不能仅凭资金未改变声称SQL回滚。独立工作树执行时额外持有主工作区`E:\星际战舰\jiaoben\tmp\feature-audit.lock`，引擎导入/检查/原生运行保持串行。剩余联合边界、真实旧PCK升级及最终发行仍待完成，不正常启动开发源码处理个人档。
 
-辅助机源码使用`verify_combat_v18.py --native --only auxiliary-world`，固定入口`--xj-verify-auxiliary-world-v41`、fresh `auxiliary-world-v41`目录；禁止默认初始化或通用导出EXE `--script`。最终84项/6图通过，覆盖真实修复/探测/遮挡/弹丸拦截/通信返航/补充及108组和RNG重开，证据`logs/v41-auxiliary-checkpoint.json`。损伤、初始资产、目标/母舰边界姿态、遮挡体、弹丸伤害与TTL时钟为明确夹具；不将其记为自然流程。旧回调须通过弱引用安全返回，机库展示的渲染帧相机使用正确插值并更新资源摘要，不忽略引擎警告。母舰损毁/超时、自有母舰联合和实际包仍待验，规格见66。
+辅助机源码使用`verify_combat_v18.py --native --only auxiliary-world`，固定入口`--xj-verify-auxiliary-world-v41`、fresh `auxiliary-world-v41`目录；禁止默认初始化或通用导出EXE `--script`。最终84项/6图通过，覆盖真实修复/探测/遮挡/弹丸拦截/通信返航/补充及108组和RNG重开。损伤、初始资产、目标/母舰边界姿态、遮挡体、弹丸伤害与TTL时钟为明确夹具；不将其记为自然流程。旧回调须通过弱引用安全返回，机库展示的渲染帧相机使用正确插值并更新资源摘要，不忽略引擎警告。母舰损毁/超时、自有母舰联合和实际包仍待验，规格见66。
 
 向实际EXE执行`owned-fleet*`或`auxiliary-world`前，工具只读检查文件版本并拒绝低于0.31.0的客户端。已验证正式0.30.0.0在启动前被拒绝。旧包升级夹具须选择其已经存在的固定诊断入口，不能把新版参数交给旧EXE尝试。
 
-编队关联批次：`prepare_fleet_upgrade_v42.py --legacy-executable <已核v0.30正式EXE>`只用旧包原有fitting入口产出关闭的format24夹具；不传通用`--script`，不读取用户库。将输出的database及JSON路径分别设为`XJ_FLEET_LEGACY_DATABASE`、`XJ_FLEET_LEGACY_PROVENANCE`，运行`verify_combat_v18.py --only fleet-integration fleet-upgrade`。源码45/23项、原场景86项与辅助机原生85项合计239项/6图通过，汇总`logs/v42-integration-checkpoint.json`。升级严格比较原99组与RNG，只允许四种新增辅助产品的商店行；工程报价桩与贡献/工资边界不当作物理或自然流程。新两个入口也受启动前客户端版本检查保护。下一批范围见66。
+编队关联批次：`prepare_fleet_upgrade_v42.py --legacy-executable <已核v0.30正式EXE>`只用旧包原有fitting入口产出关闭的format24夹具；不传通用`--script`，不读取用户库。将输出的database及JSON路径分别设为`XJ_FLEET_LEGACY_DATABASE`、`XJ_FLEET_LEGACY_PROVENANCE`，运行`verify_combat_v18.py --only fleet-integration fleet-upgrade`。源码45/23项、原场景86项与辅助机原生85项合计239项/6图通过。升级严格比较原99组与RNG，只允许四种新增辅助产品的商店行；工程报价桩与贡献/工资边界不当作物理或自然流程。新两个入口也受启动前客户端版本检查保护。下一批范围见66。
 
-实际战斗/母舰边界：`verify_combat_v18.py --native --only owned-combat-world auxiliary-boundaries`，对应两个固定v43入口及fresh目录。自有母舰从原舰支付资源，原有高危NPC数值不变；交战、命中、回收和原舰损失真实模拟。无关遭遇须使用各自数据库再生计时隔离，不只将alive置false。母舰致命伤、在外期限、返航末0.1秒为明示边界。暂停计时通过实际pause页面核验并在恢复后继续，不能把未恢复误报为返航失败。最新四组289项/13图证据`logs/v43-combat-boundaries-checkpoint.json`，含同型舰旅行和管理/AU回归；混合报告仅逐组接受通过项，失败日志保留。
+实际战斗/母舰边界：`verify_combat_v18.py --native --only owned-combat-world auxiliary-boundaries`，对应两个固定v43入口及fresh目录。自有母舰从原舰支付资源，原有高危NPC数值不变；交战、命中、回收和原舰损失真实模拟。无关遭遇须使用各自数据库再生计时隔离，不只将alive置false。母舰致命伤、在外期限、返航末0.1秒为明示边界。暂停计时通过实际pause页面核验并在恢复后继续，不能把未恢复误报为返航失败。最新四组289项/13图，含同型舰旅行和管理/AU回归；混合报告仅逐组接受通过项，失败日志保留。
 
-完整回归与旧档链：`py -m unittest discover -s jiaoben/tests`当前363项通过；`build_fleet_assets.py`生成两种静态图标与八个正式模块/配方映射。`prepare_legacy_chain_index_v44.py`校验保留的实际旧PCK测试库和来源摘要，输出`XJ_LEGACY_CHAIN_INDEX`所用索引；`verify_combat_v18.py --only legacy-chain`通过固定v44入口验证七个历史格式16/17/18/19/20/21/23，107项通过。汇总`logs/v44-regression-checkpoint.json`。更早旧档、新档自然成长和最终EXE/PCK仍待验证；禁止使用个人库补充测试样本。
+完整回归与旧档链：`py -m unittest discover -s jiaoben/tests`当前363项通过；`build_fleet_assets.py`生成两种静态图标与八个正式模块/配方映射。`prepare_legacy_chain_index_v44.py`校验保留的实际旧PCK测试库和来源摘要，输出`XJ_LEGACY_CHAIN_INDEX`所用索引；`verify_combat_v18.py --only legacy-chain`通过固定v44入口验证七个历史格式16/17/18/19/20/21/23，107项通过。更早旧档、新档自然成长和最终EXE/PCK仍待验证；禁止使用个人库补充测试样本。
 
 ## 关于下文逐轮记录
 
@@ -83,7 +83,7 @@ Windows 原生运行此后已随 v0.36.0 起的正式交付完成，当前交付
 
 2026-10-14的v0.33交付后清理已完成：删除3470个生成/中间文件，逻辑大小4.926 GiB；tmp/logs仅留`.gitkeep`，Godot/Python缓存已移除，正式包仅留`0.33.0-d64e8897-20261014-174717`。最新正式包内的聚合验收及`cleanup-verification.json`保留，源码/母版/维护脚本/升级数据库和个人存档校验一致；不要将下文历史临时路径视为仍然存在的输入。
 
-2026-10-12清理6432个忽略文件、31826797209字节（约29.6 GiB）；当前tmp约708 MiB。完整盘点、删除清单和保留文件SHA256核对在`logs/cleanup-20261012-{inventory,plan,deletion,verification}.json`，摘要见[交付记录](../doc/26-开发阶段与交付记录.md)。本次未改游戏逻辑，不重复运行游戏验收。
+2026-10-12清理6432个忽略文件、31826797209字节（约29.6 GiB）；当前tmp约708 MiB。完整盘点、删除清单和保留文件SHA256核对，摘要见[交付记录](../doc/26-开发阶段与交付记录.md)。本次未改游戏逻辑，不重复运行游戏验收。
 
 S24/S27/S28联合批次：`verify_combat_v18.py --only scenarios`检查三类挑战、货物/封锁/结果及99组恢复；`--native --only scenarios-world`使用真实Main、焦点/指针、物理武器、护航与移动远修、HUD和JSON3导出，实际包加`--executable`。`prepare_scenarios_upgrade_v39.py --legacy-executable <已验证v0.29 EXE>`仅经旧包固定fitting入口创建关闭的format23测试库；传`XJ_SCENARIOS_LEGACY_DATABASE`运行`--only scenarios-upgrade`，核027/内容分支失败回滚、原87组和旧手动档。全部使用fresh UUID和共用审计锁；不得用通用`--script`启动导出EXE。SQL及旧定义字节保护在`tests/test_scenarios.py`，当前边界见[65](../doc/65-配装挑战航路封锁与行为记录.md)。
 
@@ -93,7 +93,7 @@ S24/S27/S28联合批次：`verify_combat_v18.py --only scenarios`检查三类挑
 
 状态反馈/情报批次：`store_generate_situational.py`仅生成024/v0.20适配器，两组观测追加至format21；旧001–023、适配器及145表/四视图保持。S20/S21功能合并完成后再统一专项、适用回归与实际包验收；开发中仅做必要编译/故障定位。规则见[63](../doc/63-状态反馈与航行情报.md)。
 
-雇佣支援v0.27.0已验收：`build_hire.py`追加2表及严格`hire_`前缀的NPC/锚点；`store_generate_hire.py`仅生成023/v0.19并保护完整旧守卫。`test_hire.py`验证原143表/四视图、历史SQL原字节、回滚和费用/演员负例；`verify_combat_v18.py --only hire`覆盖合同与真实旧v0.26升级，原生`hire-world hire-travel-world`覆盖物理协同、AU/跨门费用容量与失败恢复、高缩放。实际EXE/PCK29组6320项/179图、正式目录另6项及14文件一致性通过，汇总`logs/v35-delivery-verification.json`，规则/夹具边界见[62](../doc/62-雇佣支援与舰队指令.md)。后续按多个关联目标合并开发后统一适用验收，开发中仅做必要编译与故障定位。
+雇佣支援v0.27.0已验收：`build_hire.py`追加2表及严格`hire_`前缀的NPC/锚点；`store_generate_hire.py`仅生成023/v0.19并保护完整旧守卫。`test_hire.py`验证原143表/四视图、历史SQL原字节、回滚和费用/演员负例；`verify_combat_v18.py --only hire`覆盖合同与真实旧v0.26升级，原生`hire-world hire-travel-world`覆盖物理协同、AU/跨门费用容量与失败恢复、高缩放。实际EXE/PCK29组6320项/179图、正式目录另6项及14文件一致性通过，规则/夹具边界见[62](../doc/62-雇佣支援与舰队指令.md)。后续按多个关联目标合并开发后统一适用验收，开发中仅做必要编译与故障定位。
 
 边疆阶段：`build_frontier.py`只追加五表及有明确前缀的NPC/锚点；`store_generate_frontier.py`仅生成022/v0.18，复制旧守卫并只放开有完整新历史的主权关联与有严格友方归属的补给舰/信标远修。`verify_combat_v18.py --only frontier`验证实际阶段支付、双目标、重建、主权循环、报价和68组恢复；资格/到达/长策略时间明确作为夹具。`prepare_roles_upgrade_v32.py --frontier --legacy-executable <已核验v0.25 EXE>`通过旧包固定fitting入口生成历史占领与活动战争、订单/研究/在途货物format18档；`XJ_FRONTIER_LEGACY_DATABASE`启用真实升级与失败回滚。原生`frontier-world`、`frontier-demolition-world`、`frontier-governance-world`验证真实物理护送/受击/远修、两类战斗与重建、支付/运输/防守/精确缩放；失守及回收的边界另有Core与SQL检查。规则和未完成验收见[61](../doc/61-边疆战争与重建争夺.md)。
 
@@ -171,7 +171,7 @@ v0.15.0空间专项从根目录运行`py jiaoben/verify_combat_v18.py --only mis
 
 正式游戏逻辑和运行资源放在 `code/`；对外或长期使用的说明放在 `doc/`。下载缓存可以删除，正式源文件与测试成果不能当作临时文件清理。
 
-数值检查入口为 `tests/test_balance.py`；加 `--report` 将结果写入 `logs/数值校验报告.md`。报告可重建，持久的范围说明和验收结果摘要维护在 [交付记录](../doc/26-开发阶段与交付记录.md)。测试中的公式是独立参考模型，不代表 Godot 玩法或进度存档已实现。
+数值检查入口为 `tests/test_balance.py`；加 `--report` 将结果写入。报告可重建，持久的范围说明和验收结果摘要维护在 [交付记录](../doc/26-开发阶段与交付记录.md)。测试中的公式是独立参考模型，不代表 Godot 玩法或进度存档已实现。
 
 首版内容检查见 `tests/test_content.py`，进度 DDL/夹具检查见18，接口/占位及 `tests/test_rng_contract.py` 随机流契约检查见21，实际工具链及 `prepare_progress_probe.py` 正式SQL原生探针复现见22。运行专用探针时不得向正式用户档写入数据。
 
@@ -181,29 +181,29 @@ macOS生命周期验收执行 `python3.14 jiaoben/tests/client_edges_run.py --au
 
 v0.5表现重塑检查：`tests/camera_controls_v2.gd` 覆盖相对输入、九舰三分辨率镜头及机库/飞行切换；`tests/ui_visual_v2.gd` 覆盖实际界面与缩放并输出原生截图；`art/test_hangar_v2.gd` 检查九舰展示及材质/几何边界。图形验证不加 `--headless`，音频使用 `--audio-driver CoreAudio`。艺术构建辅助代码及独立资源来源见 `art/`、`install_interface_v2_assets.py` 和 `interface_v2_sources.json`；技能安装身份在 `gamedev_skills_install.json`。全部测试使用tmp库，不能删除用户进度。
 
-UI 生命周期补充检查为 `tests/ui_lifecycle_v2.gd`。对应v0.5及存档卡片阶段的 headless 与原生 Metal/CoreAudio 均 27/27 PASS、`engine_diagnostics=0`，日志分别为 `logs/ui-lifecycle-v2-headless.log`、`logs/ui-lifecycle-v2-native.log`，未见错误、警告或资源泄漏；该阶段布局检查75/75 PASS、42 张截图。生命周期测试覆盖首次悬停、快速切页、销毁控件、独立旧档继续、失效目标/音效/特效引用、暂停 UI 音效自然结束与退出。测试 teardown 在释放节点后等待两帧和 0.25 秒，供音频混音线程释放引用；该等待只属于夹具，不是生产退出或保存规则。
+UI 生命周期补充检查为 `tests/ui_lifecycle_v2.gd`。对应v0.5及存档卡片阶段的 headless 与原生 Metal/CoreAudio 均 27/27 PASS、`engine_diagnostics=0`，日志分别，未见错误、警告或资源泄漏；该阶段布局检查75/75 PASS、42 张截图。生命周期测试覆盖首次悬停、快速切页、销毁控件、独立旧档继续、失效目标/音效/特效引用、暂停 UI 音效自然结束与退出。测试 teardown 在释放节点后等待两帧和 0.25 秒，供音频混音线程释放引用；该等待只属于夹具，不是生产退出或保存规则。
 
 与实际游戏并行运行测试时，必须显式传入 `--log-file` 的独立绝对路径，例如 `--log-file /Users/a0000/workspace/xingjizhanjian/jiaoben/logs/ui-lifecycle-v2-engine-native.log`，不与 AppSupport 的实际 `godot.log` 共用。headless 和原生运行分别保留进程输出与引擎日志；原生音频检查传入 `--audio-driver CoreAudio`。
 
-实际发布诊断使用内置 `--xj-verify-presentation` 入口，不加载外部脚本。`build_client.py` 为每次检查创建独立 fresh `jiaoben/tmp/release-presentation/<UUID>/progress.db`，通过 `XJ_TEST_DATABASE` 传入；主程序拒绝已有数据库及 tmp 外路径。构建脚本要求实际Mac包的Metal/CoreAudio **33项检查、6张截图**，包括首页、机库、NPC、飞行、档案卡片和靠站提示，使用独立 `--log-file`。先行源码33/33 PASS的 `logs/source-v3-presentation2.log` 保留；实际最终Release `0.6.0-3196c031-20261003-054157` 已另行33/33 PASS，见实际包日志与引擎日志。截图在 `tmp/release-presentation/b7a35a15-15ad-4fca-bad4-a65372ff10b6/`，该目录内进度库只属于夹具。额外人工操作复查因Mac锁屏尚未完成，不记录为人工PASS。最终包路径和摘要见 [交付记录](../doc/26-开发阶段与交付记录.md)。
+实际发布诊断使用内置 `--xj-verify-presentation` 入口，不加载外部脚本。`build_client.py` 为每次检查创建独立 fresh `jiaoben/tmp/release-presentation/<UUID>/progress.db`，通过 `XJ_TEST_DATABASE` 传入；主程序拒绝已有数据库及 tmp 外路径。构建脚本要求实际Mac包的Metal/CoreAudio **33项检查、6张截图**，包括首页、机库、NPC、飞行、档案卡片和靠站提示，使用独立 `--log-file`。先行源码33/33 PASS的保留；实际最终Release `0.6.0-3196c031-20261003-054157` 已另行33/33 PASS，见实际包日志与引擎日志。截图在 `tmp/release-presentation/b7a35a15-15ad-4fca-bad4-a65372ff10b6/`，该目录内进度库只属于夹具。额外人工操作复查因Mac锁屏尚未完成，不记录为人工PASS。最终包路径和摘要见 [交付记录](../doc/26-开发阶段与交付记录.md)。
 
 ## v0.6表现与易用性检查
 
 | 入口 | 范围与当前证据 |
 | --- | --- |
-| `tests/font_v3_glyphs.py`、`tests/font_theme_v3.gd` | 官方OTF字形/UTF-8检查、共享字体、九项资源、Theme与人员Label3D。最终报告`logs/font-v3-final-coverage.json`覆盖103文件、84张内容表、816字符，缺字/编码替换字0；独立字体headless29、原生34项/5图通过，不代替Windows实机。 |
+| `tests/font_v3_glyphs.py`、`tests/font_theme_v3.gd` | 官方OTF字形/UTF-8检查、共享字体、九项资源、Theme与人员Label3D。最终报告覆盖103文件、84张内容表、816字符，缺字/编码替换字0；独立字体headless29、原生34项/5图通过，不代替Windows实机。 |
 | `tests/interaction_v3.gd`、`tests/interaction_v3_run.py` | 真实Main的F候选/指定鼠标目标、范围速度权限、门充能取消、暂停与键盘/指针阻塞。headless51、原生55项通过；原生OS鼠标检查与headless分开。 |
-| `build_navigation_v3.py`、`tests/navigation_v3.gd` | 重建只读导航SQLite；雷达范围、选中连线/离屏、天体只航向和高缩放布局。最新headless62、整机原生67项/5图通过，使用当前星空/地貌；最终日志`logs/navigation-v3-native-final.log`。 |
+| `build_navigation_v3.py`、`tests/navigation_v3.gd` | 重建只读导航SQLite；雷达范围、选中连线/离屏、天体只航向和高缩放布局。最新headless62、整机原生67项/5图通过，使用当前星空/地貌；最终。 |
 | `art/build_station_v3.py`、`art/build_station_manifest_v3.py`、`art/test_station_v3.gd`、`art/preview_station_v3.gd` | 原创空间站构建、清单、模型/材质及原碰撞锚点保持；headless与原生各114项通过。预览产物在tmp；整机与实际包固定诊断分开记录。 |
 | `art/build_ships_v3.py`、`art/build_ship_v3_manifest.py`、`art/test_ship_v3.gd`、`art/preview_ship_v3.gd` | 九类舰与静默敌舰工业视觉、原wrapper碰撞/挂点保持；headless与原生契约各410项通过，10个GLB＋shader共11运行资源。模型合计673,622三角；自动导入LOD不等于手工LOD或性能保证。 |
 | `tests/presentation_failures.gd`、`tests/failure_factory.gd` | 真实Main/Store准备路径注入玩家/NPC模型失败，验证模拟不推进和旧world/epoch/slot保持，恢复后可再加载保存。headless＋显式CoreAudio28项通过、严格诊断0；不向个人库写入故障对象。 |
 
-最终整机原生回归汇总在 `logs/v3-final-native-acceptance.log`：导航67/5图、布局75/42图、镜头208、客户端36、物理战斗18、生命周期27，六脚本均PASS、退出0、diagnostics=0。对应日志前缀为 `navigation-v3-native-final`、`ui-v3-layout-final`、`camera-v3-final`、`client-v3-final`、`combat-v3-final`、`lifecycle-v3-final`，各有独立引擎日志。实际Release另行校验124项原始资源、ad-hoc签名、六项数据库与33项表现诊断并通过；构建身份记录源提交与构建时 `source_dirty=false`。Windows x64导出、PE/PCK/DLL检查通过，Windows原生运行未验收；源码、实际包固定诊断和人工复查保持独立结论。
+最终整机原生回归：导航67/5图、布局75/42图、镜头208、客户端36、物理战斗18、生命周期27，六脚本均PASS、退出0、diagnostics=0。对应日志前缀为 `navigation-v3-native-final`、`ui-v3-layout-final`、`camera-v3-final`、`client-v3-final`、`combat-v3-final`、`lifecycle-v3-final`，各有独立引擎日志。实际Release另行校验124项原始资源、ad-hoc签名、六项数据库与33项表现诊断并通过；构建身份记录源提交与构建时 `source_dirty=false`。Windows x64导出、PE/PCK/DLL检查通过，Windows原生运行未验收；源码、实际包固定诊断和人工复查保持独立结论。
 
 星空和地貌来源见 `../code/assets/navigation_v3/sources.json`；正式生成图放code，下载/制作中间文件、预览和日志仍放tmp/logs。新版资源说明分别在 `navigation_v3`、`station_v3`、`ship_v3` 的README；不要启动第二个Godot原生测试或同时编辑器导入，先与正在验收的整合者协调运行窗口。所有夹具继续使用独立临时库，不复用个人存档。
 
 
-v0.6.1航行视角补丁：`tests/flight_visibility_v4.gd` 验证独立SQLite中舰首存读档、HUD说明、“显示舰船”按钮、镜头恢复不改变运动、V阻断与高缩放布局；本轮验收结果见26。实际发布入口现要求35项检查和6张截图，新增舰首模式说明与找回舰船检查；上文v0.6的33项属于历史结果。源码原生四项回归汇总为 `logs/v061-native-acceptance.log`；各测试和发布包均使用独立tmp库及独立引擎日志。
+v0.6.1航行视角补丁：`tests/flight_visibility_v4.gd` 验证独立SQLite中舰首存读档、HUD说明、“显示舰船”按钮、镜头恢复不改变运动、V阻断与高缩放布局；本轮验收结果见26。实际发布入口现要求35项检查和6张截图，新增舰首模式说明与找回舰船检查；上文v0.6的33项属于历史结果。源码原生四项回归汇总；各测试和发布包均使用独立tmp库及独立引擎日志。
 
 
 v0.6.1专项已完成：`flight_visibility_v4.gd` headless/CoreAudio44项、Metal/CoreAudio49项（真实OS hover3项/2图）均通过且严格诊断0。真实SQLite保存舰首、重启继续、按钮恢复跟随并保存再重启全部通过。实际新包 `0.6.1-74ccdab4-20261003-133018` 的35项表现/6图、六项数据库、资源摘要及临时签名另行通过；相关日志前缀为构建ID，截图目录 `tmp/release-presentation/444a75a5-5b57-43fc-b5ca-8ac9701337be/`。窗口已释放，未写个人进度；Windows原生仍待实机验收，最新包位置见26。
@@ -211,7 +211,7 @@ v0.6.1专项已完成：`flight_visibility_v4.gd` headless/CoreAudio44项、Meta
 
 v0.6.2目标标注专项：`tests/target_annotations_v5.gd` 使用独立fresh Main/SQLite，冻结玩法物理并保留真实render回调。headless/CoreAudio54项、Metal/CoreAudio58项/4图通过；验证单一名称Label、无阴影/描边、选中目标排除重复通道、模型实例不变、动态/静止切换、三视角、四组布局与失效/暂停清理。NPC通过未改SQLite原型创建测试runtime DTO，再走生产sync_entities，不能冒充自然任务解锁。原生与headless日志前缀`target-annotations-v5`，所有检查严格诊断0。实际发布端点现要求37项/6图，新增清晰名称和唯一标注/Model检查；源码与实际包证据见26，不使用旧35项代替。
 
-v0.6.2实际新包 `0.6.2-8d86553e-20261003-141501` 已通过37项Metal/CoreAudio表现检查/6图、六项数据库、124项原始资源摘要与ad-hoc签名。构建时源提交 `8d86553e0251234a6700d38c8268bf7889ebdbd3`、`source_dirty=false`；构建日志为 `logs/client-v062-build.log`，实际包日志前缀为构建ID，八份导出/签名/数据库/表现及引擎日志严格诊断0。截图目录 `tmp/release-presentation/24f66996-dade-48ba-a6de-fa65b3e7f1be/`，其中靠站截图已经查看，显示单层名称和选中框。Windows Release及PE/PCK/DLL检查通过，原生运行尚未验证；交付物和摘要见 [26](../doc/26-开发阶段与交付记录.md)。
+v0.6.2实际新包 `0.6.2-8d86553e-20261003-141501` 已通过37项Metal/CoreAudio表现检查/6图、六项数据库、124项原始资源摘要与ad-hoc签名。构建时源提交 `8d86553e0251234a6700d38c8268bf7889ebdbd3`、`source_dirty=false`；实际包日志前缀为构建ID，八份导出/签名/数据库/表现及引擎日志严格诊断0。截图目录 `tmp/release-presentation/24f66996-dade-48ba-a6de-fa65b3e7f1be/`，其中靠站截图已经查看，显示单层名称和选中框。Windows Release及PE/PCK/DLL检查通过，原生运行尚未验证；交付物和摘要见 [26](../doc/26-开发阶段与交付记录.md)。
 
 
 ## v0.7.0曦航对标与自动导航
@@ -232,7 +232,7 @@ v0.6.2实际新包 `0.6.2-8d86553e-20261003-141501` 已通过37项Metal/CoreAudi
 | `tests/navigation_render_poses_v7.gd` | 567项通过：实际引擎插值与生产NavHUD，80帧插值差异，标记/虚线/雷达使用一致姿态；接触体的测试运动不写入正式平衡定义或存档。 |
 | `tests/flight_motion_visual_v7.gd` | 490项通过：实际Main物理与render回调、真实行星，120插值帧，所测中心误差0；headless没有图像证据。原生497项/6图通过，已查看代表帧，具体数据见33。 |
 
-上述当前日志分别为 `logs/camera-pointer-v7-headless{,-engine}.log`、`logs/overview-commands-v7-headless{,-engine}.log`、`logs/scene-rendering-v7-{headless,engine-headless}.log`、`logs/navigation-render-poses-v7-{headless,engine-headless}.log`、`logs/flight-motion-v7-{headless,engine-headless}.log`；各组stdout和独立引擎日志未见错误、警告、脚本错误或退出泄漏。数目对应当前完整运行，后续新增检查须以新的执行结果更新。
+上述当前日志分别；各组stdout和独立引擎日志未见错误、警告、脚本错误或退出泄漏。数目对应当前完整运行，后续新增检查须以新的执行结果更新。
 
 完整输入检查可从工作区根目录执行`/usr/local/bin/python3.14 jiaoben/tests/camera_pointer_v7_run.py`。其他GDScript入口使用`sh jiaoben/run_godot.sh --headless --audio-driver CoreAudio --path code --script ../jiaoben/tests/<文件名>.gd --log-file <本轮独立引擎日志绝对路径>`，并单独保存stdout。去掉`--headless`或使用`--native`之前必须与整合者协调独占原生窗口；不要并行打开Godot原生测试或编辑器导入。
 
@@ -244,9 +244,9 @@ v0.6.2实际新包 `0.6.2-8d86553e-20261003-141501` 已通过37项Metal/CoreAudi
 
 `python3.14 jiaoben/tests/mining_resources_v8_run.py` 执行真实Main与SQLite采矿检查；`--native` 使用Metal/CoreAudio及实际窗口焦点，需独占图形测试窗口。所有进度、日志、截图位于`tmp/`或`logs/`，不访问个人档案。
 
-最终headless **160/160**、原生 **170/170与9图**通过，退出0，完整输出与独立引擎日志严格错误、警告、泄漏0。日志为`logs/mining-resources-v8-{headless,native}{,-engine}.log`，原生截图在`tmp/mining-resources-v8/native/`。覆盖实际矿点资格、F、距离/视线/设备、有限付费周期、双采集头、末单位立即保存、满舱/配额、再生/暂停/SQLite重开、远距离总览、当前/已访问星系矿量及未知情报、四组布局和真实文字高度；T2实际接取、绑定样本、转仓/归还清理、补领、保存的样本损失、重开补采与一次性实物结算；普通借船同attempt归还重领保持额度0及唯一SQL合同、发行历史追加。普通额度0和历史样本损失是明确状态夹具，不声称自然采完600单位或自然损毁；非采矿前置任务及位置/解锁采用明确准备，不作为自然通关或个人档案人工试玩证据。
+最终headless **160/160**、原生 **170/170与9图**通过，退出0，完整输出与独立引擎日志严格错误、警告、泄漏0。原生截图在`tmp/mining-resources-v8/native/`。覆盖实际矿点资格、F、距离/视线/设备、有限付费周期、双采集头、末单位立即保存、满舱/配额、再生/暂停/SQLite重开、远距离总览、当前/已访问星系矿量及未知情报、四组布局和真实文字高度；T2实际接取、绑定样本、转仓/归还清理、补领、保存的样本损失、重开补采与一次性实物结算；普通借船同attempt归还重领保持额度0及唯一SQL合同、发行历史追加。普通额度0和历史样本损失是明确状态夹具，不声称自然采完600单位或自然损毁；非采矿前置任务及位置/解锁采用明确准备，不作为自然通关或个人档案人工试玩证据。
 
-最终相关headless回归为UI **104**、总览 **52**、内置表现诊断 **59**，日志`logs/v081-final-{ui,overview,presentation}{,-engine}.log`，均退出0且严格诊断0。本轮其余检查为玩法144、完整内容216、SQLite247；字体111源码文件/84表/857字符、缺字和编码缺陷0，证据见[交付记录](../doc/26-开发阶段与交付记录.md)。
+最终相关headless回归为UI **104**、总览 **52**、内置表现诊断 **59**，均退出0且严格诊断0。本轮其余检查为玩法144、完整内容216、SQLite247；字体111源码文件/84表/857字符、缺字和编码缺陷0，证据见[交付记录](../doc/26-开发阶段与交付记录.md)。
 
 发布诊断现在固定要求**59项检查、10张截图**，新增实际资源表查询、远距离矿量及文字几何、星图情报、真实最后单位采矿产出、耗尽拒绝及暂停倒计时。构建脚本仍须从干净源执行实际Mac Release独立运行，不能用源检查代替实际包。实际包身份和结果见26及下段。
 
@@ -257,7 +257,7 @@ v0.6.2实际新包 `0.6.2-8d86553e-20261003-141501` 已通过37项Metal/CoreAudi
 
 `/usr/local/bin/python3.14 jiaoben/tests/hud_layout_v9_run.py` 使用真实Main、独立SQLite和Viewport GUI事件检查四组布局（1440×900、1280×720，各100%/200%）；`--native` 使用独占Metal/CoreAudio窗口与实际焦点、鼠标位置，`--wide` 追加1920×1080。普通保存请求由已支付的真实采矿周期进入等待，通过实际GUI点击取消，验证只清等待请求、矿量及已支付周期保持。菜单点击验证实际页面、输入消费和键盘防护，失败时记录鼠标/焦点/指针状态而不直接清理状态规避断言。
 
-几何检查涵盖通知与两侧/顶栏/底座避让、相同通知去重及不同反馈保留、舰况与设备同一HBox同排、九舰真实已装/空SLOT可滚动访问、正常总览拉长与紧凑详情/矿量/每个动作/末行可访问、文字实际高度及完整tooltip。九舰通过明确创建/选择、矿船依法标准配装、其他舰保留空槽；矿点解锁和位置为显式定位夹具，不声称自然买齐九舰、自然通关或个人存档试玩。日志为`logs/hud-layout-v9-{headless,native}{,-engine}.log`，追加宽屏的日志带`-wide`；原生截图在`tmp/hud-layout-v9/native/`。最终headless246项，原生含宽屏324项/20图通过，严格错误/警告/泄漏0。相关UI104、生命周期27、源码内置表现66项通过，字体111文件/84表/858字符无缺字或编码缺陷。最终构建身份及证据边界见26及35。
+几何检查涵盖通知与两侧/顶栏/底座避让、相同通知去重及不同反馈保留、舰况与设备同一HBox同排、九舰真实已装/空SLOT可滚动访问、正常总览拉长与紧凑详情/矿量/每个动作/末行可访问、文字实际高度及完整tooltip。九舰通过明确创建/选择、矿船依法标准配装、其他舰保留空槽；矿点解锁和位置为显式定位夹具，不声称自然买齐九舰、自然通关或个人存档试玩。追加宽屏的日志带`-wide`；原生截图在`tmp/hud-layout-v9/native/`。最终headless246项，原生含宽屏324项/20图通过，严格错误/警告/泄漏0。相关UI104、生命周期27、源码内置表现66项通过，字体111文件/84表/858字符无缺字或编码缺陷。最终构建身份及证据边界见26及35。
 
 内置发布诊断现要求**66项检查、11张截图**，在原59项上增加顶部菜单、同排仪表/设备、总览高度、按钮文字及真实采矿中的等待保存/无重复通知/取消保持业务；新增`release-save-wait.png`。实际Mac Release须独立运行，源码headless结果不替代包验证。
 
@@ -267,9 +267,9 @@ v0.6.2实际新包 `0.6.2-8d86553e-20261003-141501` 已通过37项Metal/CoreAudi
 
 ## v0.8.3舰船姿态回正
 
-`/usr/local/bin/python3.14 jiaoben/tests/attitude_v10_run.py`运行真实Main/物理/独立SQLite；`--native`需独占Mac窗口、真实焦点与OS指针，使用Metal/CoreAudio。最终headless138项、原生146项/5图通过，完整输出及独立引擎日志严格诊断0，路径为`logs/attitude-v10-{headless,native}{,-engine}.log`及`tmp/attitude-v10/native/`。覆盖俯仰A/D、观察航向WS、总转速预算、Q/E按住与释放、四组精确/近垂直姿态、极点右轴连续、明确回正后相机/舰体右轴一致、实际导航保持及SQLite保存/关闭/重开两类姿态。初始位置、旧倾角和合法持久端点为明确夹具，未修改个人存档。
+`/usr/local/bin/python3.14 jiaoben/tests/attitude_v10_run.py`运行真实Main/物理/独立SQLite；`--native`需独占Mac窗口、真实焦点与OS指针，使用Metal/CoreAudio。最终headless138项、原生146项/5图通过，完整输出及独立引擎日志严格诊断0，路径及`tmp/attitude-v10/native/`。覆盖俯仰A/D、观察航向WS、总转速预算、Q/E按住与释放、四组精确/近垂直姿态、极点右轴连续、明确回正后相机/舰体右轴一致、实际导航保持及SQLite保存/关闭/重开两类姿态。初始位置、旧倾角和合法持久端点为明确夹具，未修改个人存档。
 
-当前操控headless280、原生294/2图复验通过。旧“释放WS后完整Basis冻结”契约改为前向不漂移、实际输入清零、残余滚转在同转速预算内收敛；non-FRONT A/D观察轴明确为世界上轴。导航渲染567、雷达/标记69、物理战斗18、生命周期27及源码内置70项通过；最终日志`logs/v083-{navigation-render,navigation,combat,lifecycle,presentation-source}-final{,-engine}.log`。导航tooltip检查维护为操控首行与完整紧凑雷达说明，未减少标记/虚线/插值覆盖。字体111文件/84表/858字符，无缺字或编码缺陷。
+当前操控headless280、原生294/2图复验通过。旧“释放WS后完整Basis冻结”契约改为前向不漂移、实际输入清零、残余滚转在同转速预算内收敛；non-FRONT A/D观察轴明确为世界上轴。导航渲染567、雷达/标记69、物理战斗18、生命周期27及源码内置70项通过；最终。导航tooltip检查维护为操控首行与完整紧凑雷达说明，未减少标记/虚线/插值覆盖。字体111文件/84表/858字符，无缺字或编码缺陷。
 
 发布门槛现为**70项表现检查、12张截图**，新增真实Flight回正及其总转速预算、显式滚转、真实镜头回正、精确垂直姿态，并新增`release-attitude-level.png`。实际Mac包必须独立运行6项数据库与70项表现，不以源测试代替；最终包身份与结果见26。Windows原生运行仍待实机。规则及镜头穿越极点的±上轴连续边界见[界面设计规范](../doc/76-界面设计规范与全界面整改.md)末节。
 
@@ -279,7 +279,7 @@ v0.6.2实际新包 `0.6.2-8d86553e-20261003-141501` 已通过37项Metal/CoreAudi
 
 从工作区根目录运行 `/usr/local/bin/python3.14 jiaoben/tests/business_list_v11_run.py`，默认使用headless/CoreAudio；追加 `--native` 使用独占Metal/CoreAudio窗口、真实焦点与OS指针。检查真实Main的报价及禁用原因、正常舰体/物品购买、舰队切换、仓储转移、出售、配装/卸装、保护资产限制、各业务列表布局/滚动与SQLite保存关闭重开。资金、解锁与目标位置为独立测试库中的显式准备，不把夹具当作自然通关或个人档案试玩。图片检查和业务动作检查互相不能替代。
 
-完整输出及独立引擎日志为 `logs/business-list-v11-{headless,native}{,-engine}.log`，原生截图位于 `tmp/business-list-v11/native/`。runner要求实际成功端点、退出0以及脚本错误/错误/警告/资源泄漏严格为0；具体检查数和发布状态以本轮实际日志及 [交付记录](../doc/26-开发阶段与交付记录.md) 为准。
+完整输出及独立引擎日志，原生截图位于 `tmp/business-list-v11/native/`。runner要求实际成功端点、退出0以及脚本错误/错误/警告/资源泄漏严格为0；具体检查数和发布状态以本轮实际日志及 [交付记录](../doc/26-开发阶段与交付记录.md) 为准。
 
 业务图片的正式资源与来源清单在 `../code/assets/business_v11/`，静态SVG构建和模型截图辅助脚本在 `art/`。从根目录依次执行：
 
@@ -290,11 +290,11 @@ sh jiaoben/run_godot.sh --audio-driver CoreAudio --path code --script ../jiaoben
 /usr/local/bin/python3.14 jiaoben/art/build_business_v11.py --finalize
 ```
 
-正式PNG产生后再执行工程导入，使Godot导入256×256透明舰体图片；测试或正式运行前确认导入已完成。渲染直接使用九类现有正式工业GLB及现有PBR材质，拒绝空图和贴边裁切；不会读取或改写玩家进度。114个原创SVG与9个实际GLB截图形成123项图片资源，174条ID映射包含配方复用，manifest不存价格、数量或另一套平衡数值。静态复核报告为 `logs/business-v11-assets-static-final.json`，PNG原生结果仍须配合实际业务界面和最终发布包验收。
+正式PNG产生后再执行工程导入，使Godot导入256×256透明舰体图片；测试或正式运行前确认导入已完成。渲染直接使用九类现有正式工业GLB及现有PBR材质，拒绝空图和贴边裁切；不会读取或改写玩家进度。114个原创SVG与9个实际GLB截图形成123项图片资源，174条ID映射包含配方复用，manifest不存价格、数量或另一套平衡数值。静态复核报告，PNG原生结果仍须配合实际业务界面和最终发布包验收。
 
 ## 任务导航、主线与战斗打捞检查
 
-`/usr/local/bin/python3.14 jiaoben/tests/encounter_mission_v12_run.py`检查真实Main、任务地点/主线研究入口、敌群聚合与展开、局部跃迁、打捞载荷、任意站鉴定、唯一预定奖励和SQLite故障回滚。追加`--native`在整合者安排的独占Metal/CoreAudio窗口运行，包含真实指针与四组分辨率/缩放。输出和引擎日志分别位于`logs/encounter-mission-v12-{headless,native}{,-engine}.log`，独立库/截图在`tmp/encounter-mission-v12/`。
+`/usr/local/bin/python3.14 jiaoben/tests/encounter_mission_v12_run.py`检查真实Main、任务地点/主线研究入口、敌群聚合与展开、局部跃迁、打捞载荷、任意站鉴定、唯一预定奖励和SQLite故障回滚。追加`--native`在整合者安排的独占Metal/CoreAudio窗口运行，包含真实指针与四组分辨率/缩放。输出和引擎日志分别，独立库/截图在`tmp/encounter-mission-v12/`。
 
 `--legacy <绝对路径>`只能指向本工作区tmp下已关闭的历史测试库，不得传入个人存档。旧档专项核验格式5→6、受审冻结内容升级、每源快照独立备份、旧手动槽恢复及事务失败保持原端点。当前源码headless480项、原生496项/15图通过；定位、资金、解锁和早期教学事件是明确夹具，不等于自然通关或长期平衡。
 
@@ -307,11 +307,11 @@ v0.11.0最终战斗自动化source headless574、Metal/CoreAudio605/5真实飞�
 v0.12.0最终source仓储813headless、827Metal/CoreAudio/6图，6相关1498+旧business389、Python129、字体906、固定104表现均通过；实际干净源`266ab3f0`包`0.12.0-266ab3f0-20261004-225644`独立6+104+462+605+827/42图、248资源/8包、签名、14严格日志通过。初候选和旧依赖warehouse鉴定入口的测试不作新包证据，最终Node支持独立salvage入口。交付身份见26。
 
 
-v0.13.0实际交付`0.13.0-afdc5e1d-20261005-002457`来自干净已推送源`afdc5e1d`：实际Mac独立6+110+462+605+827+5,351项、49图通过，严格16份构建日志诊断0；资源248/8包、签名及ZIP/PNG/源码/日志摘要复核通过。最新独立汇总为`logs/row-v17-delivery-final.json`，实际包身份与链接见26。无SQL/数值或个人档案变更。
+v0.13.0实际交付`0.13.0-afdc5e1d-20261005-002457`来自干净已推送源`afdc5e1d`：实际Mac独立6+110+462+605+827+5,351项、49图通过，严格16份构建日志诊断0；资源248/8包、签名及ZIP/PNG/源码/日志摘要复核通过。最新独立汇总，实际包身份与链接见26。无SQL/数值或个人档案变更。
 
 诊断独立变更时，`compare_pck_components_v36.py --before <旧候选EXE> --after <新候选EXE>`独占审计锁，以各自实际EXE运行`tests/pck_manifest_v36.gd`，只通过固定`--xj-verify-situational-v36`隔离入口及显式`XJ_PCK_MANIFEST_ONLY=1`读取包内资源，生成UUID清单；仅允许表现诊断及其编译/重定向文件不同，其他全部虚拟文件和EXE/DLL必须一致。该证明不替代变化组件的实际检查，不允许以源码摘要代替包内字节。
 
-导出客户端不能使用通用`--script`来代替受审诊断入口；本机已观察到参数被忽略并进入默认初始化。包清单必须通过上述固定入口，临时目录/脚本路径检查保持；不启动默认进度库。v0.28最终覆盖及误初始化后的恢复记录见[63](../doc/63-状态反馈与航行情报.md)，最终汇总`logs/v36-delivery-verification.json`。
+导出客户端不能使用通用`--script`来代替受审诊断入口；本机已观察到参数被忽略并进入默认初始化。包清单必须通过上述固定入口，临时目录/脚本路径检查保持；不启动默认进度库。v0.28最终覆盖及误初始化后的恢复记录见[63](../doc/63-状态反馈与航行情报.md)，最终。
 
 远征建设合批：`build_campaign_theme.py`仅从v0.28归档追加受审主题命名空间；`store_generate_campaign.py`只生成025/v0.21，保留原015/016账本完整守卫并追加已验证协调来源。`--only campaign`验证联合业务，`--only campaign-upgrade`通过`XJ_CAMPAIGN_LEGACY_DATABASE`仅测实际旧包升级，`--native --only campaign-world`通过`XJ_CAMPAIGN_CORE_DATABASE`导入已关闭test-owned联合库。资金、资格、姿态和命名变体均需声明。`prepare_roles_upgrade_v32.py --campaign --legacy-executable <已核v0.28 EXE>`经旧包固定fitting入口创建旧21/72组数据；不得使用通用`--script`或用户档。当前源码证据及尚未验证范围见[64](../doc/64-远征建设与主题行动.md)，本批实际发行仍待后续统一验收。
 
@@ -321,15 +321,15 @@ v0.13.0实际交付`0.13.0-afdc5e1d-20261005-002457`来自干净已推送源`afd
 
 指挥成长续段`--only natural-command`使用`XJ_NATURAL_LOGISTICS_ORIGIN`绑定已通过物流档，计划经付费配装、真实雇佣后勤、物理拆除/撤离、四项资格认证及普通补给采购达成战争受领条件；脚本刚编写，尚未运行，不作为完成证据。
 
-运输首段曾在完成造船和六批交付后触及2400秒外层墙钟限制，原结果保留为INCOMPLETE。`XJ_NATURAL_LOGISTICS_PARTIAL_ORIGIN`仅接受`v54-logistics-partial-*.json`绑定的关闭测试自动档，校验原日志/数据库摘要及实际造船、交付证据，续验返程和结算；不注入状态，不把旧超时改为整组通过。运输与指挥长流程的外层限时为3600秒，游戏内任务时限不变。
+运输首段曾在完成造船和六批交付后触及2400秒外层墙钟限制，原结果保留为INCOMPLETE。`XJ_NATURAL_LOGISTICS_PARTIAL_ORIGIN`仅接受绑定的关闭测试自动档，校验原日志/数据库摘要及实际造船、交付证据，续验返程和结算；不注入状态，不把旧超时改为整组通过。运输与指挥长流程的外层限时为3600秒，游戏内任务时限不变。
 
-指挥续段支持`XJ_NATURAL_COMMAND_PARTIAL_ORIGIN`读取`v55-command-partial-*.json`绑定的真实自动档，保留已付配装/租约及已接行动，明确不保留未存盘战斗结果。导航诊断输出交战、编队和追击者状态；撤离通过实际僚舰撤退及`forward`/`boost`输入推进，不修改坐标或清除敌人。
+指挥续段支持`XJ_NATURAL_COMMAND_PARTIAL_ORIGIN`读取绑定的真实自动档，保留已付配装/租约及已接行动，明确不保留未存盘战斗结果。导航诊断输出交战、编队和追击者状态；撤离通过实际僚舰撤退及`forward`/`boost`输入推进，不修改坐标或清除敌人。
 
 首次战争续段`--only natural-war`使用`XJ_NATURAL_COMMAND_ORIGIN`绑定正常认证档，经实际补给、付费护航、NPC行军、侦察/护送/守点/修复及安全返站验证；脚本尚未运行。运行结束后才允许生成`v56-war-origin`，不以代码存在作为完成证据。
 
 文明舰成长脚本`tests/natural_hull_v57.gd`已准备：公共二级科技→专属设计→实际制造→复用旧设备及购买二级武器，尚未注册为运行入口、也未执行，不能计为通过。必须由已通过首战档生成来源后再接入验证器。
 
-首战正常续段现已32项通过，见`logs/v56-normal-war-checkpoint.json`。文明舰`--only natural-hull`已注册，读取`XJ_NATURAL_WAR_ORIGIN`绑定首战关闭档；当前正在运行，不计为通过。上文“尚未注册”仅记录早期准备状态。
+首战正常续段现已32项通过。文明舰`--only natural-hull`已注册，读取`XJ_NATURAL_WAR_ORIGIN`绑定首战关闭档；当前正在运行，不计为通过。上文“尚未注册”仅记录早期准备状态。
 
 正常长期玩法使用`tests/natural_campaign_v58.gd`，由`natural-expedition`/`natural-project`固定入口模式区分。前者绑定已通过文明舰档，后者绑定已通过三段远征档；二者独立关闭数据库和来源。当前远征正在运行、建设尚未运行；有实际结果后再更新状态。正常驻防预警通过既有远程储备指令响应，并记录真实消耗，不改变危机时钟或所有权。
 
