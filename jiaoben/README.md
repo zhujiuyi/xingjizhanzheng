@@ -73,9 +73,9 @@ Windows 原生运行此后已随 v0.36.0 起的正式交付完成，当前交付
 2026-10-15 v0.36清理已完成：用户明确要求重试后，重新核对客户端/ZIP/存档/运行锁及路径，实际删除217目标/4149文件/5.626 GiB，E盘实增5.633 GiB。tmp/logs仅`.gitkeep`，Godot/Python缓存、临时库/截图/日志/候选包与旧0.35已移除，code/dist仅留`0.36.0-819b5e3e-20261015-191038`。正式客户端与必要原始失败/源码/历史/字体证据保留，最终667绑定通过；个人128文件内容/大小/修改时间、源码/配置/资源/桥接库一致。当前记录见该正式目录`cleanup-verification.json`、`verification/cleanup/plan.json`和`deletion.json`；`verification/cleanup-blocked.json`仅是前次未执行的历史。没有再次启动引擎。下文旧原始路径不保证存在，按保留映射查记录，重放须新建独立测试输入。**该目录及其记录已在2026-10-17清理中删除，记录迁到`0.37.1-43fc0586-20261017-043419/verification/cleanup-history/`。**
 
 
-2026-10-15 v0.35交付后的清理已完成：删除378目标/8672文件/6.902 GiB，E盘可用空间实增6.918 GiB。tmp/logs仅留`.gitkeep`，Godot/Python缓存、一次性脚本和旧v0.34客户端已删除；正式目录仅保留`0.35.0-bcb330c2-20261015-064648`。当前正式263图及必要源码/字体/图标/已知失败记录保留，映射见记录索引（`retained-records.json`）。源码、正式资源、维护脚本与个人数据128文件校验一致，完整证据见清理验证（`cleanup-verification.json`）；下列旧临时路径属于历史记录，运行时须重新生成输入。
+2026-10-15 v0.35交付后的清理已完成：删除378目标/8672文件/6.902 GiB，E盘可用空间实增6.918 GiB。tmp/logs仅留`.gitkeep`，Godot/Python缓存、一次性脚本和旧v0.34客户端已删除；正式目录仅保留`0.35.0-bcb330c2-20261015-064648`。当前正式263图及必要源码/字体/图标/已知失败记录保留，映射见记录索引。源码、正式资源、维护脚本与个人数据128文件校验一致，完整证据见清理验证；下列旧临时路径属于历史记录，运行时须重新生成输入。
 
-2026-10-14 v0.34交付后的清理已完成：用户要求重试后，经当前授权通道删除167目标/2816文件/4.319 GiB，实测E盘可用空间增加4.325 GiB。tmp/logs仅留`.gitkeep`，Godot/Python缓存及0.33.0/0.33.1旧包已移除，只保留最新v0.34.0。最终263图、必要源码与历史验收记录留在最新正式包，源码/正式资源/母版/维护脚本/升级桥接库保留，个人数据目录128文件摘要和修改时间一致；不再启动引擎重建缓存。首次删除曾被策略拒绝的历史仍保留在[交付记录](../doc/26-开发阶段与交付记录.md)，当前完成状态见清理验证（`cleanup-verification.json`）。
+2026-10-14 v0.34交付后的清理已完成：用户要求重试后，经当前授权通道删除167目标/2816文件/4.319 GiB，实测E盘可用空间增加4.325 GiB。tmp/logs仅留`.gitkeep`，Godot/Python缓存及0.33.0/0.33.1旧包已移除，只保留最新v0.34.0。最终263图、必要源码与历史验收记录留在最新正式包，源码/正式资源/母版/维护脚本/升级桥接库保留，个人数据目录128文件摘要和修改时间一致；不再启动引擎重建缓存。首次删除曾被策略拒绝的历史仍保留在[交付记录](../doc/26-开发阶段与交付记录.md)，当前完成状态见清理验证。
 
 每个联合开发阶段验收后清理重复候选包、过期UUID运行库/迁移副本、旧截图、下载缓存、一次性修改脚本及Python缓存。`tests/`、`art/`、`probes/`和构建/迁移生成器是维护中的源码，不能因为用于开发就作为垃圾删除。删除前核对Git忽略状态、实际引用和运行锁；只能操作已确认的工作区临时路径。
 
@@ -185,7 +185,7 @@ UI 生命周期补充检查为 `tests/ui_lifecycle_v2.gd`。对应v0.5及存档�
 
 与实际游戏并行运行测试时，必须显式传入 `--log-file` 的独立绝对路径，例如 `--log-file /Users/a0000/workspace/xingjizhanjian/jiaoben/logs/ui-lifecycle-v2-engine-native.log`，不与 AppSupport 的实际 `godot.log` 共用。headless 和原生运行分别保留进程输出与引擎日志；原生音频检查传入 `--audio-driver CoreAudio`。
 
-实际发布诊断使用内置 `--xj-verify-presentation` 入口，不加载外部脚本。`build_client.py` 为每次检查创建独立 fresh `jiaoben/tmp/release-presentation/<UUID>/progress.db`，通过 `XJ_TEST_DATABASE` 传入；主程序拒绝已有数据库及 tmp 外路径。构建脚本要求实际Mac包的Metal/CoreAudio **33项检查、6张截图**，包括首页、机库、NPC、飞行、档案卡片和靠站提示，使用独立 `--log-file`。先行源码33/33 PASS的 `logs/source-v3-presentation2.log` 保留；实际最终Release `0.6.0-3196c031-20261003-054157` 已另行33/33 PASS，见 实际包日志（`0.6.0-3196c031-20261003-054157-mac-presentation.log`） 与 引擎日志（`0.6.0-3196c031-20261003-054157-mac-presentation-engine.log`）。截图在 `tmp/release-presentation/b7a35a15-15ad-4fca-bad4-a65372ff10b6/`，该目录内进度库只属于夹具。额外人工操作复查因Mac锁屏尚未完成，不记录为人工PASS。最终包路径和摘要见 [交付记录](../doc/26-开发阶段与交付记录.md)。
+实际发布诊断使用内置 `--xj-verify-presentation` 入口，不加载外部脚本。`build_client.py` 为每次检查创建独立 fresh `jiaoben/tmp/release-presentation/<UUID>/progress.db`，通过 `XJ_TEST_DATABASE` 传入；主程序拒绝已有数据库及 tmp 外路径。构建脚本要求实际Mac包的Metal/CoreAudio **33项检查、6张截图**，包括首页、机库、NPC、飞行、档案卡片和靠站提示，使用独立 `--log-file`。先行源码33/33 PASS的 `logs/source-v3-presentation2.log` 保留；实际最终Release `0.6.0-3196c031-20261003-054157` 已另行33/33 PASS，见实际包日志与引擎日志。截图在 `tmp/release-presentation/b7a35a15-15ad-4fca-bad4-a65372ff10b6/`，该目录内进度库只属于夹具。额外人工操作复查因Mac锁屏尚未完成，不记录为人工PASS。最终包路径和摘要见 [交付记录](../doc/26-开发阶段与交付记录.md)。
 
 ## v0.6表现与易用性检查
 
@@ -198,7 +198,7 @@ UI 生命周期补充检查为 `tests/ui_lifecycle_v2.gd`。对应v0.5及存档�
 | `art/build_ships_v3.py`、`art/build_ship_v3_manifest.py`、`art/test_ship_v3.gd`、`art/preview_ship_v3.gd` | 九类舰与静默敌舰工业视觉、原wrapper碰撞/挂点保持；headless与原生契约各410项通过，10个GLB＋shader共11运行资源。模型合计673,622三角；自动导入LOD不等于手工LOD或性能保证。 |
 | `tests/presentation_failures.gd`、`tests/failure_factory.gd` | 真实Main/Store准备路径注入玩家/NPC模型失败，验证模拟不推进和旧world/epoch/slot保持，恢复后可再加载保存。headless＋显式CoreAudio28项通过、严格诊断0；不向个人库写入故障对象。 |
 
-最终整机原生回归汇总在 `logs/v3-final-native-acceptance.log`：导航67/5图、布局75/42图、镜头208、客户端36、物理战斗18、生命周期27，六脚本均PASS、退出0、diagnostics=0。对应日志前缀为 `navigation-v3-native-final`、`ui-v3-layout-final`、`camera-v3-final`、`client-v3-final`、`combat-v3-final`、`lifecycle-v3-final`，各有独立引擎日志。实际Release另行校验124项原始资源、ad-hoc签名、六项数据库与33项表现诊断并通过；构建身份（`build-manifest.json`）记录源提交与构建时 `source_dirty=false`。Windows x64导出、PE/PCK/DLL检查通过，Windows原生运行未验收；源码、实际包固定诊断和人工复查保持独立结论。
+最终整机原生回归汇总在 `logs/v3-final-native-acceptance.log`：导航67/5图、布局75/42图、镜头208、客户端36、物理战斗18、生命周期27，六脚本均PASS、退出0、diagnostics=0。对应日志前缀为 `navigation-v3-native-final`、`ui-v3-layout-final`、`camera-v3-final`、`client-v3-final`、`combat-v3-final`、`lifecycle-v3-final`，各有独立引擎日志。实际Release另行校验124项原始资源、ad-hoc签名、六项数据库与33项表现诊断并通过；构建身份记录源提交与构建时 `source_dirty=false`。Windows x64导出、PE/PCK/DLL检查通过，Windows原生运行未验收；源码、实际包固定诊断和人工复查保持独立结论。
 
 星空和地貌来源见 `../code/assets/navigation_v3/sources.json`；正式生成图放code，下载/制作中间文件、预览和日志仍放tmp/logs。新版资源说明分别在 `navigation_v3`、`station_v3`、`ship_v3` 的README；不要启动第二个Godot原生测试或同时编辑器导入，先与正在验收的整合者协调运行窗口。所有夹具继续使用独立临时库，不复用个人存档。
 
