@@ -59,6 +59,13 @@ S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增S
 
 完整回归与旧档链：`py -m unittest discover -s jiaoben/tests`当前363项通过；`build_fleet_assets.py`生成两种静态图标与八个正式模块/配方映射。`prepare_legacy_chain_index_v44.py`校验保留的实际旧PCK测试库和来源摘要，输出`XJ_LEGACY_CHAIN_INDEX`所用索引；`verify_combat_v18.py --only legacy-chain`通过固定v44入口验证七个历史格式16/17/18/19/20/21/23，107项通过。汇总`logs/v44-regression-checkpoint.json`。更早旧档、新档自然成长和最终EXE/PCK仍待验证；禁止使用个人库补充测试样本。
 
+## 关于下文逐轮记录
+
+下文的逐轮条目写于当轮，其中的「Windows 原生待实机」「尚未验收」只描述**当时**的状态。
+Windows 原生运行此后已随 v0.36.0 起的正式交付完成，当前交付身份、摘要与原生验证一律以
+[交付记录](../doc/26-开发阶段与交付记录.md) 的最新章节为准。2026-10-17 文档清理删除了 21 份
+已被取代的设计文档，旧条目里指向它们的编号不再有对应文件。
+
 ## 临时产物保留与清理
 
 2026-10-17 v0.37.1后的清理已完成：按用户"只保留最新的代码、文档、构建物"的要求，删除6目标/8870文件/10.07 GiB（10813192688逻辑字节），E盘可用空间实增10.09 GiB。范围是被Git忽略的中间产物——`jiaoben/tmp/`（测试库、逐次运行截图目录、一次性探针与发布脚本、交付暂存包）、`jiaoben/logs/`、`jiaoben/__pycache__/`、`code/.godot/`，以及`code/dist/`下的`0.36.0-819b5e3e-20261015-191038`与`0.37.0-63abe04a-20261017-022740`；`code/dist/`只剩`0.37.1-43fc0586-20261017-043419`。**跟踪在仓库里的`tests/`、`art/`、`probes/`、生成器和全部源码/文档一律未动**。删除前把旧构建内的清理记录（v0.36那轮的80个文件，含`retained-failure-evidence/`）迁到保留构建的`verification/cleanup-history/`，历史审计链不断。保留构建456文件按自身交付凭据复算哈希一致、ZIP 11成员CRC与逐字节内容一致；1634个Git跟踪文件清单摘要一致且工作区干净；`code/data/`22个正式catalog库摘要一致；个人存档128文件的SHA256/大小/修改时间一致，只读取未写入。没有启动引擎，`code/.godot/`由下次运行按需重建。当前记录见保留构建的`cleanup-verification.json`、`verification/cleanup/plan.json`与`deletion.json`。
@@ -94,7 +101,7 @@ S24/S27/S28联合批次：`verify_combat_v18.py --only scenarios`检查三类挑
 
 舰种/承运：`build_roles.py`追加3张定义表，旧132表/四视图不变；`store_generate_roles.py`仅生成020与v0.16适配器，复制完整旧封存守卫并只允许有完整持久记录的远修周期。`verify_combat_v18.py --only roles`检查真实调查、十八舰权限、付费恢复、中断、货损/退款/超时与59组恢复。`prepare_roles_upgrade_v32.py --legacy-executable <实际v0.23 EXE>`经旧包固定fitting测试入口的显式夹具分支，生成真实订单/取消/部分研究/机库format16档；传`XJ_ROLES_LEGACY_DATABASE`验证故障回滚及56组原状态。`--native --only roles-world`检查真实按钮、物理治疗、同225000基础造价上限战斗对照、9km感知、24批满载四门航程/交付及精确640×360逻辑界面。`XJ_ROLES_TRIP_ONLY=1`仅用于临时排障，正式门槛拒绝该子集。SQL负例见`tests/test_roles.py`，规则与边界见[59](../doc/59-舰种能力与有限承运.md)。
 
-配装/火控/HUD：`build_fitting.py`和`store_generate_fitting.py`只追加新SQL与019/v0.15，`build_fitting_assets.py`生成3个原创静态SVG及映射。`verify_combat_v18.py --only fitting`验证真实预算对照、只读比较、部分投入/替代来源、56组恢复；`prepare_fitting_upgrade_v31.py --legacy-executable <实际v0.22 EXE>`生成已关闭的format15付费订单夹具，通过`XJ_FITTING_LEGACY_DATABASE`验证53组旧状态和失败回滚。`--native --only fitting-world`验证实际鼠标/键盘比较、替换和超原射程命中，以及三窗口/缩放HUD和雷达切换，共用审计锁与fresh UUID。真实包使用`--executable`。SQL负例与旧表保护见`tests/test_fitting.py`，旧阶段测试只排除显式受审的新ID，不能放宽历史行或视图一致性。见[57](../doc/57-配装比较与火控专精.md)、[58](../doc/58-太空界面与简洁配装分析.md)。
+配装/火控/HUD：`build_fitting.py`和`store_generate_fitting.py`只追加新SQL与019/v0.15，`build_fitting_assets.py`生成3个原创静态SVG及映射。`verify_combat_v18.py --only fitting`验证真实预算对照、只读比较、部分投入/替代来源、56组恢复；`prepare_fitting_upgrade_v31.py --legacy-executable <实际v0.22 EXE>`生成已关闭的format15付费订单夹具，通过`XJ_FITTING_LEGACY_DATABASE`验证53组旧状态和失败回滚。`--native --only fitting-world`验证实际鼠标/键盘比较、替换和超原射程命中，以及三窗口/缩放HUD和雷达切换，共用审计锁与fresh UUID。真实包使用`--executable`。SQL负例与旧表保护见`tests/test_fitting.py`，旧阶段测试只排除显式受审的新ID，不能放宽历史行或视图一致性。见[57](../doc/57-配装比较与火控专精.md)。
 
 拆除与突破：`build_operations.py`追加两种目标和物理装置；`store_generate_operations.py`只生成018/v0.14，不改历史迁移。`verify_combat_v18.py --only operations`检查业务、货物、成果、53组恢复，`prepare_operations_upgrade_v30.py --legacy-executable <实际v0.21 EXE>`创建带付费订单和无人机舱的format14旧库，传`XJ_OPERATIONS_LEGACY_DATABASE`检查升级/失败回滚/52组原状态。`--native --only operations-world`检查真实入口、鼠标/Ctrl/Shift、实际伤害及5.2公里突破；资格/资产/初始姿态、近毁装置和隔离/恢复场景均为明确夹具。两入口支持实际`--executable`并共用审计锁/fresh UUID/严格双日志。定义/SQL封存负例见`tests/test_operations.py`，当前证据和边界见[56](../doc/56-拆除与封锁突破.md)。
 
@@ -112,7 +119,7 @@ v0.16.0文明扩展：`build_civilization_content.py`从旧正式SQL生成独立
 
 `verify_combat_v18.py --only civilizations`检查真实入籍、捐献、爵位、专属采购/制造/研究、切换保留资产、战役状态与SQLite重开。`--only civilization-world --native`用真实Main/GUI/Renderer验证星图筛选、文明界面、原生捐献、专属模型、友军识别、实际舰队开火与伤害及占领；资格和装配物资为明确测试前提，战斗不跳过真实模拟。`prepare_civilization_upgrade_v24.py --legacy-executable <旧客户端EXE>`创建真实format8旧档夹具，`--only civilization-upgrade --legacy <其progress.db>`验证备份、迁移/内容分支失败回滚、资产与RNG保留、旧手动档及升级幂等。所有游戏检查串行持有同一审计锁，fresh UUID tmp，个人档不参与；必须退出0且完整结果及双日志无错误/警告/泄漏，实际包追加`--executable <EXE>`复验。
 
-v0.15.3空间站图标菜单专项：`verify_combat_v18.py --only service-navigation --native` 执行 `tests/service_navigation_v22.gd`，检查机库/侧栏/下拉/标题同名同序同图标、六种尺寸与缩放、真实GUI点击和Tab、观察舰船、独立出港、飞行停靠权限，以及状态/保存端点/偏好无隐藏修改。另核“服务导航”标题去重、初始工业页焦点、Tab与悬停不产生第二选中、Enter回机库。实际包使用 `--executable <Windows EXE>`，通过固定 `--xj-verify-service-navigation-v22` 入口加载相同Node，保留真实PCK资源。fresh UUID库和图在tmp，严格双日志与摘要在logs；必须退出0、断言完整、11张原生图且无引擎错误/警告/泄漏。`build_service_navigation.py` 生成独立展示资源清单，保留全部旧发布清单。详见[48](../doc/48-空间站图标菜单与名称统一.md)。
+v0.15.3空间站图标菜单专项：`verify_combat_v18.py --only service-navigation --native` 执行 `tests/service_navigation_v22.gd`，检查机库/侧栏/下拉/标题同名同序同图标、六种尺寸与缩放、真实GUI点击和Tab、观察舰船、独立出港、飞行停靠权限，以及状态/保存端点/偏好无隐藏修改。另核“服务导航”标题去重、初始工业页焦点、Tab与悬停不产生第二选中、Enter回机库。实际包使用 `--executable <Windows EXE>`，通过固定 `--xj-verify-service-navigation-v22` 入口加载相同Node，保留真实PCK资源。fresh UUID库和图在tmp，严格双日志与摘要在logs；必须退出0、断言完整、11张原生图且无引擎错误/警告/泄漏。`build_service_navigation.py` 生成独立展示资源清单，保留全部旧发布清单。
 
 v0.14.1任务按钮与显示专项：`verify_combat_v18.py --only mission-display`执行`tests/mission_display_v19.gd`，加`--native`验证真实窗口的五种尺寸/100%与200%缩放、最大化/独占全屏、caption完整宽度、任务所有筛选/分页/滚动访问、长中文/多操作/tooltip、真实接取/放弃/重接和SQLite重开。`--executable <Windows EXE>`使用固定`--xj-verify-mission-display-v19`入口在真实PCK内运行同一Node；临时库与图位于fresh UUID的mission-display-v19子目录。基线`XJ_MISSION_DISPLAY_V19_BASELINE=1`只输出REPRODUCED，不可记录为正常验收PASS。输出窗口observations记录实际native/逻辑尺寸及等比final transform四边，截图尺寸必须对应整个客户区并核左右/上下覆盖。个人存档不参与。
 
@@ -120,23 +127,23 @@ v0.14.0光影/武器/无人机专项：`verify_combat_v18.py`在Windows串行加
 
 `tests/input_startup.gd`直接调用真实Main的初始化前输入回调，覆盖四类未注册事件、正常Ctrl释放、Ctrl按下及无关键释放；不启动服务或打开个人存档。执行`sh jiaoben/run_godot.sh --headless --path code --script ../jiaoben/tests/input_startup.gd`时，须同时满足`INPUT_STARTUP_RESULT PASS checks=10 failures=0`、退出0及输出/独立引擎日志无错误、警告或泄漏。旧源码会输出PASS但仍产生四条缺失fire动作错误，不能只看断言摘要。
 
-`tests/row_quantity_v17_run.py`验证仓储单行、小按钮与远站只读，市场/工业独立行数量、12次GUI买卖/制造/拆解、五种非法数量拒绝、七种过期上下文、四布局和SQLite重开；加`--native`独占Metal/CoreAudio窗口，fresh UUID库/图在tmp，双日志与结构化结果在logs。实际包通过受限`--xj-verify-row-quantities`入口加载同一外部测试Node，res://保持实际PCK；构建清单记录测试源码、双日志与图的SHA256。详见[44](../doc/44-单行业务列表与行内数量.md)。
+`tests/row_quantity_v17_run.py`验证仓储单行、小按钮与远站只读，市场/工业独立行数量、12次GUI买卖/制造/拆解、五种非法数量拒绝、七种过期上下文、四布局和SQLite重开；加`--native`独占Metal/CoreAudio窗口，fresh UUID库/图在tmp，双日志与结构化结果在logs。实际包通过受限`--xj-verify-row-quantities`入口加载同一外部测试Node，res://保持实际PCK；构建清单记录测试源码、双日志与图的SHA256。
 
-`tests/warehouse_transfer_v16_run.py`验证真实双列表与独立行数量、8 GUI搬运、矿舱/设备/密封包、远站排序灰色只读、容量/权限/过期回调、四布局及SQLite重开；加`--native`独占Metal/CoreAudio窗口，fresh UUID数据/图在tmp，严格双日志在logs。实际包通过固定外部Node入口`--xj-verify-warehouse`复验，production资源保持PCK；v0.12.0固定表现门槛104项/16图，含release-warehouse-dual，当前门槛见下。详见[43](../doc/43-双列表仓储与行内搬运.md)。
+`tests/warehouse_transfer_v16_run.py`验证真实双列表与独立行数量、8 GUI搬运、矿舱/设备/密封包、远站排序灰色只读、容量/权限/过期回调、四布局及SQLite重开；加`--native`独占Metal/CoreAudio窗口，fresh UUID数据/图在tmp，严格双日志在logs。实际包通过固定外部Node入口`--xj-verify-warehouse`复验，production资源保持PCK；v0.12.0固定表现门槛104项/16图，含release-warehouse-dual，当前门槛见下。
 
-`tests/combat_automation_v15_run.py`验证真实八组合checkbox、正式双武器周期/支付与资格、近敌锁定/死亡换锁、范围接近和朝敌环绕、手动/X/Z/保存/跃迁边界、四布局真实飞行渲染/tooltip、SQL重开及25步大舰范围边缘。追加`--native`独占Metal/CoreAudio窗口，使用共用锁；UUID临时库/截图在tmp，严格双日志和结构结果在logs，scope/revision/global Z/飞行截图字段必须完整。新实际包通过受限显式`--xj-verify-combat-automation`加载同一固定外部测试Node，res://仍为包内PCK；构建脚本将测试源码/日志/图摘要纳入包清单。详见[42](../doc/42-战斗自动化与索敌环绕.md)。
+`tests/combat_automation_v15_run.py`验证真实八组合checkbox、正式双武器周期/支付与资格、近敌锁定/死亡换锁、范围接近和朝敌环绕、手动/X/Z/保存/跃迁边界、四布局真实飞行渲染/tooltip、SQL重开及25步大舰范围边缘。追加`--native`独占Metal/CoreAudio窗口，使用共用锁；UUID临时库/截图在tmp，严格双日志和结构结果在logs，scope/revision/global Z/飞行截图字段必须完整。新实际包通过受限显式`--xj-verify-combat-automation`加载同一固定外部测试Node，res://仍为包内PCK；构建脚本将测试源码/日志/图摘要纳入包清单。
 
-`tests/turn_response_v14.gd`验证九舰真实转速与输入优先级；`tests/manual_turn_v14_run.py`检查真实Main的九舰/装备/合法载荷216组合及UI隔离；`tests/camera_collision_v14_run.py`检查正式站/门264数值情境、6组真实插值帧采样、九舰FRONT贴面与SQLite重开。两runner用共用独占锁，`--native`独占Metal/CoreAudio窗口；库/图在tmp，严格双日志/结构结果在logs。旧Main复现用`--baseline-only --expect-defect`，旧Rig用`--baseline`，只在确认旧源码并完整恢复新源码时运行；缺陷复现不作验收PASS。结果与证据边界见[41](../doc/41-手动转向与近障碍相机修正.md)。
+`tests/turn_response_v14.gd`验证九舰真实转速与输入优先级；`tests/manual_turn_v14_run.py`检查真实Main的九舰/装备/合法载荷216组合及UI隔离；`tests/camera_collision_v14_run.py`检查正式站/门264数值情境、6组真实插值帧采样、九舰FRONT贴面与SQLite重开。两runner用共用独占锁，`--native`独占Metal/CoreAudio窗口；库/图在tmp，严格双日志/结构结果在logs。旧Main复现用`--baseline-only --expect-defect`，旧Rig用`--baseline`，只在确认旧源码并完整恢复新源码时运行；缺陷复现不作验收PASS。
 
 ## 星图重塑
 
-v0.15.1正常跃迁专项为`py jiaoben/verify_combat_v18.py --only warp-scene --native`；actual-PCK加`--executable <EXE>`且不传source project path。正式站/门/矿出发、自然星空与行星、精确舰体轮廓、实际字形不透明内部像素、用户2859×945超宽与3440×1370在100%/200%及三视角受控；测试不加入checker环境。`test_warp_presentation.py`固定旧发布Git字节核旧DB/SQL/manifest不变、新FXv3闭合。基线模式EXPECTED_DEFECT不作为发布PASS，按[47](../doc/47-跃迁离场与真实背景虚化修正.md)记录边界。
+v0.15.1正常跃迁专项为`py jiaoben/verify_combat_v18.py --only warp-scene --native`；actual-PCK加`--executable <EXE>`且不传source project path。正式站/门/矿出发、自然星空与行星、精确舰体轮廓、实际字形不透明内部像素、用户2859×945超宽与3440×1370在100%/200%及三视角受控；测试不加入checker环境。`test_warp_presentation.py`固定旧发布Git字节核旧DB/SQL/manifest不变、新FXv3闭合。基线模式EXPECTED_DEFECT不作为发布PASS，
 
 v0.15.0空间专项从根目录运行`py jiaoben/verify_combat_v18.py --only mission-display spatial-business spatial-navigation warp-visual space-upgrade`，原生加`--native`；actual-PCK加`--executable <Windows EXE>`且不传源码path。源码/实际包共享固定Node，WASAPI、独占共用锁、fresh UUID tmp库和严格双日志。空间升级fixture由`tests/prepare_space_upgrade_v20.py`固定旧Git catalog身份，通过query_only原生SQLite复制到受审内存adapter，同一路径用于源码和PCK；测试不打开个人档。`py -m unittest discover -s jiaoben/tests -p 'test_*.py'`含空间catalog及SQL完整绑定/不可变约束。规格与最终结果见[46](../doc/46-星系尺度与跃迁体验.md)和[26](../doc/26-开发阶段与交付记录.md)。
 
 同一runner的`--only base-store base-presentation --native`执行6项实际数据库与110项/17图内置表现门槛；源码直接运行固定Main CLI入口，实际EXE无需源码工程。store门槛强制headless/WASAPI且无截图，presentation真实原生窗口。所有进程均检查退出、完整结果及输出/引擎双日志；上一结果的截图文件存在不能代替新包验收。
 
-从根目录执行 `/usr/local/bin/python3.14 jiaoben/tests/star_chart_v13_run.py`，追加`--native`独占Metal/CoreAudio窗口。fresh tmp SQLite验证真实Main的单选情报、方向/门资格/载重变化、输入隔离、关闭重开/换世界/实际旅行绑定、四布局及120/300个纯UI节点；日志和结构化结果在logs，截图和DB在tmp。共用`feature-audit.lock`，不得与其它Godot检查/编辑器导入并行。原生Viewport事件与额外系统输入复查分别记录，最终结果见40。
+从根目录执行 `/usr/local/bin/python3.14 jiaoben/tests/star_chart_v13_run.py`，追加`--native`独占Metal/CoreAudio窗口。fresh tmp SQLite验证真实Main的单选情报、方向/门资格/载重变化、输入隔离、关闭重开/换世界/实际旅行绑定、四布局及120/300个纯UI节点；日志和结构化结果在logs，截图和DB在tmp。共用`feature-audit.lock`，不得与其它Godot检查/编辑器导入并行。原生Viewport事件与额外系统输入复查分别记录，最终结果见26。
 
 当前发行包内置表现门槛为110项/17图（保留104项，增加2项仓储单行/小按钮和4项市场/工业独立数量/报价/状态不变检查，并增加release-business-industry图），`build_client.py`必须用实际bundle/PCK独立运行；未通过不得发布。历史小节的旧检查数属于对应版本。
 
@@ -146,7 +153,7 @@ v0.15.0空间专项从根目录运行`py jiaoben/verify_combat_v18.py --only mis
 
 旧catalog夹具由runner从已存在Git提交 `c2ac4ae5eb43dc9ab052f09ea5d2a72c542edf4c` 的正式数值库提取到 `tmp/audit-catalog-v090.db`，验证固定SHA，不覆盖身份不同的既有文件。独立运行历史probe前先用runner准备该夹具。借船清理probe依赖先执行`gameplay_probe.gd`得到已关闭基线。原始v0.8.4发行测试库是本机历史额外证据，不是默认runner依赖；额外`--legacy`输入只允许已关闭tmp测试库。
 
-本轮功能矩阵、确认修复、实际检查数、夹具与原生边界见 [39](../doc/39-功能完整性审核与测试.md)。测试源码和正式代码按各自目录纳入Git，所有运行数据库、截图、日志仍留在tmp/logs，不能带入正式用户存档。
+本轮功能矩阵、确认修复、实际检查数、夹具与原生边界见 [26](../doc/26-开发阶段与交付记录.md)。测试源码和正式代码按各自目录纳入Git，所有运行数据库、截图、日志仍留在tmp/logs，不能带入正式用户存档。
 
 | 路径 | 用途 | Git 管理 |
 | --- | --- | --- |
@@ -164,7 +171,7 @@ v0.15.0空间专项从根目录运行`py jiaoben/verify_combat_v18.py --only mis
 
 正式游戏逻辑和运行资源放在 `code/`；对外或长期使用的说明放在 `doc/`。下载缓存可以删除，正式源文件与测试成果不能当作临时文件清理。
 
-数值检查入口为 `tests/test_balance.py`；加 `--report` 将结果写入 `logs/数值校验报告.md`。报告可重建，持久的范围说明和验收结果摘要维护在 [开发准备度](../doc/16-开发准备度与缺口清单.md)。测试中的公式是独立参考模型，不代表 Godot 玩法或进度存档已实现。
+数值检查入口为 `tests/test_balance.py`；加 `--report` 将结果写入 `logs/数值校验报告.md`。报告可重建，持久的范围说明和验收结果摘要维护在 [交付记录](../doc/26-开发阶段与交付记录.md)。测试中的公式是独立参考模型，不代表 Godot 玩法或进度存档已实现。
 
 首版内容检查见 `tests/test_content.py`，进度 DDL/夹具检查见18，接口/占位及 `tests/test_rng_contract.py` 随机流契约检查见21，实际工具链及 `prepare_progress_probe.py` 正式SQL原生探针复现见22。运行专用探针时不得向正式用户档写入数据。
 
@@ -174,7 +181,7 @@ macOS生命周期验收执行 `python3.14 jiaoben/tests/client_edges_run.py --au
 
 v0.5表现重塑检查：`tests/camera_controls_v2.gd` 覆盖相对输入、九舰三分辨率镜头及机库/飞行切换；`tests/ui_visual_v2.gd` 覆盖实际界面与缩放并输出原生截图；`art/test_hangar_v2.gd` 检查九舰展示及材质/几何边界。图形验证不加 `--headless`，音频使用 `--audio-driver CoreAudio`。艺术构建辅助代码及独立资源来源见 `art/`、`install_interface_v2_assets.py` 和 `interface_v2_sources.json`；技能安装身份在 `gamedev_skills_install.json`。全部测试使用tmp库，不能删除用户进度。
 
-UI 生命周期补充检查为 `tests/ui_lifecycle_v2.gd`。对应v0.5及存档卡片阶段的 headless 与原生 Metal/CoreAudio 均 27/27 PASS、`engine_diagnostics=0`，日志分别为 `logs/ui-lifecycle-v2-headless.log`、`logs/ui-lifecycle-v2-native.log`，未见错误、警告或资源泄漏；该阶段布局检查75/75 PASS、42 张截图。生命周期测试覆盖首次悬停、快速切页、销毁控件、独立旧档继续、失效目标/音效/特效引用、暂停 UI 音效自然结束与退出。修复及证据边界见 [界面重塑方案](../doc/29-操控与界面重塑方案.md)。测试 teardown 在释放节点后等待两帧和 0.25 秒，供音频混音线程释放引用；该等待只属于夹具，不是生产退出或保存规则。
+UI 生命周期补充检查为 `tests/ui_lifecycle_v2.gd`。对应v0.5及存档卡片阶段的 headless 与原生 Metal/CoreAudio 均 27/27 PASS、`engine_diagnostics=0`，日志分别为 `logs/ui-lifecycle-v2-headless.log`、`logs/ui-lifecycle-v2-native.log`，未见错误、警告或资源泄漏；该阶段布局检查75/75 PASS、42 张截图。生命周期测试覆盖首次悬停、快速切页、销毁控件、独立旧档继续、失效目标/音效/特效引用、暂停 UI 音效自然结束与退出。测试 teardown 在释放节点后等待两帧和 0.25 秒，供音频混音线程释放引用；该等待只属于夹具，不是生产退出或保存规则。
 
 与实际游戏并行运行测试时，必须显式传入 `--log-file` 的独立绝对路径，例如 `--log-file /Users/a0000/workspace/xingjizhanjian/jiaoben/logs/ui-lifecycle-v2-engine-native.log`，不与 AppSupport 的实际 `godot.log` 共用。headless 和原生运行分别保留进程输出与引擎日志；原生音频检查传入 `--audio-driver CoreAudio`。
 
@@ -193,7 +200,7 @@ UI 生命周期补充检查为 `tests/ui_lifecycle_v2.gd`。对应v0.5及存档�
 
 最终整机原生回归汇总在 `logs/v3-final-native-acceptance.log`：导航67/5图、布局75/42图、镜头208、客户端36、物理战斗18、生命周期27，六脚本均PASS、退出0、diagnostics=0。对应日志前缀为 `navigation-v3-native-final`、`ui-v3-layout-final`、`camera-v3-final`、`client-v3-final`、`combat-v3-final`、`lifecycle-v3-final`，各有独立引擎日志。实际Release另行校验124项原始资源、ad-hoc签名、六项数据库与33项表现诊断并通过；[构建身份](../code/dist/0.6.0-3196c031-20261003-054157/build-manifest.json)记录源提交与构建时 `source_dirty=false`。Windows x64导出、PE/PCK/DLL检查通过，Windows原生运行未验收；源码、实际包固定诊断和人工复查保持独立结论。
 
-星空和地貌来源见 `../code/assets/navigation_v3/sources.json`；正式生成图放code，下载/制作中间文件、预览和日志仍放tmp/logs。新版资源说明分别在 `navigation_v3`、`station_v3`、`ship_v3` 的README；验证范围汇总见 [31](../doc/31-EVE第二银河参考与易用性改版.md)。不要启动第二个Godot原生测试或同时编辑器导入，先与正在验收的整合者协调运行窗口。所有夹具继续使用独立临时库，不复用个人存档。
+星空和地貌来源见 `../code/assets/navigation_v3/sources.json`；正式生成图放code，下载/制作中间文件、预览和日志仍放tmp/logs。新版资源说明分别在 `navigation_v3`、`station_v3`、`ship_v3` 的README；不要启动第二个Godot原生测试或同时编辑器导入，先与正在验收的整合者协调运行窗口。所有夹具继续使用独立临时库，不复用个人存档。
 
 
 v0.6.1航行视角补丁：`tests/flight_visibility_v4.gd` 验证独立SQLite中舰首存读档、HUD说明、“显示舰船”按钮、镜头恢复不改变运动、V阻断与高缩放布局；本轮验收结果见26。实际发布入口现要求35项检查和6张截图，新增舰首模式说明与找回舰船检查；上文v0.6的33项属于历史结果。源码原生四项回归汇总为 `logs/v061-native-acceptance.log`；各测试和发布包均使用独立tmp库及独立引擎日志。
@@ -264,7 +271,7 @@ v0.6.2实际新包 `0.6.2-8d86553e-20261003-141501` 已通过37项Metal/CoreAudi
 
 当前操控headless280、原生294/2图复验通过。旧“释放WS后完整Basis冻结”契约改为前向不漂移、实际输入清零、残余滚转在同转速预算内收敛；non-FRONT A/D观察轴明确为世界上轴。导航渲染567、雷达/标记69、物理战斗18、生命周期27及源码内置70项通过；最终日志`logs/v083-{navigation-render,navigation,combat,lifecycle,presentation-source}-final{,-engine}.log`。导航tooltip检查维护为操控首行与完整紧凑雷达说明，未减少标记/虚线/插值覆盖。字体111文件/84表/858字符，无缺字或编码缺陷。
 
-发布门槛现为**70项表现检查、12张截图**，新增真实Flight回正及其总转速预算、显式滚转、真实镜头回正、精确垂直姿态，并新增`release-attitude-level.png`。实际Mac包必须独立运行6项数据库与70项表现，不以源测试代替；最终包身份与结果见26。Windows原生运行仍待实机。规则及镜头穿越极点的±上轴连续边界见[36](../doc/36-舰船姿态回正与相机基准.md)。
+发布门槛现为**70项表现检查、12张截图**，新增真实Flight回正及其总转速预算、显式滚转、真实镜头回正、精确垂直姿态，并新增`release-attitude-level.png`。实际Mac包必须独立运行6项数据库与70项表现，不以源测试代替；最终包身份与结果见26。Windows原生运行仍待实机。规则及镜头穿越极点的±上轴连续边界见[界面设计规范](../doc/76-界面设计规范与全界面整改.md)末节。
 
 最终实际交付`0.8.3-903ebd87-20261003-225013`来自干净已推送源`903ebd87`，实际Mac6项数据库、70项Metal/CoreAudio表现及12图、125项资源与临时签名通过；8份独立构建日志严格诊断0，两ZIP及12图SHA已重算一致、CRC与说明/许可齐备。源码138/146的完整输入与持久化专项和实际包70固定场景分开记录；回正/航行/站外停止画面已查看。Windows导出组件通过，原生待实机。证据及包路径见26。
 
@@ -293,14 +300,14 @@ sh jiaoben/run_godot.sh --audio-driver CoreAudio --path code --script ../jiaoben
 
 `build_client.py`另用实际Mac bundle加载其导出PCK，绝不传`--path code`；通过显式`--xj-verify-encounters`入口加载绝对外部专项Node，使用新的UUID tmp目录。Release模板不支持编辑器的`--script`参数，源码runner则生成tmp SceneTree启动器。此层不请求legacy输入，与源码旧档测试分开记录，严格核对最终JSON、PASS标记、双日志诊断和每张PNG摘要。实际构建身份、检查数及Windows验证边界见26。
 
-操控v0.10.1最终源码：组件699，真实Main headless/原生各2,032；相机headless1,493、原生1,498/4图；8相关回归2,084、Python129、字体899，源码固定表现100均通过。实际干净源`b6399ee6`导出的`0.10.1-b6399ee6-20261004-185156`独立6+100+460/30图、248资源/8包、签名和10份严格日志通过；Windows原生待实机。详细fixture/帧率/恢复范围见41，交付身份见26。
+操控v0.10.1最终源码：组件699，真实Main headless/原生各2,032；相机headless1,493、原生1,498/4图；8相关回归2,084、Python129、字体899，源码固定表现100均通过。实际干净源`b6399ee6`导出的`0.10.1-b6399ee6-20261004-185156`独立6+100+460/30图、248资源/8包、签名和10份严格日志通过；详细fixture/帧率/恢复范围与交付身份见26。
 
-v0.11.0最终战斗自动化source headless574、Metal/CoreAudio605/5真实飞行图，9回归4217、Python129、字体901与原100表现通过；实际干净源`fc87c476`包`0.11.0-fc87c476-20261004-202947`独立6+100+460+605/35图、248资源/8包、签名与12严格日志通过，Windows原生待实机。见42/26。
+v0.11.0最终战斗自动化source headless574、Metal/CoreAudio605/5真实飞行图，9回归4217、Python129、字体901与原100表现通过；实际干净源`fc87c476`包`0.11.0-fc87c476-20261004-202947`独立6+100+460+605/35图、248资源/8包、签名与12严格日志通过，交付身份见26。
 
-v0.12.0最终source仓储813headless、827Metal/CoreAudio/6图，6相关1498+旧business389、Python129、字体906、固定104表现均通过；实际干净源`266ab3f0`包`0.12.0-266ab3f0-20261004-225644`独立6+104+462+605+827/42图、248资源/8包、签名、14严格日志通过。初候选和旧依赖warehouse鉴定入口的测试不作新包证据，最终Node支持独立salvage入口。详见43/26，Windows原生待实机。
+v0.12.0最终source仓储813headless、827Metal/CoreAudio/6图，6相关1498+旧business389、Python129、字体906、固定104表现均通过；实际干净源`266ab3f0`包`0.12.0-266ab3f0-20261004-225644`独立6+104+462+605+827/42图、248资源/8包、签名、14严格日志通过。初候选和旧依赖warehouse鉴定入口的测试不作新包证据，最终Node支持独立salvage入口。交付身份见26。
 
 
-v0.13.0实际交付`0.13.0-afdc5e1d-20261005-002457`来自干净已推送源`afdc5e1d`：实际Mac独立6+110+462+605+827+5,351项、49图通过，严格16份构建日志诊断0；资源248/8包、签名及ZIP/PNG/源码/日志摘要复核通过。最新独立汇总为`logs/row-v17-delivery-final.json`，完整源回归见44，实际包身份、链接及Windows原生边界见26。无SQL/数值或个人档案变更。
+v0.13.0实际交付`0.13.0-afdc5e1d-20261005-002457`来自干净已推送源`afdc5e1d`：实际Mac独立6+110+462+605+827+5,351项、49图通过，严格16份构建日志诊断0；资源248/8包、签名及ZIP/PNG/源码/日志摘要复核通过。最新独立汇总为`logs/row-v17-delivery-final.json`，实际包身份与链接见26。无SQL/数值或个人档案变更。
 
 诊断独立变更时，`compare_pck_components_v36.py --before <旧候选EXE> --after <新候选EXE>`独占审计锁，以各自实际EXE运行`tests/pck_manifest_v36.gd`，只通过固定`--xj-verify-situational-v36`隔离入口及显式`XJ_PCK_MANIFEST_ONLY=1`读取包内资源，生成UUID清单；仅允许表现诊断及其编译/重定向文件不同，其他全部虚拟文件和EXE/DLL必须一致。该证明不替代变化组件的实际检查，不允许以源码摘要代替包内字节。
 
