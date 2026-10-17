@@ -2,7 +2,7 @@
 
 ## 航行加载响应
 
-`py jiaoben/tests/startup_navigation_run.py [--executable <v0.37.0 EXE>]` 使用真实标题按钮、共享审计锁、fresh UUID 库与严格双日志，验证新建/继续/保存返回标题的响应以及加载后持续运行。可传 `--profile-copy <jiaoben/tmp 内已关闭的副本>`，先继续原世界再新建；加 `--profile-new-first` 单独验证未先升级的旧档直接新建。不得传个人原件。旧 v0.33.0 反例另加 `--legacy-v61`，只在 tmp 暂存适配脚本。失败/安全停止入口为 `py jiaoben/tests/loading_failure_run.py [--executable <v0.33.1 EXE>]`，固定两条预期错误各一次，其余诊断严格拒绝。原始报告在 logs，截图/副本在 tmp，边界与验收见 [71](../doc/71-航行加载响应与旧档性能修复.md)。
+`py jiaoben/tests/startup_navigation_run.py [--executable <v0.37.1 EXE>]` 使用真实标题按钮、共享审计锁、fresh UUID 库与严格双日志，验证新建/继续/保存返回标题的响应以及加载后持续运行。可传 `--profile-copy <jiaoben/tmp 内已关闭的副本>`，先继续原世界再新建；加 `--profile-new-first` 单独验证未先升级的旧档直接新建。不得传个人原件。旧 v0.33.0 反例另加 `--legacy-v61`，只在 tmp 暂存适配脚本。失败/安全停止入口为 `py jiaoben/tests/loading_failure_run.py [--executable <v0.33.1 EXE>]`，固定两条预期错误各一次，其余诊断严格拒绝。原始报告在 logs，截图/副本在 tmp，边界与验收见 [71](../doc/71-航行加载响应与旧档性能修复.md)。
 
 ## 全界面UI审查
 
@@ -61,7 +61,9 @@ S32/S33开发检查点：`build_owned_fleet.py`从封存v0.30目录编写新增S
 
 ## 临时产物保留与清理
 
-2026-10-15 v0.36清理已完成：用户明确要求重试后，重新核对客户端/ZIP/存档/运行锁及路径，实际删除217目标/4149文件/5.626 GiB，E盘实增5.633 GiB。tmp/logs仅`.gitkeep`，Godot/Python缓存、临时库/截图/日志/候选包与旧0.35已移除，code/dist仅留`0.37.0-819b5e3e-20261015-191038`。正式客户端与必要原始失败/源码/历史/字体证据保留，最终667绑定通过；个人128文件内容/大小/修改时间、源码/配置/资源/桥接库一致。当前记录见该正式目录`cleanup-verification.json`、`verification/cleanup/plan.json`和`deletion.json`；`verification/cleanup-blocked.json`仅是前次未执行的历史。没有再次启动引擎。下文旧原始路径不保证存在，按保留映射查记录，重放须新建独立测试输入。
+2026-10-17 v0.37.1后的清理已完成：按用户"只保留最新的代码、文档、构建物"的要求，删除6目标/8870文件/10.07 GiB（10813192688逻辑字节），E盘可用空间实增10.09 GiB。范围是被Git忽略的中间产物——`jiaoben/tmp/`（测试库、逐次运行截图目录、一次性探针与发布脚本、交付暂存包）、`jiaoben/logs/`、`jiaoben/__pycache__/`、`code/.godot/`，以及`code/dist/`下的`0.36.0-819b5e3e-20261015-191038`与`0.37.0-63abe04a-20261017-022740`；`code/dist/`只剩`0.37.1-43fc0586-20261017-043419`。**跟踪在仓库里的`tests/`、`art/`、`probes/`、生成器和全部源码/文档一律未动**。删除前把旧构建内的清理记录（v0.36那轮的80个文件，含`retained-failure-evidence/`）迁到保留构建的`verification/cleanup-history/`，历史审计链不断。保留构建456文件按自身交付凭据复算哈希一致、ZIP 11成员CRC与逐字节内容一致；1634个Git跟踪文件清单摘要一致且工作区干净；`code/data/`22个正式catalog库摘要一致；个人存档128文件的SHA256/大小/修改时间一致，只读取未写入。没有启动引擎，`code/.godot/`由下次运行按需重建。当前记录见保留构建的`cleanup-verification.json`、`verification/cleanup/plan.json`与`deletion.json`。
+
+2026-10-15 v0.36清理已完成：用户明确要求重试后，重新核对客户端/ZIP/存档/运行锁及路径，实际删除217目标/4149文件/5.626 GiB，E盘实增5.633 GiB。tmp/logs仅`.gitkeep`，Godot/Python缓存、临时库/截图/日志/候选包与旧0.35已移除，code/dist仅留`0.36.0-819b5e3e-20261015-191038`。正式客户端与必要原始失败/源码/历史/字体证据保留，最终667绑定通过；个人128文件内容/大小/修改时间、源码/配置/资源/桥接库一致。当前记录见该正式目录`cleanup-verification.json`、`verification/cleanup/plan.json`和`deletion.json`；`verification/cleanup-blocked.json`仅是前次未执行的历史。没有再次启动引擎。下文旧原始路径不保证存在，按保留映射查记录，重放须新建独立测试输入。**该目录及其记录已在2026-10-17清理中删除，记录迁到`0.37.1-43fc0586-20261017-043419/verification/cleanup-history/`。**
 
 
 2026-10-15 v0.35交付后的清理已完成：删除378目标/8672文件/6.902 GiB，E盘可用空间实增6.918 GiB。tmp/logs仅留`.gitkeep`，Godot/Python缓存、一次性脚本和旧v0.34客户端已删除；正式目录仅保留`0.35.0-bcb330c2-20261015-064648`。当前正式263图及必要源码/字体/图标/已知失败记录保留，映射见[记录索引](../code/dist/0.35.0-bcb330c2-20261015-064648/verification/retained-records.json)。源码、正式资源、维护脚本与个人数据128文件校验一致，完整证据见[清理验证](../code/dist/0.35.0-bcb330c2-20261015-064648/cleanup-verification.json)；下列旧临时路径属于历史记录，运行时须重新生成输入。
